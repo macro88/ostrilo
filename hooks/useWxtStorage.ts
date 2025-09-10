@@ -15,10 +15,16 @@ export function useWxtStorage<T>(key: string, defaultValue: T) {
 
   // Watch for changes
   useEffect(() => {
-    const onChanged = (changes: Record<string, browser.Storage.StorageChange>) => {
+    const onChanged = (
+      changes: Record<string, browser.Storage.StorageChange>
+    ) => {
       if (key in changes) {
         const newValue = changes[key].newValue;
-        setValue((newValue !== undefined && newValue !== null) ? newValue as T : defaultValue);
+        setValue(
+          newValue !== undefined && newValue !== null
+            ? (newValue as T)
+            : defaultValue
+        );
       }
     };
 

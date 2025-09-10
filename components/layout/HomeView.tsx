@@ -38,7 +38,9 @@ export function HomeView() {
             <span className="text-sm font-medium">Security</span>
           </div>
           <p className="text-lg font-semibold">
-            {settings.autoLockMinutes === 0 ? "∞" : `${settings.autoLockMinutes}m`}
+            {settings.autoLockMinutes === 0
+              ? "∞"
+              : `${settings.autoLockMinutes}m`}
           </p>
           <p className="text-xs text-muted-foreground">Auto-lock</p>
         </div>
@@ -77,7 +79,9 @@ export function HomeView() {
           <div className="flex justify-between">
             <span className="text-muted-foreground">Session TTL:</span>
             <span>
-              {settings.sessionTTLMinutes === 0 ? "Until lock" : `${settings.sessionTTLMinutes}m`}
+              {settings.sessionTTLMinutes === 0
+                ? "Until lock"
+                : `${settings.sessionTTLMinutes}m`}
             </span>
           </div>
           <div className="flex justify-between">
@@ -91,10 +95,16 @@ export function HomeView() {
       <div className="bg-card border border-border rounded-lg p-4">
         <h3 className="font-medium mb-3">Quick Actions</h3>
         <div className="space-y-2">
-          <button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-4 rounded-lg font-medium" disabled>
+          <button
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-4 rounded-lg font-medium"
+            disabled
+          >
             Generate New Key
           </button>
-          <button className="w-full bg-muted hover:bg-muted/80 text-foreground py-2 px-4 rounded-lg font-medium" disabled>
+          <button
+            className="w-full bg-muted hover:bg-muted/80 text-foreground py-2 px-4 rounded-lg font-medium"
+            disabled
+          >
             Import Key
           </button>
         </div>

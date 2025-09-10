@@ -4,10 +4,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { useAppSettings } from "@/hooks/useAppSettings";
-import { Theme, TrustLevel, TRUST_LEVEL_DESCRIPTIONS, COMMON_EVENT_KINDS } from "@/lib/settings";
+import {
+  Theme,
+  TrustLevel,
+  TRUST_LEVEL_DESCRIPTIONS,
+  COMMON_EVENT_KINDS,
+} from "@/lib/settings";
 import { Plus, X, Key, Shield, Clock, Globe, Trash2 } from "lucide-react";
 
 export function SettingsView() {
@@ -21,7 +32,7 @@ export function SettingsView() {
     addRelay,
     removeRelay,
     updateMediumAllowKinds,
-    resetSettings
+    resetSettings,
   } = useAppSettings();
 
   const [newRelay, setNewRelay] = useState("");
@@ -58,7 +69,7 @@ export function SettingsView() {
     if (enabled && !currentKinds.includes(kind)) {
       updateMediumAllowKinds([...currentKinds, kind]);
     } else if (!enabled && currentKinds.includes(kind)) {
-      updateMediumAllowKinds(currentKinds.filter(k => k !== kind));
+      updateMediumAllowKinds(currentKinds.filter((k) => k !== kind));
     }
   };
 
@@ -81,7 +92,9 @@ export function SettingsView() {
               {selectedKey.pubkey.slice(0, 16)}...{selectedKey.pubkey.slice(-8)}
             </p>
             {selectedKey.label && (
-              <p className="text-sm text-muted-foreground">{selectedKey.label}</p>
+              <p className="text-sm text-muted-foreground">
+                {selectedKey.label}
+              </p>
             )}
           </div>
         ) : (
@@ -117,14 +130,16 @@ export function SettingsView() {
           <Shield className="h-4 w-4" />
           <h3 className="font-medium">Security</h3>
         </div>
-        
+
         <div className="space-y-4">
           {/* Auto-lock timer */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>Auto-lock after inactivity</Label>
               <span className="text-sm text-muted-foreground">
-                {settings.autoLockMinutes === 0 ? "Never" : `${settings.autoLockMinutes} min`}
+                {settings.autoLockMinutes === 0
+                  ? "Never"
+                  : `${settings.autoLockMinutes} min`}
               </span>
             </div>
             <Slider
@@ -142,7 +157,9 @@ export function SettingsView() {
             <div className="flex items-center justify-between">
               <Label>Session grant timeout</Label>
               <span className="text-sm text-muted-foreground">
-                {settings.sessionTTLMinutes === 0 ? "Until lock" : `${settings.sessionTTLMinutes} min`}
+                {settings.sessionTTLMinutes === 0
+                  ? "Until lock"
+                  : `${settings.sessionTTLMinutes} min`}
               </span>
             </div>
             <Slider
@@ -163,11 +180,15 @@ export function SettingsView() {
             <Button variant="outline" className="w-full text-left" disabled>
               Export Private Key
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               className="w-full"
               onClick={() => {
-                if (confirm("This will reset all settings to defaults. Are you sure?")) {
+                if (
+                  confirm(
+                    "This will reset all settings to defaults. Are you sure?"
+                  )
+                ) {
                   resetSettings();
                 }
               }}
@@ -185,13 +206,18 @@ export function SettingsView() {
           <Globe className="h-4 w-4" />
           <h3 className="font-medium">Relays</h3>
         </div>
-        
+
         <div className="space-y-3">
           {/* Relay list */}
           <div className="space-y-2">
             {settings.relays.map((relay) => (
-              <div key={relay} className="flex items-center justify-between bg-muted p-2 rounded">
-                <span className="text-sm font-mono truncate flex-1">{relay}</span>
+              <div
+                key={relay}
+                className="flex items-center justify-between bg-muted p-2 rounded"
+              >
+                <span className="text-sm font-mono truncate flex-1">
+                  {relay}
+                </span>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -232,21 +258,25 @@ export function SettingsView() {
         <p className="text-sm text-muted-foreground mb-4">
           Event kinds that are automatically allowed for medium trust origins:
         </p>
-        
+
         <div className="space-y-2">
           {Object.entries(COMMON_EVENT_KINDS).map(([kind, description]) => {
             const kindNum = parseInt(kind);
             const isEnabled = settings.mediumAllowKinds.includes(kindNum);
-            
+
             return (
               <div key={kind} className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-medium">Kind {kind}</div>
-                  <div className="text-xs text-muted-foreground">{description}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {description}
+                  </div>
                 </div>
                 <Switch
                   checked={isEnabled}
-                  onCheckedChange={(checked) => handleToggleMediumKind(kindNum, checked)}
+                  onCheckedChange={(checked) =>
+                    handleToggleMediumKind(kindNum, checked)
+                  }
                 />
               </div>
             );
@@ -260,16 +290,16 @@ export function SettingsView() {
         <div className="space-y-1 text-sm text-muted-foreground">
           <p>Version 1.0.0</p>
           <p>Built with ❤️ for Nostr</p>
-          <p className="text-xs pt-2">
-            Settings version: {settings.__version}
-          </p>
+          <p className="text-xs pt-2">Settings version: {settings.__version}</p>
         </div>
       </div>
 
       {/* Development Debug Section */}
-      {process.env.NODE_ENV === 'development' && (
+      {process.env.NODE_ENV === "development" && (
         <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <h3 className="font-medium mb-2 text-yellow-800 dark:text-yellow-200">Debug (Dev Mode)</h3>
+          <h3 className="font-medium mb-2 text-yellow-800 dark:text-yellow-200">
+            Debug (Dev Mode)
+          </h3>
           <details className="text-xs">
             <summary className="cursor-pointer text-yellow-700 dark:text-yellow-300 mb-2">
               View Raw Settings
@@ -279,8 +309,8 @@ export function SettingsView() {
             </pre>
           </details>
           <div className="mt-2 space-x-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => {
                 console.log("Current settings:", settings);
@@ -288,8 +318,8 @@ export function SettingsView() {
             >
               Log to Console
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => {
                 // Add a test relay for demonstration
