@@ -1,9 +1,9 @@
-import { storage } from "wxt/storage";
 import { browser } from "wxt/browser";
 
 export default defineBackground(() => {
   async function apply() {
-    const docked = await storage.getItem<boolean>("sync:isDocked", false);
+    const result = await browser.storage.sync.get("isDocked");
+    const docked = result.isDocked || false;
     const sp: any = (browser as any).sidePanel;
     if (!sp || typeof sp.setPanelBehavior !== "function") return;
     try {
@@ -19,5 +19,9 @@ export default defineBackground(() => {
     }
   }
   apply();
-  storage.watch("sync:isDocked", apply);
+  browser.storage.onChanged.addListener((changes) => {
+    if ("isDocked" in changes) {
+      apply();
+    }
+  });
 });

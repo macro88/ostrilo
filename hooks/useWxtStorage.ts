@@ -1,38 +1,39 @@
 import { useState, useEffect, useCallback } from "react";
-import { storage } from "#imports";
+import { browser } from "wxt/browser";
 
-export function useWxtStorage<T>(key: StorageItemKey, defaultValue: T) {
-  const [value, setValue] = useState<T | null>(defaultValue);
+export function useWxtStorage<T>(key: string, defaultValue: T) {
+  const [value, setValue] = useState<T>(defaultValue);
 
+  // Get initial value from storage
   useEffect(() => {
-    storage.getItem<T>(key).then(setValue);
-  }, [key, defaultValue]);
-
-  // 2. Watch for changes to the key in storage from other parts of the extension.
-  useEffect(() => {
-    const unwatch = storage.watch<T>(key, (newValue) => {
-      // When the storage changes, update the local state.
-      // Fall back to defaultValue if the new value is null or undefined.
-      setValue(newValue ?? defaultValue);
+    browser.storage.sync.get([key]).then((result) => {
+      if (result[key] !== undefined) {
+        setValue(result[key]);
+      }
     });
+  }, [key]);
 
-    // The return function for cleanup must be synchronous.
-    // We resolve the promise which gives the actual unwatch function.
+  // Watch for changes
+  useEffect(() => {
+    const onChanged = (changes: { [key: string]: any }) => {
+      if (key in changes) {
+        setValue(changes[key].newValue ?? defaultValue);
+      }
+    };
+
+    browser.storage.onChanged.addListener(onChanged);
     return () => {
-      unwatch();
+      browser.storage.onChanged.removeListener(onChanged);
     };
   }, [key, defaultValue]);
 
-  // 3. Create a setter function that updates both React state and extension storage.
+  // Setter
   const setStoredValue = useCallback(
     (newValue: T | ((prevValue: T) => T)) => {
-      // Use the functional update form of useState to avoid stale closures.
       setValue((currentValue) => {
         const valueToStore =
           newValue instanceof Function ? newValue(currentValue) : newValue;
-        // Asynchronously set the item in storage.
-        storage.setItem(key, valueToStore);
-        // Return the new value to update the React state immediately.
+        browser.storage.sync.set({ [key]: valueToStore });
         return valueToStore;
       });
     },
