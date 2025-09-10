@@ -25,7 +25,7 @@ export function PasswordInput({
   confirmValue,
   onConfirmChange,
   error,
-  disabled = false
+  disabled = false,
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -108,7 +108,11 @@ export function PasswordInput({
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
             disabled={disabled}
           >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPassword ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
           </button>
         </div>
       </div>
@@ -117,22 +121,29 @@ export function PasswordInput({
       {showStrengthMeter && strength && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Password Strength</span>
-            <span className={`text-sm font-medium ${
-              strength.score >= 3 ? "text-green-600" : 
-              strength.score >= 2 ? "text-yellow-600" : "text-red-600"
-            }`}>
+            <span className="text-sm text-muted-foreground">
+              Password Strength
+            </span>
+            <span
+              className={`text-sm font-medium ${
+                strength.score >= 3
+                  ? "text-green-600"
+                  : strength.score >= 2
+                  ? "text-yellow-600"
+                  : "text-red-600"
+              }`}
+            >
               {getStrengthLabel(strength.score)}
             </span>
           </div>
-          
+
           {/* Strength bars */}
           <div className="flex gap-1">
             {[0, 1, 2, 3].map((level) => (
               <div
                 key={level}
                 className={`h-2 flex-1 rounded-sm ${
-                  level < strength.score 
+                  level < strength.score
                     ? getStrengthColor(strength.score)
                     : "bg-muted"
                 }`}
@@ -155,7 +166,9 @@ export function PasswordInput({
                 <div className="flex items-center gap-2 text-xs">
                   <Check className="h-3 w-3 text-green-500" />
                   <span className="text-muted-foreground">
-                    {strength.score >= 2 ? "Length and complexity" : "Minimum length"}
+                    {strength.score >= 2
+                      ? "Length and complexity"
+                      : "Minimum length"}
                   </span>
                 </div>
               )}
@@ -184,7 +197,11 @@ export function PasswordInput({
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
               disabled={disabled}
             >
-              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showConfirmPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
             </button>
           </div>
         </div>
@@ -197,7 +214,7 @@ export function PasswordInput({
           {error}
         </div>
       )}
-      
+
       {confirmError && (
         <div className="text-sm text-red-600 flex items-center gap-2">
           <X className="h-4 w-4" />

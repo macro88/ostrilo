@@ -4,15 +4,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useKeyManager } from "@/hooks/useKeyManager";
 import mascotLogo from "/assets/ostrilo_mascot_front.svg";
-import { 
-  Lock, 
-  Unlock, 
-  Eye, 
-  EyeOff, 
+import {
+  Lock,
+  Unlock,
+  Eye,
+  EyeOff,
   AlertTriangle,
   Fingerprint,
   Shield,
-  Key
+  Key,
 } from "lucide-react";
 
 interface LockScreenProps {
@@ -20,7 +20,10 @@ interface LockScreenProps {
   title?: string;
 }
 
-export function LockScreen({ onUnlock, title = "Ostrilo is Locked" }: LockScreenProps) {
+export function LockScreen({
+  onUnlock,
+  title = "Ostrilo is Locked",
+}: LockScreenProps) {
   const { unlock, isLoading, hasKeys } = useKeyManager();
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -30,7 +33,7 @@ export function LockScreen({ onUnlock, title = "Ostrilo is Locked" }: LockScreen
 
   // Check biometric availability
   useEffect(() => {
-    if ('credentials' in navigator && 'create' in navigator.credentials) {
+    if ("credentials" in navigator && "create" in navigator.credentials) {
       setBiometricAvailable(true);
     }
   }, []);
@@ -47,7 +50,7 @@ export function LockScreen({ onUnlock, title = "Ostrilo is Locked" }: LockScreen
       setPassword(""); // Clear password from memory
       onUnlock?.();
     } catch (error) {
-      setAttemptCount(prev => prev + 1);
+      setAttemptCount((prev) => prev + 1);
       setError(error instanceof Error ? error.message : "Incorrect password");
       setPassword(""); // Clear password on error
     }
@@ -60,7 +63,7 @@ export function LockScreen({ onUnlock, title = "Ostrilo is Locked" }: LockScreen
       // 1. Store an encrypted copy of the password using biometric protection
       // 2. Use WebAuthn or platform-specific APIs to decrypt it
       // 3. Use the decrypted password to unlock the keys
-      
+
       console.log("Biometric unlock requested (not implemented yet)");
       setError("Biometric unlock is not yet implemented");
     } catch (error) {
@@ -91,9 +94,7 @@ export function LockScreen({ onUnlock, title = "Ostrilo is Locked" }: LockScreen
         <div className="text-center p-3 bg-muted rounded-lg">
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Key className="h-4 w-4" />
-            <span>
-              Your keys are secured
-            </span>
+            <span>Your keys are secured</span>
           </div>
         </div>
       )}
@@ -123,7 +124,11 @@ export function LockScreen({ onUnlock, title = "Ostrilo is Locked" }: LockScreen
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
               disabled={isLoading}
             >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
             </button>
           </div>
         </div>
@@ -163,7 +168,9 @@ export function LockScreen({ onUnlock, title = "Ostrilo is Locked" }: LockScreen
                 <span className="w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">or</span>
+                <span className="bg-background px-2 text-muted-foreground">
+                  or
+                </span>
               </div>
             </div>
 
@@ -191,7 +198,8 @@ export function LockScreen({ onUnlock, title = "Ostrilo is Locked" }: LockScreen
         <div className="p-3 border-2 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 rounded-lg">
           <div className="flex items-center gap-2 text-sm text-amber-600">
             <AlertTriangle className="h-4 w-4" />
-            Multiple failed attempts detected. Ensure you're using the correct password.
+            Multiple failed attempts detected. Ensure you're using the correct
+            password.
           </div>
         </div>
       )}

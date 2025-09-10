@@ -30,11 +30,7 @@ export default defineConfig({
     },
     // Optimize dependencies for the browser extension environment
     optimizeDeps: {
-      include: [
-        "@noble/curves",
-        "@noble/hashes",
-        "@scure/base",
-      ],
+      include: ["@noble/curves", "@noble/hashes", "@scure/base"],
     },
   }),
 });

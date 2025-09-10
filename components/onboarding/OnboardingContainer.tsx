@@ -39,19 +39,13 @@ export function OnboardingContainer({ onComplete }: OnboardingContainerProps) {
           onImportKey={handleImportKey}
         />
       )}
-      
+
       {currentFlow === "create" && (
-        <OnboardingCreateKey
-          onBack={handleBack}
-          onComplete={handleComplete}
-        />
+        <OnboardingCreateKey onBack={handleBack} onComplete={handleComplete} />
       )}
-      
+
       {currentFlow === "import" && (
-        <OnboardingImportKey
-          onBack={handleBack}
-          onComplete={handleComplete}
-        />
+        <OnboardingImportKey onBack={handleBack} onComplete={handleComplete} />
       )}
     </div>
   );

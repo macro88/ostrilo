@@ -7,8 +7,13 @@ interface OnboardingWelcomeProps {
   onImportKey: () => void;
 }
 
-export function OnboardingWelcome({ onCreateKey, onImportKey }: OnboardingWelcomeProps) {
-  const [selectedOption, setSelectedOption] = useState<"create" | "import" | null>(null);
+export function OnboardingWelcome({
+  onCreateKey,
+  onImportKey,
+}: OnboardingWelcomeProps) {
+  const [selectedOption, setSelectedOption] = useState<
+    "create" | "import" | null
+  >(null);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8">
@@ -21,13 +26,14 @@ export function OnboardingWelcome({ onCreateKey, onImportKey }: OnboardingWelcom
             className="w-full h-full"
           />
         </div>
-        
+
         <h1 className="text-3xl font-bold text-foreground">
           Welcome to Ostrilo
         </h1>
-        
+
         <p className="text-lg text-muted-foreground max-w-md">
-          Your secure Nostr signing companion. Let's set up your cryptographic identity.
+          Your secure Nostr signing companion. Let's set up your cryptographic
+          identity.
         </p>
       </div>
 
@@ -40,7 +46,7 @@ export function OnboardingWelcome({ onCreateKey, onImportKey }: OnboardingWelcom
             Military-grade encryption with local key storage
           </p>
         </div>
-        
+
         <div className="text-center space-y-2 p-4">
           <Zap className="h-8 w-8 mx-auto text-yellow-500" />
           <h3 className="font-semibold">Fast</h3>
@@ -48,7 +54,7 @@ export function OnboardingWelcome({ onCreateKey, onImportKey }: OnboardingWelcom
             Instant signing with optimized cryptography
           </p>
         </div>
-        
+
         <div className="text-center space-y-2 p-4">
           <Key className="h-8 w-8 mx-auto text-green-500" />
           <h3 className="font-semibold">Private</h3>
@@ -81,11 +87,13 @@ export function OnboardingWelcome({ onCreateKey, onImportKey }: OnboardingWelcom
                 Generate a fresh cryptographic identity
               </p>
             </div>
-            <div className={`w-4 h-4 border-2 rounded-full ${
-              selectedOption === "create" 
-                ? "border-blue-500 bg-blue-500" 
-                : "border-muted-foreground"
-            }`} />
+            <div
+              className={`w-4 h-4 border-2 rounded-full ${
+                selectedOption === "create"
+                  ? "border-blue-500 bg-blue-500"
+                  : "border-muted-foreground"
+              }`}
+            />
           </div>
         </div>
 
@@ -106,11 +114,13 @@ export function OnboardingWelcome({ onCreateKey, onImportKey }: OnboardingWelcom
                 Use your existing nsec private key
               </p>
             </div>
-            <div className={`w-4 h-4 border-2 rounded-full ${
-              selectedOption === "import" 
-                ? "border-green-500 bg-green-500" 
-                : "border-muted-foreground"
-            }`} />
+            <div
+              className={`w-4 h-4 border-2 rounded-full ${
+                selectedOption === "import"
+                  ? "border-green-500 bg-green-500"
+                  : "border-muted-foreground"
+              }`}
+            />
           </div>
         </div>
 
@@ -137,7 +147,7 @@ export function OnboardingWelcome({ onCreateKey, onImportKey }: OnboardingWelcom
       {/* Security notice */}
       <div className="text-center text-xs text-muted-foreground max-w-md">
         <Shield className="h-4 w-4 inline mr-1" />
-        Your private keys are encrypted and stored locally on your device. 
+        Your private keys are encrypted and stored locally on your device.
         Ostrilo never has access to your keys or personal data.
       </div>
     </div>

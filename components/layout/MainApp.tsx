@@ -22,10 +22,14 @@ export function MainApp() {
 
   // Show lock screen if user has keys but needs to unlock
   if (needsUnlock) {
-    return <LockScreen onUnlock={() => {
-      // The unlock happens in the LockScreen component
-      // The state will update automatically through the hook
-    }} />;
+    return (
+      <LockScreen
+        onUnlock={() => {
+          // The unlock happens in the LockScreen component
+          // The state will update automatically through the hook
+        }}
+      />
+    );
   }
 
   // Loading state

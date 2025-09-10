@@ -5,16 +5,16 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useKeyManager } from "@/hooks/useKeyManager";
 import { parsePrivateKey, evaluatePasswordStrength } from "@/lib/crypto";
-import { 
-  FileKey, 
-  ArrowLeft, 
-  ArrowRight, 
+import {
+  FileKey,
+  ArrowLeft,
+  ArrowRight,
   AlertTriangle,
   CheckCircle,
   Key,
   Upload,
   Eye,
-  EyeOff
+  EyeOff,
 } from "lucide-react";
 
 interface OnboardingImportKeyProps {
@@ -24,17 +24,20 @@ interface OnboardingImportKeyProps {
 
 type ImportStep = "import" | "password" | "success";
 
-export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyProps) {
+export function OnboardingImportKey({
+  onBack,
+  onComplete,
+}: OnboardingImportKeyProps) {
   const { importKey, isLoading } = useKeyManager();
   const [currentStep, setCurrentStep] = useState<ImportStep>("import");
-  
+
   // Import state
   const [privateKeyInput, setPrivateKeyInput] = useState("");
   const [keyName, setKeyName] = useState("");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [importError, setImportError] = useState("");
   const [parsedKey, setParsedKey] = useState<Uint8Array | null>(null);
-  
+
   // Password state
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -45,19 +48,21 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
       setImportError("Private key is required");
       return false;
     }
-    
+
     if (!keyName.trim()) {
       setImportError("Key name is required");
       return false;
     }
-    
+
     try {
       const parsed = parsePrivateKey(privateKeyInput.trim());
       setParsedKey(parsed);
       setImportError("");
       return true;
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Invalid private key format");
+      setImportError(
+        error instanceof Error ? error.message : "Invalid private key format"
+      );
       return false;
     }
   };
@@ -67,18 +72,18 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
       setPasswordError("Password is required");
       return false;
     }
-    
+
     if (password !== confirmPassword) {
       setPasswordError("Passwords do not match");
       return false;
     }
-    
+
     const strength = evaluatePasswordStrength(password);
     if (!strength.meetsMinimum) {
       setPasswordError("Password does not meet minimum requirements");
       return false;
     }
-    
+
     setPasswordError("");
     return true;
   };
@@ -90,24 +95,26 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
 
   const handleSetPassword = async () => {
     if (!validatePassword() || !parsedKey) return;
-    
+
     try {
       await importKey(privateKeyInput.trim(), password, keyName.trim());
       setCurrentStep("success");
     } catch (error) {
-      setPasswordError(error instanceof Error ? error.message : "Failed to import key");
+      setPasswordError(
+        error instanceof Error ? error.message : "Failed to import key"
+      );
     }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
-        
+
         // Try to parse as JSON first (exported key file)
         try {
           const keyData = JSON.parse(content);
@@ -128,9 +135,9 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
       }
     };
     reader.readAsText(file);
-    
+
     // Clear the input so the same file can be selected again
-    event.target.value = '';
+    event.target.value = "";
   };
 
   const renderImportStep = () => (
@@ -174,7 +181,11 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
                 onClick={() => setShowPrivateKey(!showPrivateKey)}
                 className="p-1 text-muted-foreground hover:text-foreground"
               >
-                {showPrivateKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPrivateKey ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
               </button>
             </div>
           </div>
@@ -219,10 +230,13 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
         <div className="p-3 border-2 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 rounded-lg">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <div className="font-medium text-amber-600 text-sm">Security Notice</div>
+            <div className="font-medium text-amber-600 text-sm">
+              Security Notice
+            </div>
           </div>
           <div className="text-xs text-amber-600">
-            Only import keys you trust. Malicious keys could compromise your Nostr identity.
+            Only import keys you trust. Malicious keys could compromise your
+            Nostr identity.
           </div>
         </div>
       </div>
@@ -239,7 +253,11 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button onClick={handleImportKey} disabled={isLoading} className="flex-1">
+        <Button
+          onClick={handleImportKey}
+          disabled={isLoading}
+          className="flex-1"
+        >
           Continue
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
@@ -262,7 +280,9 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
           <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
             <div className="flex items-center gap-2 mb-1">
               <CheckCircle className="h-4 w-4 text-green-600" />
-              <div className="font-medium text-green-600 text-sm">Key Validated</div>
+              <div className="font-medium text-green-600 text-sm">
+                Key Validated
+              </div>
             </div>
             <div className="text-xs text-green-600">
               Private key "{keyName}" is ready for import
@@ -293,7 +313,11 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button onClick={handleSetPassword} disabled={isLoading} className="flex-1">
+        <Button
+          onClick={handleSetPassword}
+          disabled={isLoading}
+          className="flex-1"
+        >
           {isLoading ? "Importing..." : "Import Key"}
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
@@ -313,7 +337,9 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
 
       <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
         <div className="text-center space-y-2">
-          <div className="font-semibold text-green-600">"{keyName}" is ready to use</div>
+          <div className="font-semibold text-green-600">
+            "{keyName}" is ready to use
+          </div>
           <div className="text-sm text-green-600">
             Your key is now encrypted and stored securely on this device
           </div>
@@ -322,9 +348,10 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
 
       <div className="text-center space-y-4">
         <div className="text-sm text-muted-foreground">
-          You can now start using Ostrilo to sign Nostr events and manage your identity.
+          You can now start using Ostrilo to sign Nostr events and manage your
+          identity.
         </div>
-        
+
         <Button onClick={onComplete} className="w-full" size="lg">
           Get Started
           <ArrowRight className="ml-2 h-4 w-4" />
@@ -345,7 +372,8 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   currentStep === step
                     ? "bg-blue-500 text-white"
-                    : ["import", "password", "success"].indexOf(currentStep) > index
+                    : ["import", "password", "success"].indexOf(currentStep) >
+                      index
                     ? "bg-green-500 text-white"
                     : "bg-muted text-muted-foreground"
                 }`}
@@ -359,7 +387,8 @@ export function OnboardingImportKey({ onBack, onComplete }: OnboardingImportKeyP
               className="h-2 bg-blue-500 rounded-full transition-all duration-300"
               style={{
                 width: `${
-                  (["import", "password", "success"].indexOf(currentStep) + 1) * 33.33
+                  (["import", "password", "success"].indexOf(currentStep) + 1) *
+                  33.33
                 }%`,
               }}
             />

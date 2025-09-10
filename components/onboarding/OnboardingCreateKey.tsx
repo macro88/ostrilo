@@ -4,25 +4,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useKeyManager } from "@/hooks/useKeyManager";
-import { 
-  evaluatePasswordStrength, 
+import {
+  evaluatePasswordStrength,
   generateKeyPair,
   publicKeyToHex,
   publicKeyToBech32,
-  privateKeyToBech32
+  privateKeyToBech32,
 } from "@/lib/crypto";
-import { 
-  Key, 
-  ArrowLeft, 
-  ArrowRight, 
-  Copy, 
-  Download, 
-  Eye, 
+import {
+  Key,
+  ArrowLeft,
+  ArrowRight,
+  Copy,
+  Download,
+  Eye,
   EyeOff,
   CheckCircle,
   AlertTriangle,
   Shield,
-  Fingerprint
+  Fingerprint,
 } from "lucide-react";
 
 interface OnboardingCreateKeyProps {
@@ -32,16 +32,19 @@ interface OnboardingCreateKeyProps {
 
 type CreateStep = "password" | "generate" | "backup" | "verify";
 
-export function OnboardingCreateKey({ onBack, onComplete }: OnboardingCreateKeyProps) {
+export function OnboardingCreateKey({
+  onBack,
+  onComplete,
+}: OnboardingCreateKeyProps) {
   const { generateKey, isLoading } = useKeyManager();
   const [currentStep, setCurrentStep] = useState<CreateStep>("password");
-  
+
   // Password setup state
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [keyName, setKeyName] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  
+
   // Key generation state
   const [generatedKey, setGeneratedKey] = useState<{
     privateKey: string;
@@ -49,7 +52,7 @@ export function OnboardingCreateKey({ onBack, onComplete }: OnboardingCreateKeyP
     nsec: string;
     npub: string;
   } | null>(null);
-  
+
   // Backup verification state
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [backupConfirmed, setBackupConfirmed] = useState(false);
@@ -63,7 +66,7 @@ export function OnboardingCreateKey({ onBack, onComplete }: OnboardingCreateKeyP
 
   useEffect(() => {
     // Check if biometric authentication is available
-    if ('credentials' in navigator && 'create' in navigator.credentials) {
+    if ("credentials" in navigator && "create" in navigator.credentials) {
       setBiometricAvailable(true);
     }
   }, []);
@@ -73,57 +76,61 @@ export function OnboardingCreateKey({ onBack, onComplete }: OnboardingCreateKeyP
       setPasswordError("Password is required");
       return false;
     }
-    
+
     if (password !== confirmPassword) {
       setPasswordError("Passwords do not match");
       return false;
     }
-    
+
     const strength = evaluatePasswordStrength(password);
     if (!strength.meetsMinimum) {
       setPasswordError("Password does not meet minimum requirements");
       return false;
     }
-    
+
     if (!keyName.trim()) {
       setPasswordError("Key name is required");
       return false;
     }
-    
+
     setPasswordError("");
     return true;
   };
 
   const handleGenerateKey = async () => {
     if (!validatePassword()) return;
-    
+
     try {
       // Generate the key pair first
       const keyPair = await generateKeyPair();
       const publicKeyHex = publicKeyToHex(keyPair.publicKey);
       const npub = publicKeyToBech32(keyPair.publicKey);
       const nsec = privateKeyToBech32(keyPair.privateKey);
-      
+
       // Store the generated key data for display
       const keyData = {
-        privateKey: Array.from(keyPair.privateKey).map(b => b.toString(16).padStart(2, '0')).join(''),
+        privateKey: Array.from(keyPair.privateKey)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join(""),
         publicKey: publicKeyHex,
         nsec,
-        npub
+        npub,
       };
       setGeneratedKey(keyData);
-      
+
       // Extract random words from nsec for verification
       const nsecWords = nsec.slice(5).match(/.{1,4}/g) || [];
       const randomWords = nsecWords.slice(0, 3);
       setVerificationWords(randomWords);
-      
+
       // Save the key using the key manager (this encrypts and stores it)
       await generateKey(password, keyName.trim());
-      
+
       setCurrentStep("generate");
     } catch (error) {
-      setPasswordError(error instanceof Error ? error.message : "Failed to generate key");
+      setPasswordError(
+        error instanceof Error ? error.message : "Failed to generate key"
+      );
     }
   };
 
@@ -132,47 +139,52 @@ export function OnboardingCreateKey({ onBack, onComplete }: OnboardingCreateKeyP
       await navigator.clipboard.writeText(text);
     } catch (error) {
       // Fallback for older browsers
-      const textArea = document.createElement('textarea');
+      const textArea = document.createElement("textarea");
       textArea.value = text;
       document.body.appendChild(textArea);
       textArea.select();
-      document.execCommand('copy');
+      document.execCommand("copy");
       document.body.removeChild(textArea);
     }
   };
 
   const handleDownloadKey = () => {
     if (!generatedKey) return;
-    
+
     const keyData = {
       name: keyName,
       privateKey: generatedKey.nsec,
       publicKey: generatedKey.npub,
-      created: new Date().toISOString()
+      created: new Date().toISOString(),
     };
-    
+
     const dataStr = JSON.stringify(keyData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    
-    const exportFileDefaultName = `ostrilo-key-${keyName.toLowerCase().replace(/[^a-z0-9]/g, '-')}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
+    const dataUri =
+      "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+
+    const exportFileDefaultName = `ostrilo-key-${keyName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "-")}.json`;
+
+    const linkElement = document.createElement("a");
+    linkElement.setAttribute("href", dataUri);
+    linkElement.setAttribute("download", exportFileDefaultName);
     linkElement.click();
   };
 
   const handleVerifyBackup = () => {
     if (!verificationWords.length) return;
-    
-    const expectedInput = verificationWords.join('').toLowerCase();
-    const userInput = userVerificationInput.toLowerCase().replace(/\s/g, '');
-    
+
+    const expectedInput = verificationWords.join("").toLowerCase();
+    const userInput = userVerificationInput.toLowerCase().replace(/\s/g, "");
+
     if (userInput === expectedInput) {
       setVerificationError("");
       onComplete();
     } else {
-      setVerificationError("Verification failed. Please check your backup and try again.");
+      setVerificationError(
+        "Verification failed. Please check your backup and try again."
+      );
     }
   };
 
@@ -232,7 +244,11 @@ export function OnboardingCreateKey({ onBack, onComplete }: OnboardingCreateKeyP
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button onClick={handleGenerateKey} disabled={isLoading} className="flex-1">
+        <Button
+          onClick={handleGenerateKey}
+          disabled={isLoading}
+          className="flex-1"
+        >
           Generate Key
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
@@ -287,7 +303,11 @@ export function OnboardingCreateKey({ onBack, onComplete }: OnboardingCreateKeyP
                 size="sm"
                 onClick={() => setShowPrivateKey(!showPrivateKey)}
               >
-                {showPrivateKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPrivateKey ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
               </Button>
               {showPrivateKey && (
                 <Button
@@ -394,14 +414,15 @@ export function OnboardingCreateKey({ onBack, onComplete }: OnboardingCreateKeyP
         <CheckCircle className="h-12 w-12 mx-auto text-green-500" />
         <h2 className="text-2xl font-bold">Verify Your Backup</h2>
         <p className="text-muted-foreground">
-          Enter these characters from your private key to confirm you have it saved
+          Enter these characters from your private key to confirm you have it
+          saved
         </p>
       </div>
 
       <div className="space-y-4">
         <div className="p-4 bg-muted rounded-lg text-center">
           <Label className="text-sm text-muted-foreground">
-            Enter characters: {verificationWords.join(' • ')}
+            Enter characters: {verificationWords.join(" • ")}
           </Label>
           <div className="text-xs text-muted-foreground mt-1">
             (from your nsec private key, without spaces)
@@ -452,7 +473,9 @@ export function OnboardingCreateKey({ onBack, onComplete }: OnboardingCreateKeyP
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   currentStep === step
                     ? "bg-blue-500 text-white"
-                    : ["password", "generate", "backup", "verify"].indexOf(currentStep) > index
+                    : ["password", "generate", "backup", "verify"].indexOf(
+                        currentStep
+                      ) > index
                     ? "bg-green-500 text-white"
                     : "bg-muted text-muted-foreground"
                 }`}
@@ -466,7 +489,11 @@ export function OnboardingCreateKey({ onBack, onComplete }: OnboardingCreateKeyP
               className="h-2 bg-blue-500 rounded-full transition-all duration-300"
               style={{
                 width: `${
-                  (["password", "generate", "backup", "verify"].indexOf(currentStep) + 1) * 25
+                  (["password", "generate", "backup", "verify"].indexOf(
+                    currentStep
+                  ) +
+                    1) *
+                  25
                 }%`,
               }}
             />
