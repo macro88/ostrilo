@@ -19,7 +19,16 @@ import {
   TRUST_LEVEL_DESCRIPTIONS,
   COMMON_EVENT_KINDS,
 } from "@/lib/settings";
-import { Plus, X, Key, Shield, Clock, Globe, Trash2 } from "lucide-react";
+import {
+  Plus,
+  X,
+  Key,
+  Shield,
+  Clock,
+  Globe,
+  Trash2,
+  Computer,
+} from "lucide-react";
 
 export function SettingsView() {
   const {
@@ -104,6 +113,10 @@ export function SettingsView() {
 
       {/* Theme Section */}
       <div className="bg-card border border-border rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Computer className="h-4 w-4" />
+          <h3 className="font-medium">Display</h3>
+        </div>
         <div className="space-y-3">
           <Label htmlFor="theme">Theme</Label>
           <Select value={settings.theme} onValueChange={handleThemeChange}>
@@ -117,10 +130,6 @@ export function SettingsView() {
             </SelectContent>
           </Select>
         </div>
-      </div>
-
-      {/* Side Panel Toggle */}
-      <div className="bg-card border border-border rounded-lg p-4">
         <SidePanelToggle />
       </div>
 
