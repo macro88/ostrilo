@@ -1,6 +1,7 @@
 import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import mascotLogo from "/assets/ostrilo_mascot_front.svg";
 
 interface HeaderProps {
   selectedKey?: string;
@@ -25,14 +26,8 @@ export function Header({ selectedKey, avatar }: HeaderProps) {
   return (
     <header className="flex items-center justify-between p-4 bg-background border-b border-border">
       {/* Left side - Menu/hamburger placeholder */}
-      <div className="w-6 h-6">
-        <svg viewBox="0 0 24 24" className="w-6 h-6 text-foreground">
-          <path
-            fill="currentColor"
-            d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"
-          />
-        </svg>
-      </div>
+
+      <img src={mascotLogo} alt="Ostrilo Mascot" className="w-6 h-6" />
 
       {/* Center - Wallet name */}
       <h1 className="text-lg font-semibold text-foreground">Ostrilo Signer</h1>
