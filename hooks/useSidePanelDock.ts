@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { browser } from "wxt/browser";
+import browser from "webextension-polyfill";
 
 /**
  * Side panel docking helper.

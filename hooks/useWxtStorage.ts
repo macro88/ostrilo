@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { browser } from "wxt/browser";
+import browser from "webextension-polyfill";
 
 export function useWxtStorage<T>(key: string, defaultValue: T) {
   const [value, setValue] = useState<T>(defaultValue);
 
   // Get initial value from storage
   useEffect(() => {
-    browser.storage.sync.get([key]).then((result) => {
+    browser.storage.sync.get([key]).then((result: Record<string, any>) => {
       if (result[key] !== undefined) {
         setValue(result[key]);
       }
@@ -15,9 +15,10 @@ export function useWxtStorage<T>(key: string, defaultValue: T) {
 
   // Watch for changes
   useEffect(() => {
-    const onChanged = (changes: { [key: string]: any }) => {
+    const onChanged = (changes: Record<string, browser.Storage.StorageChange>) => {
       if (key in changes) {
-        setValue(changes[key].newValue ?? defaultValue);
+        const newValue = changes[key].newValue;
+        setValue((newValue !== undefined && newValue !== null) ? newValue as T : defaultValue);
       }
     };
 
