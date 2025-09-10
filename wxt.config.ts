@@ -14,5 +14,27 @@ export default defineConfig({
         "@": path.resolve(__dirname, "./"), // or "./src" if using src directory
       },
     },
+    build: {
+      rollupOptions: {
+        external: [],
+        // Handle crypto dependencies properly for browser extension
+        output: {
+          globals: {},
+        },
+      },
+      // Ensure dependencies are properly bundled
+      commonjsOptions: {
+        include: [/node_modules/],
+        transformMixedEsModules: true,
+      },
+    },
+    // Optimize dependencies for the browser extension environment
+    optimizeDeps: {
+      include: [
+        "@noble/curves",
+        "@noble/hashes",
+        "@scure/base",
+      ],
+    },
   }),
 });

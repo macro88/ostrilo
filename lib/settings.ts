@@ -43,6 +43,8 @@ export interface AppSettingsV1 {
   mediumAllowKinds: number[]; // shipped default for medium trust
   sessionTTLMinutes: number; // 0 = until lock only
   selectedKeyId?: string; // convenience mirror of active key
+  onboardingCompleted?: boolean; // track if user completed onboarding
+  onboardingCompletedAt?: number; // epoch seconds when onboarding was completed
 }
 
 // Default settings shipped with the extension
