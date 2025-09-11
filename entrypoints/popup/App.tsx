@@ -2,7 +2,7 @@ import { MainApp } from "@/components/layout/MainApp";
 import "./App.css";
 
 function App() {
-  return <MainApp isUnlocked={true} />;
+  return <MainApp />;
 }
 
 export default App;
