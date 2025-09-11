@@ -7,13 +7,13 @@ import { ProfileView } from "@/components/layout/ProfileView";
 import { ActivityView } from "@/components/layout/ActivityView";
 import { SettingsView } from "@/components/layout/SettingsView";
 import { TabKey } from "@/components/layout/BottomTabs";
-import { useOnboarding } from "@/hooks/useKeyManager";
+import { useOnboarding } from "@/hooks/useOnboarding";
 import { useKeyManager } from "@/hooks/useKeyManager";
 
 export function MainApp() {
   const [activeTab, setActiveTab] = useState<TabKey>("home");
-  const { needsOnboarding, needsUnlock } = useOnboarding();
-  const { selectedUnlockedKey, isLoading } = useKeyManager();
+  const { needsOnboarding } = useOnboarding();
+  const { selectedUnlockedKey, isLoading, isLocked } = useKeyManager();
 
   // Show onboarding for first-time users
   if (needsOnboarding) {
@@ -21,7 +21,7 @@ export function MainApp() {
   }
 
   // Show lock screen if user has keys but needs to unlock
-  if (needsUnlock) {
+  if (isLocked) {
     return (
       <LockScreen
         onUnlock={() => {

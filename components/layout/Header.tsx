@@ -10,7 +10,7 @@ interface HeaderProps {
 
 export function Header({ selectedKey, avatar }: HeaderProps) {
   const [copied, setCopied] = useState(false);
-
+  const { lock } = useKeyManager();
   const handleCopyKey = async () => {
     if (selectedKey) {
       await navigator.clipboard.writeText(selectedKey);
@@ -30,7 +30,12 @@ export function Header({ selectedKey, avatar }: HeaderProps) {
       <img src={mascotLogo} alt="Ostrilo Mascot" className="w-6 h-6" />
 
       {/* Center - Wallet name */}
-      <h1 className="text-lg font-semibold text-foreground">Ostrilo Signer</h1>
+      <h1
+        className="text-lg font-semibold text-foreground"
+        onClick={() => lock()}
+      >
+        Ostrilo Signer
+      </h1>
 
       {/* Right side - Avatar and key */}
       <div className="flex items-center gap-2">

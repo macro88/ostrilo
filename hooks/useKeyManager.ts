@@ -1,9 +1,10 @@
 /**
  * Key management and lock state hooks for Ostrilo
  * Handles encrypted key storage, unlock/lock states, and auto-lock timers
+ * Now uses React Context for proper state management
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback } from "react";
 import browser from "webextension-polyfill";
 import {
   generateKeyPair,
@@ -16,101 +17,33 @@ import {
   zeroize,
   PasswordStrength,
   evaluatePasswordStrength,
-  isPlatformAuthenticatorAvailable,
 } from "@/lib/crypto";
 import { KeyRecord } from "@/lib/settings";
 import { useAppSettings } from "./useAppSettings";
-
-// Types
-export interface UnlockedKey {
-  id: string;
-  privateKey: Uint8Array;
-  publicKey: Uint8Array;
-  publicKeyHex: string;
-  publicKeyBech32: string;
-}
-
-export interface LockState {
-  isLocked: boolean;
-  unlockedKeys: Map<string, UnlockedKey>;
-  selectedKeyId?: string;
-  lastActivity: number;
-}
-
-// Storage keys
-const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
-const LOCK_STATE_STORAGE = "lockState";
-
-// Memory-only lock state (cleared on extension restart)
-let globalLockState: LockState = {
-  isLocked: true,
-  unlockedKeys: new Map(),
-  selectedKeyId: undefined,
-  lastActivity: Date.now(),
-};
+import {
+  useKeyManagerContext,
+  ENCRYPTED_KEYS_STORAGE,
+} from "./KeyManagerContext";
+import type { UnlockedKey, LockState } from "./KeyManagerContext";
 
 /**
  * Main hook for key management and lock state
+ * Now uses React Context for state management instead of global variables
  */
 export function useKeyManager() {
+  const { updateSettings, settings } = useAppSettings();
   const {
-    settings,
-    updateSettings,
-    selectedKey: settingsSelectedKey,
-  } = useAppSettings();
-  const [lockState, setLockState] = useState<LockState>(globalLockState);
-  const [isLoading, setIsLoading] = useState(true);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const autoLockTimer = useRef<number | null>(null);
-
-  // Check biometric availability on mount
-  useEffect(() => {
-    isPlatformAuthenticatorAvailable().then(setBiometricAvailable);
-  }, []);
-
-  // Update global state when local state changes
-  useEffect(() => {
-    globalLockState = lockState;
-  }, [lockState]);
-
-  // Auto-lock timer management
-  const resetAutoLockTimer = useCallback(() => {
-    if (autoLockTimer.current !== null) {
-      window.clearTimeout(autoLockTimer.current);
-    }
-
-    if (settings.autoLockMinutes > 0 && !lockState.isLocked) {
-      autoLockTimer.current = window.setTimeout(() => {
-        lock();
-      }, settings.autoLockMinutes * 60 * 1000);
-    }
-  }, [settings.autoLockMinutes, lockState.isLocked]);
-
-  // Update activity timestamp and reset timer
-  const updateActivity = useCallback(() => {
-    const now = Date.now();
-    setLockState((prev) => ({ ...prev, lastActivity: now }));
-    resetAutoLockTimer();
-  }, [resetAutoLockTimer]);
-
-  // Lock the extension
-  const lock = useCallback(() => {
-    // Zero out all private keys in memory
-    globalLockState.unlockedKeys.forEach((key) => {
-      zeroize(key.privateKey);
-    });
-
-    setLockState({
-      isLocked: true,
-      unlockedKeys: new Map(),
-      selectedKeyId: undefined,
-      lastActivity: Date.now(),
-    });
-
-    if (autoLockTimer.current !== null) {
-      window.clearTimeout(autoLockTimer.current);
-    }
-  }, []);
+    lockState,
+    keys,
+    isLoading,
+    biometricAvailable,
+    setLockState,
+    setIsLoading,
+    lock,
+    updateActivity,
+    saveEncryptedKeys,
+    loadKeys,
+  } = useKeyManagerContext();
 
   // Unlock with password
   const unlock = useCallback(
@@ -155,6 +88,7 @@ export function useKeyManager() {
 
             const unlockedKey: UnlockedKey = {
               id: keyRecord.id,
+              label: keyRecord.label || "Unnamed",
               privateKey,
               publicKey: publicKeyBytes,
               publicKeyHex: publicKey,
@@ -173,18 +107,16 @@ export function useKeyManager() {
           throw new Error("Invalid password");
         }
 
-        // Determine selected key
-        let selectedKeyId = settings.selectedKeyId;
-        if (!selectedKeyId || !unlockedKeys.has(selectedKeyId)) {
-          selectedKeyId = unlockedKeys.keys().next().value;
-        }
-
-        setLockState({
+        // Update lock state to unlocked with the decrypted keys
+        setLockState((prev) => ({
+          ...prev,
           isLocked: false,
           unlockedKeys,
-          selectedKeyId,
-          lastActivity: Date.now(),
-        });
+          selectedKeyId:
+            settings.selectedKeyId && unlockedKeys.has(settings.selectedKeyId)
+              ? settings.selectedKeyId
+              : unlockedKeys.keys().next().value,
+        }));
 
         updateActivity();
         return true;
@@ -195,7 +127,7 @@ export function useKeyManager() {
         setIsLoading(false);
       }
     },
-    [settings.selectedKeyId, updateActivity]
+    [keys, setIsLoading, setLockState, updateActivity, settings]
   );
 
   // Generate new key
@@ -218,25 +150,26 @@ export function useKeyManager() {
           salt: encrypted.salt,
           createdAt: Math.floor(Date.now() / 1000),
           lastUsedAt: Math.floor(Date.now() / 1000),
-          isSelected: settings.keys.length === 0, // First key is selected by default
+          isSelected: keys.length === 0, // First key is selected by default
         };
 
-        // Save to storage
-        const currentKeys = [...settings.keys, keyRecord];
-        await updateSettings({
-          keys: currentKeys,
-          selectedKeyId: keyRecord.isSelected
-            ? keyRecord.id
-            : settings.selectedKeyId,
-        });
-
-        // Also save encrypted keys separately for unlock process
+        // Save to local storage only
+        const currentKeys = [...keys, keyRecord];
+        console.log("Saving new key, total keys now:", currentKeys.length);
         await saveEncryptedKeys(currentKeys);
+
+        // Update only selectedKeyId in sync settings if this is the first key
+        if (keyRecord.isSelected) {
+          await updateSettings({
+            selectedKeyId: keyRecord.id,
+          });
+        }
 
         // If unlocked, add to memory
         if (!lockState.isLocked) {
           const unlockedKey: UnlockedKey = {
             id: keyRecord.id,
+            label: label || "Unnamed",
             privateKey: keyPair.privateKey,
             publicKey: keyPair.publicKey,
             publicKeyHex,
@@ -264,7 +197,7 @@ export function useKeyManager() {
         throw error;
       }
     },
-    [settings.keys, settings.selectedKeyId, lockState.isLocked, updateSettings]
+    [keys, lockState.isLocked, updateSettings, saveEncryptedKeys, setLockState]
   );
 
   // Import existing key
@@ -284,9 +217,7 @@ export function useKeyManager() {
         const publicKeyHex = publicKeyToHex(derivedPublicKey);
 
         // Check if key already exists
-        const existingKey = settings.keys.find(
-          (k) => k.pubkey === publicKeyHex
-        );
+        const existingKey = keys.find((k) => k.pubkey === publicKeyHex);
         if (existingKey) {
           throw new Error("This key has already been imported");
         }
@@ -304,25 +235,25 @@ export function useKeyManager() {
           salt: encrypted.salt,
           createdAt: Math.floor(Date.now() / 1000),
           lastUsedAt: Math.floor(Date.now() / 1000),
-          isSelected: settings.keys.length === 0, // First key is selected by default
+          isSelected: keys.length === 0, // First key is selected by default
         };
 
-        // Save to storage
-        const currentKeys = [...settings.keys, keyRecord];
-        await updateSettings({
-          keys: currentKeys,
-          selectedKeyId: keyRecord.isSelected
-            ? keyRecord.id
-            : settings.selectedKeyId,
-        });
-
-        // Also save encrypted keys separately
+        // Save to local storage only
+        const currentKeys = [...keys, keyRecord];
         await saveEncryptedKeys(currentKeys);
+
+        // Update only selectedKeyId in sync settings if this is the first key
+        if (keyRecord.isSelected) {
+          await updateSettings({
+            selectedKeyId: keyRecord.id,
+          });
+        }
 
         // If unlocked, add to memory
         if (!lockState.isLocked) {
           const unlockedKey: UnlockedKey = {
             id: keyRecord.id,
+            label: label || "Unnamed",
             privateKey,
             publicKey: derivedPublicKey,
             publicKeyHex,
@@ -350,7 +281,7 @@ export function useKeyManager() {
         throw error;
       }
     },
-    [settings.keys, settings.selectedKeyId, lockState.isLocked, updateSettings]
+    [keys, lockState.isLocked, updateSettings, saveEncryptedKeys, setLockState]
   );
 
   // Export key (requires unlock)
@@ -377,14 +308,16 @@ export function useKeyManager() {
         throw new Error("Key not found or not unlocked");
       }
 
-      // Update settings
-      const updatedKeys = settings.keys.map((k) => ({
+      // Update keys in local storage
+      const updatedKeys = keys.map((k) => ({
         ...k,
         isSelected: k.id === keyId,
       }));
 
+      await saveEncryptedKeys(updatedKeys);
+
+      // Update only selectedKeyId in sync settings
       await updateSettings({
-        keys: updatedKeys,
         selectedKeyId: keyId,
       });
 
@@ -392,44 +325,15 @@ export function useKeyManager() {
       setLockState((prev) => ({ ...prev, selectedKeyId: keyId }));
       updateActivity();
     },
-    [lockState.unlockedKeys, settings.keys, updateSettings, updateActivity]
+    [
+      lockState.unlockedKeys,
+      keys,
+      saveEncryptedKeys,
+      updateSettings,
+      setLockState,
+      updateActivity,
+    ]
   );
-
-  // Helper to save encrypted keys to local storage
-  const saveEncryptedKeys = useCallback(async (keys: KeyRecord[]) => {
-    await browser.storage.local.set({
-      [ENCRYPTED_KEYS_STORAGE]: keys,
-    });
-  }, []);
-
-  // Initialize lock state on mount
-  useEffect(() => {
-    const initLockState = async () => {
-      try {
-        setIsLoading(true);
-
-        // Check if we have any keys
-        if (settings.keys.length === 0) {
-          setLockState((prev) => ({ ...prev, isLocked: false }));
-        }
-
-        updateActivity();
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initLockState();
-  }, [settings.keys.length, updateActivity]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (autoLockTimer.current !== null) {
-        window.clearTimeout(autoLockTimer.current);
-      }
-    };
-  }, []);
 
   // Get current selected unlocked key
   const selectedUnlockedKey = lockState.selectedKeyId
@@ -441,7 +345,7 @@ export function useKeyManager() {
     isLocked: lockState.isLocked,
     isLoading,
     selectedUnlockedKey,
-    hasKeys: settings.keys.length > 0,
+    hasKeys: keys.length > 0,
     biometricAvailable,
 
     // Actions
@@ -455,34 +359,5 @@ export function useKeyManager() {
 
     // Utilities
     evaluatePasswordStrength,
-  };
-}
-
-/**
- * Hook for first-run detection and onboarding state
- */
-export function useOnboarding() {
-  const { settings, updateSettings } = useAppSettings();
-  const { hasKeys, isLocked } = useKeyManager();
-
-  const isFirstRun = settings.keys.length === 0;
-  const needsOnboarding = isFirstRun;
-  const needsUnlock = hasKeys && isLocked;
-
-  const markOnboardingComplete = async () => {
-    // Set a flag in settings to indicate onboarding is complete
-    // This could be used for showing help tips or other first-time user guidance
-    await updateSettings({
-      onboardingCompleted: true,
-      onboardingCompletedAt: Math.floor(Date.now() / 1000),
-    });
-  };
-
-  return {
-    isFirstRun,
-    needsOnboarding,
-    needsUnlock,
-    hasKeys,
-    markOnboardingComplete,
   };
 }

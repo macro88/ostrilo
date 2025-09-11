@@ -28,13 +28,14 @@ import {
   Globe,
   Trash2,
   Computer,
+  Fingerprint,
 } from "lucide-react";
+import { Pubkey } from "../common/pubkey";
 
 export function SettingsView() {
   const {
     settings,
     isLoading,
-    selectedKey,
     updateTheme,
     updateAutoLockMinutes,
     updateSessionTTLMinutes,
@@ -43,8 +44,16 @@ export function SettingsView() {
     updateMediumAllowKinds,
     resetSettings,
   } = useAppSettings();
-
+  const { selectedUnlockedKey } = useKeyManager();
   const [newRelay, setNewRelay] = useState("");
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  useState(() => {
+    // Check if biometric authentication is available
+    if ("credentials" in navigator && "create" in navigator.credentials) {
+      setBiometricAvailable(true);
+    }
+  });
 
   if (isLoading) {
     return (
@@ -95,16 +104,13 @@ export function SettingsView() {
           <Key className="h-4 w-4" />
           <h3 className="font-medium">Active Key</h3>
         </div>
-        {selectedKey ? (
+        {selectedUnlockedKey ? (
           <div className="space-y-2">
-            <p className="text-sm font-mono bg-muted p-2 rounded">
-              {selectedKey.pubkey.slice(0, 16)}...{selectedKey.pubkey.slice(-8)}
-            </p>
-            {selectedKey.label && (
-              <p className="text-sm text-muted-foreground">
-                {selectedKey.label}
-              </p>
-            )}
+            <Pubkey
+              key={selectedUnlockedKey.id}
+              label={selectedUnlockedKey.label}
+              pubkey={selectedUnlockedKey.publicKeyBech32}
+            />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">No key selected</p>
@@ -139,6 +145,24 @@ export function SettingsView() {
           <Shield className="h-4 w-4" />
           <h3 className="font-medium">Security</h3>
         </div>
+
+        {biometricAvailable && (
+          <div className="flex items-center space-x-2 p-3 border rounded-lg">
+            <Fingerprint className="h-5 w-5 text-blue-500" />
+            <div className="flex-1">
+              <div className="font-medium">Enable Biometric Unlock</div>
+              <div className="text-sm text-muted-foreground">
+                Use fingerprint or face recognition for quick access
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={biometricEnabled}
+              onChange={(e) => setBiometricEnabled(e.target.checked)}
+              className="rounded"
+            />
+          </div>
+        )}
 
         <div className="space-y-4">
           {/* Auto-lock timer */}

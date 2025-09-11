@@ -1,8 +1,17 @@
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { useKeyManager } from "@/hooks/useKeyManager";
 import { Key, Settings, Shield, Globe } from "lucide-react";
 
 export function HomeView() {
-  const { settings, isLoading, selectedKey } = useAppSettings();
+  const { settings, isLoading: settingsLoading } = useAppSettings();
+  const {
+    hasKeys,
+    selectedUnlockedKey,
+    isLoading: keysLoading,
+    generateKey,
+  } = useKeyManager();
+
+  const isLoading = settingsLoading || keysLoading;
 
   if (isLoading) {
     return (
@@ -26,9 +35,9 @@ export function HomeView() {
             <Key className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Keys</span>
           </div>
-          <p className="text-lg font-semibold">{settings.keys.length}</p>
+          <p className="text-lg font-semibold">{hasKeys ? "1+" : "0"}</p>
           <p className="text-xs text-muted-foreground">
-            {selectedKey ? "1 active" : "None selected"}
+            {selectedUnlockedKey ? "1 active" : "None selected"}
           </p>
         </div>
 
@@ -97,7 +106,7 @@ export function HomeView() {
         <div className="space-y-2">
           <button
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-4 rounded-lg font-medium"
-            disabled
+            onClick={() => generateKey("", "New Key")}
           >
             Generate New Key
           </button>

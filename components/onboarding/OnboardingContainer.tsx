@@ -2,7 +2,7 @@ import { useState } from "react";
 import { OnboardingWelcome } from "./OnboardingWelcome";
 import { OnboardingCreateKey } from "./OnboardingCreateKey";
 import { OnboardingImportKey } from "./OnboardingImportKey";
-import { useOnboarding } from "@/hooks/useKeyManager";
+import { useOnboarding } from "@/hooks/useOnboarding";
 
 type OnboardingFlow = "welcome" | "create" | "import";
 
