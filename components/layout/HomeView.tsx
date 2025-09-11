@@ -8,6 +8,7 @@ export function HomeView() {
     hasKeys,
     selectedUnlockedKey,
     isLoading: keysLoading,
+    generateKey,
   } = useKeyManager();
 
   const isLoading = settingsLoading || keysLoading;
@@ -105,7 +106,7 @@ export function HomeView() {
         <div className="space-y-2">
           <button
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-4 rounded-lg font-medium"
-            disabled
+            onClick={() => generateKey("", "New Key")}
           >
             Generate New Key
           </button>

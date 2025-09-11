@@ -13,8 +13,8 @@ interface PubkeyProps {
 export function Pubkey({
   pubkey,
   label,
-  startChars = 16,
-  endChars = 8,
+  startChars = 8,
+  endChars = 6,
   className = "",
 }: PubkeyProps) {
   const [copied, setCopied] = useState(false);
@@ -53,14 +53,14 @@ export function Pubkey({
       aria-label="Public key display"
     >
       <div className="flex items-center gap-3 min-w-0">
-        <span className="font-mono text-sm bg-muted px-3 py-1 rounded-md truncate whitespace-nowrap">
-          {display}
-        </span>
         {label && (
           <span className="text-sm text-muted-foreground truncate">
             {label}
           </span>
         )}
+        <span className="font-mono text-sm bg-muted px-3 py-1 rounded-md truncate whitespace-nowrap">
+          {display}
+        </span>
       </div>
 
       <div className="flex items-center">

@@ -1,7 +1,12 @@
 import { MainApp } from "@/components/layout/MainApp";
+import { KeyManagerProvider } from "@/hooks/KeyManagerContext";
 
 function AppPanel() {
-  return <MainApp isUnlocked={true} />;
+  return (
+    <KeyManagerProvider>
+      <MainApp />
+    </KeyManagerProvider>
+  );
 }
 
 export default AppPanel;

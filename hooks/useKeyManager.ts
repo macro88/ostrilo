@@ -1,9 +1,10 @@
 /**
  * Key management and lock state hooks for Ostrilo
  * Handles encrypted key storage, unlock/lock states, and auto-lock timers
+ * Now uses React Context for proper state management
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback } from "react";
 import browser from "webextension-polyfill";
 import {
   generateKeyPair,
@@ -16,98 +17,33 @@ import {
   zeroize,
   PasswordStrength,
   evaluatePasswordStrength,
-  isPlatformAuthenticatorAvailable,
 } from "@/lib/crypto";
 import { KeyRecord } from "@/lib/settings";
 import { useAppSettings } from "./useAppSettings";
-
-// Types
-export interface UnlockedKey {
-  id: string;
-  privateKey: Uint8Array;
-  publicKey: Uint8Array;
-  publicKeyHex: string;
-  publicKeyBech32: string;
-}
-
-export interface LockState {
-  isLocked: boolean;
-  unlockedKeys: Map<string, UnlockedKey>;
-  selectedKeyId?: string;
-  lastActivity: number;
-}
-
-// Storage keys
-const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
-const LOCK_STATE_STORAGE = "lockState";
-
-// Memory-only lock state (cleared on extension restart)
-let globalLockState: LockState = {
-  isLocked: true,
-  unlockedKeys: new Map(),
-  selectedKeyId: undefined,
-  lastActivity: Date.now(),
-};
+import {
+  useKeyManagerContext,
+  ENCRYPTED_KEYS_STORAGE,
+} from "./KeyManagerContext";
+import type { UnlockedKey, LockState } from "./KeyManagerContext";
 
 /**
  * Main hook for key management and lock state
+ * Now uses React Context for state management instead of global variables
  */
 export function useKeyManager() {
-  const { settings, updateSettings } = useAppSettings();
-  const [keys, setKeys] = useState<KeyRecord[]>([]);
-  const [lockState, setLockState] = useState<LockState>(globalLockState);
-  const [isLoading, setIsLoading] = useState(true);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const autoLockTimer = useRef<number | null>(null);
-
-  // Check biometric availability on mount
-  useEffect(() => {
-    isPlatformAuthenticatorAvailable().then(setBiometricAvailable);
-  }, []);
-
-  // Update global state when local state changes
-  useEffect(() => {
-    globalLockState = lockState;
-  }, [lockState]);
-
-  // Auto-lock timer management
-  const resetAutoLockTimer = useCallback(() => {
-    if (autoLockTimer.current !== null) {
-      window.clearTimeout(autoLockTimer.current);
-    }
-
-    if (settings.autoLockMinutes > 0 && !lockState.isLocked) {
-      autoLockTimer.current = window.setTimeout(() => {
-        lock();
-      }, settings.autoLockMinutes * 60 * 1000);
-    }
-  }, [settings.autoLockMinutes, lockState.isLocked]);
-
-  // Update activity timestamp and reset timer
-  const updateActivity = useCallback(() => {
-    const now = Date.now();
-    setLockState((prev) => ({ ...prev, lastActivity: now }));
-    resetAutoLockTimer();
-  }, [resetAutoLockTimer]);
-
-  // Lock the extension
-  const lock = useCallback(() => {
-    // Zero out all private keys in memory
-    globalLockState.unlockedKeys.forEach((key) => {
-      zeroize(key.privateKey);
-    });
-
-    setLockState({
-      isLocked: true,
-      unlockedKeys: new Map(),
-      selectedKeyId: undefined,
-      lastActivity: Date.now(),
-    });
-
-    if (autoLockTimer.current !== null) {
-      window.clearTimeout(autoLockTimer.current);
-    }
-  }, []);
+  const { updateSettings, settings } = useAppSettings();
+  const {
+    lockState,
+    keys,
+    isLoading,
+    biometricAvailable,
+    setLockState,
+    setIsLoading,
+    lock,
+    updateActivity,
+    saveEncryptedKeys,
+    loadKeys,
+  } = useKeyManagerContext();
 
   // Unlock with password
   const unlock = useCallback(
@@ -152,6 +88,7 @@ export function useKeyManager() {
 
             const unlockedKey: UnlockedKey = {
               id: keyRecord.id,
+              label: keyRecord.label || "Unnamed",
               privateKey,
               publicKey: publicKeyBytes,
               publicKeyHex: publicKey,
@@ -170,18 +107,16 @@ export function useKeyManager() {
           throw new Error("Invalid password");
         }
 
-        // Determine selected key
-        let selectedKeyId = settings.selectedKeyId;
-        if (!selectedKeyId || !unlockedKeys.has(selectedKeyId)) {
-          selectedKeyId = unlockedKeys.keys().next().value;
-        }
-
-        setLockState({
+        // Update lock state to unlocked with the decrypted keys
+        setLockState((prev) => ({
+          ...prev,
           isLocked: false,
           unlockedKeys,
-          selectedKeyId,
-          lastActivity: Date.now(),
-        });
+          selectedKeyId:
+            settings.selectedKeyId && unlockedKeys.has(settings.selectedKeyId)
+              ? settings.selectedKeyId
+              : unlockedKeys.keys().next().value,
+        }));
 
         updateActivity();
         return true;
@@ -192,29 +127,8 @@ export function useKeyManager() {
         setIsLoading(false);
       }
     },
-    [settings.selectedKeyId, updateActivity]
+    [keys, setIsLoading, setLockState, updateActivity, settings]
   );
-
-  // Helper to save encrypted keys to local storage
-  const saveEncryptedKeys = useCallback(async (keysToSave: KeyRecord[]) => {
-    await browser.storage.local.set({
-      [ENCRYPTED_KEYS_STORAGE]: keysToSave,
-    });
-    setKeys(keysToSave);
-  }, []);
-
-  // Helper to load keys from local storage
-  const loadKeys = useCallback(async (): Promise<KeyRecord[]> => {
-    try {
-      const result = await browser.storage.local.get([ENCRYPTED_KEYS_STORAGE]);
-      const loadedKeys = (result[ENCRYPTED_KEYS_STORAGE] || []) as KeyRecord[];
-      setKeys(loadedKeys);
-      return loadedKeys;
-    } catch (error) {
-      console.error("Failed to load keys:", error);
-      return [];
-    }
-  }, []);
 
   // Generate new key
   const generateKey = useCallback(
@@ -244,10 +158,18 @@ export function useKeyManager() {
         console.log("Saving new key, total keys now:", currentKeys.length);
         await saveEncryptedKeys(currentKeys);
 
+        // Update only selectedKeyId in sync settings if this is the first key
+        if (keyRecord.isSelected) {
+          await updateSettings({
+            selectedKeyId: keyRecord.id,
+          });
+        }
+
         // If unlocked, add to memory
         if (!lockState.isLocked) {
           const unlockedKey: UnlockedKey = {
             id: keyRecord.id,
+            label: label || "Unnamed",
             privateKey: keyPair.privateKey,
             publicKey: keyPair.publicKey,
             publicKeyHex,
@@ -275,7 +197,7 @@ export function useKeyManager() {
         throw error;
       }
     },
-    [keys, lockState.isLocked, updateSettings, saveEncryptedKeys]
+    [keys, lockState.isLocked, updateSettings, saveEncryptedKeys, setLockState]
   );
 
   // Import existing key
@@ -331,6 +253,7 @@ export function useKeyManager() {
         if (!lockState.isLocked) {
           const unlockedKey: UnlockedKey = {
             id: keyRecord.id,
+            label: label || "Unnamed",
             privateKey,
             publicKey: derivedPublicKey,
             publicKeyHex,
@@ -358,13 +281,7 @@ export function useKeyManager() {
         throw error;
       }
     },
-    [
-      keys,
-      settings.selectedKeyId,
-      lockState.isLocked,
-      updateSettings,
-      saveEncryptedKeys,
-    ]
+    [keys, lockState.isLocked, updateSettings, saveEncryptedKeys, setLockState]
   );
 
   // Export key (requires unlock)
@@ -413,41 +330,10 @@ export function useKeyManager() {
       keys,
       saveEncryptedKeys,
       updateSettings,
+      setLockState,
       updateActivity,
     ]
   );
-
-  // Initialize lock state on mount
-  useEffect(() => {
-    const initLockState = async () => {
-      try {
-        setIsLoading(true);
-
-        // Load keys from local storage first
-        await loadKeys();
-
-        // Check if we have any keys
-        if (keys.length === 0) {
-          setLockState((prev) => ({ ...prev, isLocked: false }));
-        }
-
-        updateActivity();
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initLockState();
-  }, [keys.length, loadKeys, updateActivity]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (autoLockTimer.current !== null) {
-        window.clearTimeout(autoLockTimer.current);
-      }
-    };
-  }, []);
 
   // Get current selected unlocked key
   const selectedUnlockedKey = lockState.selectedKeyId

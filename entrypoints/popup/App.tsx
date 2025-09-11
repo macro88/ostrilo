@@ -1,8 +1,13 @@
 import { MainApp } from "@/components/layout/MainApp";
+import { KeyManagerProvider } from "@/hooks/KeyManagerContext";
 import "./App.css";
 
 function App() {
-  return <MainApp isUnlocked={true} />;
+  return (
+    <KeyManagerProvider>
+      <MainApp />
+    </KeyManagerProvider>
+  );
 }
 
 export default App;

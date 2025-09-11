@@ -39,6 +39,7 @@ export interface AppSettingsV1 {
   autoLockMinutes: number;
   relays: string[]; // for profile fetch; no auto connect in BG
   // NOTE: keys are stored in local storage for security, not sync
+  selectedKeyId?: string; // ID of the currently selected key
   origins: OriginPolicy[]; // per-origin policies
   mediumAllowKinds: number[]; // shipped default for medium trust
   sessionTTLMinutes: number; // 0 = until lock only

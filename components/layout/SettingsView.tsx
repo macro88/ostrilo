@@ -30,6 +30,7 @@ import {
   Computer,
   Fingerprint,
 } from "lucide-react";
+import { Pubkey } from "../common/pubkey";
 
 export function SettingsView() {
   const {
@@ -105,15 +106,11 @@ export function SettingsView() {
         </div>
         {selectedUnlockedKey ? (
           <div className="space-y-2">
-            <p className="text-sm font-mono bg-muted p-2 rounded">
-              {selectedUnlockedKey.pubkey.slice(0, 16)}...
-              {selectedUnlockedKey.pubkey.slice(-8)}
-            </p>
-            {selectedUnlockedKey.label && (
-              <p className="text-sm text-muted-foreground">
-                {selectedUnlockedKey.label}
-              </p>
-            )}
+            <Pubkey
+              key={selectedUnlockedKey.id}
+              label={selectedUnlockedKey.label}
+              pubkey={selectedUnlockedKey.publicKeyBech32}
+            />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">No key selected</p>
