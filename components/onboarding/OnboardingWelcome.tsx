@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Key, Shield, Zap, ArrowRight, FileKey, Download } from "lucide-react";
+import { AppLogo } from "../common/app-logo";
 
 interface OnboardingWelcomeProps {
   onCreateKey: () => void;
@@ -16,15 +17,11 @@ export function OnboardingWelcome({
   >(null);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8">
+    <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-6">
       {/* Mascot and welcome text */}
-      <div className="text-center space-y-4">
-        <div className="w-24 h-24 mx-auto mb-6">
-          <img
-            src="/assets/ostrilo_mascot_front.svg"
-            alt="Ostrilo Mascot"
-            className="w-full h-full"
-          />
+      <div className="text-center space-y-2">
+        <div className="w-18 h-18 mx-auto mb-6">
+          <AppLogo size={96} />
         </div>
 
         <h1 className="text-3xl font-bold text-foreground">
@@ -32,38 +29,9 @@ export function OnboardingWelcome({
         </h1>
 
         <p className="text-lg text-muted-foreground max-w-md">
-          Your secure Nostr signing companion. Let's set up your cryptographic
-          identity.
+          Your secure Nostr signing companion.
         </p>
       </div>
-
-      {/* Features highlight */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
-        <div className="text-center space-y-2 p-4">
-          <Shield className="h-8 w-8 mx-auto text-blue-500" />
-          <h3 className="font-semibold">Secure</h3>
-          <p className="text-sm text-muted-foreground">
-            Military-grade encryption with local key storage
-          </p>
-        </div>
-
-        <div className="text-center space-y-2 p-4">
-          <Zap className="h-8 w-8 mx-auto text-yellow-500" />
-          <h3 className="font-semibold">Fast</h3>
-          <p className="text-sm text-muted-foreground">
-            Instant signing with optimized cryptography
-          </p>
-        </div>
-
-        <div className="text-center space-y-2 p-4">
-          <Key className="h-8 w-8 mx-auto text-green-500" />
-          <h3 className="font-semibold">Private</h3>
-          <p className="text-sm text-muted-foreground">
-            Your keys stay on your device, always
-          </p>
-        </div>
-      </div>
-
       {/* Action selection */}
       <div className="w-full max-w-md space-y-4">
         <h2 className="text-xl font-semibold text-center mb-6">
@@ -84,7 +52,7 @@ export function OnboardingWelcome({
             <div className="flex-1">
               <h3 className="font-semibold">Create New Key</h3>
               <p className="text-sm text-muted-foreground">
-                Generate a fresh cryptographic identity
+                Generate a fresh Nostr key
               </p>
             </div>
             <div

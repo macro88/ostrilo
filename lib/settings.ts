@@ -38,11 +38,10 @@ export interface AppSettingsV1 {
   sidePanel: boolean;
   autoLockMinutes: number;
   relays: string[]; // for profile fetch; no auto connect in BG
-  keys: KeyRecord[]; // multi-key
+  // NOTE: keys are stored in local storage for security, not sync
   origins: OriginPolicy[]; // per-origin policies
   mediumAllowKinds: number[]; // shipped default for medium trust
   sessionTTLMinutes: number; // 0 = until lock only
-  selectedKeyId?: string; // convenience mirror of active key
   onboardingCompleted?: boolean; // track if user completed onboarding
   onboardingCompletedAt?: number; // epoch seconds when onboarding was completed
 }
@@ -54,11 +53,9 @@ export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {
   sidePanel: false,
   autoLockMinutes: 5,
   relays: ["wss://relay.damus.io", "wss://nostr.wine"],
-  keys: [],
   origins: [],
   mediumAllowKinds: [6, 16, 7, 10002], // Repost, Generic Repost, Reaction, Relay list
   sessionTTLMinutes: 0,
-  selectedKeyId: undefined,
 };
 
 // Trust level descriptions for UI

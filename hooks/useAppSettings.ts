@@ -6,7 +6,6 @@ import {
   Theme,
   TrustLevel,
   OriginPolicy,
-  KeyRecord,
 } from "@/lib/settings";
 
 const SETTINGS_KEY = "appSettings";
@@ -59,6 +58,8 @@ export function useAppSettings() {
   const updateSettings = useCallback(
     async (updates: Partial<AppSettingsV1>) => {
       const newSettings = { ...settings, ...updates };
+
+      console.log("Updating settings:", newSettings);
       setSettings(newSettings);
 
       try {
@@ -134,44 +135,6 @@ export function useAppSettings() {
     [updateSettings]
   );
 
-  // Key management
-  const addKey = useCallback(
-    (key: KeyRecord) => {
-      const newKeys = [...settings.keys, key];
-      return updateSettings({ keys: newKeys });
-    },
-    [settings.keys, updateSettings]
-  );
-
-  const removeKey = useCallback(
-    (keyId: string) => {
-      const newKeys = settings.keys.filter((k) => k.id !== keyId);
-      const updates: Partial<AppSettingsV1> = { keys: newKeys };
-
-      // If removing the selected key, clear selection
-      if (settings.selectedKeyId === keyId) {
-        updates.selectedKeyId = undefined;
-      }
-
-      return updateSettings(updates);
-    },
-    [settings.keys, settings.selectedKeyId, updateSettings]
-  );
-
-  const selectKey = useCallback(
-    (keyId: string) => {
-      const newKeys = settings.keys.map((k) => ({
-        ...k,
-        isSelected: k.id === keyId,
-      }));
-      return updateSettings({
-        keys: newKeys,
-        selectedKeyId: keyId,
-      });
-    },
-    [settings.keys, updateSettings]
-  );
-
   // Origin policy management
   const updateOriginPolicy = useCallback(
     (origin: string, policy: Partial<OriginPolicy>) => {
@@ -231,15 +194,9 @@ export function useAppSettings() {
     }
   }, []);
 
-  // Get current selected key
-  const selectedKey = settings.keys.find(
-    (k) => k.id === settings.selectedKeyId
-  );
-
   return {
     settings,
     isLoading,
-    selectedKey,
 
     // General settings
     updateSettings,
@@ -258,11 +215,6 @@ export function useAppSettings() {
     updateOriginPolicy,
     removeOriginPolicy,
     updateOriginTrustLevel,
-
-    // Key management
-    addKey,
-    removeKey,
-    selectKey,
 
     // Reset
     resetSettings,
