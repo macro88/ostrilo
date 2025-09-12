@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import browser from "webextension-polyfill";
+import { useCallback, useMemo } from "react";
+import { useWxtStorage } from "./useWxtStorage";
 import {
   AppSettingsV1,
   DEFAULT_SETTINGS_V1,
@@ -11,67 +11,31 @@ import {
 const SETTINGS_KEY = "appSettings";
 
 export function useAppSettings() {
-  const [settings, setSettings] = useState<AppSettingsV1>(DEFAULT_SETTINGS_V1);
-  const [isLoading, setIsLoading] = useState(true);
+  const [rawSettings, setRawSettings, ready] = useWxtStorage<AppSettingsV1>(
+    SETTINGS_KEY,
+    DEFAULT_SETTINGS_V1
+  );
 
-  // Load settings from storage on mount
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const result = await browser.storage.sync.get([SETTINGS_KEY]);
-        if (result[SETTINGS_KEY]) {
-          const stored = result[SETTINGS_KEY] as AppSettingsV1;
-          // Simple migration: merge with defaults to ensure new fields exist
-          const merged = { ...DEFAULT_SETTINGS_V1, ...stored };
-          setSettings(merged);
-        }
-      } catch (error) {
-        console.error("Failed to load settings:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Merge defaults with stored to ensure new fields exist (simple migration)
+  const settings = useMemo<AppSettingsV1>(
+    () => ({ ...DEFAULT_SETTINGS_V1, ...(rawSettings as AppSettingsV1) }),
+    [rawSettings]
+  );
 
-    loadSettings();
-  }, []);
-
-  // Watch for storage changes
-  useEffect(() => {
-    const onChanged = (
-      changes: Record<string, browser.Storage.StorageChange>
-    ) => {
-      if (SETTINGS_KEY in changes) {
-        const newValue = changes[SETTINGS_KEY].newValue;
-        if (newValue) {
-          setSettings(newValue as AppSettingsV1);
-        }
-      }
-    };
-
-    browser.storage.onChanged.addListener(onChanged);
-    return () => {
-      browser.storage.onChanged.removeListener(onChanged);
-    };
-  }, []);
+  const isLoading = !ready;
 
   // Save settings to storage
   const updateSettings = useCallback(
     async (updates: Partial<AppSettingsV1>) => {
-      const newSettings = { ...settings, ...updates };
-
-      console.log("Updating settings:", newSettings);
-      setSettings(newSettings);
-
+      const next = { ...settings, ...updates } as AppSettingsV1;
       try {
-        await browser.storage.sync.set({ [SETTINGS_KEY]: newSettings });
+        await setRawSettings(next);
       } catch (error) {
         console.error("Failed to save settings:", error);
-        // Revert on error
-        setSettings(settings);
         throw error;
       }
     },
-    [settings]
+    [settings, setRawSettings]
   );
 
   // Individual setting updaters for convenience
@@ -185,14 +149,13 @@ export function useAppSettings() {
 
   // Reset settings to defaults
   const resetSettings = useCallback(async () => {
-    setSettings(DEFAULT_SETTINGS_V1);
     try {
-      await browser.storage.sync.set({ [SETTINGS_KEY]: DEFAULT_SETTINGS_V1 });
+      await setRawSettings(DEFAULT_SETTINGS_V1);
     } catch (error) {
       console.error("Failed to reset settings:", error);
       throw error;
     }
-  }, []);
+  }, [setRawSettings]);
 
   return {
     settings,

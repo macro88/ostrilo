@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,14 +29,12 @@ export function LockScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [attemptCount, setAttemptCount] = useState(0);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
 
-  // Check biometric availability
-  useEffect(() => {
-    if ("credentials" in navigator && "create" in navigator.credentials) {
-      setBiometricAvailable(true);
-    }
-  }, []);
+  // Derive biometric availability synchronously
+  const biometricAvailable =
+    typeof navigator !== "undefined" &&
+    typeof (navigator as any).credentials !== "undefined" &&
+    typeof (navigator as any).credentials.create === "function";
 
   const handleUnlock = async () => {
     if (!password.trim()) {
@@ -58,12 +56,6 @@ export function LockScreen({
 
   const handleBiometricUnlock = async () => {
     try {
-      // This is a placeholder for biometric implementation
-      // In a real implementation, you'd:
-      // 1. Store an encrypted copy of the password using biometric protection
-      // 2. Use WebAuthn or platform-specific APIs to decrypt it
-      // 3. Use the decrypted password to unlock the keys
-
       console.log("Biometric unlock requested (not implemented yet)");
       setError("Biometric unlock is not yet implemented");
     } catch (error) {

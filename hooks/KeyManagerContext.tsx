@@ -18,6 +18,10 @@ import { zeroize } from "@/lib/crypto";
 import { KeyRecord } from "@/lib/settings";
 import { useAppSettings } from "./useAppSettings";
 
+// Storage keys
+export const ENCRYPTED_KEYS_STORAGE = "encryptedKeys"; // Local storage for encrypted keys
+export const LOCK_STATE_STORAGE = "lockState"; // Session storage for lock state
+
 // Types
 export interface UnlockedKey {
   id: string;
@@ -31,6 +35,13 @@ export interface UnlockedKey {
 export interface LockState {
   isLocked: boolean;
   unlockedKeys: Map<string, UnlockedKey>;
+  selectedKeyId?: string;
+  lastActivity: number;
+}
+
+// Serializable lock state for storage (Map cannot be serialized)
+interface PersistedLockState {
+  isLocked: boolean;
   selectedKeyId?: string;
   lastActivity: number;
 }
@@ -55,9 +66,6 @@ export interface KeyManagerContextType {
   saveEncryptedKeys: (keysToSave: KeyRecord[]) => Promise<void>;
   loadKeys: () => Promise<KeyRecord[]>;
 }
-
-// Storage keys
-export const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
 
 // Create context
 const KeyManagerContext = createContext<KeyManagerContextType | null>(null);
@@ -94,17 +102,15 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
 
   const [keys, setKeys] = useState<KeyRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
+
+  // Derive biometric availability synchronously
+  const biometricAvailable =
+    typeof navigator !== "undefined" &&
+    typeof (navigator as any).credentials !== "undefined" &&
+    typeof (navigator as any).credentials.create === "function";
 
   // Auto-lock timer
   const autoLockTimer = useRef<number | null>(null);
-
-  // Check biometric availability on mount
-  useEffect(() => {
-    import("@/lib/crypto").then(({ isPlatformAuthenticatorAvailable }) => {
-      isPlatformAuthenticatorAvailable().then(setBiometricAvailable);
-    });
-  }, []);
 
   // Auto-lock timer management
   const resetAutoLockTimer = useCallback(() => {
@@ -113,33 +119,81 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
       autoLockTimer.current = null;
     }
 
-    if (settings.autoLockMinutes > 0 && !lockState.isLocked) {
+    // Only set timer if auto-lock is enabled
+    if (settings.autoLockMinutes > 0) {
       autoLockTimer.current = window.setTimeout(() => {
-        lock();
+        // Force lock by calling the lock function
+        setLockState((currentState) => {
+          // Zero out all private keys in memory for security
+          currentState.unlockedKeys.forEach((key) => {
+            zeroize(key.privateKey);
+          });
+
+          const newLockState = {
+            isLocked: true,
+            unlockedKeys: new Map(),
+            selectedKeyId: undefined,
+            lastActivity: Date.now(),
+          };
+
+          // Persist locked state to session storage
+          const persistedState: PersistedLockState = {
+            isLocked: newLockState.isLocked,
+            selectedKeyId: newLockState.selectedKeyId,
+            lastActivity: newLockState.lastActivity,
+          };
+          browser.storage.session.set({ [LOCK_STATE_STORAGE]: persistedState });
+
+          return newLockState;
+        });
       }, settings.autoLockMinutes * 60 * 1000);
     }
-  }, [settings.autoLockMinutes, lockState.isLocked]);
+  }, [settings.autoLockMinutes]);
 
   // Update activity timestamp and reset timer
-  const updateActivity = useCallback(() => {
+  const updateActivity = useCallback(async () => {
     const now = Date.now();
-    setLockState((prev) => ({ ...prev, lastActivity: now }));
+    setLockState((prev) => {
+      const newState = { ...prev, lastActivity: now };
+
+      // Persist state to session storage if unlocked
+      if (!newState.isLocked) {
+        const persistedState: PersistedLockState = {
+          isLocked: newState.isLocked,
+          selectedKeyId: newState.selectedKeyId,
+          lastActivity: newState.lastActivity,
+        };
+        browser.storage.session.set({ [LOCK_STATE_STORAGE]: persistedState });
+      }
+
+      return newState;
+    });
     resetAutoLockTimer();
   }, [resetAutoLockTimer]);
 
   // Lock the extension - SECURITY CRITICAL
-  const lock = useCallback(() => {
+  const lock = useCallback(async () => {
     // Zero out all private keys in memory for security
     lockState.unlockedKeys.forEach((key) => {
       zeroize(key.privateKey);
     });
 
-    setLockState({
+    const newLockState = {
       isLocked: true,
       unlockedKeys: new Map(),
       selectedKeyId: undefined,
       lastActivity: Date.now(),
-    });
+    };
+
+    setLockState(newLockState);
+
+    // Persist lock state to session storage (cleared on browser close)
+    const persistedState: PersistedLockState = {
+      isLocked: newLockState.isLocked,
+      selectedKeyId: newLockState.selectedKeyId,
+      lastActivity: newLockState.lastActivity,
+    };
+    await browser.storage.session.set({ [LOCK_STATE_STORAGE]: persistedState });
 
     // Clear auto-lock timer
     if (autoLockTimer.current !== null) {
@@ -181,20 +235,51 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
         // Load keys from storage
         await loadKeys();
 
-        // Initialize activity tracking
-        updateActivity();
+        // Check if we should restore a previous unlocked session from session storage
+        const result = await browser.storage.session.get([LOCK_STATE_STORAGE]);
+        const persistedLockState = result[LOCK_STATE_STORAGE] as
+          | PersistedLockState
+          | undefined;
+
+        if (persistedLockState && !persistedLockState.isLocked) {
+          // Check if we're still within the auto-lock window
+          const timeSinceLastActivity =
+            Date.now() - persistedLockState.lastActivity;
+          const autoLockMs = settings.autoLockMinutes * 60 * 1000;
+
+          if (
+            settings.autoLockMinutes === 0 ||
+            timeSinceLastActivity < autoLockMs
+          ) {
+            // We're still within the valid session window
+            // Set state to unlocked but keys will need to be re-decrypted when accessed
+            setLockState({
+              isLocked: false,
+              unlockedKeys: new Map(), // Empty until password is re-entered
+              selectedKeyId: persistedLockState.selectedKeyId,
+              lastActivity: persistedLockState.lastActivity,
+            });
+            // Note: Don't call updateActivity here to avoid initialization loops
+            return;
+          }
+        }
+
+        // If we get here, we should be locked (either no previous state, was locked, or timeout expired)
+        await lock();
       } finally {
         setIsLoading(false);
       }
     };
 
     initializeKeyManager();
-  }, [loadKeys, updateActivity]);
+  }, [loadKeys, settings.autoLockMinutes]); // Removed updateActivity and lock to prevent loops
 
-  // Reset auto-lock timer when settings or lock state changes
+  // Reset auto-lock timer when settings change, but only after initialization
   useEffect(() => {
-    resetAutoLockTimer();
-  }, [resetAutoLockTimer]);
+    if (!isLoading) {
+      resetAutoLockTimer();
+    }
+  }, [resetAutoLockTimer, isLoading]);
 
   // Cleanup on unmount - SECURITY CRITICAL
   useEffect(() => {

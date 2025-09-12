@@ -138,7 +138,7 @@ export function OnboardingCreateKey({
           </Button>
           <Button
             onClick={handleGenerateKey}
-            disabled={isLoading || isGenerating}
+            disabled={isGenerating}
             className="flex-1"
           >
             {isGenerating ? "Creating..." : "Create Key"}
