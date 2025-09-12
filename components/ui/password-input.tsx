@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { evaluatePasswordStrength, PasswordStrength } from "@/lib/crypto";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,28 +29,18 @@ export function PasswordInput({
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [strength, setStrength] = useState<PasswordStrength | null>(null);
-  const [confirmError, setConfirmError] = useState<string>("");
+  const strength: PasswordStrength | null = useMemo(() => {
+    if (!showStrengthMeter || value.length === 0) return null;
+    return evaluatePasswordStrength(value);
+  }, [showStrengthMeter, value]);
 
-  // Evaluate password strength
-  useEffect(() => {
-    if (showStrengthMeter && value.length > 0) {
-      setStrength(evaluatePasswordStrength(value));
-    } else {
-      setStrength(null);
+  const confirmError = useMemo(() => {
+    if (confirmValue === undefined) return "";
+    if (confirmValue.length > 0 && confirmValue !== value) {
+      return "Passwords do not match";
     }
-  }, [value, showStrengthMeter]);
-
-  // Check confirm password match
-  useEffect(() => {
-    if (confirmValue !== undefined) {
-      if (confirmValue.length > 0 && confirmValue !== value) {
-        setConfirmError("Passwords do not match");
-      } else {
-        setConfirmError("");
-      }
-    }
-  }, [value, confirmValue]);
+    return "";
+  }, [confirmValue, value]);
 
   const getStrengthColor = (score: number) => {
     switch (score) {
