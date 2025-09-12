@@ -14,6 +14,12 @@ import React, {
   ReactNode,
 } from "react";
 import browser from "webextension-polyfill";
+import {
+  unlockVault,
+  lockVault,
+  listKeys,
+  getLockState,
+} from "@/src/infrastructure/messaging/client";
 import { zeroize } from "@/lib/crypto";
 import { KeyRecord } from "@/lib/settings";
 import { useAppSettings } from "./useAppSettings";
@@ -193,7 +199,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
       selectedKeyId: newLockState.selectedKeyId,
       lastActivity: newLockState.lastActivity,
     };
-    await browser.storage.session.set({ [LOCK_STATE_STORAGE]: persistedState });
+    await lockVault();
 
     // Clear auto-lock timer
     if (autoLockTimer.current !== null) {
@@ -205,9 +211,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
   // Helper to save encrypted keys to local storage
   const saveEncryptedKeys = useCallback(
     async (keysToSave: KeyRecord[]): Promise<void> => {
-      await browser.storage.local.set({
-        [ENCRYPTED_KEYS_STORAGE]: keysToSave,
-      });
+      // Keys are managed via background services; update local snapshot only
       setKeys(keysToSave);
     },
     []
@@ -216,8 +220,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
   // Helper to load keys from local storage
   const loadKeys = useCallback(async (): Promise<KeyRecord[]> => {
     try {
-      const result = await browser.storage.local.get([ENCRYPTED_KEYS_STORAGE]);
-      const loadedKeys = (result[ENCRYPTED_KEYS_STORAGE] || []) as KeyRecord[];
+      const loadedKeys = await listKeys();
       setKeys(loadedKeys);
       return loadedKeys;
     } catch (error) {
@@ -236,10 +239,14 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
         await loadKeys();
 
         // Check if we should restore a previous unlocked session from session storage
-        const result = await browser.storage.session.get([LOCK_STATE_STORAGE]);
-        const persistedLockState = result[LOCK_STATE_STORAGE] as
-          | PersistedLockState
-          | undefined;
+        const persisted = await getLockState();
+        const persistedLockState: PersistedLockState | undefined = persisted
+          ? {
+              isLocked: persisted.isLocked,
+              selectedKeyId: persisted.selectedKeyId,
+              lastActivity: Date.now(),
+            }
+          : undefined;
 
         if (persistedLockState && !persistedLockState.isLocked) {
           // Check if we're still within the auto-lock window
