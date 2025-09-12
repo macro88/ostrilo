@@ -1,5 +1,9 @@
-import { useCallback, useMemo } from "react";
-import { useWxtStorage } from "./useWxtStorage";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
+import {
+  getSettings as rpcGetSettings,
+  updateSettings as rpcUpdateSettings,
+  subscribeSettingsChanged,
+} from "@/src/infrastructure/messaging/client";
 import {
   AppSettingsV1,
   DEFAULT_SETTINGS_V1,
@@ -8,12 +12,28 @@ import {
   OriginPolicy,
 } from "@/lib/settings";
 
-const SETTINGS_KEY = "appSettings";
-
 export function useAppSettings() {
-  const [rawSettings, setRawSettings, ready] = useWxtStorage<AppSettingsV1>(
-    SETTINGS_KEY,
-    DEFAULT_SETTINGS_V1
+  // External store that fetches once and updates via BG events
+  const subscribe = (cb: () => void) => subscribeSettingsChanged(cb);
+  const getSnapshot = () => stateCache.current;
+  const getServerSnapshot = () => stateCache.current;
+
+  const stateCache = { current: DEFAULT_SETTINGS_V1 as AppSettingsV1 } as {
+    current: AppSettingsV1;
+  };
+  // Initial load side-effect free via lazy getter in subscribe pattern
+  // We fetch eagerly once on first call
+  if ((getSnapshot() as any).__init !== true) {
+    (async () => {
+      const s = (await rpcGetSettings()) ?? DEFAULT_SETTINGS_V1;
+      stateCache.current = { ...DEFAULT_SETTINGS_V1, ...s } as AppSettingsV1;
+      (stateCache.current as any).__init = true;
+    })();
+  }
+  const rawSettings = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot
   );
 
   // Merge defaults with stored to ensure new fields exist (simple migration)
@@ -22,20 +42,15 @@ export function useAppSettings() {
     [rawSettings]
   );
 
-  const isLoading = !ready;
+  const isLoading = !rawSettings;
 
   // Save settings to storage
   const updateSettings = useCallback(
     async (updates: Partial<AppSettingsV1>) => {
       const next = { ...settings, ...updates } as AppSettingsV1;
-      try {
-        await setRawSettings(next);
-      } catch (error) {
-        console.error("Failed to save settings:", error);
-        throw error;
-      }
+      await rpcUpdateSettings(next);
     },
-    [settings, setRawSettings]
+    [settings]
   );
 
   // Individual setting updaters for convenience
@@ -150,12 +165,12 @@ export function useAppSettings() {
   // Reset settings to defaults
   const resetSettings = useCallback(async () => {
     try {
-      await setRawSettings(DEFAULT_SETTINGS_V1);
+      await rpcUpdateSettings(DEFAULT_SETTINGS_V1);
     } catch (error) {
       console.error("Failed to reset settings:", error);
       throw error;
     }
-  }, [setRawSettings]);
+  }, []);
 
   return {
     settings,

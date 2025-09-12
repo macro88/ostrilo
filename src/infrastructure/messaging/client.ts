@@ -1,5 +1,6 @@
 import browser from "webextension-polyfill";
 import type { RpcRequest, RpcResponse } from "./rpc";
+// webextension-polyfill already imported above
 
 export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
   const res = (await browser.runtime.sendMessage(req)) as RpcResponse;
@@ -39,4 +40,27 @@ export async function signHash(hashHex: string, keyId?: string) {
     hashHex,
     keyId,
   });
+}
+
+export async function getSettings() {
+  return rpc<import("@/src/domain/types").AppSettingsV1 | undefined>({
+    type: "settings.get",
+  });
+}
+
+export async function updateSettings(
+  patch: Partial<import("@/src/domain/types").AppSettingsV1>
+) {
+  return rpc<import("@/src/domain/types").AppSettingsV1>({
+    type: "settings.update",
+    patch: patch as any,
+  });
+}
+
+export function subscribeSettingsChanged(cb: () => void) {
+  const handler = (msg: any) => {
+    if (msg && msg.__event === "ostrilo.settings.changed") cb();
+  };
+  browser.runtime.onMessage.addListener(handler);
+  return () => browser.runtime.onMessage.removeListener(handler);
 }

@@ -7,6 +7,7 @@ import {
 } from "@/src/infrastructure/crypto/adapters";
 import { KeyVaultService } from "@/src/application/services/key-vault.service";
 import { PolicyService } from "@/src/application/services/policy.service";
+import { SettingsService } from "@/src/application/services/settings.service";
 import type {
   RpcRequest,
   RpcResponse,
@@ -22,6 +23,7 @@ export default defineBackground(() => {
     NobleSchnorr
   );
   const policy = new PolicyService(storage);
+  const settings = new SettingsService(storage);
 
   // Simple RPC handler
   browser.runtime.onMessage.addListener(
@@ -56,6 +58,14 @@ export default defineBackground(() => {
           }
           case "vault.sign": {
             const data = await vault.sign(message.hashHex, message.keyId);
+            return { ok: true, data } as const;
+          }
+          case "settings.get": {
+            const data = await settings.get();
+            return { ok: true, data } as const;
+          }
+          case "settings.update": {
+            const data = await settings.update(message.patch as any);
             return { ok: true, data } as const;
           }
           default:

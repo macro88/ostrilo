@@ -128,30 +128,8 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     // Only set timer if auto-lock is enabled
     if (settings.autoLockMinutes > 0) {
       autoLockTimer.current = window.setTimeout(() => {
-        // Force lock by calling the lock function
-        setLockState((currentState) => {
-          // Zero out all private keys in memory for security
-          currentState.unlockedKeys.forEach((key) => {
-            zeroize(key.privateKey);
-          });
-
-          const newLockState = {
-            isLocked: true,
-            unlockedKeys: new Map(),
-            selectedKeyId: undefined,
-            lastActivity: Date.now(),
-          };
-
-          // Persist locked state to session storage
-          const persistedState: PersistedLockState = {
-            isLocked: newLockState.isLocked,
-            selectedKeyId: newLockState.selectedKeyId,
-            lastActivity: newLockState.lastActivity,
-          };
-          browser.storage.session.set({ [LOCK_STATE_STORAGE]: persistedState });
-
-          return newLockState;
-        });
+        // Delegate to central lock which triggers BG RPC and zeroization
+        lock();
       }, settings.autoLockMinutes * 60 * 1000);
     }
   }, [settings.autoLockMinutes]);
@@ -211,7 +189,9 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
   // Helper to save encrypted keys to local storage
   const saveEncryptedKeys = useCallback(
     async (keysToSave: KeyRecord[]): Promise<void> => {
-      // Keys are managed via background services; update local snapshot only
+      await browser.storage.local.set({
+        [ENCRYPTED_KEYS_STORAGE]: keysToSave,
+      });
       setKeys(keysToSave);
     },
     []
