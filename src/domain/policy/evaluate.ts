@@ -9,7 +9,11 @@ import {
 } from "../types";
 
 // Map trust level to default behaviours
-function defaultForTrust(trust: TrustLevel, kind: number, mediumAllow: Set<number>): Authorisation {
+function defaultForTrust(
+  trust: TrustLevel,
+  kind: number,
+  mediumAllow: Set<number>
+): Authorisation {
   if (trust === "high") return "allow";
   if (trust === "medium") {
     return mediumAllow.has(kind) ? "allow" : "ask";
