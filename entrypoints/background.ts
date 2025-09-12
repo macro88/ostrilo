@@ -48,6 +48,25 @@ export default defineBackground(() => {
             await vault.lock();
             return { ok: true, data: null } as const;
           }
+          case "vault.generate": {
+            const data = await vault.generateKey(
+              message.password,
+              message.label
+            );
+            return { ok: true, data } as const;
+          }
+          case "vault.import": {
+            const data = await vault.importKey(
+              message.keyInput,
+              message.password,
+              message.label
+            );
+            return { ok: true, data } as const;
+          }
+          case "vault.select": {
+            await vault.selectKey(message.id);
+            return { ok: true, data: null } as const;
+          }
           case "keys.list": {
             const data = await vault.listKeys();
             return { ok: true, data } as const;
@@ -67,6 +86,30 @@ export default defineBackground(() => {
           case "settings.update": {
             const data = await settings.update(message.patch as any);
             return { ok: true, data } as const;
+          }
+          case "policy.setOrigin": {
+            await policy.setOriginPolicy(message.origin, message.patch as any);
+            return { ok: true, data: null } as const;
+          }
+          case "policy.setKindRule": {
+            await policy.setPerKindRule(
+              message.origin,
+              message.kind,
+              message.mode as any
+            );
+            return { ok: true, data: null } as const;
+          }
+          case "policy.clearSession": {
+            await policy.clearSessionGrant(message.origin);
+            return { ok: true, data: null } as const;
+          }
+          case "policy.setSession": {
+            await policy.setSessionGrant(message.origin, message.enabled);
+            return { ok: true, data: null } as const;
+          }
+          case "policy.removeOrigin": {
+            await policy.removeOriginPolicy(message.origin);
+            return { ok: true, data: null } as const;
           }
           default:
             return { ok: false, error: "unknown_method" } as const;

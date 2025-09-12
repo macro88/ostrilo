@@ -5,6 +5,12 @@ import {
   subscribeSettingsChanged,
 } from "@/src/infrastructure/messaging/client";
 import {
+  policySetOrigin,
+  policySetKindRule,
+  policyClearSession,
+  policyRemoveOrigin,
+} from "@/src/infrastructure/messaging/client";
+import {
   AppSettingsV1,
   DEFAULT_SETTINGS_V1,
   Theme,
@@ -117,49 +123,41 @@ export function useAppSettings() {
   // Origin policy management
   const updateOriginPolicy = useCallback(
     (origin: string, policy: Partial<OriginPolicy>) => {
-      const existingIndex = settings.origins.findIndex(
-        (o) => o.origin === origin
-      );
-      let newOrigins;
-
-      if (existingIndex >= 0) {
-        // Update existing policy
-        newOrigins = [...settings.origins];
-        newOrigins[existingIndex] = {
-          ...newOrigins[existingIndex],
-          ...policy,
-          updatedAt: Math.floor(Date.now() / 1000),
-        };
-      } else {
-        // Add new policy
-        const newPolicy: OriginPolicy = {
-          origin,
-          trustLevel: "medium",
-          rules: {},
-          updatedAt: Math.floor(Date.now() / 1000),
-          ...policy,
-        };
-        newOrigins = [...settings.origins, newPolicy];
-      }
-
-      return updateSettings({ origins: newOrigins });
+      // Delegate mutations to background PolicyService
+      return policySetOrigin(origin, policy as any);
     },
-    [settings.origins, updateSettings]
+    []
   );
 
-  const removeOriginPolicy = useCallback(
-    (origin: string) => {
-      const newOrigins = settings.origins.filter((o) => o.origin !== origin);
-      return updateSettings({ origins: newOrigins });
-    },
-    [settings.origins, updateSettings]
-  );
+  const removeOriginPolicy = useCallback((origin: string) => {
+    return policyRemoveOrigin(origin);
+  }, []);
 
   const updateOriginTrustLevel = useCallback(
     (origin: string, trustLevel: TrustLevel) => {
       return updateOriginPolicy(origin, { trustLevel });
     },
     [updateOriginPolicy]
+  );
+
+  // Per-kind rule helper
+  const setPerKindRule = useCallback(
+    (origin: string, kind: number, mode: "allow" | "deny" | "ask") => {
+      return policySetKindRule(origin, kind, mode);
+    },
+    []
+  );
+
+  // Session grant toggle
+  const setSessionGrant = useCallback(
+    async (origin: string, enabled: boolean) => {
+      if (!enabled) return policyClearSession(origin);
+      const { policySetSession } = await import(
+        "@/src/infrastructure/messaging/client"
+      );
+      return policySetSession(origin, true);
+    },
+    []
   );
 
   // Reset settings to defaults
@@ -193,6 +191,8 @@ export function useAppSettings() {
     updateOriginPolicy,
     removeOriginPolicy,
     updateOriginTrustLevel,
+    setPerKindRule,
+    setSessionGrant,
 
     // Reset
     resetSettings,

@@ -43,6 +43,9 @@ export function SettingsView() {
     removeRelay,
     updateMediumAllowKinds,
     resetSettings,
+    setPerKindRule,
+    setSessionGrant,
+    removeOriginPolicy,
   } = useAppSettings();
   const { selectedUnlockedKey } = useKeyManager();
   const [newRelay, setNewRelay] = useState("");
@@ -314,6 +317,71 @@ export function SettingsView() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Per-Origin Policies (minimal) */}
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Shield className="h-4 w-4" />
+          <h3 className="font-medium">Per-Origin Policies</h3>
+        </div>
+        {settings.origins.length === 0 && (
+          <div className="text-sm text-muted-foreground">
+            No origins configured yet. Policies appear after first prompt.
+          </div>
+        )}
+        <div className="space-y-3">
+          {settings.origins.map((o) => (
+            <div key={o.origin} className="border rounded p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-sm">
+                    {o.name || o.origin}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Trust: {o.trustLevel}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">Session grant</Label>
+                  <Switch
+                    checked={!!o.sessionGrantAll}
+                    onCheckedChange={(v) => setSessionGrant(o.origin, v)}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeOriginPolicy(o.origin)}
+                    title="Remove origin"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Quick rules:
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {[1, 6, 7, 9735].map((kind) => (
+                    <Button
+                      key={kind}
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setPerKindRule(
+                          o.origin,
+                          kind,
+                          (o.rules as any)?.[kind] === "deny" ? "ask" : "deny"
+                        )
+                      }
+                    >
+                      Kind {kind}: {(o.rules as any)?.[kind] || "—"}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

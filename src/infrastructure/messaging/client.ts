@@ -28,6 +28,31 @@ export async function listKeys() {
   return rpc<import("@/src/domain/types").KeyRecord[]>({ type: "keys.list" });
 }
 
+export async function generateKey(password: string, label?: string) {
+  return rpc<import("@/src/domain/types").KeyRecord>({
+    type: "vault.generate",
+    password,
+    label,
+  });
+}
+
+export async function importKey(
+  keyInput: string,
+  password: string,
+  label?: string
+) {
+  return rpc<import("@/src/domain/types").KeyRecord>({
+    type: "vault.import",
+    keyInput,
+    password,
+    label,
+  });
+}
+
+export async function selectKey(id: string) {
+  return rpc<null>({ type: "vault.select", id });
+}
+
 export async function getLockState() {
   return rpc<{ isLocked: boolean; selectedKeyId?: string }>({
     type: "state.getLock",
@@ -63,4 +88,31 @@ export function subscribeSettingsChanged(cb: () => void) {
   };
   browser.runtime.onMessage.addListener(handler);
   return () => browser.runtime.onMessage.removeListener(handler);
+}
+
+export async function policySetOrigin(
+  origin: string,
+  patch: Record<string, unknown>
+) {
+  return rpc<null>({ type: "policy.setOrigin", origin, patch });
+}
+
+export async function policySetKindRule(
+  origin: string,
+  kind: number,
+  mode: "allow" | "deny" | "ask"
+) {
+  return rpc<null>({ type: "policy.setKindRule", origin, kind, mode });
+}
+
+export async function policyClearSession(origin: string) {
+  return rpc<null>({ type: "policy.clearSession", origin });
+}
+
+export async function policySetSession(origin: string, enabled: boolean) {
+  return rpc<null>({ type: "policy.setSession", origin, enabled });
+}
+
+export async function policyRemoveOrigin(origin: string) {
+  return rpc<null>({ type: "policy.removeOrigin", origin });
 }
