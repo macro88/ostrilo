@@ -4,6 +4,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useKeyManager } from "@/hooks/useKeyManager";
+import {
+  importKey as rpcImportKey,
+  unlockVault,
+} from "@/src/infrastructure/messaging/client";
 import { parsePrivateKey, evaluatePasswordStrength } from "@/lib/crypto";
 import {
   FileKey,
@@ -28,8 +32,9 @@ export function OnboardingImportKey({
   onBack,
   onComplete,
 }: OnboardingImportKeyProps) {
-  const { importKey, isLoading } = useKeyManager();
+  const { isLoading } = useKeyManager();
   const [currentStep, setCurrentStep] = useState<ImportStep>("import");
+  const [backupChecked, setBackupChecked] = useState(false);
 
   // Import state
   const [privateKeyInput, setPrivateKeyInput] = useState("");
@@ -97,7 +102,8 @@ export function OnboardingImportKey({
     if (!validatePassword() || !parsedKey) return;
 
     try {
-      await importKey(privateKeyInput.trim(), password, keyName.trim());
+      await rpcImportKey(privateKeyInput.trim(), password, keyName.trim());
+      await unlockVault(password);
       setCurrentStep("success");
     } catch (error) {
       setPasswordError(
@@ -336,7 +342,7 @@ export function OnboardingImportKey({
       </div>
 
       <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-        <div className="text-center space-y-2">
+        <div className="space-y-2">
           <div className="font-semibold text-green-600">
             "{keyName}" is ready to use
           </div>
@@ -346,13 +352,28 @@ export function OnboardingImportKey({
         </div>
       </div>
 
-      <div className="text-center space-y-4">
-        <div className="text-sm text-muted-foreground">
-          You can now start using Ostrilo to sign Nostr events and manage your
-          identity.
+      <div className="space-y-3">
+        <div className="flex items-start space-x-2 p-3 border rounded">
+          <input
+            id="backupConfirmImport"
+            type="checkbox"
+            className="mt-1"
+            checked={backupChecked}
+            onChange={(e) => setBackupChecked(e.target.checked)}
+          />
+          <Label htmlFor="backupConfirmImport" className="text-sm">
+            I have safely backed up my key.
+          </Label>
         </div>
-
-        <Button onClick={onComplete} className="w-full" size="lg">
+        <Button
+          onClick={async () => {
+            if (!backupChecked) return;
+            onComplete();
+          }}
+          disabled={!backupChecked}
+          className="w-full"
+          size="lg"
+        >
           Get Started
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>

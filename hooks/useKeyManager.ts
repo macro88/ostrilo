@@ -6,6 +6,7 @@
 
 import { useCallback } from "react";
 import browser from "webextension-polyfill";
+import { unlockVault as rpcUnlock } from "@/src/infrastructure/messaging/client";
 import {
   generateKeyPair,
   parsePrivateKey,
@@ -51,71 +52,12 @@ export function useKeyManager() {
       try {
         setIsLoading(true);
 
-        // Get encrypted keys from storage
-        const result = await browser.storage.local.get([
-          ENCRYPTED_KEYS_STORAGE,
-        ]);
-        const encryptedKeys =
-          (result[ENCRYPTED_KEYS_STORAGE] as KeyRecord[]) || [];
-
-        if (encryptedKeys.length === 0) {
-          // No keys to unlock
-          setLockState((prev) => ({ ...prev, isLocked: false }));
-          updateActivity();
-          return true;
-        }
-
-        // Try to decrypt at least one key to verify password
-        const unlockedKeys = new Map<string, UnlockedKey>();
-        let passwordVerified = false;
-
-        for (const keyRecord of encryptedKeys) {
-          try {
-            const privateKey = await decryptPrivateKey(
-              {
-                ct: keyRecord.ct,
-                iv: keyRecord.iv,
-                salt: keyRecord.salt,
-              },
-              password
-            );
-
-            const publicKey = keyRecord.pubkey; // Already stored as hex
-            const publicKeyBytes = new Uint8Array(
-              publicKey.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) ||
-                []
-            );
-
-            const unlockedKey: UnlockedKey = {
-              id: keyRecord.id,
-              label: keyRecord.label || "Unnamed",
-              privateKey,
-              publicKey: publicKeyBytes,
-              publicKeyHex: publicKey,
-              publicKeyBech32: publicKeyToBech32(publicKeyBytes),
-            };
-
-            unlockedKeys.set(keyRecord.id, unlockedKey);
-            passwordVerified = true;
-          } catch (error) {
-            console.error(`Failed to decrypt key ${keyRecord.id}:`, error);
-            // Continue trying other keys
-          }
-        }
-
-        if (!passwordVerified) {
-          throw new Error("Invalid password");
-        }
-
-        // Update lock state to unlocked with the decrypted keys
+        // Delegate to background vault unlock
+        const { selectedKeyId } = await rpcUnlock(password);
         setLockState((prev) => ({
           ...prev,
           isLocked: false,
-          unlockedKeys,
-          selectedKeyId:
-            settings.selectedKeyId && unlockedKeys.has(settings.selectedKeyId)
-              ? settings.selectedKeyId
-              : unlockedKeys.keys().next().value,
+          selectedKeyId: selectedKeyId ?? prev.selectedKeyId,
         }));
 
         updateActivity();
@@ -127,7 +69,7 @@ export function useKeyManager() {
         setIsLoading(false);
       }
     },
-    [keys, setIsLoading, setLockState, updateActivity, settings]
+    [setIsLoading, setLockState, updateActivity]
   );
 
   // Generate new key
@@ -304,9 +246,7 @@ export function useKeyManager() {
   // Select active key
   const selectKey = useCallback(
     async (keyId: string) => {
-      if (!lockState.unlockedKeys.has(keyId)) {
-        throw new Error("Key not found or not unlocked");
-      }
+      // Allow selection even if locked—BG tracks selected in sync; UI uses selectedKeyId for display
 
       // Update keys in local storage
       const updatedKeys = keys.map((k) => ({
@@ -325,14 +265,7 @@ export function useKeyManager() {
       setLockState((prev) => ({ ...prev, selectedKeyId: keyId }));
       updateActivity();
     },
-    [
-      lockState.unlockedKeys,
-      keys,
-      saveEncryptedKeys,
-      updateSettings,
-      setLockState,
-      updateActivity,
-    ]
+    [keys, saveEncryptedKeys, updateSettings, setLockState, updateActivity]
   );
 
   // Get current selected unlocked key
