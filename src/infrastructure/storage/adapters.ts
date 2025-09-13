@@ -1,5 +1,5 @@
 import browser from "webextension-polyfill";
-import { StoragePort, StorageSuite } from "@/src/application/ports/storage";
+import { StoragePort, StorageSuite } from "@/application/ports/storage";
 
 function createArea(area: "local" | "sync" | "session"): StoragePort {
   const api = (browser.storage as any)[area] as browser.Storage.StorageArea;

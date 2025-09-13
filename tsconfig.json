@@ -5,7 +5,14 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"] // or "./src/*" if using src directory
+      "@/*": ["./src/*"],
+      "@/components/*": ["./src/ui/components/*"],
+      "@/hooks/*": ["./src/ui/hooks/*"],
+      "@/lib/*": ["./src/ui/lib/*"],
+      "@/assets/*": ["./src/assets/*"],
+      "@/infrastructure/*": ["./src/infrastructure/*"],
+      "@/application/*": ["./src/application/*"],
+      "@/domain/*": ["./src/domain/*"]
     }
   }
 }

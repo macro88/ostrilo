@@ -5,7 +5,7 @@ import type {
   CryptoAead,
   CryptoKdf,
   Schnorr,
-} from "@/src/application/ports/crypto";
+} from "@/application/ports/crypto";
 
 function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
   const ab = new ArrayBuffer(u8.byteLength);

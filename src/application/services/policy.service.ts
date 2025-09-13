@@ -4,9 +4,9 @@ import {
   PolicyContext,
   PolicyInput,
   PolicyOutput,
-} from "@/src/domain/types";
-import { evaluatePolicy } from "@/src/domain/policy/evaluate";
-import { StorageSuite } from "@/src/application/ports/storage";
+} from "@/domain/types";
+import { evaluatePolicy } from "@/domain/policy/evaluate";
+import { StorageSuite } from "@/application/ports/storage";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
 
 const SETTINGS_KEY = "appSettings";
@@ -14,12 +14,12 @@ const SETTINGS_KEY = "appSettings";
 export class PolicyService {
   constructor(private storage: StorageSuite) {}
 
-  async loadContext(): Promise<
-    PolicyContext & {
-      policies: OriginPolicy[];
-      sessionGrants: Record<string, number>;
-    }
-  > {
+  async loadContext(): Promise<{
+    unlocked: boolean;
+    mediumAllowKinds: number[];
+    policies: OriginPolicy[];
+    sessionGrants: Record<string, number>;
+  }> {
     const [settings, lock, grants] = await Promise.all([
       this.storage.sync.get<any>(SETTINGS_KEY),
       this.storage.session.get<{ isLocked?: boolean }>("lockState"),
@@ -38,21 +38,24 @@ export class PolicyService {
     };
   }
 
-  async evaluate(input: PolicyInput): Promise<PolicyOutput> {
+  async evaluate(input: { origin: string; kind: number }): Promise<PolicyOutput> {
     const { unlocked, mediumAllowKinds, policies, sessionGrants } =
       await this.loadContext();
     // Apply active session grant if present and not expired
     const grant = sessionGrants[input.origin];
     const now = Date.now();
     const hasGrant = typeof grant === "number" && (grant === 0 || grant > now);
-    const patchedPolicies = policies.map((p) =>
+    const patchedPolicies = policies.map((p: OriginPolicy) =>
       p.origin === input.origin ? { ...p, sessionGrantAll: hasGrant } : p
     );
-    return evaluatePolicy(
-      input,
-      { unlocked, mediumAllowKinds },
-      patchedPolicies
-    );
+    return evaluatePolicy({
+      origin: input.origin,
+      kind: input.kind,
+      unlocked,
+      mediumAllowKinds,
+      policies: patchedPolicies,
+      sessionGrants
+    });
   }
 
   private async getSettings(): Promise<any> {

@@ -23,18 +23,16 @@ function defaultForTrust(
 }
 
 export function evaluatePolicy(
-  input: PolicyInput,
-  ctx: PolicyContext,
-  originPolicies: OriginPolicy[]
+  input: PolicyInput
 ): PolicyOutput {
-  const { origin, kind } = input;
+  const { origin, kind, unlocked, mediumAllowKinds, policies, sessionGrants } = input;
 
-  if (!ctx.unlocked) {
+  if (!unlocked) {
     return { mode: "deny", reason: "locked" };
   }
 
-  const policy = originPolicies.find((p) => p.origin === origin);
-  const mediumAllow = new Set<number>(ctx.mediumAllowKinds);
+  const policy = policies.find((p: OriginPolicy) => p.origin === origin);
+  const mediumAllow = new Set<number>(mediumAllowKinds);
 
   // Explicit deny always wins, even against session grant
   const explicit: Authorisation | undefined = policy?.rules?.[kind];

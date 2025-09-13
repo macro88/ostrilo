@@ -1,5 +1,5 @@
-import { StorageSuite } from "@/src/application/ports/storage";
-import type { AppSettingsV1, Theme } from "@/src/domain/types";
+import { StorageSuite } from "@/application/ports/storage";
+import type { AppSettingsV1, Theme } from "@/domain/types";
 
 const SETTINGS_KEY = "appSettings";
 export const SETTINGS_CHANGED_EVENT = "ostrilo.settings.changed";

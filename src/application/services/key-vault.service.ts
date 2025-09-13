@@ -1,10 +1,10 @@
-import { StorageSuite } from "@/src/application/ports/storage";
+import { StorageSuite } from "@/application/ports/storage";
 import type {
   CryptoAead,
   CryptoKdf,
   Schnorr,
-} from "@/src/application/ports/crypto";
-import { AppSettingsV1, KeyRecord } from "@/src/domain/types";
+} from "@/application/ports/crypto";
+import { AppSettingsV1, KeyRecord } from "@/domain/types";
 import { randomBytes } from "@noble/hashes/utils";
 import { bech32 } from "@scure/base";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";

@@ -4,6 +4,8 @@ import path from "path";
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
+  srcDir: "src",
+  entrypointsDir: "extension",
   manifest: {
     permissions: ["storage", "sidePanel"],
   },
@@ -11,24 +13,28 @@ export default defineConfig({
     plugins: [tailwindcss()],
     resolve: {
       alias: {
-        "@": path.resolve(__dirname, "./"), // or "./src" if using src directory
+        "@/components": path.resolve(__dirname, "./src/ui/components"),
+        "@/hooks": path.resolve(__dirname, "./src/ui/hooks"),
+        "@/lib": path.resolve(__dirname, "./src/ui/lib"),
+        "@/assets": path.resolve(__dirname, "./src/assets"),
+        "@/infrastructure": path.resolve(__dirname, "./src/infrastructure"),
+        "@/application": path.resolve(__dirname, "./src/application"),
+        "@/domain": path.resolve(__dirname, "./src/domain"),
+        "@": path.resolve(__dirname, "./src"),
       },
     },
     build: {
       rollupOptions: {
         external: [],
-        // Handle crypto dependencies properly for browser extension
         output: {
           globals: {},
         },
       },
-      // Ensure dependencies are properly bundled
       commonjsOptions: {
         include: [/node_modules/],
         transformMixedEsModules: true,
       },
     },
-    // Optimize dependencies for the browser extension environment
     optimizeDeps: {
       include: ["@noble/curves", "@noble/hashes", "@scure/base"],
     },

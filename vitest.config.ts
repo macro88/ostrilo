@@ -4,7 +4,14 @@ import path from "node:path";
 export default defineConfig({
   resolve: {
     alias: {
-      "@": path.resolve(process.cwd()),
+      "@/components": path.resolve(process.cwd(), "./src/ui/components"),
+      "@/hooks": path.resolve(process.cwd(), "./src/ui/hooks"),
+      "@/lib": path.resolve(process.cwd(), "./src/ui/lib"),
+      "@/assets": path.resolve(process.cwd(), "./src/assets"),
+      "@/infrastructure": path.resolve(process.cwd(), "./src/infrastructure"),
+      "@/application": path.resolve(process.cwd(), "./src/application"),
+      "@/domain": path.resolve(process.cwd(), "./src/domain"),
+      "@": path.resolve(process.cwd(), "./src"),
     },
   },
   test: {

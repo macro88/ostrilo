@@ -81,11 +81,11 @@ export async function lockVault() {
 }
 
 export async function listKeys() {
-  return rpc<import("@/src/domain/types").KeyRecord[]>({ type: "keys.list" });
+  return rpc<import("@/domain/types").KeyRecord[]>({ type: "keys.list" });
 }
 
 export async function generateKey(password: string, label?: string) {
-  return rpc<import("@/src/domain/types").KeyRecord>({
+  return rpc<import("@/domain/types").KeyRecord>({
     type: "vault.generate",
     password,
     label,
@@ -97,7 +97,7 @@ export async function importKey(
   password: string,
   label?: string
 ) {
-  return rpc<import("@/src/domain/types").KeyRecord>({
+  return rpc<import("@/domain/types").KeyRecord>({
     type: "vault.import",
     keyInput,
     password,
@@ -125,7 +125,7 @@ export async function signHash(hashHex: string, keyId?: string) {
 
 // Settings caching to prevent excessive RPC calls
 let settingsCache: {
-  data: import("@/src/domain/types").AppSettingsV1 | undefined;
+  data: import("@/domain/types").AppSettingsV1 | undefined;
   timestamp: number;
 } | null = null;
 
@@ -138,7 +138,7 @@ export async function getSettings(forceRefresh = false) {
   }
 
   // Fetch from background
-  const data = await rpc<import("@/src/domain/types").AppSettingsV1 | undefined>({
+  const data = await rpc<import("@/domain/types").AppSettingsV1 | undefined>({
     type: "settings.get",
   });
 
@@ -152,9 +152,9 @@ export async function getSettings(forceRefresh = false) {
 }
 
 export async function updateSettings(
-  patch: Partial<import("@/src/domain/types").AppSettingsV1>
+  patch: Partial<import("@/domain/types").AppSettingsV1>
 ) {
-  const result = await rpc<import("@/src/domain/types").AppSettingsV1>({
+  const result = await rpc<import("@/domain/types").AppSettingsV1>({
     type: "settings.update",
     patch: patch as any,
   });
