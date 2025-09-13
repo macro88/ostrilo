@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,8 +37,8 @@ export function OnboardingImportKey({
   const [currentStep, setCurrentStep] = useState<ImportStep>("import");
   const [backupChecked, setBackupChecked] = useState(false);
 
-  // Import state
-  const [privateKeyInput, setPrivateKeyInput] = useState("");
+  // Import state - Use ref for private key to avoid storing in React state
+  const privateKeyRef = useRef<HTMLInputElement>(null);
   const [keyName, setKeyName] = useState("");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [importError, setImportError] = useState("");
@@ -50,7 +50,8 @@ export function OnboardingImportKey({
   const [passwordError, setPasswordError] = useState("");
 
   const validateImport = async () => {
-    if (!privateKeyInput.trim()) {
+    const keyInput = privateKeyRef.current?.value.trim();
+    if (!keyInput) {
       setImportError("Private key is required");
       return false;
     }
@@ -61,7 +62,7 @@ export function OnboardingImportKey({
     }
 
     try {
-      const parsed = await parsePrivateKey(privateKeyInput.trim());
+      const parsed = await parsePrivateKey(keyInput);
       // Convert array back to Uint8Array since RPC returns arrays
       const parsedKey = new Uint8Array(parsed);
       setParsedKey(parsedKey);
@@ -109,9 +110,21 @@ export function OnboardingImportKey({
   const handleSetPassword = async () => {
     if (!(await validatePassword()) || !parsedKey) return;
 
+    const keyInput = privateKeyRef.current?.value.trim();
+    if (!keyInput) {
+      setPasswordError("Private key is no longer available");
+      return;
+    }
+
     try {
-      await rpcImportKey(privateKeyInput.trim(), password, keyName.trim());
+      await rpcImportKey(keyInput, password, keyName.trim());
       await unlockVault(password);
+      
+      // Clear the private key from the input for security
+      if (privateKeyRef.current) {
+        privateKeyRef.current.value = "";
+      }
+      
       setCurrentStep("success");
     } catch (error) {
       setPasswordError(
@@ -133,16 +146,22 @@ export function OnboardingImportKey({
         try {
           const keyData = JSON.parse(content);
           if (keyData.privateKey) {
-            setPrivateKeyInput(keyData.privateKey);
+            if (privateKeyRef.current) {
+              privateKeyRef.current.value = keyData.privateKey;
+            }
             if (keyData.name && !keyName) {
               setKeyName(keyData.name);
             }
           } else {
-            setPrivateKeyInput(content.trim());
+            if (privateKeyRef.current) {
+              privateKeyRef.current.value = content.trim();
+            }
           }
         } catch {
           // Not JSON, treat as raw key
-          setPrivateKeyInput(content.trim());
+          if (privateKeyRef.current) {
+            privateKeyRef.current.value = content.trim();
+          }
         }
       } catch (error) {
         setImportError("Failed to read file");
@@ -183,10 +202,9 @@ export function OnboardingImportKey({
           <div className="relative">
             <Input
               id="privateKey"
+              ref={privateKeyRef}
               type={showPrivateKey ? "text" : "password"}
               placeholder="nsec1..."
-              value={privateKeyInput}
-              onChange={(e) => setPrivateKeyInput(e.target.value)}
               className={importError ? "border-red-500 pr-16" : "pr-16"}
             />
             <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
