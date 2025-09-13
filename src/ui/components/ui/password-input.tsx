@@ -1,8 +1,16 @@
-import { useMemo, useState } from "react";
-import { evaluatePasswordStrength, PasswordStrength } from "@/domain/utils/crypto";
+import { useEffect, useState, useMemo } from "react";
+import { evaluatePasswordStrength } from "@/infrastructure/messaging/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Shield, Check, X } from "lucide-react";
+
+// Define PasswordStrength interface here since we're not importing it from crypto
+interface PasswordStrength {
+  score: number;
+  feedback: string[];
+  warning: string;
+  meetsMinimum: boolean; // Add this property that was used in the component
+}
 
 interface PasswordInputProps {
   label: string;
@@ -29,9 +37,22 @@ export function PasswordInput({
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const strength: PasswordStrength | null = useMemo(() => {
-    if (!showStrengthMeter || value.length === 0) return null;
-    return evaluatePasswordStrength(value);
+  const [strength, setStrength] = useState<PasswordStrength | null>(null);
+
+  useEffect(() => {
+    if (!showStrengthMeter || value.length === 0) {
+      setStrength(null);
+      return;
+    }
+
+    evaluatePasswordStrength(value).then(result => {
+      setStrength({
+        ...result,
+        meetsMinimum: result.score >= 3 // Define minimum strength requirement
+      });
+    }).catch(() => {
+      setStrength(null);
+    });
   }, [showStrengthMeter, value]);
 
   const confirmError = useMemo(() => {

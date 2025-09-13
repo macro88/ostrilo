@@ -14,7 +14,9 @@ export type RpcRequest =
   | { type: "policy.setKindRule"; origin: string; kind: number; mode: string }
   | { type: "policy.clearSession"; origin: string }
   | { type: "policy.setSession"; origin: string; enabled: boolean }
-  | { type: "policy.removeOrigin"; origin: string };
+  | { type: "policy.removeOrigin"; origin: string }
+  | { type: "crypto.evaluatePassword"; password: string }
+  | { type: "crypto.parsePrivateKey"; keyInput: string };
 
 export type RpcResponse =
   | { ok: true; data: unknown }

@@ -134,6 +134,20 @@ export default defineBackground(() => {
               result = { ok: true, data: null } as const;
               break;
             }
+            case "crypto.evaluatePassword": {
+              // Import the function dynamically to keep it in background only
+              const { evaluatePasswordStrength } = await import("@/domain/utils/crypto");
+              const strength = evaluatePasswordStrength(message.password);
+              result = { ok: true, data: strength } as const;
+              break;
+            }
+            case "crypto.parsePrivateKey": {
+              // Import the function dynamically to keep it in background only
+              const { parsePrivateKey } = await import("@/domain/utils/crypto");
+              const privateKey = parsePrivateKey(message.keyInput);
+              result = { ok: true, data: Array.from(privateKey) } as const; // Convert Uint8Array to Array for JSON
+              break;
+            }
             default:
               console.log("[BG] Unknown method:", (message as any).type);
               result = { ok: false, error: "unknown_method" } as const;

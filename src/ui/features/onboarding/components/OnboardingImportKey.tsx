@@ -7,8 +7,9 @@ import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import {
   importKey as rpcImportKey,
   unlockVault,
+  parsePrivateKey,
+  evaluatePasswordStrength,
 } from "@/infrastructure/messaging/client";
-import { parsePrivateKey, evaluatePasswordStrength } from "@/domain/utils/crypto";
 import {
   FileKey,
   ArrowLeft,
@@ -48,7 +49,7 @@ export function OnboardingImportKey({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
-  const validateImport = () => {
+  const validateImport = async () => {
     if (!privateKeyInput.trim()) {
       setImportError("Private key is required");
       return false;
@@ -60,8 +61,10 @@ export function OnboardingImportKey({
     }
 
     try {
-      const parsed = parsePrivateKey(privateKeyInput.trim());
-      setParsedKey(parsed);
+      const parsed = await parsePrivateKey(privateKeyInput.trim());
+      // Convert array back to Uint8Array since RPC returns arrays
+      const parsedKey = new Uint8Array(parsed);
+      setParsedKey(parsedKey);
       setImportError("");
       return true;
     } catch (error) {
@@ -72,7 +75,7 @@ export function OnboardingImportKey({
     }
   };
 
-  const validatePassword = () => {
+  const validatePassword = async () => {
     if (!password) {
       setPasswordError("Password is required");
       return false;
@@ -83,9 +86,14 @@ export function OnboardingImportKey({
       return false;
     }
 
-    const strength = evaluatePasswordStrength(password);
-    if (!strength.meetsMinimum) {
-      setPasswordError("Password does not meet minimum requirements");
+    try {
+      const strength = await evaluatePasswordStrength(password);
+      if (strength.score < 3) { // Use score instead of meetsMinimum property
+        setPasswordError("Password does not meet minimum requirements");
+        return false;
+      }
+    } catch (error) {
+      setPasswordError("Could not validate password strength");
       return false;
     }
 
@@ -94,12 +102,12 @@ export function OnboardingImportKey({
   };
 
   const handleImportKey = async () => {
-    if (!validateImport()) return;
+    if (!(await validateImport())) return;
     setCurrentStep("password");
   };
 
   const handleSetPassword = async () => {
-    if (!validatePassword() || !parsedKey) return;
+    if (!(await validatePassword()) || !parsedKey) return;
 
     try {
       await rpcImportKey(privateKeyInput.trim(), password, keyName.trim());

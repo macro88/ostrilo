@@ -7,14 +7,9 @@ import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import {
   generateKey as rpcGenerateKey,
   unlockVault,
+  evaluatePasswordStrength,
 } from "@/infrastructure/messaging/client";
 import { useOnboarding } from "../hooks/useOnboarding";
-
-import {
-  evaluatePasswordStrength,
-  generateKeyPair,
-  publicKeyToBech32,
-} from "@/domain/utils/crypto";
 import {
   Key,
   ArrowLeft,
@@ -42,7 +37,7 @@ export function OnboardingCreateKey({
   const [backupChecked, setBackupChecked] = useState(false);
   const [step, setStep] = useState<"input" | "backup">("input");
 
-  const validatePassword = () => {
+  const validatePassword = async () => {
     if (!password) {
       setPasswordError("Password is required");
       return false;
@@ -53,9 +48,14 @@ export function OnboardingCreateKey({
       return false;
     }
 
-    const strength = evaluatePasswordStrength(password);
-    if (!strength.meetsMinimum) {
-      setPasswordError("Password does not meet minimum requirements");
+    try {
+      const strength = await evaluatePasswordStrength(password);
+      if (strength.score < 3) { // Use score instead of meetsMinimum property
+        setPasswordError("Password does not meet minimum requirements");
+        return false;
+      }
+    } catch (error) {
+      setPasswordError("Could not validate password strength");
       return false;
     }
 
@@ -69,7 +69,7 @@ export function OnboardingCreateKey({
   };
 
   const handleGenerateKey = async () => {
-    if (!validatePassword()) return;
+    if (!(await validatePassword())) return;
 
     setIsGenerating(true);
     try {

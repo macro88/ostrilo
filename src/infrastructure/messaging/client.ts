@@ -203,3 +203,17 @@ export async function policySetSession(origin: string, enabled: boolean) {
 export async function policyRemoveOrigin(origin: string) {
   return rpc<null>({ type: "policy.removeOrigin", origin });
 }
+
+export async function evaluatePasswordStrength(password: string) {
+  return rpc<{ score: number; feedback: string[]; warning: string }>({ 
+    type: "crypto.evaluatePassword", 
+    password 
+  });
+}
+
+export async function parsePrivateKey(keyInput: string) {
+  return rpc<Uint8Array>({ 
+    type: "crypto.parsePrivateKey", 
+    keyInput 
+  });
+}
