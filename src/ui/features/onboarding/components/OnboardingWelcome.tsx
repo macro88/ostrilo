@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Key, Shield, Zap, ArrowRight, FileKey, Download } from "lucide-react";
-import { AppLogo } from "../common/app-logo";
+import { AppLogo } from "@/components/common/app-logo";
 
 interface OnboardingWelcomeProps {
   onCreateKey: () => void;

@@ -1,5 +1,5 @@
-import { useAppSettings } from "./useAppSettings";
-import { useKeyManager } from "./useKeyManager";
+import { useAppSettings } from "@/hooks/useAppSettings";
+import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 
 /**
  * Hook for first-run detection and onboarding state

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SidePanelToggle } from "../common/sidepanel-toggle";
+import { SidePanelToggle } from "@/components/navigation/sidepanel-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,8 +30,8 @@ import {
   Computer,
   Fingerprint,
 } from "lucide-react";
-import { Pubkey } from "../common/pubkey";
-import { useKeyManager } from "@/ui/hooks/useKeyManager";
+import { Pubkey } from "@/components/common/pubkey";
+import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 
 export function SettingsView() {
   const {

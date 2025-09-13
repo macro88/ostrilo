@@ -20,7 +20,7 @@ import {
   evaluatePasswordStrength,
 } from "@/domain/utils/crypto";
 import { KeyRecord } from "@/domain/types";
-import { useAppSettings } from "./useAppSettings";
+import { useAppSettings } from "@/hooks/useAppSettings";
 import {
   useKeyManagerContext,
   ENCRYPTED_KEYS_STORAGE,

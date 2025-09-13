@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Header } from "./Header";
-import { BottomTabs, TabKey } from "./BottomTabs";
+import { BottomTabs, TabKey } from "../navigation/BottomTabs";
 
 interface AppLayoutProps {
   children: ReactNode;

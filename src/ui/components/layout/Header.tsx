@@ -2,7 +2,7 @@ import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import mascotLogo from "@/assets/ostrilo_mascot_front.svg";
-import { useKeyManager } from "@/ui/hooks/useKeyManager";
+import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager"; "@/ui/features/authentication/hooks/useKeyManager";
 
 interface HeaderProps {
   selectedKey?: string;

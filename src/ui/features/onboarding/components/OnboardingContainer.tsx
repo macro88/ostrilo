@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { useAppSettings } from "@/hooks/useAppSettings";
+import { useOnboarding } from "../hooks/useOnboarding";
 import { OnboardingWelcome } from "./OnboardingWelcome";
 import { OnboardingCreateKey } from "./OnboardingCreateKey";
 import { OnboardingImportKey } from "./OnboardingImportKey";
-import { useOnboarding } from "@/hooks/useOnboarding";
 
 type OnboardingFlow = "welcome" | "create" | "import";
 

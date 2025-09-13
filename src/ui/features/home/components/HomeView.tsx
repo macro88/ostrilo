@@ -1,5 +1,5 @@
 import { useAppSettings } from "@/hooks/useAppSettings";
-import { useKeyManager } from "@/hooks/useKeyManager";
+import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import { Key, Settings, Shield, Globe } from "lucide-react";
 
 export function HomeView() {

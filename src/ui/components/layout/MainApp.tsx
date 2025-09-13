@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { AppLayout } from "@/ui/components/layout/AppLayout";
-import { LockScreen } from "@/ui/components/layout/LockScreen";
-import { OnboardingContainer } from "@/ui/components/onboarding/OnboardingContainer";
-import { HomeView } from "@/ui/components/layout/HomeView";
-import { ProfileView } from "@/ui/components/layout/ProfileView";
-import { ActivityView } from "@/ui/components/layout/ActivityView";
-import { SettingsView } from "@/ui/components/layout/SettingsView";
-import { TabKey } from "@/ui/components/layout/BottomTabs";
-import { useOnboarding } from "@/ui/hooks/useOnboarding";
-import { useKeyManager } from "@/ui/hooks/useKeyManager";
+import { LockScreen } from "@/ui/features/authentication/components/LockScreen";
+import { OnboardingContainer } from "@/ui/features/onboarding/components/OnboardingContainer";
+import { HomeView } from "@/ui/features/home/components/HomeView";
+import { ProfileView } from "@/ui/features/profile/components/ProfileView";
+import { ActivityView } from "@/ui/features/activity/components/ActivityView";
+import { SettingsView } from "@/ui/features/settings/components/SettingsView";
+import { TabKey } from "@/ui/components/navigation/BottomTabs";
+import { useOnboarding } from "@/ui/features/onboarding/hooks/useOnboarding";
+import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 
 export function MainApp() {
   const [activeTab, setActiveTab] = useState<TabKey>("home");

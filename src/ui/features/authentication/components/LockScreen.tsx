@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useKeyManager } from "@/hooks/useKeyManager";
+import { useKeyManager } from "../hooks/useKeyManager";
 import mascotLogo from "@/assets/ostrilo_mascot_front.svg";
 import {
   Lock,

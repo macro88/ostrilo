@@ -22,7 +22,7 @@ import {
 } from "@/infrastructure/messaging/client";
 import { zeroize } from "@/domain/utils/crypto";
 import { KeyRecord } from "@/domain/types";
-import { useAppSettings } from "./useAppSettings";
+import { useAppSettings } from "@/hooks/useAppSettings";
 
 // Storage keys
 export const ENCRYPTED_KEYS_STORAGE = "encryptedKeys"; // Local storage for encrypted keys
