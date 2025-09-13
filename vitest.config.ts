@@ -18,13 +18,41 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],
     globals: true,
+    testTimeout: 10000, // 10 seconds for crypto operations
+    hookTimeout: 10000, // 10 seconds for setup/teardown
+    teardownTimeout: 10000,
     exclude: [
       "**/tests/e2e/**", // E2E handled by Playwright
       "**/node_modules/**",
       "**/dist/**",
     ],
     coverage: {
-      reporter: ["text", "html"],
+      provider: "v8",
+      reporter: ["text", "html", "lcov"],
+      exclude: [
+        "**/tests/**",
+        "**/entrypoints/**", // Browser extension entrypoints
+        "**/components/ui/**", // shadcn/ui components
+        "**/*.config.*",
+        "**/node_modules/**",
+        "**/dist/**",
+      ],
+      all: true,
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 70,
+        statements: 80,
+      },
+    },
+    // Performance optimizations
+    isolate: false, // Faster test execution
+    pool: "threads",
+    poolOptions: {
+      threads: {
+        minThreads: 1,
+        maxThreads: 4,
+      },
     },
   },
 });
