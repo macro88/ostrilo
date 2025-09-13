@@ -89,7 +89,8 @@ export function OnboardingImportKey({
 
     try {
       const strength = await evaluatePasswordStrength(password);
-      if (strength.score < 3) { // Use score instead of meetsMinimum property
+      if (strength.score < 3) {
+        // Use score instead of meetsMinimum property
         setPasswordError("Password does not meet minimum requirements");
         return false;
       }
@@ -119,12 +120,12 @@ export function OnboardingImportKey({
     try {
       await rpcImportKey(keyInput, password, keyName.trim());
       await unlockVault(password);
-      
+
       // Clear the private key from the input for security
       if (privateKeyRef.current) {
         privateKeyRef.current.value = "";
       }
-      
+
       setCurrentStep("success");
     } catch (error) {
       setPasswordError(
