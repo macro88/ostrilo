@@ -7,7 +7,7 @@ import type {
 import { AppSettingsV1, KeyRecord } from "@/src/domain/types";
 import { randomBytes } from "@noble/hashes/utils";
 import { bech32 } from "@scure/base";
-import { SETTINGS_CHANGED_EVENT } from "./settings.service";
+import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
 
 const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
 const LOCK_STATE_STORAGE = "lockState";
@@ -107,11 +107,13 @@ export class KeyVaultService {
       if (!hasSelected && records.length === 0) {
         record.isSelected = true;
         // also set selectedKeyId in settings
-        const settings = (await this.getSettings()) ?? ({} as AppSettingsV1);
+        const settings = (await this.getSettings()) ?? defaultSettings();
         await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, {
-          ...(settings as any),
+          ...defaultSettings(),
+          ...settings,
+          __version: "settings.v1",
           selectedKeyId: record.id,
-        } as any);
+        } as AppSettingsV1);
       }
       const next = [...records, record];
       await this.saveKeys(next);
@@ -150,11 +152,13 @@ export class KeyVaultService {
         records.find((r) => r.isSelected)?.id;
       if (!hasSelected && records.length === 0) {
         record.isSelected = true;
-        const settings = (await this.getSettings()) ?? ({} as AppSettingsV1);
+        const settings = (await this.getSettings()) ?? defaultSettings();
         await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, {
-          ...(settings as any),
+          ...defaultSettings(),
+          ...settings,
+          __version: "settings.v1",
           selectedKeyId: record.id,
-        } as any);
+        } as AppSettingsV1);
       }
       const next = [...records, record];
       await this.saveKeys(next);
@@ -166,11 +170,13 @@ export class KeyVaultService {
 
   async selectKey(id: string): Promise<void> {
     // Update selectedKeyId in settings
-    const settings = (await this.getSettings()) ?? ({} as AppSettingsV1);
+    const settings = (await this.getSettings()) ?? defaultSettings();
     await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, {
-      ...(settings as any),
+      ...defaultSettings(),
+      ...settings,
+      __version: "settings.v1",
       selectedKeyId: id,
-    } as any);
+    } as AppSettingsV1);
     // Also mark in local list for UI convenience
     const records = await this.listKeys();
     const next = records.map((r) => ({ ...r, isSelected: r.id === id }));

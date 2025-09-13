@@ -7,7 +7,7 @@ import {
 } from "@/src/domain/types";
 import { evaluatePolicy } from "@/src/domain/policy/evaluate";
 import { StorageSuite } from "@/src/application/ports/storage";
-import { SETTINGS_CHANGED_EVENT } from "./settings.service";
+import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
 
 const SETTINGS_KEY = "appSettings";
 
@@ -56,7 +56,9 @@ export class PolicyService {
   }
 
   private async getSettings(): Promise<any> {
-    return (await this.storage.sync.get<any>(SETTINGS_KEY)) ?? {};
+    return (
+      (await this.storage.sync.get<any>(SETTINGS_KEY)) ?? defaultSettings()
+    );
   }
 
   private async putSettings(next: any): Promise<void> {

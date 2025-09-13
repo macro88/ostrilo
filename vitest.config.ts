@@ -11,6 +11,11 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],
     globals: true,
+    exclude: [
+      "**/tests/e2e/**", // E2E handled by Playwright
+      "**/node_modules/**",
+      "**/dist/**",
+    ],
     coverage: {
       reporter: ["text", "html"],
     },

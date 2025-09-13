@@ -1,11 +1,36 @@
-import browser from "webextension-polyfill";
+import { browser } from "wxt/browser";
 import type { RpcRequest, RpcResponse } from "./rpc";
 // webextension-polyfill already imported above
 
 export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
-  const res = (await browser.runtime.sendMessage(req)) as RpcResponse;
-  if (res && res.ok === true) return res.data as T;
-  throw new Error((res as any)?.error ?? "rpc_failed");
+  const method = (req as any)?.type ?? "unknown";
+  const attempt = async (): Promise<T> => {
+    const res = (await browser.runtime.sendMessage(req)) as
+      | RpcResponse
+      | undefined;
+    if (res && (res as any).ok === true) return (res as any).data as T;
+    const err = (res as any)?.error ?? "rpc_failed";
+    throw new Error(`rpc:${method}:${err}`);
+  };
+  const isWarmup = (m: string) =>
+    /Receiving end does not exist|Could not establish connection|No message port|The message port closed|Extension context invalidated/i.test(
+      m
+    );
+  let lastErr: any;
+  for (const delay of [0, 80, 160, 320]) {
+    try {
+      if (delay) await new Promise((r) => setTimeout(r, delay));
+      return await attempt();
+    } catch (e: any) {
+      lastErr = e;
+      const msg = e?.message || String(e);
+      if (!isWarmup(msg)) break;
+      // continue and retry with next delay
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error(String(lastErr) || `rpc:${method}:transport_failed`);
 }
 
 export async function evaluatePolicy(origin: string, kind: number) {

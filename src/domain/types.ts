@@ -33,7 +33,6 @@ export interface AppSettingsV1 {
   sidePanel: boolean;
   autoLockMinutes: number;
   relays: string[];
-  keys: KeyRecord[];
   origins: OriginPolicy[];
   mediumAllowKinds: number[];
   sessionTTLMinutes: number;
