@@ -18,37 +18,91 @@ import {
   OriginPolicy,
 } from "@/lib/settings";
 
-export function useAppSettings() {
-  // External store that fetches once and updates via BG events
-  const subscribe = (cb: () => void) => subscribeSettingsChanged(cb);
-  const getSnapshot = () => stateCache.current;
-  const getServerSnapshot = () => stateCache.current;
+// Global settings store to prevent multiple fetches
+class SettingsStore {
+  private settings: AppSettingsV1 | null = null;
+  private isLoading = false;
+  private isInitialized = false;
+  private listeners = new Set<() => void>();
 
-  const stateCache = { current: DEFAULT_SETTINGS_V1 as AppSettingsV1 } as {
-    current: AppSettingsV1;
+  subscribe = (callback: () => void) => {
+    this.listeners.add(callback);
+    
+    // Start initial load if not done
+    if (!this.isInitialized && !this.isLoading) {
+      this.loadSettings();
+    }
+
+    return () => {
+      this.listeners.delete(callback);
+    };
   };
-  // Initial load side-effect free via lazy getter in subscribe pattern
-  // We fetch eagerly once on first call
-  if ((getSnapshot() as any).__init !== true) {
-    (async () => {
-      const s = (await rpcGetSettings()) ?? DEFAULT_SETTINGS_V1;
-      stateCache.current = { ...DEFAULT_SETTINGS_V1, ...s } as AppSettingsV1;
-      (stateCache.current as any).__init = true;
-    })();
+
+  getSnapshot = () => {
+    if (!this.isInitialized && !this.isLoading) {
+      this.loadSettings();
+    }
+    return this.settings;
+  };
+
+  private async loadSettings() {
+    if (this.isLoading) return;
+    this.isLoading = true;
+
+    try {
+      const settings = await rpcGetSettings();
+      this.settings = settings ?? DEFAULT_SETTINGS_V1;
+      this.isInitialized = true;
+      this.notifyListeners();
+    } catch (error) {
+      console.error("Failed to load settings:", error);
+      this.settings = DEFAULT_SETTINGS_V1;
+      this.isInitialized = true;
+      this.notifyListeners();
+    } finally {
+      this.isLoading = false;
+    }
   }
+
+  private notifyListeners() {
+    this.listeners.forEach(callback => callback());
+  }
+
+  // Called when settings change externally
+  onSettingsChanged = () => {
+    if (this.isInitialized) {
+      this.loadSettings();
+    }
+  };
+}
+
+const settingsStore = new SettingsStore();
+
+// Set up external change listener
+let subscriptionSetup = false;
+const setupSubscription = () => {
+  if (!subscriptionSetup) {
+    subscribeSettingsChanged(settingsStore.onSettingsChanged);
+    subscriptionSetup = true;
+  }
+};
+
+export function useAppSettings() {
+  setupSubscription();
+
   const rawSettings = useSyncExternalStore(
-    subscribe,
-    getSnapshot,
-    getServerSnapshot
+    settingsStore.subscribe,
+    settingsStore.getSnapshot,
+    () => null // Server snapshot for SSR
   );
 
   // Merge defaults with stored to ensure new fields exist (simple migration)
   const settings = useMemo<AppSettingsV1>(
-    () => ({ ...DEFAULT_SETTINGS_V1, ...(rawSettings as AppSettingsV1) }),
+    () => ({ ...DEFAULT_SETTINGS_V1, ...(rawSettings ?? {}) }),
     [rawSettings]
   );
 
-  const isLoading = !rawSettings;
+  const isLoading = rawSettings === null;
 
   // Save settings to storage
   const updateSettings = useCallback(

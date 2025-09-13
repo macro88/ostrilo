@@ -123,24 +123,55 @@ export async function signHash(hashHex: string, keyId?: string) {
   });
 }
 
-export async function getSettings() {
-  return rpc<import("@/src/domain/types").AppSettingsV1 | undefined>({
+// Settings caching to prevent excessive RPC calls
+let settingsCache: {
+  data: import("@/src/domain/types").AppSettingsV1 | undefined;
+  timestamp: number;
+} | null = null;
+
+const SETTINGS_CACHE_TTL = 5000; // 5 seconds cache
+
+export async function getSettings(forceRefresh = false) {
+  // Check cache first
+  if (!forceRefresh && settingsCache && (Date.now() - settingsCache.timestamp < SETTINGS_CACHE_TTL)) {
+    return settingsCache.data;
+  }
+
+  // Fetch from background
+  const data = await rpc<import("@/src/domain/types").AppSettingsV1 | undefined>({
     type: "settings.get",
   });
+
+  // Update cache
+  settingsCache = {
+    data,
+    timestamp: Date.now(),
+  };
+
+  return data;
 }
 
 export async function updateSettings(
   patch: Partial<import("@/src/domain/types").AppSettingsV1>
 ) {
-  return rpc<import("@/src/domain/types").AppSettingsV1>({
+  const result = await rpc<import("@/src/domain/types").AppSettingsV1>({
     type: "settings.update",
     patch: patch as any,
   });
+
+  // Invalidate cache after update
+  settingsCache = null;
+
+  return result;
 }
 
 export function subscribeSettingsChanged(cb: () => void) {
   const handler = (msg: any) => {
-    if (msg && msg.__event === "ostrilo.settings.changed") cb();
+    if (msg && msg.__event === "ostrilo.settings.changed") {
+      // Invalidate cache when settings change externally
+      settingsCache = null;
+      cb();
+    }
   };
   browser.runtime.onMessage.addListener(handler);
   return () => browser.runtime.onMessage.removeListener(handler);
