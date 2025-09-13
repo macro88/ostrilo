@@ -4,18 +4,48 @@ import type { RpcRequest, RpcResponse } from "./rpc";
 
 export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
   const method = (req as any)?.type ?? "unknown";
+  console.log("[CLIENT] Sending RPC:", method);
+  
   const attempt = async (): Promise<T> => {
-    const res = (await browser.runtime.sendMessage(req)) as
-      | RpcResponse
-      | undefined;
-    if (res && (res as any).ok === true) return (res as any).data as T;
-    const err = (res as any)?.error ?? "rpc_failed";
-    throw new Error(`rpc:${method}:${err}`);
+    try {
+      const res = (await browser.runtime.sendMessage(req)) as
+        | RpcResponse
+        | undefined;
+      
+      console.log("[CLIENT] Received response for", method, ":", res);
+      
+      // More detailed error diagnostics
+      if (!res) {
+        throw new Error(`rpc:${method}:no_response`);
+      }
+      
+      if (typeof res !== 'object') {
+        throw new Error(`rpc:${method}:invalid_response_type`);
+      }
+      
+      if ((res as any).ok === true) {
+        return (res as any).data as T;
+      }
+      
+      const err = (res as any)?.error ?? "unknown_error";
+      throw new Error(`rpc:${method}:${err}`);
+    } catch (e: any) {
+      console.log("[CLIENT] RPC error for", method, ":", e);
+      // Preserve original error if it's already formatted
+      if (e?.message?.startsWith?.(`rpc:${method}:`)) {
+        throw e;
+      }
+      // Format connection/transport errors
+      const msg = e?.message || String(e);
+      throw new Error(`rpc:${method}:transport_error:${msg}`);
+    }
   };
+  
   const isWarmup = (m: string) =>
     /Receiving end does not exist|Could not establish connection|No message port|The message port closed|Extension context invalidated/i.test(
       m
     );
+    
   let lastErr: any;
   for (const delay of [0, 80, 160, 320]) {
     try {
@@ -24,6 +54,7 @@ export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
     } catch (e: any) {
       lastErr = e;
       const msg = e?.message || String(e);
+      // Only retry on connection/warmup issues, not on RPC-level errors
       if (!isWarmup(msg)) break;
       // continue and retry with next delay
     }

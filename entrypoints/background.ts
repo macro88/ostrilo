@@ -27,96 +27,127 @@ export default defineBackground(() => {
 
   // Simple RPC handler
   browser.runtime.onMessage.addListener(
-    async (message: RpcRequest): Promise<RpcResponse> => {
+    (message: RpcRequest, sender, sendResponse) => {
+      console.log("[BG] Received RPC message:", message?.type || "unknown");
+      
       if (!message || typeof message !== "object" || !("type" in message)) {
-        return { ok: false, error: "invalid_request" } as const;
+        console.log("[BG] Invalid request format");
+        sendResponse({ ok: false, error: "invalid_request" } as const);
+        return false;
       }
-      try {
-        switch (message.type) {
-          case "policy.evaluate": {
-            const data = await policy.evaluate({
-              origin: message.origin,
-              kind: message.kind,
-            });
-            return { ok: true, data } as const;
+      
+      (async () => {
+        try {
+          let result: RpcResponse;
+          switch (message.type) {
+            case "policy.evaluate": {
+              const data = await policy.evaluate({
+                origin: message.origin,
+                kind: message.kind,
+              });
+              result = { ok: true, data } as const;
+              break;
+            }
+            case "vault.unlock": {
+              const data = await vault.unlock(message.password);
+              result = { ok: true, data } as const;
+              break;
+            }
+            case "vault.lock": {
+              await vault.lock();
+              result = { ok: true, data: null } as const;
+              break;
+            }
+            case "vault.generate": {
+              const data = await vault.generateKey(
+                message.password,
+                message.label
+              );
+              result = { ok: true, data } as const;
+              break;
+            }
+            case "vault.import": {
+              const data = await vault.importKey(
+                message.keyInput,
+                message.password,
+                message.label
+              );
+              result = { ok: true, data } as const;
+              break;
+            }
+            case "vault.select": {
+              await vault.selectKey(message.id);
+              result = { ok: true, data: null } as const;
+              break;
+            }
+            case "keys.list": {
+              const data = await vault.listKeys();
+              result = { ok: true, data } as const;
+              break;
+            }
+            case "state.getLock": {
+              const data = await vault.getLockState();
+              result = { ok: true, data } as const;
+              break;
+            }
+            case "vault.sign": {
+              const data = await vault.sign(message.hashHex, message.keyId);
+              result = { ok: true, data } as const;
+              break;
+            }
+            case "settings.get": {
+              const data = await settings.get();
+              result = { ok: true, data } as const;
+              break;
+            }
+            case "settings.update": {
+              const data = await settings.update(message.patch as any);
+              result = { ok: true, data } as const;
+              break;
+            }
+            case "policy.setOrigin": {
+              await policy.setOriginPolicy(message.origin, message.patch as any);
+              result = { ok: true, data: null } as const;
+              break;
+            }
+            case "policy.setKindRule": {
+              await policy.setPerKindRule(
+                message.origin,
+                message.kind,
+                message.mode as any
+              );
+              result = { ok: true, data: null } as const;
+              break;
+            }
+            case "policy.clearSession": {
+              await policy.clearSessionGrant(message.origin);
+              result = { ok: true, data: null } as const;
+              break;
+            }
+            case "policy.setSession": {
+              await policy.setSessionGrant(message.origin, message.enabled);
+              result = { ok: true, data: null } as const;
+              break;
+            }
+            case "policy.removeOrigin": {
+              await policy.removeOriginPolicy(message.origin);
+              result = { ok: true, data: null } as const;
+              break;
+            }
+            default:
+              console.log("[BG] Unknown method:", (message as any).type);
+              result = { ok: false, error: "unknown_method" } as const;
           }
-          case "vault.unlock": {
-            const data = await vault.unlock(message.password);
-            return { ok: true, data } as const;
-          }
-          case "vault.lock": {
-            await vault.lock();
-            return { ok: true, data: null } as const;
-          }
-          case "vault.generate": {
-            const data = await vault.generateKey(
-              message.password,
-              message.label
-            );
-            return { ok: true, data } as const;
-          }
-          case "vault.import": {
-            const data = await vault.importKey(
-              message.keyInput,
-              message.password,
-              message.label
-            );
-            return { ok: true, data } as const;
-          }
-          case "vault.select": {
-            await vault.selectKey(message.id);
-            return { ok: true, data: null } as const;
-          }
-          case "keys.list": {
-            const data = await vault.listKeys();
-            return { ok: true, data } as const;
-          }
-          case "state.getLock": {
-            const data = await vault.getLockState();
-            return { ok: true, data } as const;
-          }
-          case "vault.sign": {
-            const data = await vault.sign(message.hashHex, message.keyId);
-            return { ok: true, data } as const;
-          }
-          case "settings.get": {
-            const data = await settings.get();
-            return { ok: true, data } as const;
-          }
-          case "settings.update": {
-            const data = await settings.update(message.patch as any);
-            return { ok: true, data } as const;
-          }
-          case "policy.setOrigin": {
-            await policy.setOriginPolicy(message.origin, message.patch as any);
-            return { ok: true, data: null } as const;
-          }
-          case "policy.setKindRule": {
-            await policy.setPerKindRule(
-              message.origin,
-              message.kind,
-              message.mode as any
-            );
-            return { ok: true, data: null } as const;
-          }
-          case "policy.clearSession": {
-            await policy.clearSessionGrant(message.origin);
-            return { ok: true, data: null } as const;
-          }
-          case "policy.setSession": {
-            await policy.setSessionGrant(message.origin, message.enabled);
-            return { ok: true, data: null } as const;
-          }
-          case "policy.removeOrigin": {
-            await policy.removeOriginPolicy(message.origin);
-            return { ok: true, data: null } as const;
-          }
-          default:
-            return { ok: false, error: "unknown_method" } as const;
+          console.log("[BG] Sending response for", message.type, ":", result.ok ? "success" : result.error);
+          sendResponse(result);
+        } catch (e: any) {
+          const errorResult = { ok: false, error: e?.message ?? String(e) } as const;
+          console.log("[BG] Error handling", message.type, ":", errorResult.error);
+          sendResponse(errorResult);
         }
-      } catch (e: any) {
-        return { ok: false, error: e?.message ?? String(e) } as const;
-      }
+      })();
+      
+      return true; // Keep message port open for async response
     }
   );
   async function apply() {
