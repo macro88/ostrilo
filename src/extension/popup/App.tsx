@@ -1,5 +1,5 @@
 import { MainApp } from "@/components/layout/MainApp";
-import { KeyManagerProvider } from "@/ui/features/authentication/hooks/KeyManagerContext";
+import { KeyManagerProvider } from "@/ui/state/KeyManagerContext";
 import "./App.css";
 
 function App() {
