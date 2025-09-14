@@ -24,7 +24,7 @@ describe("KeyVaultService - Memory Zeroization Security Tests", () => {
   beforeEach(() => {
     // Reset the mock before each test
     mockZeroize.mockClear();
-    
+
     // Mock storage
     mockStorage = {
       local: {
@@ -235,15 +235,17 @@ describe("Memory Zeroization Utility Function", () => {
   it("should securely zero out Uint8Array buffers", async () => {
     // We need to test the actual implementation, so let's reset the mock temporarily
     vi.doUnmock("@/domain/utils/crypto");
-    const { zeroize: actualZeroize } = await import("../../src/domain/utils/crypto");
-    
+    const { zeroize: actualZeroize } = await import(
+      "../../src/domain/utils/crypto"
+    );
+
     const testData = new Uint8Array([1, 2, 3, 4, 5]);
 
     actualZeroize(testData);
 
     // All bytes should be zero
     expect(Array.from(testData)).toEqual([0, 0, 0, 0, 0]);
-    
+
     // Re-mock for other tests
     vi.doMock("@/domain/utils/crypto", async () => {
       const actual = await vi.importActual("@/domain/utils/crypto");
@@ -257,8 +259,10 @@ describe("Memory Zeroization Utility Function", () => {
   it("should handle null/undefined buffers gracefully", async () => {
     // Test the actual implementation for error handling
     vi.doUnmock("@/domain/utils/crypto");
-    const { zeroize: actualZeroize } = await import("../../src/domain/utils/crypto");
-    
+    const { zeroize: actualZeroize } = await import(
+      "../../src/domain/utils/crypto"
+    );
+
     expect(() => actualZeroize(null as any)).not.toThrow();
     expect(() => actualZeroize(undefined as any)).not.toThrow();
   });

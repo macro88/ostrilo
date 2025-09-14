@@ -190,7 +190,9 @@ describe("Domain Utils - Encoding", () => {
 
       // Parse from nsec
       const parsedFromNsec = parsePrivateKey(nsec);
-      expect(Array.from(parsedFromNsec)).toEqual(Array.from(keyPair.privateKey));
+      expect(Array.from(parsedFromNsec)).toEqual(
+        Array.from(keyPair.privateKey)
+      );
     });
   });
 });
