@@ -24,32 +24,6 @@ import {
   generateKeyPair,
 } from "@/domain/utils/crypto";
 
-import { describe, it, expect } from "vitest";
-import {
-  evaluatePasswordStrength,
-  isValidPrivateKeyFormat,
-  isValidPublicKeyHex,
-  isValidRelayUrl,
-  isValidOrigin,
-} from "@/domain/utils/validation";
-import {
-  hexToBytes,
-  bytesToHex,
-  isValidHex,
-  isValidBech32,
-  bytesToBech32,
-  bech32ToBytes,
-  publicKeyToBech32,
-  privateKeyToBech32,
-  parsePrivateKey,
-} from "@/domain/utils/encoding";
-import {
-  zeroize,
-  generatePrivateKey,
-  getPublicKey,
-  generateKeyPair,
-} from "@/domain/utils/crypto";
-
 describe("Domain Utils - Validation", () => {
   describe("evaluatePasswordStrength", () => {
     it("evaluates strong passwords", () => {

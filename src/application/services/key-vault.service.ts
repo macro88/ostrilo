@@ -7,6 +7,7 @@ import type {
 import { AppSettingsV1, KeyRecord } from "@/domain/types";
 import { randomBytes } from "@noble/hashes/utils";
 import { bech32 } from "@scure/base";
+import { zeroize } from "@/domain/utils/crypto";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
 
 const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
@@ -77,12 +78,15 @@ export class KeyVaultService {
   ): Promise<{ ct: number[]; iv: number[]; salt: number[] }> {
     const salt = randomBytes(16);
     const iv = randomBytes(12);
-    const raw = await this.kdf.deriveKey(password, salt);
-    const key = await this.aead.importKey(raw, ["encrypt"]);
-    const ct = await this.aead.encrypt(key, iv, sk);
-    // zeroize derived raw
-    raw.fill(0);
-    return { ct: Array.from(ct), iv: Array.from(iv), salt: Array.from(salt) };
+    const rawKey = await this.kdf.deriveKey(password, salt);
+    try {
+      const key = await this.aead.importKey(rawKey, ["encrypt"]);
+      const ct = await this.aead.encrypt(key, iv, sk);
+      return { ct: Array.from(ct), iv: Array.from(iv), salt: Array.from(salt) };
+    } finally {
+      // Always zeroize derived key material
+      zeroize(rawKey);
+    }
   }
 
   async generateKey(password: string, label?: string): Promise<KeyRecord> {
@@ -119,8 +123,8 @@ export class KeyVaultService {
       await this.saveKeys(next);
       return record;
     } finally {
-      // zeroize sk
-      sk.fill(0);
+      // zeroize private key material
+      zeroize(sk);
     }
   }
 
@@ -164,7 +168,7 @@ export class KeyVaultService {
       await this.saveKeys(next);
       return record;
     } finally {
-      sk.fill(0);
+      zeroize(sk);
     }
   }
 
@@ -204,11 +208,21 @@ export class KeyVaultService {
       const iv = new Uint8Array(rec.iv);
       const ct = new Uint8Array(rec.ct);
       const rawKey = await this.kdf.deriveKey(password, salt);
-      const key = await this.aead.importKey(rawKey, ["decrypt"]);
-      const pt = await this.aead.decrypt(key, iv, ct);
-      this.unlocked.set(rec.id, pt);
-      // zeroize rawKey
-      rawKey.fill(0);
+      let pt: Uint8Array | null = null;
+      try {
+        const key = await this.aead.importKey(rawKey, ["decrypt"]);
+        pt = await this.aead.decrypt(key, iv, ct);
+        this.unlocked.set(rec.id, pt);
+        // Clear the local reference after storing
+        pt = null;
+      } finally {
+        // Always zeroize derived key material
+        zeroize(rawKey);
+        // Zeroize the plaintext if it exists and wasn't stored
+        if (pt) {
+          zeroize(pt);
+        }
+      }
     }
 
     const selectedKeyId = settings?.selectedKeyId ?? records[0]?.id;
@@ -221,8 +235,8 @@ export class KeyVaultService {
   }
 
   async lock(): Promise<void> {
-    // zeroize secrets
-    this.unlocked.forEach((v) => v.fill(0));
+    // zeroize all unlocked private keys
+    this.unlocked.forEach((sk) => zeroize(sk));
     this.unlocked.clear();
     await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
       isLocked: true,
