@@ -43,59 +43,179 @@ To use these ports, you need **adapters**. These are the plugs that fit into the
 
 ```mermaid
 graph TD
-    subgraph "Outside World"
-        UI(React UI)
-        BrowserStorage(Browser Storage)
-        CryptoLib(Crypto Library)
+    subgraph "External World (Technology)"
+        UI(React UI - Popup/Sidepanel)
+        BrowserStorage(Browser Storage - chrome.storage)
+        CryptoLib(Crypto Libraries - WebCrypto, Noble)
     end
 
     subgraph "Application (The Hexagon)"
-        Core(Core Business Logic)
+        Core(Domain Logic - Policy, Types, Crypto Interfaces)
+        Services(Application Services - KeyVaultService, PolicyService)
     end
 
     subgraph "Ports (Interfaces)"
-        InputPort(Input Port)
-        OutputPort(Output Port)
+        InputPort(Driving Ports - Service Methods)
+        OutputPort(Driven Ports - IStorage, ICrypto)
     end
 
     subgraph "Adapters (Implementations)"
-        UI_Adapter(UI Adapter)
-        Storage_Adapter(Storage Adapter)
-        Crypto_Adapter(Crypto Adapter)
+        UI_Adapter(Driving Adapter - UI Components & Hooks)
+        Storage_Adapter(Driven Adapter - Storage Adapters)
+        Crypto_Adapter(Driven Adapter - Crypto Adapters)
+        RPC_Adapter(Driving/Driven Adapter - RPC Messaging)
     end
 
     UI --> UI_Adapter;
-    UI_Adapter --> InputPort;
-    InputPort --> Core;
+    UI_Adapter --> RPC_Adapter;
+    RPC_Adapter --> InputPort;
+    InputPort --> Services;
+    Services --> Core;
+    Services --> OutputPort;
 
-    Core --> OutputPort;
     OutputPort --> Storage_Adapter;
     Storage_Adapter --> BrowserStorage;
 
-    Core --> OutputPort;
     OutputPort --> Crypto_Adapter;
     Crypto_Adapter --> CryptoLib;
 ```
 
+### The Philosophy and Origins
+
+The Hexagonal Architecture pattern was first described by **Alistair Cockburn** in the early 2000s. His goal was to solve a common problem: the entanglement of core business logic with external technology concerns.
+
+The key insight was to create a clear, formalized boundary around the "application" and to allow it to be "driven" by different actors in a symmetrical way. Whether the driver is a human user clicking a button, an automated test suite, or another computer system, the application core should not know the difference. This is why the shape is a hexagon—the number of sides is not literally six, but is meant to represent the many different "sides" or "ports" the application might have to interact with various external tools.
+
 ### Key Terms Explained
 
-*   **The Hexagon (The Application Core):** This is the heart of your application. It contains the pure business logic and has no dependencies on any external technology. In Ostrilo, this is the `src/domain` directory.
-*   **Ports:** These are interfaces that define a contract for communication. They are part of the application core.
-    *   **Driving/Input Ports:** These are called by the outside world to *drive* the application. They are the entry point to the hexagon. In Ostrilo, these are represented by the methods on the application services in `src/application/services`.
-    *   **Driven/Output Ports:** These are called by the application to interact with external services. They are the exit point from the hexagon. In Ostrilo, these are the interfaces in `src/application/ports`.
-*   **Adapters:** These are the concrete implementations of the ports. They live outside the hexagon.
-    *   **Driving/Primary Adapters:** These wrap the driving ports and translate external requests into calls to the application core. The React components in `src/ui` are a primary adapter.
+*   **The Hexagon (The Application Core):** This is the heart of your application. It contains the pure business logic and has no dependencies on any external technology. In Ostrilo, this is the `src/domain` and `src/application` directories.
+*   **Ports:** These are interfaces that define a contract for communication.
+    *   **Driving/Input Ports:** These are called by the outside world to *drive* the application. They are the entry point to the hexagon. In Ostrilo, these are the public methods on the application services in `src/application/services`.
+    *   **Driven/Output Ports:** These are called by the application to interact with external services. They are the exit point from the hexagon. In Ostrilo, these are the interfaces in `src/application/ports` (e.g., `storage.ts`).
+*   **Adapters:** These are the concrete implementations of the ports. They live outside the hexagon in `src/infrastructure`.
+    *   **Driving/Primary Adapters:** These wrap the driving ports and translate external requests into calls to the application core. The React components in `src/ui` and the RPC message handlers are primary adapters.
     *   **Driven/Secondary Adapters:** These implement the driven ports and interact with external services. The `LocalStorageAdapter` in `src/infrastructure/storage/adapters.ts` is a secondary adapter.
+
+### Ports and Adapters in Code: A Simple Example
+
+Let's make this concrete with a simplified code example. Imagine we have a service to manage users.
+
+#### 1. The Domain Object
+
+This is a simple data structure with no logic.
+
+```typescript
+// In the Domain layer
+export interface User {
+  id: string;
+  name: string;
+}
+```
+
+#### 2. The Port (The Contract)
+
+This is the **Driven/Output Port**. It's an interface that defines *what* we need to do with users (e.g., find one), but not *how*. It lives inside the application layer.
+
+```typescript
+// src/application/ports/user-repository.ts
+import { User } from "@/domain/user";
+
+export interface IUserRepository {
+  findById(id: string): Promise<User | null>;
+  save(user: User): Promise<void>;
+}
+```
+
+#### 3. The Application Service
+
+The service depends on the **port (the interface)**, not on any specific database or storage mechanism. This keeps the core logic pure.
+
+```typescript
+// src/application/services/user.service.ts
+import { IUserRepository } from "../ports/user-repository";
+import { User } from "@/domain/user";
+
+export class UserService {
+  // The service depends on the abstraction (the port), not a concrete implementation.
+  constructor(private readonly userRepository: IUserRepository) {}
+
+  public async findUser(id: string): Promise<User | null> {
+    return this.userRepository.findById(id);
+  }
+}
+```
+
+#### 4. The Adapter (The Implementation)
+
+This is the **Driven/Secondary Adapter**. It implements the port's contract using a specific technology. Here, we'll use a simple in-memory array, but it could just as easily be a database.
+
+```typescript
+// src/infrastructure/storage/in-memory-user-repository.ts
+import { IUserRepository } from "@/application/ports/user-repository";
+import { User } from "@/domain/user";
+
+export class InMemoryUserRepository implements IUserRepository {
+  private users: Map<string, User> = new Map();
+
+  async findById(id: string): Promise<User | null> {
+    return this.users.get(id) || null;
+  }
+
+  async save(user: User): Promise<void> {
+    this.users.set(user.id, user);
+  }
+}
+```
+Because `UserService` only depends on the `IUserRepository` interface, we could easily create a `PrismaUserRepository` or `FirebaseUserRepository` and "plug it in" without changing a single line of code in `UserService`.
+
+#### 5. The Driving Adapter (Putting it all together)
+
+The **Driving/Primary Adapter** is what initiates the action. This could be a UI component, an RPC handler, or a test. It's responsible for creating the service with a concrete adapter.
+
+```typescript
+// In a test file or a composition root like src/extension/background.ts
+
+import { UserService } from "@/application/services/user.service";
+import { InMemoryUserRepository } from "@/infrastructure/storage/in-memory-user-repository";
+
+// 1. Create the adapter (the concrete implementation)
+const userRepository = new InMemoryUserRepository();
+
+// 2. Create the service, injecting the adapter
+const userService = new UserService(userRepository);
+
+// 3. Use the service
+async function main() {
+  await userRepository.save({ id: "1", name: "Alice" });
+  const user = await userService.findUser("1");
+  console.log(user); // { id: '1', name: 'Alice' }
+}
+
+main();
+```
+This example demonstrates the core benefit: the `UserService` (application logic) is completely decoupled from the `InMemoryUserRepository` (infrastructure), connected only by the `IUserRepository` (port).
 
 ## Chapter 3: A Deeper Dive into the Ostrilo Hexagon
 
 Let's see how this looks in the Ostrilo codebase:
 
-*   **`src/domain` (The Hexagon):** This is the core. It contains the pure business logic, like how to validate a Nostr event or how to encrypt data. It has zero dependencies on the rest of the application.
-*   **`src/application/ports` (The Ports):** This directory defines the interfaces for the outside world. For example, `src/application/ports/storage.ts` defines the `IStorage` interface, which specifies that there must be a way to `get`, `set`, and `remove` data.
-*   **`src/application/services` (The Application Logic):** These services orchestrate the domain logic. They use the ports to interact with the outside world. For example, `KeyVaultService` uses the `IStorage` port to save encrypted keys.
-*   **`src/infrastructure` (The Adapters):** This is where the ports are implemented. `src/infrastructure/storage/adapters.ts` provides the `LocalStorageAdapter` which implements the `IStorage` port using the browser's `localStorage` API.
-*   **`src/ui` (A Driving Adapter):** The React components in the UI call the application services to get work done. For example, when you click the "Unlock" button, the UI calls the `unlock` method on the `KeyVaultService`.
+*   **`src/domain` (The Core of the Hexagon):** This is the most inner part. It contains pure, independent business logic and types. It has zero dependencies on the rest of the application.
+    *   `types.ts`: Defines core data structures like `KeyRecord` and `OriginPolicy`.
+    *   `policy/evaluate.ts`: A pure function for evaluating security policies.
+    *   `utils/`: Pure utility functions for things like encoding and validation.
+
+*   **`src/application` (The Application Layer):** This layer orchestrates the domain logic. It defines the application's capabilities.
+    *   `ports/`: Defines the interfaces (output ports) for external services. For example, `src/application/ports/storage.ts` defines the `IStorage` interface, which specifies a contract for storage, and `crypto.ts` defines interfaces like `CryptoAead` and `Schnorr`.
+    *   `services/`: Contains the application services that implement core use cases. For example, `KeyVaultService` manages keys, and `PolicyService` manages permissions. These services are the primary entry point (input ports) to the application logic.
+
+*   **`src/infrastructure` (The Adapters):** This is where the ports are implemented. It's the bridge between the application and the outside world.
+    *   `storage/adapters.ts`: Provides `StorageAdapter` which implements the `IStorage` port using the browser's `chrome.storage` API.
+    *   `crypto/adapters.ts`: Implements the crypto ports using WebCrypto for AES-GCM and the Noble library for Schnorr signatures.
+    *   `messaging/`: Contains the RPC system, which acts as an adapter for communication between the UI and the background script.
+
+*   **`src/ui` (A Driving Adapter):** The React components, hooks, and state management that make up the user interface. The UI calls the application services (via the RPC adapter) to get work done.
+
+*   **`src/extension` (Composition Root & Entrypoints):** This directory contains the browser extension's entry points. The crucial `background.ts` script acts as the "composition root," where all the services and adapters are instantiated and wired together.
 
 ## Chapter 4: The RPC Pattern in Ostrilo
 
@@ -116,7 +236,7 @@ These contexts cannot directly call functions in each other. They need a way to 
 
 ### How RPC works in Ostrilo
 
-In Ostrilo, the UI (running in the popup or side panel) needs to talk to the application services (running in the background script). We use a simple, message-based RPC system to achieve this.
+Ostrilo uses a robust, modular, and type-safe RPC system. It has evolved from a simple message-passing system to a sophisticated architecture with clear boundaries and runtime validation.
 
 Here's the flow of an RPC call:
 
@@ -125,37 +245,51 @@ sequenceDiagram
     participant UI as React UI (Client)
     participant Client as rpc() (in client.ts)
     participant Browser as Browser Runtime
-    participant Background as background.ts (Server)
+    participant Router as Background (RpcRouter)
+    participant Handler as RpcHandler (e.g., VaultRpcHandler)
+    participant Validator as Zod Schema
     participant Service as Application Service
 
     UI->>Client: unlockVault("password")
     Client->>Browser: sendMessage({type: "vault.unlock", ...})
-    Browser->>Background: onMessage listener receives message
-    Background->>Service: vault.unlock("password")
-    Service-->>Background: Returns result
-    Background->>Browser: sendResponse({ok: true, data: ...})
+    Browser->>Router: onMessage listener receives message
+    Router->>Handler: Delegates "vault.unlock" to VaultRpcHandler
+    Handler->>Validator: validate(message)
+    Validator-->>Handler: Returns success or error
+    alt on Validation Success
+        Handler->>Service: vault.unlock("password")
+        Service-->>Handler: Returns result
+        Handler->>Router: Wraps in RpcResponse
+    else on Validation Failure
+        Handler->>Router: Returns validation error
+    end
+    Router->>Browser: sendResponse({ok: true, data: ...} or {ok: false, error: ...})
     Browser-->>Client: Returns response
-    Client-->>UI: Returns result
+    Client-->>UI: Returns result or throws error
 ```
 
-1.  **The UI calls a function:** The React UI calls a function from `src/infrastructure/messaging/client.ts`, for example `unlockVault("password")`.
-2.  **The client sends a message:** The `rpc` function in `client.ts` constructs a message object (e.g., `{ type: "vault.unlock", password: "password" }`) and sends it using `browser.runtime.sendMessage`.
-3.  **The background script receives the message:** The `onMessage` listener in `src/extension/background.ts` receives the message.
-4.  **The background script calls the service:** The background script uses a `switch` statement to determine which service method to call based on the message `type`. It then calls the appropriate method on the application service (e.g., `vault.unlock("password")`).
-5.  **The background script sends the response:** Once the service method returns, the background script wraps the result in a response object (e.g., `{ ok: true, data: ... }`) and sends it back using the `sendResponse` function.
-6.  **The client receives the response:** The `rpc` function in `client.ts` receives the response and returns the data to the UI.
+1.  **The UI calls a client function:** The React UI calls a typed function from `src/infrastructure/messaging/client.ts`, for example `unlockVault("password")`.
+2.  **The client sends a message:** The `rpc` function in `client.ts` constructs a message and sends it using `browser.runtime.sendMessage`.
+3.  **The RpcRouter receives the message:** The `onMessage` listener in `src/extension/background.ts` passes the message to the `RpcRouter`.
+4.  **The Router delegates to a Handler:** The router inspects the message `type` (e.g., `"vault.unlock"`) and delegates the request to the appropriate registered handler, such as `VaultRpcHandler`. These handlers are located in `src/infrastructure/messaging/handlers/`.
+5.  **The Handler validates the input:** Before any processing, the handler uses a **Zod schema** to validate the entire message. This provides crucial runtime safety, ensuring that no malformed or unexpected data reaches the core application.
+6.  **The Handler calls the Service:** If validation passes, the handler calls the appropriate method on the application service (e.g., `keyVaultService.unlock(...)`).
+7.  **The response is returned:** The result from the service is wrapped in a standardized `RpcResponse` object and sent back through the browser runtime to the original caller in the UI.
 
-The RPC system itself is another **adapter** in our Hexagonal Architecture. It's part of the infrastructure that allows the UI (a driving adapter) to communicate with the application core.
+This modular RPC system is another **adapter** in our Hexagonal Architecture. It provides a secure and maintainable way for driving adapters (like the UI) to communicate with the application core.
 
 ## Chapter 5: From Beginner to Expert - Advanced Concepts
 
 ### Testing
 
-Hexagonal Architecture makes testing a breeze:
+Hexagonal Architecture makes testing a breeze, and Ostrilo's test suite is structured to mirror the architecture, as detailed in `tests/TESTING.md`.
 
-*   **Domain Logic:** The `src/domain` directory can be tested in complete isolation. It's just pure functions and business rules.
-*   **Application Services:** You can test the application services by providing "mock" implementations of the ports. For example, you can create a mock storage adapter that just stores data in memory, instead of relying on the browser's `localStorage`.
-*   **Adapters:** You can test the adapters to ensure they correctly interact with the external services.
+*   **`tests/unit/domain`:** Tests the pure business logic in complete isolation.
+*   **`tests/unit/application`:** Tests the application services by providing "mock" implementations of the ports (e.g., an in-memory storage adapter).
+*   **`tests/unit/infrastructure`:** Tests the adapters, including the important RPC validation schemas.
+*   **`tests/integration`:** Verifies that the different layers and services work together correctly.
+*   **`tests/security`:** Focuses on cryptographic correctness and memory safety.
+*   **`tests/e2e`:** Uses Playwright to test the full application, from UI interaction to background logic, in a real browser environment.
 
 ### The Dependency Inversion Principle
 
@@ -163,7 +297,7 @@ Hexagonal Architecture is a direct application of the **Dependency Inversion Pri
 
 > High-level modules should not depend on low-level modules. Both should depend on abstractions.
 
-In our case, the application core (high-level module) does not depend on the infrastructure (low-level module). Both depend on the ports (abstractions).
+In our case, the application core (`src/application`, a high-level module) does not depend on the infrastructure (`src/infrastructure`, a low-level module). Both depend on the ports (`src/application/ports`, abstractions). This inversion of control is the key to the architecture's flexibility and testability.
 
 ## Chapter 6: Tutorial - Adding a New Feature
 
@@ -196,12 +330,12 @@ Now, we need to teach our application how to handle this new note. We'll add a n
 
 **File:** `src/application/services/key-vault.service.ts`
 
-We'll add a new method called `setKeyNote`.
-
 ```typescript
 // Inside the KeyVaultService class
 
 public async setKeyNote(keyId: string, note: string): Promise<void> {
+  // Note: In a real implementation, this would involve decrypting the
+  // key record, updating it, and re-encrypting it. We simplify here.
   const keyRecord = await this.storage.get(keyId);
   if (!keyRecord) {
     throw new Error("Key not found");
@@ -214,8 +348,6 @@ public async setKeyNote(keyId: string, note: string): Promise<void> {
   await this.storage.set(keyId, keyRecord);
 }
 ```
-*(Note: In a real implementation, the `KeyRecord` would be encrypted, so you would need to decrypt it first, update the note, and then re-encrypt it. We're keeping it simple here to focus on the pattern.)*
-
 Our application service now has a new capability. Notice we are still just using the `IStorage` port. We haven't touched any specific infrastructure.
 
 ### Step 3: Expose the Feature via RPC (The Messaging Adapter)
@@ -229,19 +361,34 @@ Add a new type to our `RpcRequest` union:
 ```typescript
 export type RpcRequest =
   // ... existing types
-  | { type: "vault.setKeyNote"; keyId: string; note: string };
+  | { type: "vault.setKeyNote"; payload: { keyId: string; note: string } };
 ```
 
-**File:** `src/extension/background.ts`
+**File:** `src/infrastructure/validation/schemas.ts` (or a similar validation file)
 
-Handle the new message type in the `onMessage` listener:
+Add a Zod schema for the new message payload:
 
 ```typescript
-// Inside the onMessage listener's switch statement
+export const SetKeyNotePayloadSchema = z.object({
+  keyId: z.string().uuid(),
+  note: z.string().max(1000), // Example validation
+});
+```
+
+**File:** `src/infrastructure/messaging/handlers/vault-rpc.ts`
+
+Handle the new message type in the `VaultRpcHandler`:
+
+```typescript
+// Inside the VaultRpcHandler's handleRequest method's switch statement
 case "vault.setKeyNote": {
-  await vault.setKeyNote(message.keyId, message.note);
-  result = { ok: true, data: null } as const;
-  break;
+  const validation = SetKeyNotePayloadSchema.safeParse(message.payload);
+  if (!validation.success) {
+    // Return a validation error
+    return { ok: false, error: "invalid_payload", issues: validation.error.issues };
+  }
+  await context.vault.setKeyNote(validation.data.keyId, validation.data.note);
+  return { ok: true, data: null };
 }
 ```
 
@@ -250,25 +397,25 @@ case "vault.setKeyNote": {
 Create a new client function to call the RPC method:
 
 ```typescript
-export async function setKeyNote(keyId: string, note: string) {
-  return rpc<null>({ type: "vault.setKeyNote", keyId, note });
+export async function setKeyNote(keyId: string, note: string): Promise<void> {
+  await rpc<null>({ type: "vault.setKeyNote", payload: { keyId, note } });
 }
 ```
 
-Now, our UI has a way to securely call the background service to set a note.
+Now, our UI has a secure, validated way to call the background service.
 
 ### Step 4: Build the UI (The Driving Adapter)
 
-With the backend logic in place, we can build the UI. We'll create a new component to edit the note.
+With the backend logic in place, we can build the UI.
 
-**File:** `src/ui/features/profile/components/KeyNoteEditor.tsx` (You would create this new file)
+**File:** `src/ui/features/profile/components/KeyNoteEditor.tsx` (A new file)
 
 ```typescript
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { useKeyNote } from '@/hooks/useKeyNote'; // We will create this next
+import { Button } from '@/ui/components/ui/button';
+import { Label } from '@/ui/components/ui/label';
+import { Textarea } from '@/ui/components/ui/textarea';
+import { useKeyNote } from '@/ui/hooks/useKeyNote'; // We will create this next
 
 export function KeyNoteEditor({ keyId, currentNote }: { keyId: string; currentNote?: string }) {
   const [note, setNote] = useState(currentNote || '');
@@ -299,7 +446,7 @@ export function KeyNoteEditor({ keyId, currentNote }: { keyId: string; currentNo
 
 To keep our component clean, we'll encapsulate the logic for saving the note in a custom hook.
 
-**File:** `src/ui/hooks/useKeyNote.ts` (You would create this new file)
+**File:** `src/ui/hooks/useKeyNote.ts` (A new file)
 
 ```typescript
 import { useState } from 'react';
@@ -327,35 +474,22 @@ export function useKeyNote() {
 
 ### Step 6: Integrate the New Component
 
-Finally, we'll add our new `KeyNoteEditor` component to an existing view, for example, the `ProfileView`.
-
-**File:** `src/ui/features/profile/components/ProfileView.tsx`
-
-You would find the currently selected key and pass its ID and current note to the `KeyNoteEditor`.
-
-```typescript
-// Inside the ProfileView component...
-// ... find the selectedKey from a list of keys
-
-{selectedKey && (
-  <KeyNoteEditor keyId={selectedKey.id} currentNote={selectedKey.note} />
-)}
-```
+Finally, add the `KeyNoteEditor` to an existing view, like `ProfileView.tsx`.
 
 ### Tutorial Recap
 
 Let's review the journey:
 
-1.  **Domain:** We defined the `note` field. Pure data, no logic.
-2.  **Application:** We created a `setKeyNote` service method. Pure logic, no infrastructure.
-3.  **Infrastructure (RPC):** We created a "wire" to connect the outside world to our application logic.
-4.  **UI (React):** We built a component to interact with the user.
+1.  **Domain:** We defined the `note` field. Pure data.
+2.  **Application:** We created a `setKeyNote` service method. Pure application logic.
+3.  **Infrastructure (RPC):** We created a "wire" with validation to connect the outside world to our application logic.
+4.  **UI (React):** We built a component for user interaction.
 5.  **UI Logic (Hook):** We encapsulated the UI's interaction with the RPC layer.
 
 Each step was self-contained and followed a predictable pattern. This is the power of Hexagonal Architecture. It provides a clear roadmap for extending the application in a way that is maintainable, testable, and scalable.
 
 ## Conclusion
 
-By embracing Hexagonal Architecture and a clear RPC pattern, Ostrilo achieves a clean separation of concerns. This makes the codebase more flexible, testable, and easier to reason about.
+By embracing Hexagonal Architecture and a robust RPC pattern, Ostrilo achieves a clean separation of concerns. This makes the codebase more flexible, testable, and easier to reason about.
 
-As you explore the code, keep the concepts of the hexagon, ports, and adapters in mind. You'll start to see how the different pieces of the application fit together to create a robust and maintainable system. Happy coding!
+As you explore the code, keep the concepts of the hexagon, ports, and adapters in mind. You'll start to see how the different pieces of the application fit together to create a powerful and secure system. Happy coding!
