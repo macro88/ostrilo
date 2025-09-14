@@ -11,7 +11,7 @@ import {
   privateKeyToBech32,
   publicKeyToBech32,
   evaluatePasswordStrength,
-} from "./lib/crypto";
+} from "./src/domain/utils/crypto";
 
 export async function testCrypto() {
   console.log("🔐 Testing Ostrilo Crypto Functions...");
