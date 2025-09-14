@@ -1,32 +1,36 @@
 import { browser } from "wxt/browser";
 import type { RpcRequest, RpcResponse } from "./rpc";
+import type {
+  AppSettingsPatch,
+  OriginPolicyPatch,
+} from "@/infrastructure/validation/schemas";
 // webextension-polyfill already imported above
 
 export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
   const method = (req as any)?.type ?? "unknown";
   console.log("[CLIENT] Sending RPC:", method);
-  
+
   const attempt = async (): Promise<T> => {
     try {
       const res = (await browser.runtime.sendMessage(req)) as
         | RpcResponse
         | undefined;
-      
+
       console.log("[CLIENT] Received response for", method, ":", res);
-      
+
       // More detailed error diagnostics
       if (!res) {
         throw new Error(`rpc:${method}:no_response`);
       }
-      
-      if (typeof res !== 'object') {
+
+      if (typeof res !== "object") {
         throw new Error(`rpc:${method}:invalid_response_type`);
       }
-      
+
       if ((res as any).ok === true) {
         return (res as any).data as T;
       }
-      
+
       const err = (res as any)?.error ?? "unknown_error";
       throw new Error(`rpc:${method}:${err}`);
     } catch (e: any) {
@@ -40,12 +44,12 @@ export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
       throw new Error(`rpc:${method}:transport_error:${msg}`);
     }
   };
-  
+
   const isWarmup = (m: string) =>
     /Receiving end does not exist|Could not establish connection|No message port|The message port closed|Extension context invalidated/i.test(
       m
     );
-    
+
   let lastErr: any;
   for (const delay of [0, 80, 160, 320]) {
     try {
@@ -133,7 +137,11 @@ const SETTINGS_CACHE_TTL = 5000; // 5 seconds cache
 
 export async function getSettings(forceRefresh = false) {
   // Check cache first
-  if (!forceRefresh && settingsCache && (Date.now() - settingsCache.timestamp < SETTINGS_CACHE_TTL)) {
+  if (
+    !forceRefresh &&
+    settingsCache &&
+    Date.now() - settingsCache.timestamp < SETTINGS_CACHE_TTL
+  ) {
     return settingsCache.data;
   }
 
@@ -151,12 +159,10 @@ export async function getSettings(forceRefresh = false) {
   return data;
 }
 
-export async function updateSettings(
-  patch: Partial<import("@/domain/types").AppSettingsV1>
-) {
+export async function updateSettings(patch: AppSettingsPatch) {
   const result = await rpc<import("@/domain/types").AppSettingsV1>({
     type: "settings.update",
-    patch: patch as any,
+    patch,
   });
 
   // Invalidate cache after update
@@ -179,7 +185,7 @@ export function subscribeSettingsChanged(cb: () => void) {
 
 export async function policySetOrigin(
   origin: string,
-  patch: Record<string, unknown>
+  patch: OriginPolicyPatch
 ) {
   return rpc<null>({ type: "policy.setOrigin", origin, patch });
 }
@@ -205,15 +211,15 @@ export async function policyRemoveOrigin(origin: string) {
 }
 
 export async function evaluatePasswordStrength(password: string) {
-  return rpc<{ score: number; feedback: string[]; warning: string }>({ 
-    type: "crypto.evaluatePassword", 
-    password 
+  return rpc<{ score: number; feedback: string[]; warning: string }>({
+    type: "crypto.evaluatePassword",
+    password,
   });
 }
 
 export async function parsePrivateKey(keyInput: string) {
-  return rpc<Uint8Array>({ 
-    type: "crypto.parsePrivateKey", 
-    keyInput 
+  return rpc<Uint8Array>({
+    type: "crypto.parsePrivateKey",
+    keyInput,
   });
 }

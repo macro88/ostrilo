@@ -1,3 +1,8 @@
+import type {
+  AppSettingsPatch,
+  OriginPolicyPatch,
+} from "@/infrastructure/validation/schemas";
+
 export type RpcRequest =
   | { type: "policy.evaluate"; origin: string; kind: number }
   | { type: "vault.unlock"; password: string }
@@ -9,8 +14,8 @@ export type RpcRequest =
   | { type: "state.getLock" }
   | { type: "vault.sign"; hashHex: string; keyId?: string }
   | { type: "settings.get" }
-  | { type: "settings.update"; patch: Record<string, unknown> }
-  | { type: "policy.setOrigin"; origin: string; patch: Record<string, unknown> }
+  | { type: "settings.update"; patch: AppSettingsPatch }
+  | { type: "policy.setOrigin"; origin: string; patch: OriginPolicyPatch }
   | { type: "policy.setKindRule"; origin: string; kind: number; mode: string }
   | { type: "policy.clearSession"; origin: string }
   | { type: "policy.setSession"; origin: string; enabled: boolean }

@@ -17,6 +17,7 @@ import {
   TrustLevel,
   OriginPolicy,
 } from "@/domain/types";
+import type { AppSettingsPatch } from "@/infrastructure/validation/schemas";
 
 // Global settings store to prevent multiple fetches
 class SettingsStore {
@@ -27,7 +28,7 @@ class SettingsStore {
 
   subscribe = (callback: () => void) => {
     this.listeners.add(callback);
-    
+
     // Start initial load if not done
     if (!this.isInitialized && !this.isLoading) {
       this.loadSettings();
@@ -65,7 +66,7 @@ class SettingsStore {
   }
 
   private notifyListeners() {
-    this.listeners.forEach(callback => callback());
+    this.listeners.forEach((callback) => callback());
   }
 
   // Called when settings change externally
@@ -107,10 +108,9 @@ export function useAppSettings() {
   // Save settings to storage
   const updateSettings = useCallback(
     async (updates: Partial<AppSettingsV1>) => {
-      const next = { ...settings, ...updates } as AppSettingsV1;
-      await rpcUpdateSettings(next);
+      await rpcUpdateSettings(updates);
     },
-    [settings]
+    []
   );
 
   // Individual setting updaters for convenience
@@ -178,7 +178,7 @@ export function useAppSettings() {
   const updateOriginPolicy = useCallback(
     (origin: string, policy: Partial<OriginPolicy>) => {
       // Delegate mutations to background PolicyService
-      return policySetOrigin(origin, policy as any);
+      return policySetOrigin(origin, policy);
     },
     []
   );
@@ -217,7 +217,19 @@ export function useAppSettings() {
   // Reset settings to defaults
   const resetSettings = useCallback(async () => {
     try {
-      await rpcUpdateSettings(DEFAULT_SETTINGS_V1);
+      // Reset only the fields that are supported by AppSettingsPatch
+      const resetPatch: AppSettingsPatch = {
+        theme: DEFAULT_SETTINGS_V1.theme,
+        sidePanel: DEFAULT_SETTINGS_V1.sidePanel,
+        autoLockMinutes: DEFAULT_SETTINGS_V1.autoLockMinutes,
+        relays: DEFAULT_SETTINGS_V1.relays,
+        selectedKeyId: DEFAULT_SETTINGS_V1.selectedKeyId,
+        mediumAllowKinds: DEFAULT_SETTINGS_V1.mediumAllowKinds,
+        sessionTTLMinutes: DEFAULT_SETTINGS_V1.sessionTTLMinutes,
+        onboardingCompleted: DEFAULT_SETTINGS_V1.onboardingCompleted,
+        onboardingCompletedAt: DEFAULT_SETTINGS_V1.onboardingCompletedAt,
+      };
+      await rpcUpdateSettings(resetPatch);
     } catch (error) {
       console.error("Failed to reset settings:", error);
       throw error;
