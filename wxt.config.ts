@@ -8,6 +8,13 @@ export default defineConfig({
   entrypointsDir: "extension",
   manifest: {
     permissions: ["storage", "sidePanel"],
+    // Make injected script accessible to all HTTP/HTTPS pages for NIP-07 provider
+    web_accessible_resources: [
+      {
+        resources: ["injected.js"],
+        matches: ["http://*/*", "https://*/*"],
+      },
+    ],
   },
   vite: () => ({
     plugins: [tailwindcss()],

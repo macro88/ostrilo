@@ -299,9 +299,9 @@ export interface PolicyOutput {
   reason: EvalReason;
 }
 
-export type EvalReason = 
+export type EvalReason =
   | "locked"
-  | "explicit_allow" 
+  | "explicit_allow"
   | "explicit_deny"
   | "rule"
   | "session"
@@ -322,4 +322,46 @@ export interface SignatureVerificationResult {
   isValid: boolean;
   pubkey?: string;
   error?: string;
+}
+
+// ============================================
+// NIP-01 Event Types
+// ============================================
+
+/**
+ * NIP-01 Unsigned Event - event data before signing
+ * Used when a dapp requests signing via window.nostr.signEvent()
+ */
+export interface UnsignedEvent {
+  /** Event kind number (0-65535) */
+  kind: number;
+  /** Event content (arbitrary string, may be JSON) */
+  content: string;
+  /** Array of tag arrays (e.g., [["e", "id"], ["p", "pubkey"]]) */
+  tags: string[][];
+  /** Unix timestamp in seconds */
+  created_at: number;
+  /** Optional pubkey - signer will fill if missing */
+  pubkey?: string;
+}
+
+/**
+ * NIP-01 Signed Event - complete event with id and signature
+ * Returned after signing via window.nostr.signEvent()
+ */
+export interface SignedEvent {
+  /** 32-byte lowercase hex event id (SHA-256 of serialized event) */
+  id: string;
+  /** 32-byte lowercase hex public key of the event creator */
+  pubkey: string;
+  /** Unix timestamp in seconds */
+  created_at: number;
+  /** Event kind number (0-65535) */
+  kind: number;
+  /** Array of tag arrays */
+  tags: string[][];
+  /** Event content */
+  content: string;
+  /** 64-byte lowercase hex Schnorr signature */
+  sig: string;
 }

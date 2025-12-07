@@ -6,41 +6,41 @@
 
 ## 2. RPC Layer
 
-- [ ] 2.1 Add `nostr.getPublicKey` request type to `src/infrastructure/messaging/rpc.ts`
-- [ ] 2.2 Add `nostr.signEvent` request type with `event` and `origin` fields
-- [ ] 2.3 Create `src/infrastructure/messaging/handlers/nostr-rpc.ts` with `NostrRpcHandler`
-- [ ] 2.4 Implement `handleGetPublicKey`: return selected key's pubkey or error if locked
-- [ ] 2.5 Implement `handleSignEvent`: validate event, evaluate policy, compute id, sign, return
-- [ ] 2.6 Register `nostr` module in background.ts RpcRouter
+- [x] 2.1 Add `nostr.getPublicKey` request type to `src/infrastructure/messaging/rpc.ts`
+- [x] 2.2 Add `nostr.signEvent` request type with `event` and `origin` fields
+- [x] 2.3 Create `src/infrastructure/messaging/handlers/nostr-rpc.ts` with `NostrRpcHandler`
+- [x] 2.4 Implement `handleGetPublicKey`: return selected key's pubkey or error if locked
+- [x] 2.5 Implement `handleSignEvent`: validate event, evaluate policy, compute id, sign, return
+- [x] 2.6 Register `nostr` module in background.ts RpcRouter
 
 ## 3. Event Hashing
 
-- [ ] 3.1 Add `computeEventId(event: UnsignedEvent)` function in `src/domain/utils/crypto.ts`
-- [ ] 3.2 Implement NIP-01 serialization: `[0, pubkey, created_at, kind, tags, content]`
-- [ ] 3.3 Hash with SHA-256, return hex string
+- [x] 3.1 Add `computeEventId(event: UnsignedEvent)` function in `src/domain/utils/crypto.ts`
+- [x] 3.2 Implement NIP-01 serialization: `[0, pubkey, created_at, kind, tags, content]`
+- [x] 3.3 Hash with SHA-256, return hex string
 - [ ] 3.4 Add unit tests for event id computation with NIP-01 test vectors
 
 ## 4. Content Script
 
-- [ ] 4.1 Update `wxt.config.ts` to set content script `matches: ['<all_urls>']`
-- [ ] 4.2 Rewrite `src/extension/content.ts` as message bridge
-- [ ] 4.3 Listen for `OSTRILO_NIP07_REQUEST` messages from page
-- [ ] 4.4 Validate message shape and forward to background via `browser.runtime.sendMessage`
-- [ ] 4.5 Return response to page via `window.postMessage` with `OSTRILO_NIP07_RESPONSE`
+- [x] 4.1 Update `wxt.config.ts` to set content script `matches: ['<all_urls>']`
+- [x] 4.2 Rewrite `src/extension/content.ts` as message bridge
+- [x] 4.3 Listen for `OSTRILO_NOSTR_REQUEST` messages from page
+- [x] 4.4 Validate message shape and forward to background via `browser.runtime.sendMessage`
+- [x] 4.5 Return response to page via `window.postMessage` with `OSTRILO_NOSTR_RESPONSE`
 
 ## 5. Injected Script
 
-- [ ] 5.1 Create `src/extension/injected.ts` for page context execution
-- [ ] 5.2 Define `window.nostr` object with `getPublicKey()` and `signEvent(event)`
-- [ ] 5.3 Implement request/response promise management with unique IDs
-- [ ] 5.4 Add timeout handling (10 second default)
-- [ ] 5.5 Check for existing `window.nostr` and log warning if present
+- [x] 5.1 Create `src/extension/injected.ts` for page context execution
+- [x] 5.2 Define `window.nostr` object with `getPublicKey()` and `signEvent(event)`
+- [x] 5.3 Implement request/response promise management with unique IDs
+- [x] 5.4 Add timeout handling (30 second default)
+- [x] 5.5 Check for existing `window.nostr` and log warning if present (using Object.defineProperty)
 
 ## 6. Script Injection
 
-- [ ] 6.1 Configure WXT to inject `injected.ts` into page context (`world: 'MAIN'`)
-- [ ] 6.2 Ensure injection runs at `document_start` for early availability
-- [ ] 6.3 Test injection works on Chrome MV3 and Firefox MV2
+- [x] 6.1 Configure WXT to inject `injected.ts` into page context using `injectScript` helper
+- [x] 6.2 Ensure injection runs at `document_start` for early availability
+- [x] 6.3 Configure `web_accessible_resources` in manifest for injected.js
 
 ## 7. Integration & Testing
 

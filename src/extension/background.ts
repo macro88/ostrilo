@@ -18,6 +18,7 @@ import {
   SettingsRpcHandler,
   CryptoRpcHandler,
   StateRpcHandler,
+  NostrRpcHandler,
 } from "@/infrastructure/messaging/handlers";
 
 export default defineBackground(() => {
@@ -47,6 +48,7 @@ export default defineBackground(() => {
   router.registerModule("crypto", new CryptoRpcHandler());
   router.registerModule("state", new StateRpcHandler());
   router.registerModule("keys", new VaultRpcHandler()); // keys.list is handled by VaultRpcHandler
+  router.registerModule("nostr", new NostrRpcHandler()); // NIP-07 operations
 
   console.log(
     "[Background] Registered RPC modules:",

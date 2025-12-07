@@ -119,3 +119,60 @@ export const EventKindSchema = z
   .max(65535, "Invalid event kind");
 
 export const ModeSchema = z.string().min(1, "Mode cannot be empty");
+
+// ============================================
+// NIP-01 Event Validation Schemas
+// ============================================
+
+/** 32-byte lowercase hex string (64 chars) */
+export const HexString32Schema = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, "Must be 64-character lowercase hex string");
+
+/** 64-byte lowercase hex string (128 chars) for signatures */
+export const HexString64Schema = z
+  .string()
+  .regex(/^[0-9a-f]{128}$/, "Must be 128-character lowercase hex string");
+
+/** Tag array - array of strings */
+export const TagSchema = z.array(z.string());
+
+/** Tags array - array of tag arrays */
+export const TagsSchema = z.array(TagSchema);
+
+/**
+ * NIP-01 Unsigned Event Schema
+ * Validates events received from dapps before signing
+ */
+export const UnsignedEventSchema = z.object({
+  kind: EventKindSchema,
+  content: z.string(),
+  tags: TagsSchema,
+  created_at: z.number().int().positive(),
+  pubkey: HexString32Schema.optional(),
+});
+
+/**
+ * NIP-01 Signed Event Schema
+ * Validates complete signed events
+ */
+export const SignedEventSchema = z.object({
+  id: HexString32Schema,
+  pubkey: HexString32Schema,
+  created_at: z.number().int().positive(),
+  kind: EventKindSchema,
+  tags: TagsSchema,
+  content: z.string(),
+  sig: HexString64Schema,
+});
+
+// Infer types from schemas
+export type UnsignedEventInput = z.infer<typeof UnsignedEventSchema>;
+export type SignedEventInput = z.infer<typeof SignedEventSchema>;
+
+// Export validation functions
+export const validateUnsignedEvent = (data: unknown) =>
+  UnsignedEventSchema.safeParse(data);
+
+export const validateSignedEvent = (data: unknown) =>
+  SignedEventSchema.safeParse(data);

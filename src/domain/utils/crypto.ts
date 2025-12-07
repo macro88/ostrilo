@@ -417,3 +417,109 @@ export async function isPlatformAuthenticatorAvailable(): Promise<boolean> {
     return false;
   }
 }
+
+// ============================================
+// NIP-01 Event ID Computation
+// ============================================
+
+/**
+ * Compute NIP-01 event ID from event data
+ * ID is SHA-256 hash of the serialized event array:
+ * [0, pubkey, created_at, kind, tags, content]
+ *
+ * @param pubkey - 32-byte lowercase hex public key
+ * @param created_at - Unix timestamp in seconds
+ * @param kind - Event kind number
+ * @param tags - Array of tag arrays
+ * @param content - Event content string
+ * @returns 32-byte lowercase hex event ID
+ */
+export function computeEventId(
+  pubkey: string,
+  created_at: number,
+  kind: number,
+  tags: string[][],
+  content: string
+): string {
+  // NIP-01 serialization: [0, pubkey, created_at, kind, tags, content]
+  const serialized = JSON.stringify([
+    0,
+    pubkey,
+    created_at,
+    kind,
+    tags,
+    content,
+  ]);
+
+  // Hash the UTF-8 encoded serialized string
+  const encoder = new TextEncoder();
+  const data = encoder.encode(serialized);
+  const hash = sha256(data);
+
+  // Convert to lowercase hex
+  return Array.from(hash)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Sign an event hash using Schnorr signature (BIP-340)
+ *
+ * @param eventIdHex - 32-byte lowercase hex event ID
+ * @param privateKey - 32-byte private key
+ * @returns 64-byte lowercase hex Schnorr signature
+ */
+export function signEventHash(
+  eventIdHex: string,
+  privateKey: Uint8Array
+): string {
+  // Convert hex event ID to bytes
+  const messageBytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    messageBytes[i] = parseInt(eventIdHex.substr(i * 2, 2), 16);
+  }
+
+  // Sign using Schnorr
+  const signature = schnorr.sign(messageBytes, privateKey);
+
+  // Convert to lowercase hex
+  return Array.from(signature)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Verify a Schnorr signature on an event
+ *
+ * @param eventIdHex - 32-byte lowercase hex event ID
+ * @param signatureHex - 64-byte lowercase hex Schnorr signature
+ * @param pubkeyHex - 32-byte lowercase hex x-only public key
+ * @returns true if signature is valid
+ */
+export function verifyEventSignature(
+  eventIdHex: string,
+  signatureHex: string,
+  pubkeyHex: string
+): boolean {
+  try {
+    // Convert hex strings to bytes
+    const message = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      message[i] = parseInt(eventIdHex.substr(i * 2, 2), 16);
+    }
+
+    const signature = new Uint8Array(64);
+    for (let i = 0; i < 64; i++) {
+      signature[i] = parseInt(signatureHex.substr(i * 2, 2), 16);
+    }
+
+    const pubkey = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      pubkey[i] = parseInt(pubkeyHex.substr(i * 2, 2), 16);
+    }
+
+    return schnorr.verify(signature, message, pubkey);
+  } catch {
+    return false;
+  }
+}

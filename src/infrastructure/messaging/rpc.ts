@@ -2,6 +2,7 @@ import type {
   AppSettingsPatch,
   OriginPolicyPatch,
 } from "@/infrastructure/validation/schemas";
+import type { UnsignedEvent, SignedEvent } from "@/domain/types";
 
 export type RpcRequest =
   | { type: "policy.evaluate"; origin: string; kind: number }
@@ -21,7 +22,19 @@ export type RpcRequest =
   | { type: "policy.setSession"; origin: string; enabled: boolean }
   | { type: "policy.removeOrigin"; origin: string }
   | { type: "crypto.evaluatePassword"; password: string }
-  | { type: "crypto.parsePrivateKey"; keyInput: string };
+  | { type: "crypto.parsePrivateKey"; keyInput: string }
+  // NIP-07 Nostr operations
+  | { type: "nostr.getPublicKey" }
+  | { type: "nostr.signEvent"; event: UnsignedEvent; origin: string };
+
+// NIP-07 specific response types
+export type NostrGetPublicKeyResponse =
+  | { ok: true; data: { pubkey: string } }
+  | { ok: false; error: string };
+
+export type NostrSignEventResponse =
+  | { ok: true; data: { event: SignedEvent } }
+  | { ok: false; error: string };
 
 export type RpcResponse =
   | { ok: true; data: unknown }
