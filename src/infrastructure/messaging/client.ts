@@ -223,3 +223,25 @@ export async function parsePrivateKey(keyInput: string) {
     keyInput,
   });
 }
+
+// Approval queue operations
+export async function getNextApprovalRequest() {
+  return rpc<{ request: import("@/domain/types").PendingRequest | null }>({
+    type: "approval.getNext",
+  });
+}
+
+export async function resolveApprovalRequest(
+  requestId: string,
+  action: import("@/domain/types").ApprovalAction
+) {
+  return rpc<{ resolved: boolean }>({
+    type: "approval.resolve",
+    requestId,
+    action,
+  });
+}
+
+export async function getApprovalCount() {
+  return rpc<{ count: number }>({ type: "approval.count" });
+}

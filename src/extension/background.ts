@@ -19,7 +19,9 @@ import {
   CryptoRpcHandler,
   StateRpcHandler,
   NostrRpcHandler,
+  ApprovalRpcHandler,
 } from "@/infrastructure/messaging/handlers";
+import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 
 export default defineBackground(() => {
   // Compose services
@@ -40,6 +42,9 @@ export default defineBackground(() => {
     settings,
   };
 
+  // Create approval queue service
+  const approvalQueue = new ApprovalQueueService();
+
   // Setup modular RPC router
   const router = new RpcRouter();
   router.registerModule("vault", new VaultRpcHandler());
@@ -48,7 +53,8 @@ export default defineBackground(() => {
   router.registerModule("crypto", new CryptoRpcHandler());
   router.registerModule("state", new StateRpcHandler());
   router.registerModule("keys", new VaultRpcHandler()); // keys.list is handled by VaultRpcHandler
-  router.registerModule("nostr", new NostrRpcHandler()); // NIP-07 operations
+  router.registerModule("nostr", new NostrRpcHandler(approvalQueue)); // NIP-07 operations with approval
+  router.registerModule("approval", new ApprovalRpcHandler(approvalQueue)); // Approval queue operations
 
   console.log(
     "[Background] Registered RPC modules:",

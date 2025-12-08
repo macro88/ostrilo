@@ -365,3 +365,40 @@ export interface SignedEvent {
   /** 64-byte lowercase hex Schnorr signature */
   sig: string;
 }
+
+// ============================================
+// Approval Queue Types
+// ============================================
+
+/**
+ * Result of an approval decision from the user
+ * - "allow": Sign this event
+ * - "deny": Reject this event
+ */
+export type ApprovalDecision = "allow" | "deny";
+
+/**
+ * User action choices in the approval prompt UI
+ * - "allow": Sign this event and allow future events from this origin+kind
+ * - "allow_once": Sign this event only (no policy change)
+ * - "deny": Reject this event only (no policy change)
+ * - "deny_remember": Reject and block future events from this origin+kind
+ */
+export type ApprovalAction = "allow" | "allow_once" | "deny" | "deny_remember";
+
+/**
+ * A pending approval request in the queue
+ * Created when policy evaluation returns "ask" and waits for user decision
+ */
+export interface PendingRequest {
+  /** Unique request identifier (UUID) */
+  id: string;
+  /** Origin of the requesting dapp (e.g., "https://primal.net") */
+  origin: string;
+  /** The unsigned event to be signed */
+  event: UnsignedEvent;
+  /** Unix timestamp when the request was created (seconds) */
+  createdAt: number;
+  /** Unix timestamp when the request will auto-deny (seconds) */
+  timeoutAt: number;
+}

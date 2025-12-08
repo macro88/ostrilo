@@ -514,4 +514,163 @@ describe("RPC Router and Handlers", () => {
       });
     });
   });
+
+  describe("ApprovalRpcHandler", () => {
+    let handler: any;
+    let mockQueue: any;
+
+    beforeEach(async () => {
+      // Import dynamically to avoid hoisting issues
+      const { ApprovalRpcHandler } = await import(
+        "@/infrastructure/messaging/handlers/approval-rpc"
+      );
+
+      // Create mock queue
+      mockQueue = {
+        getNextPending: vi.fn(),
+        getById: vi.fn(),
+        resolve: vi.fn(),
+        count: vi.fn(),
+      };
+
+      handler = new ApprovalRpcHandler(mockQueue);
+    });
+
+    describe("approval.getNext", () => {
+      it("should return next pending request", async () => {
+        const mockRequest = {
+          id: "test-id",
+          origin: "https://example.com",
+          event: { kind: 1, content: "test", tags: [], created_at: 123 },
+          createdAt: 123,
+          timeoutAt: 183,
+        };
+        mockQueue.getNextPending.mockReturnValue(mockRequest);
+
+        const message = { type: "approval.getNext" } as const;
+        const result = await handler.handleRequest(message, mockContext);
+
+        expect(result.ok).toBe(true);
+        expect((result as any).data.request).toEqual(mockRequest);
+      });
+
+      it("should return null when queue is empty", async () => {
+        mockQueue.getNextPending.mockReturnValue(undefined);
+
+        const message = { type: "approval.getNext" } as const;
+        const result = await handler.handleRequest(message, mockContext);
+
+        expect(result.ok).toBe(true);
+        expect((result as any).data.request).toBeNull();
+      });
+    });
+
+    describe("approval.count", () => {
+      it("should return pending count", async () => {
+        mockQueue.count.mockReturnValue(3);
+
+        const message = { type: "approval.count" } as const;
+        const result = await handler.handleRequest(message, mockContext);
+
+        expect(result.ok).toBe(true);
+        expect((result as any).data.count).toBe(3);
+      });
+    });
+
+    describe("approval.resolve", () => {
+      it("should resolve request with allow action", async () => {
+        const mockRequest = {
+          id: "test-id",
+          origin: "https://example.com",
+          event: { kind: 1, content: "test", tags: [], created_at: 123 },
+          createdAt: 123,
+          timeoutAt: 183,
+        };
+        mockQueue.getById.mockReturnValue(mockRequest);
+        mockQueue.resolve.mockReturnValue(true);
+
+        const message = {
+          type: "approval.resolve",
+          requestId: "test-id",
+          action: "allow",
+        } as const;
+        const result = await handler.handleRequest(message, mockContext);
+
+        expect(result.ok).toBe(true);
+        expect((result as any).data.resolved).toBe(true);
+        expect(mockQueue.resolve).toHaveBeenCalledWith("test-id", "allow");
+      });
+
+      it("should return error for non-existent request", async () => {
+        mockQueue.getById.mockReturnValue(undefined);
+
+        const message = {
+          type: "approval.resolve",
+          requestId: "non-existent",
+          action: "allow",
+        } as const;
+        const result = await handler.handleRequest(message, mockContext);
+
+        expect(result.ok).toBe(false);
+        expect((result as any).error).toBe("Request not found");
+      });
+
+      it("should update policy on deny_remember action", async () => {
+        const mockRequest = {
+          id: "test-id",
+          origin: "https://example.com",
+          event: { kind: 1, content: "test", tags: [], created_at: 123 },
+          createdAt: 123,
+          timeoutAt: 183,
+        };
+        mockQueue.getById.mockReturnValue(mockRequest);
+        mockQueue.resolve.mockReturnValue(true);
+
+        const message = {
+          type: "approval.resolve",
+          requestId: "test-id",
+          action: "deny_remember",
+        } as const;
+        const result = await handler.handleRequest(message, mockContext);
+
+        expect(result.ok).toBe(true);
+        expect(mockContext.policy.setPerKindRule).toHaveBeenCalledWith(
+          "https://example.com",
+          1,
+          "deny"
+        );
+      });
+
+      it("should not update policy on allow action", async () => {
+        const mockRequest = {
+          id: "test-id",
+          origin: "https://example.com",
+          event: { kind: 1, content: "test", tags: [], created_at: 123 },
+          createdAt: 123,
+          timeoutAt: 183,
+        };
+        mockQueue.getById.mockReturnValue(mockRequest);
+        mockQueue.resolve.mockReturnValue(true);
+
+        const message = {
+          type: "approval.resolve",
+          requestId: "test-id",
+          action: "allow",
+        } as const;
+        await handler.handleRequest(message, mockContext);
+
+        expect(mockContext.policy.setPerKindRule).not.toHaveBeenCalled();
+      });
+    });
+
+    it("should handle unsupported methods", async () => {
+      const message = { type: "approval.unsupported" } as any;
+      const result = await handler.handleRequest(message, mockContext);
+
+      expect(result).toEqual({
+        ok: false,
+        error: "unsupported_method: approval.unsupported",
+      });
+    });
+  });
 });

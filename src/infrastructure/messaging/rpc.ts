@@ -2,7 +2,12 @@ import type {
   AppSettingsPatch,
   OriginPolicyPatch,
 } from "@/infrastructure/validation/schemas";
-import type { UnsignedEvent, SignedEvent } from "@/domain/types";
+import type {
+  UnsignedEvent,
+  SignedEvent,
+  PendingRequest,
+  ApprovalAction,
+} from "@/domain/types";
 
 export type RpcRequest =
   | { type: "policy.evaluate"; origin: string; kind: number }
@@ -25,7 +30,11 @@ export type RpcRequest =
   | { type: "crypto.parsePrivateKey"; keyInput: string }
   // NIP-07 Nostr operations
   | { type: "nostr.getPublicKey" }
-  | { type: "nostr.signEvent"; event: UnsignedEvent; origin: string };
+  | { type: "nostr.signEvent"; event: UnsignedEvent; origin: string }
+  // Approval queue operations
+  | { type: "approval.getNext" }
+  | { type: "approval.resolve"; requestId: string; action: ApprovalAction }
+  | { type: "approval.count" };
 
 // NIP-07 specific response types
 export type NostrGetPublicKeyResponse =
@@ -34,6 +43,19 @@ export type NostrGetPublicKeyResponse =
 
 export type NostrSignEventResponse =
   | { ok: true; data: { event: SignedEvent } }
+  | { ok: false; error: string };
+
+// Approval queue response types
+export type ApprovalGetNextResponse =
+  | { ok: true; data: { request: PendingRequest | null } }
+  | { ok: false; error: string };
+
+export type ApprovalResolveResponse =
+  | { ok: true; data: { resolved: boolean } }
+  | { ok: false; error: string };
+
+export type ApprovalCountResponse =
+  | { ok: true; data: { count: number } }
   | { ok: false; error: string };
 
 export type RpcResponse =

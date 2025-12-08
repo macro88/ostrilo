@@ -1,6 +1,6 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
 import type { RpcModule, ServiceContext } from "../rpc-router";
-import type { SignedEvent, UnsignedEvent } from "@/domain/types";
+import type { SignedEvent, UnsignedEvent, ApprovalDecision, ApprovalAction } from "@/domain/types";
 import {
   UnsignedEventSchema,
   OriginSchema,
@@ -10,12 +10,20 @@ import {
   signEventHash,
   publicKeyToHex,
 } from "@/domain/utils/crypto";
+import { ApprovalQueueService } from "@/application/services/approval-queue.service";
+import { browser } from "wxt/browser";
+
+/** Approval popup dimensions */
+const POPUP_WIDTH = 400;
+const POPUP_HEIGHT = 520;
 
 /**
  * RPC handler for NIP-07 Nostr operations
  * Handles: nostr.getPublicKey, nostr.signEvent
  */
 export class NostrRpcHandler implements RpcModule {
+  constructor(private approvalQueue?: ApprovalQueueService) {}
+
   async handleRequest(
     message: RpcRequest,
     context: ServiceContext
@@ -129,14 +137,35 @@ export class NostrRpcHandler implements RpcModule {
     }
 
     if (policyResult.mode === "ask") {
-      // For now, return pending - the approval prompt feature will handle this
-      return {
-        ok: false,
-        error: "approval_required",
-      };
+      // Need approval - queue the request and open popup
+      if (!this.approvalQueue) {
+        // No queue configured - fall back to error
+        return {
+          ok: false,
+          error: "approval_required",
+        };
+      }
+
+      try {
+        // Wait for user approval
+        const decision = await this.requestApproval(message.origin, event);
+        
+        if (decision !== "allow") {
+          return {
+            ok: false,
+            error: "user_denied",
+          };
+        }
+        // Fall through to signing if approved
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : "approval_failed",
+        };
+      }
     }
 
-    // Policy allows - proceed with signing
+    // Policy allows (or user approved) - proceed with signing
     try {
       // Compute event ID using NIP-01 format
       const eventId = computeEventId(
@@ -179,6 +208,69 @@ export class NostrRpcHandler implements RpcModule {
           error instanceof Error ? error.message : "Unknown error"
         }`,
       };
+    }
+  }
+
+  /**
+   * Request user approval for signing an event
+   * Opens the approval popup and waits for user decision
+   * 
+   * @param origin - The origin of the requesting dapp
+   * @param event - The unsigned event to sign
+   * @returns Promise resolving to the user's decision
+   */
+  private async requestApproval(
+    origin: string,
+    event: UnsignedEvent
+  ): Promise<ApprovalDecision> {
+    return new Promise<ApprovalDecision>((resolve, reject) => {
+      // Enqueue the request with a resolver callback
+      const pendingRequest = this.approvalQueue!.enqueue(
+        origin,
+        event,
+        (decision: ApprovalDecision, _action: ApprovalAction) => {
+          resolve(decision);
+        }
+      );
+
+      // Open approval popup
+      this.openApprovalPopup(pendingRequest.id).catch((err) => {
+        // If popup fails to open, reject the request
+        this.approvalQueue!.resolve(pendingRequest.id, "deny");
+        reject(new Error(`Failed to open approval popup: ${err.message}`));
+      });
+    });
+  }
+
+  /**
+   * Open the approval popup window
+   * 
+   * @param requestId - The ID of the pending request
+   */
+  private async openApprovalPopup(requestId: string): Promise<void> {
+    // Get the extension URL for the approval page
+    // Use type assertion since approval.html is dynamically registered
+    const approvalUrl = browser.runtime.getURL(
+      `/approval.html?requestId=${encodeURIComponent(requestId)}` as `/popup.html${string}`
+    );
+
+    // Calculate centered position
+    const left = Math.round((screen.width - POPUP_WIDTH) / 2);
+    const top = Math.round((screen.height - POPUP_HEIGHT) / 2);
+
+    try {
+      await browser.windows.create({
+        url: approvalUrl,
+        type: "popup",
+        width: POPUP_WIDTH,
+        height: POPUP_HEIGHT,
+        left,
+        top,
+        focused: true,
+      });
+    } catch (err) {
+      console.error("[NostrRpcHandler] Failed to open approval popup:", err);
+      throw err;
     }
   }
 }
