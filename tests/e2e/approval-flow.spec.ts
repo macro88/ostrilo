@@ -1,10 +1,4 @@
 import { test, expect, Page } from "./fixtures/extension";
-import path from "path";
-import { fileURLToPath } from "url";
-
-// Get __dirname equivalent in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 /**
  * E2E tests for Approval Flow (add-approval-prompt)
@@ -22,6 +16,11 @@ const __dirname = path.dirname(__filename);
  */
 
 test.describe("Approval Flow", () => {
+  // Skip all tests if not running on Chromium
+  // Extension E2E tests only work on Chromium due to extension loading requirements
+  test.beforeEach(async ({ browserName }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+  });
   /**
    * Helper function to wait for window.nostr to be injected
    */
@@ -46,10 +45,7 @@ test.describe("Approval Flow", () => {
   test("Task 9.3: signEvent with ask policy triggers approval requirement", async ({
     extensionContext,
     extensionId,
-    browserName,
   }) => {
-    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
-
     // Navigate to an HTTP page
     const page = await extensionContext.newPage();
     await page.goto("http://localhost:8765/test-page.html");
@@ -100,10 +96,7 @@ test.describe("Approval Flow", () => {
   test("Task 9.4: Approval flow - Allow action signs and returns event", async ({
     extensionContext,
     extensionId,
-    browserName,
   }) => {
-    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
-
     // Note: This test verifies the structure but cannot fully test approval flow
     // without a way to unlock the vault and configure policy programmatically.
     // The test documents the expected behavior.
@@ -152,10 +145,7 @@ test.describe("Approval Flow", () => {
   test("Task 9.5: Approval flow - Deny action returns error to dApp", async ({
     extensionContext,
     extensionId,
-    browserName,
   }) => {
-    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
-
     const page = await extensionContext.newPage();
     await page.goto("http://localhost:8765/test-page.html");
 
@@ -199,10 +189,7 @@ test.describe("Approval Flow", () => {
   test("Task 9.6: Approval flow - Deny + Remember creates deny rule", async ({
     extensionContext,
     extensionId,
-    browserName,
   }) => {
-    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
-
     // Note: This test documents expected behavior when "Deny + Remember" is clicked.
     // Full testing requires vault unlock and policy configuration automation.
 
@@ -236,10 +223,7 @@ test.describe("Approval Flow", () => {
   test("Task 9.7: Approval flow - Timeout results in auto-deny with timeout error", async ({
     extensionContext,
     extensionId,
-    browserName,
   }) => {
-    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
-
     // Note: This test documents expected behavior when approval times out.
     // The ApprovalQueueService has a 60-second timeout that auto-denies requests.
     // Full testing would require mocking timers or using a shorter timeout.
@@ -277,10 +261,7 @@ test.describe("Approval Flow", () => {
   test("Approval popup structure and RPC methods are available", async ({
     extensionContext,
     extensionId,
-    browserName,
   }) => {
-    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
-
     // Open approval popup directly to verify it loads correctly
     const approvalPage = await extensionContext.newPage();
     const approvalUrl = `chrome-extension://${extensionId}/approval.html`;
@@ -302,10 +283,7 @@ test.describe("Approval Flow", () => {
   test("Approval queue handles multiple pending requests correctly", async ({
     extensionContext,
     extensionId,
-    browserName,
   }) => {
-    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
-
     const page = await extensionContext.newPage();
     await page.goto("http://localhost:8765/test-page.html");
 
