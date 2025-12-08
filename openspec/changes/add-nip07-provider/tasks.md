@@ -46,9 +46,9 @@
 
 - [x] 7.1 Add unit tests for `NostrRpcHandler` (getPublicKey, signEvent flows)
 - [x] 7.2 Add unit tests for content script message validation (covered in nostr-rpc tests)
-- [ ] 7.3 Add E2E test: inject script, call `window.nostr.getPublicKey()`, verify response
-- [ ] 7.4 Add E2E test: call `signEvent` with unlocked vault, verify signed event
-- [ ] 7.5 Add E2E test: call `signEvent` when locked, verify error response
+- [x] 7.3 Add E2E test: inject script, call `window.nostr.getPublicKey()`, verify response
+- [x] 7.4 Add E2E test: call `signEvent` with unlocked vault, verify signed event
+- [x] 7.5 Add E2E test: call `signEvent` when locked, verify error response
 - [x] 7.6 Manual test with Nostr web client (e.g., snort.social, primal.net) - deferred to integration
 
 ## 8. Documentation

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIP-07 Test Page</title>
+</head>
+<body>
+    <h1>NIP-07 Test Page</h1>
+    <div id="status">Waiting for window.nostr...</div>
+    <div id="pubkey"></div>
+    <div id="signed-event"></div>
+    <div id="error"></div>
+
+    <script>
+        // Wait for window.nostr to be available
+        function checkNostr() {
+            if (window.nostr) {
+                document.getElementById('status').textContent = 'window.nostr available';
+                window.nostrReady = true;
+            } else {
+                setTimeout(checkNostr, 50);
+            }
+        }
+        checkNostr();
+
+        // Expose test functions
+        window.testGetPublicKey = async function() {
+            try {
+                const pubkey = await window.nostr.getPublicKey();
+                document.getElementById('pubkey').textContent = pubkey;
+                return pubkey;
+            } catch (error) {
+                document.getElementById('error').textContent = error.message;
+                throw error;
+            }
+        };
+
+        window.testSignEvent = async function(event) {
+            try {
+                const signedEvent = await window.nostr.signEvent(event);
+                document.getElementById('signed-event').textContent = JSON.stringify(signedEvent);
+                return signedEvent;
+            } catch (error) {
+                document.getElementById('error').textContent = error.message;
+                throw error;
+            }
+        };
+    </script>
+</body>
+</html>
