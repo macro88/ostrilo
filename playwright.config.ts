@@ -20,6 +20,13 @@ export default defineConfig({
     video: "retain-on-failure",
   },
 
+  /* Configure web server for E2E tests */
+  webServer: {
+    command: 'npx http-server tests/e2e/fixtures -p 8765',
+    port: 8765,
+    reuseExistingServer: !process.env.CI,
+  },
+
   /* Configure projects for major browsers */
   projects: [
     // Generic desktop browsers for non-extension tests
