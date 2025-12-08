@@ -71,6 +71,17 @@ This layer provides the concrete implementations (adapters) for the ports define
 -   `crypto/`: Contains the implementation of the cryptography port.
 -   `storage/`: Contains the implementation of the storage port.
 -   `messaging/`: Contains the logic for communication between different parts of the extension.
+    -   `handlers/`: Contains RPC handlers including `nostr-rpc.ts` for NIP-07 operations.
+
+### `src/extension`
+
+This directory contains the browser extension entry points:
+
+-   `background.ts`: The service worker/background script that handles RPC routing and maintains vault state.
+-   `content.ts`: The content script that acts as a message bridge between web pages and the background script.
+-   `injected.ts`: The script injected into web pages to provide the `window.nostr` API (NIP-07).
+-   `popup/`: The popup UI shown when clicking the extension icon.
+-   `sidepanel/`: The side panel UI for Chrome.
 
 ### `src/ui`
 
@@ -102,6 +113,80 @@ The application uses a combination of React's built-in state management features
 
 -   **Local State:** For component-specific state, we use the `useState` and `useReducer` hooks.
 -   **Global State:** For state that needs to be shared across multiple components, we use the `useContext` hook in combination with the `createContext` function. The `KeyManagerContext` in `src/ui/state/KeyManagerContext.tsx` is a good example of this.
+
+## NIP-07 Provider (window.nostr)
+
+Ostrilo implements the NIP-07 standard, which provides a `window.nostr` object that web applications can use to interact with the signer.
+
+### Architecture
+
+The NIP-07 provider uses a three-layer communication model:
+
+```
+Web Page (window.nostr) ←→ Content Script ←→ Background Script
+         injected.ts           content.ts        background.ts
+```
+
+1. **`injected.ts`**: Runs in the page's MAIN world, exposes `window.nostr` API
+2. **`content.ts`**: Runs in ISOLATED world, bridges messages between page and extension
+3. **`background.ts`**: Processes requests via `NostrRpcHandler`
+
+### Supported Methods
+
+```typescript
+// Get the public key of the currently selected identity
+const pubkey = await window.nostr.getPublicKey();
+// Returns: "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+
+// Sign an unsigned Nostr event
+const signedEvent = await window.nostr.signEvent({
+  kind: 1,
+  content: "Hello, Nostr!",
+  tags: [],
+  created_at: Math.floor(Date.now() / 1000),
+});
+// Returns: { id, pubkey, created_at, kind, tags, content, sig }
+```
+
+### Policy Evaluation
+
+Before signing events, the `NostrRpcHandler` evaluates the requesting origin's policy:
+
+- **allow**: Event is signed immediately
+- **deny**: Request is rejected with `policy_denied` error
+- **ask**: Request returns `approval_required` (UI prompt to be implemented)
+
+### Message Protocol
+
+Messages between injected script and content script use `window.postMessage`:
+
+```typescript
+// Request (injected → content)
+{ type: "OSTRILO_NOSTR_REQUEST", id: string, method: string, params?: unknown }
+
+// Response (content → injected)  
+{ type: "OSTRILO_NOSTR_RESPONSE", id: string, result?: unknown, error?: string }
+```
+
+### Testing NIP-07
+
+You can test the NIP-07 provider in the browser console on any page:
+
+```javascript
+// Check if provider is available
+console.log(window.nostr);
+
+// Get public key (requires unlocked vault)
+await window.nostr.getPublicKey();
+
+// Sign an event
+await window.nostr.signEvent({
+  kind: 1,
+  content: "Test note",
+  tags: [],
+  created_at: Math.floor(Date.now() / 1000),
+});
+```
 
 ## UI Components
 

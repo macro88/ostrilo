@@ -5,6 +5,7 @@ import { PolicyRpcHandler } from "@/infrastructure/messaging/handlers/policy-rpc
 import { SettingsRpcHandler } from "@/infrastructure/messaging/handlers/settings-rpc";
 import { CryptoRpcHandler } from "@/infrastructure/messaging/handlers/crypto-rpc";
 import { StateRpcHandler } from "@/infrastructure/messaging/handlers/state-rpc";
+import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
 
 describe("RPC Router and Handlers", () => {
@@ -261,6 +262,256 @@ describe("RPC Router and Handlers", () => {
       if (result.ok) {
         expect(result.data).toEqual([1, 2, 3]); // Converted to Array from Uint8Array
       }
+    });
+  });
+
+  describe("NostrRpcHandler", () => {
+    let handler: NostrRpcHandler;
+    let nostrMockContext: ServiceContext;
+
+    beforeEach(() => {
+      handler = new NostrRpcHandler();
+
+      // Create mock context specific to Nostr handler tests
+      nostrMockContext = {
+        vault: {
+          unlock: vi.fn().mockResolvedValue({ selectedKeyId: "test-key" }),
+          lock: vi.fn().mockResolvedValue(undefined),
+          generateKey: vi
+            .fn()
+            .mockResolvedValue({ publicKey: "generated-key" }),
+          importKey: vi.fn().mockResolvedValue({ publicKey: "imported-key" }),
+          selectKey: vi.fn().mockResolvedValue(undefined),
+          sign: vi.fn().mockResolvedValue("a".repeat(128)), // 64-byte hex signature
+          listKeys: vi.fn().mockResolvedValue([
+            {
+              id: "key-1",
+              pubkey:
+                "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+              isSelected: true,
+            },
+          ]),
+          getLockState: vi.fn().mockResolvedValue({ isLocked: false }),
+        },
+        policy: {
+          evaluate: vi
+            .fn()
+            .mockResolvedValue({ mode: "allow", reason: "explicit_allow" }),
+          setOriginPolicy: vi.fn().mockResolvedValue(undefined),
+          setPerKindRule: vi.fn().mockResolvedValue(undefined),
+          clearSessionGrant: vi.fn().mockResolvedValue(undefined),
+          setSessionGrant: vi.fn().mockResolvedValue(undefined),
+          removeOriginPolicy: vi.fn().mockResolvedValue(undefined),
+        },
+        settings: {
+          get: vi.fn().mockResolvedValue({ theme: "dark" }),
+          update: vi.fn().mockResolvedValue({ theme: "light" }),
+        },
+      } as any;
+    });
+
+    describe("nostr.getPublicKey", () => {
+      it("should return pubkey when vault is unlocked and key is selected", async () => {
+        const message = { type: "nostr.getPublicKey" } as const;
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.data).toEqual({
+            pubkey:
+              "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+          });
+        }
+      });
+
+      it("should return error when vault is locked", async () => {
+        nostrMockContext.vault.getLockState = vi
+          .fn()
+          .mockResolvedValue({ isLocked: true });
+
+        const message = { type: "nostr.getPublicKey" } as const;
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.error).toBe("vault_locked");
+        }
+      });
+
+      it("should return error when no key is selected", async () => {
+        nostrMockContext.vault.listKeys = vi
+          .fn()
+          .mockResolvedValue([
+            { id: "key-1", pubkey: "abc123", isSelected: false },
+          ]);
+
+        const message = { type: "nostr.getPublicKey" } as const;
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.error).toBe("no_key_selected");
+        }
+      });
+    });
+
+    describe("nostr.signEvent", () => {
+      const validUnsignedEvent = {
+        kind: 1,
+        content: "Hello, Nostr!",
+        tags: [],
+        created_at: 1234567890,
+      };
+
+      it("should sign event when vault is unlocked and policy allows", async () => {
+        const message = {
+          type: "nostr.signEvent",
+          event: validUnsignedEvent,
+          origin: "https://example.com",
+        } as const;
+
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          const data = result.data as { event: any };
+          expect(data.event).toBeDefined();
+          expect(data.event.id).toMatch(/^[0-9a-f]{64}$/);
+          expect(data.event.pubkey).toBe(
+            "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+          );
+          expect(data.event.sig).toBe("a".repeat(128));
+          expect(data.event.kind).toBe(1);
+          expect(data.event.content).toBe("Hello, Nostr!");
+        }
+      });
+
+      it("should return error when vault is locked", async () => {
+        nostrMockContext.vault.getLockState = vi
+          .fn()
+          .mockResolvedValue({ isLocked: true });
+
+        const message = {
+          type: "nostr.signEvent",
+          event: validUnsignedEvent,
+          origin: "https://example.com",
+        } as const;
+
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.error).toBe("vault_locked");
+        }
+      });
+
+      it("should return error when policy denies", async () => {
+        nostrMockContext.policy.evaluate = vi
+          .fn()
+          .mockResolvedValue({ mode: "deny", reason: "explicit_deny" });
+
+        const message = {
+          type: "nostr.signEvent",
+          event: validUnsignedEvent,
+          origin: "https://example.com",
+        } as const;
+
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.error).toBe("policy_denied");
+        }
+      });
+
+      it("should return approval_required when policy asks", async () => {
+        nostrMockContext.policy.evaluate = vi
+          .fn()
+          .mockResolvedValue({ mode: "ask", reason: "default_ask" });
+
+        const message = {
+          type: "nostr.signEvent",
+          event: validUnsignedEvent,
+          origin: "https://example.com",
+        } as const;
+
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.error).toBe("approval_required");
+        }
+      });
+
+      it("should return error for invalid event", async () => {
+        const message = {
+          type: "nostr.signEvent",
+          event: { kind: "invalid" }, // kind should be number
+          origin: "https://example.com",
+        } as any;
+
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.error).toContain("invalid_event");
+        }
+      });
+
+      it("should return error for invalid origin", async () => {
+        const message = {
+          type: "nostr.signEvent",
+          event: validUnsignedEvent,
+          origin: "not-a-valid-url",
+        } as const;
+
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.error).toContain("invalid_origin");
+        }
+      });
+
+      it("should handle events with tags", async () => {
+        const eventWithTags = {
+          ...validUnsignedEvent,
+          tags: [
+            [
+              "p",
+              "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+            ],
+            [
+              "e",
+              "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
+            ],
+          ],
+        };
+
+        const message = {
+          type: "nostr.signEvent",
+          event: eventWithTags,
+          origin: "https://example.com",
+        } as const;
+
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          const data = result.data as { event: any };
+          expect(data.event.tags).toEqual(eventWithTags.tags);
+        }
+      });
+    });
+
+    it("should handle unsupported methods", async () => {
+      const message = { type: "nostr.unsupported" } as any;
+      const result = await handler.handleRequest(message, nostrMockContext);
+
+      expect(result).toEqual({
+        ok: false,
+        error: "unsupported_method: nostr.unsupported",
+      });
     });
   });
 });

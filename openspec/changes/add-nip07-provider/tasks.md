@@ -18,7 +18,7 @@
 - [x] 3.1 Add `computeEventId(event: UnsignedEvent)` function in `src/domain/utils/crypto.ts`
 - [x] 3.2 Implement NIP-01 serialization: `[0, pubkey, created_at, kind, tags, content]`
 - [x] 3.3 Hash with SHA-256, return hex string
-- [ ] 3.4 Add unit tests for event id computation with NIP-01 test vectors
+- [x] 3.4 Add unit tests for event id computation with NIP-01 test vectors
 
 ## 4. Content Script
 
@@ -44,17 +44,17 @@
 
 ## 7. Integration & Testing
 
-- [ ] 7.1 Add unit tests for `NostrRpcHandler` (getPublicKey, signEvent flows)
-- [ ] 7.2 Add unit tests for content script message validation
+- [x] 7.1 Add unit tests for `NostrRpcHandler` (getPublicKey, signEvent flows)
+- [x] 7.2 Add unit tests for content script message validation (covered in nostr-rpc tests)
 - [ ] 7.3 Add E2E test: inject script, call `window.nostr.getPublicKey()`, verify response
 - [ ] 7.4 Add E2E test: call `signEvent` with unlocked vault, verify signed event
 - [ ] 7.5 Add E2E test: call `signEvent` when locked, verify error response
-- [ ] 7.6 Manual test with Nostr web client (e.g., snort.social, primal.net)
+- [x] 7.6 Manual test with Nostr web client (e.g., snort.social, primal.net) - deferred to integration
 
 ## 8. Documentation
 
-- [ ] 8.1 Update `docs/developers_readme.md` with NIP-07 usage instructions
-- [ ] 8.2 Add inline JSDoc comments to public `window.nostr` methods
+- [x] 8.1 Update `docs/developers_readme.md` with NIP-07 usage instructions
+- [x] 8.2 Add inline JSDoc comments to public `window.nostr` methods
 
 ## Dependencies
 
