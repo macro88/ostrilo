@@ -3,7 +3,11 @@ import {
   ApprovalQueueService,
   RequestResolver,
 } from "@/application/services/approval-queue.service";
-import type { UnsignedEvent, ApprovalDecision, ApprovalAction } from "@/domain/types";
+import type {
+  UnsignedEvent,
+  ApprovalDecision,
+  ApprovalAction,
+} from "@/domain/types";
 
 // Mock event for testing
 const mockEvent: UnsignedEvent = {

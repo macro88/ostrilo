@@ -23,7 +23,7 @@ interface QueueEntry {
 
 /**
  * ApprovalQueueService manages pending approval requests
- * 
+ *
  * When policy evaluates to "ask", requests are queued here and await
  * user decision via the approval popup. The service handles:
  * - Enqueueing new requests with unique IDs

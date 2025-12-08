@@ -137,7 +137,11 @@ export function ApprovalPrompt() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
-        <img src={mascotLogo} alt="Ostrilo" className="w-16 h-16 mb-4 animate-pulse" />
+        <img
+          src={mascotLogo}
+          alt="Ostrilo"
+          className="w-16 h-16 mb-4 animate-pulse"
+        />
         <p className="text-muted-foreground">Loading request...</p>
       </div>
     );
@@ -263,7 +267,9 @@ export function ApprovalPrompt() {
               <Pubkey pubkey={selectedKey.pubkey} />
             </div>
           ) : (
-            <span className="text-muted-foreground italic">No key selected</span>
+            <span className="text-muted-foreground italic">
+              No key selected
+            </span>
           )}
         </div>
       </div>
@@ -271,7 +277,9 @@ export function ApprovalPrompt() {
       {/* Help text */}
       <div className="px-4 pb-2">
         <p className="text-xs text-muted-foreground text-center">
-          <strong>Allow</strong> signs this event. <strong>Deny + Remember</strong> blocks future requests from this site for this event type.
+          <strong>Allow</strong> signs this event.{" "}
+          <strong>Deny + Remember</strong> blocks future requests from this site
+          for this event type.
         </p>
       </div>
 

@@ -1,11 +1,14 @@
 import type { RpcRequest, RpcResponse } from "@/infrastructure/messaging/rpc";
-import type { RpcModule, ServiceContext } from "@/infrastructure/messaging/rpc-router";
+import type {
+  RpcModule,
+  ServiceContext,
+} from "@/infrastructure/messaging/rpc-router";
 import type { ApprovalAction } from "@/domain/types";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 
 /**
  * RPC handler for approval queue operations
- * 
+ *
  * Handles:
  * - approval.getNext: Get the next pending approval request
  * - approval.resolve: Resolve a pending request with user's action
@@ -47,7 +50,8 @@ export class ApprovalRpcHandler implements RpcModule {
     } catch (err) {
       return {
         ok: false,
-        error: err instanceof Error ? err.message : "Failed to get next request",
+        error:
+          err instanceof Error ? err.message : "Failed to get next request",
       };
     }
   }
@@ -55,7 +59,7 @@ export class ApprovalRpcHandler implements RpcModule {
   /**
    * Handle approval.resolve RPC request
    * Resolves a pending request with the user's action
-   * 
+   *
    * @param requestId - The unique request ID
    * @param action - The user's action (allow, allow_once, deny, deny_remember)
    * @param context - Service context for policy updates
@@ -68,7 +72,7 @@ export class ApprovalRpcHandler implements RpcModule {
     try {
       // Get the request before resolving (for deny_remember)
       const request = this.queue.getById(requestId);
-      
+
       if (!request) {
         return { ok: false, error: "Request not found" };
       }
@@ -84,7 +88,7 @@ export class ApprovalRpcHandler implements RpcModule {
 
       // Resolve the request
       const resolved = this.queue.resolve(requestId, action);
-      
+
       return { ok: true, data: { resolved } };
     } catch (err) {
       return {

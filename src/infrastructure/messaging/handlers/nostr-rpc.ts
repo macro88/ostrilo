@@ -1,6 +1,11 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
 import type { RpcModule, ServiceContext } from "../rpc-router";
-import type { SignedEvent, UnsignedEvent, ApprovalDecision, ApprovalAction } from "@/domain/types";
+import type {
+  SignedEvent,
+  UnsignedEvent,
+  ApprovalDecision,
+  ApprovalAction,
+} from "@/domain/types";
 import {
   UnsignedEventSchema,
   OriginSchema,
@@ -149,7 +154,7 @@ export class NostrRpcHandler implements RpcModule {
       try {
         // Wait for user approval
         const decision = await this.requestApproval(message.origin, event);
-        
+
         if (decision !== "allow") {
           return {
             ok: false,
@@ -214,7 +219,7 @@ export class NostrRpcHandler implements RpcModule {
   /**
    * Request user approval for signing an event
    * Opens the approval popup and waits for user decision
-   * 
+   *
    * @param origin - The origin of the requesting dapp
    * @param event - The unsigned event to sign
    * @returns Promise resolving to the user's decision
@@ -244,14 +249,16 @@ export class NostrRpcHandler implements RpcModule {
 
   /**
    * Open the approval popup window
-   * 
+   *
    * @param requestId - The ID of the pending request
    */
   private async openApprovalPopup(requestId: string): Promise<void> {
     // Get the extension URL for the approval page
     // Use type assertion since approval.html is dynamically registered
     const approvalUrl = browser.runtime.getURL(
-      `/approval.html?requestId=${encodeURIComponent(requestId)}` as `/popup.html${string}`
+      `/approval.html?requestId=${encodeURIComponent(
+        requestId
+      )}` as `/popup.html${string}`
     );
 
     // Calculate centered position
