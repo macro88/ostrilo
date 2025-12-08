@@ -154,7 +154,101 @@ Before signing events, the `NostrRpcHandler` evaluates the requesting origin's p
 
 - **allow**: Event is signed immediately
 - **deny**: Request is rejected with `policy_denied` error
-- **ask**: Request returns `approval_required` (UI prompt to be implemented)
+- **ask**: User approval required via popup (see Approval Flow below)
+
+### Approval Flow
+
+When a policy evaluates to "ask", Ostrilo presents a real-time approval prompt to the user. This flow is implemented through a combination of background queue management, popup UI, and RPC communication.
+
+#### Architecture
+
+```
+dApp → Content Script → Background Script → Approval Queue → Approval Popup
+                                                ↓
+                                        User Decision (Allow/Deny)
+                                                ↓
+                                        Background Script → dApp
+```
+
+#### Components
+
+**ApprovalQueueService** (`src/application/services/approval-queue.service.ts`)
+- Manages pending approval requests in a FIFO queue
+- Each request has a unique ID and 60-second timeout
+- Auto-denies requests that timeout without user action
+- Resolves requests when user makes a decision
+
+**ApprovalRpcHandler** (`src/infrastructure/messaging/handlers/approval-rpc.ts`)
+- Provides RPC methods for approval popup:
+  - `approval.getNext`: Fetch the next pending request
+  - `approval.resolve`: Submit user's decision
+  - `approval.count`: Get count of pending requests
+
+**ApprovalPrompt** (`src/ui/features/approval/components/ApprovalPrompt.tsx`)
+- Displays request details: origin, event kind, content preview, signing key
+- Shows countdown timer for timeout
+- Provides action buttons: Allow, Allow Once, Deny, Deny + Remember
+
+#### Request Flow
+
+1. **dApp calls `signEvent`**: The unsigned event flows through content script to background script
+2. **Policy evaluation**: `PolicyService.evaluate()` returns `{ mode: "ask" }`
+3. **Queue request**: `ApprovalQueueService.enqueue()` creates a pending request with unique ID
+4. **Open popup**: Background script opens approval popup via `browser.windows.create()`
+   - Fallback: If popup creation fails, sets badge notification to alert user
+5. **Fetch request**: Popup calls `approval.getNext` RPC to get request details
+6. **Display UI**: Shows origin, event kind, content preview, and action buttons
+7. **User decides**: Clicks one of four action buttons
+8. **Resolve request**: Popup calls `approval.resolve` RPC with decision
+9. **Update policy**: If "Deny + Remember" was clicked, adds deny rule for origin+kind
+10. **Return result**: Promise in background script resolves/rejects, result flows back to dApp
+11. **Next request**: If queue has more requests, popup shows next one; otherwise closes
+
+#### User Actions
+
+| Action | Behavior | Policy Change |
+|--------|----------|---------------|
+| **Allow** | Sign event and return to dApp | None |
+| **Allow Once** | Same as Allow (alias for clarity) | None |
+| **Deny** | Reject with "user_denied" error | None |
+| **Deny + Remember** | Reject with "user_denied" error | Creates deny rule for origin+kind |
+
+#### Timeout Handling
+
+- Default timeout: 60 seconds
+- Countdown timer shown in popup UI
+- On timeout: Request auto-denied, popup closes
+- dApp receives "user_denied" error
+
+#### Cross-Browser Support
+
+The approval popup uses `browser.windows.create()` which is supported in both Chrome and Firefox:
+- Chrome MV3: Opens as popup window
+- Firefox MV2: Opens as popup window
+
+Fallback mechanism: If popup creation fails (e.g., blocked by browser), extension badge is set to "!" with orange background and title updated to prompt user to click extension icon.
+
+#### Testing Approval Flow
+
+Unit tests cover queue operations and timeout behavior:
+```bash
+npm run test:unit tests/unit/application/approval-queue.service.test.ts
+```
+
+E2E tests document expected behavior for approval scenarios:
+```bash
+npm run test:e2e tests/e2e/approval-flow.spec.ts
+```
+
+Manual testing with a Nostr web client:
+1. Build extension: `npm run build`
+2. Load extension in browser
+3. Complete onboarding to create/import a key
+4. Visit a Nostr web app (e.g., nostrudel.ninja, snort.social)
+5. Set policy for the origin to "ask" via Settings → Permissions
+6. Trigger a signing request in the web app
+7. Verify approval popup appears with correct details
+8. Test each action button and verify behavior
 
 ### Message Protocol
 
