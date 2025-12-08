@@ -21,6 +21,15 @@ const __dirname = path.dirname(__filename);
  */
 
 test.describe("NIP-07 Provider", () => {
+  /**
+   * Helper function to wait for window.nostr to be injected
+   * Uses waitForFunction to detect when window.nostr becomes available
+   */
+  async function waitForNostrInjection(page: any) {
+    await page.waitForFunction(() => typeof window.nostr !== 'undefined', {
+      timeout: 5000,
+    });
+  }
 
   test("Task 7.3: window.nostr API is injected and has getPublicKey method", async ({
     extensionContext,
@@ -34,7 +43,7 @@ test.describe("NIP-07 Provider", () => {
     await page.goto("http://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected (give it time for the content script)
-    await page.waitForTimeout(2000);
+    await waitForNostrInjection(page);
 
     // Verify window.nostr exists
     const hasNostr = await page.evaluate(() => typeof window.nostr !== 'undefined');
@@ -80,7 +89,7 @@ test.describe("NIP-07 Provider", () => {
     await page.goto("http://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected
-    await page.waitForTimeout(2000);
+    await waitForNostrInjection(page);
 
     // Verify window.nostr.signEvent exists
     const hasSignEvent = await page.evaluate(() => 
@@ -123,7 +132,7 @@ test.describe("NIP-07 Provider", () => {
     await page.goto("http://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected
-    await page.waitForTimeout(2000);
+    await waitForNostrInjection(page);
 
     // Create an unsigned event
     const unsignedEvent = {
@@ -164,7 +173,7 @@ test.describe("NIP-07 Provider", () => {
     await page.goto("http://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected
-    await page.waitForTimeout(2000);
+    await waitForNostrInjection(page);
 
     // Verify window.nostr structure
     const nostrStructure = await page.evaluate(() => {
@@ -197,7 +206,7 @@ test.describe("NIP-07 Provider", () => {
     await page.goto("http://localhost:8765/test-page.html");
     
     // Wait for content script injection
-    await page.waitForTimeout(2000);
+    await waitForNostrInjection(page);
     
     // Check that window.nostr is available
     const hasNostr = await page.evaluate(() => typeof window.nostr !== 'undefined');
@@ -216,15 +225,15 @@ test.describe("NIP-07 Provider", () => {
     await page.goto("http://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected
-    await page.waitForTimeout(2000);
+    await waitForNostrInjection(page);
 
     // Test signEvent with invalid event (should reject)
     const invalidEventError = await page.evaluate(async () => {
       try {
-        // @ts-ignore - intentionally passing invalid event
-        await window.nostr.signEvent({ invalid: 'event' });
+        // Intentionally passing invalid event to test error handling
+        await (window.nostr.signEvent as any)({ invalid: 'event' });
         return null;
-      } catch (err) {
+      } catch (err: any) {
         return err.message;
       }
     });
@@ -236,10 +245,10 @@ test.describe("NIP-07 Provider", () => {
     // Test signEvent with missing required fields
     const missingFieldsError = await page.evaluate(async () => {
       try {
-        // @ts-ignore - intentionally passing incomplete event
-        await window.nostr.signEvent({ kind: 1 });
+        // Intentionally passing incomplete event to test error handling
+        await (window.nostr.signEvent as any)({ kind: 1 });
         return null;
-      } catch (err) {
+      } catch (err: any) {
         return err.message;
       }
     });
