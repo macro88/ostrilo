@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures/extension";
+import { test, expect, Page } from "./fixtures/extension";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -25,7 +25,7 @@ test.describe("NIP-07 Provider", () => {
    * Helper function to wait for window.nostr to be injected
    * Uses waitForFunction to detect when window.nostr becomes available
    */
-  async function waitForNostrInjection(page: any) {
+  async function waitForNostrInjection(page: Page) {
     await page.waitForFunction(() => typeof window.nostr !== 'undefined', {
       timeout: 5000,
     });
@@ -231,10 +231,11 @@ test.describe("NIP-07 Provider", () => {
     const invalidEventError = await page.evaluate(async () => {
       try {
         // Intentionally passing invalid event to test error handling
-        await (window.nostr.signEvent as any)({ invalid: 'event' });
+        const invalidEvent = { invalid: 'event' } as unknown as Parameters<typeof window.nostr.signEvent>[0];
+        await window.nostr.signEvent(invalidEvent);
         return null;
-      } catch (err: any) {
-        return err.message;
+      } catch (err: unknown) {
+        return err instanceof Error ? err.message : String(err);
       }
     });
 
@@ -246,10 +247,11 @@ test.describe("NIP-07 Provider", () => {
     const missingFieldsError = await page.evaluate(async () => {
       try {
         // Intentionally passing incomplete event to test error handling
-        await (window.nostr.signEvent as any)({ kind: 1 });
+        const incompleteEvent = { kind: 1 } as unknown as Parameters<typeof window.nostr.signEvent>[0];
+        await window.nostr.signEvent(incompleteEvent);
         return null;
-      } catch (err: any) {
-        return err.message;
+      } catch (err: unknown) {
+        return err instanceof Error ? err.message : String(err);
       }
     });
 
