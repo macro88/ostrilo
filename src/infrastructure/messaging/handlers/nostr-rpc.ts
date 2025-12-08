@@ -134,6 +134,15 @@ export class NostrRpcHandler implements RpcModule {
       kind: event.kind,
     });
 
+    console.log(
+      "[NostrRpcHandler] Policy result for",
+      message.origin,
+      "kind",
+      event.kind,
+      ":",
+      policyResult
+    );
+
     if (policyResult.mode === "deny") {
       return {
         ok: false,
@@ -145,15 +154,22 @@ export class NostrRpcHandler implements RpcModule {
       // Need approval - queue the request and open popup
       if (!this.approvalQueue) {
         // No queue configured - fall back to error
+        console.log("[NostrRpcHandler] No approval queue configured!");
         return {
           ok: false,
           error: "approval_required",
         };
       }
 
+      console.log(
+        "[NostrRpcHandler] Policy requires approval, opening popup..."
+      );
+
       try {
         // Wait for user approval
         const decision = await this.requestApproval(message.origin, event);
+
+        console.log("[NostrRpcHandler] Approval decision:", decision);
 
         if (decision !== "allow") {
           return {
@@ -163,6 +179,7 @@ export class NostrRpcHandler implements RpcModule {
         }
         // Fall through to signing if approved
       } catch (error) {
+        console.error("[NostrRpcHandler] Approval error:", error);
         return {
           ok: false,
           error: error instanceof Error ? error.message : "approval_failed",
@@ -234,12 +251,25 @@ export class NostrRpcHandler implements RpcModule {
         origin,
         event,
         (decision: ApprovalDecision, _action: ApprovalAction) => {
+          console.log(
+            "[NostrRpcHandler] Request resolved with decision:",
+            decision
+          );
           resolve(decision);
         }
       );
 
+      console.log(
+        "[NostrRpcHandler] Queued approval request:",
+        pendingRequest.id
+      );
+
       // Open approval popup
       this.openApprovalPopup(pendingRequest.id).catch((err) => {
+        console.error(
+          "[NostrRpcHandler] Popup open failed, denying request:",
+          err
+        );
         // If popup fails to open, reject the request
         this.approvalQueue!.resolve(pendingRequest.id, "deny");
         reject(new Error(`Failed to open approval popup: ${err.message}`));
@@ -261,20 +291,20 @@ export class NostrRpcHandler implements RpcModule {
       )}` as `/popup.html${string}`
     );
 
-    // Calculate centered position
-    const left = Math.round((screen.width - POPUP_WIDTH) / 2);
-    const top = Math.round((screen.height - POPUP_HEIGHT) / 2);
+    console.log("[NostrRpcHandler] Opening approval popup at:", approvalUrl);
 
     try {
-      await browser.windows.create({
+      const win = await browser.windows.create({
         url: approvalUrl,
         type: "popup",
         width: POPUP_WIDTH,
         height: POPUP_HEIGHT,
-        left,
-        top,
         focused: true,
       });
+      console.log(
+        "[NostrRpcHandler] Approval popup opened, window id:",
+        win?.id
+      );
     } catch (err) {
       console.error("[NostrRpcHandler] Failed to open approval popup:", err);
       throw err;

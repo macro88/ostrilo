@@ -7,7 +7,7 @@ export default defineConfig({
   srcDir: "src",
   entrypointsDir: "extension",
   manifest: {
-    permissions: ["storage", "sidePanel"],
+    permissions: ["storage", "sidePanel", "windows"],
     // Make injected script accessible to all HTTP/HTTPS pages for NIP-07 provider
     web_accessible_resources: [
       {
