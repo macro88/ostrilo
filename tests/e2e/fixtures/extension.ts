@@ -101,3 +101,4 @@ export const test = base.extend<ExtensionFixtures>({
 });
 
 export const expect = baseExpect;
+export { Page };
