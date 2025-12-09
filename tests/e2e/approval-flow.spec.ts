@@ -60,7 +60,7 @@ test.describe("Approval Flow", () => {
     // or policy is set to ask (depending on vault state)
     const result = await page.evaluate(async (event) => {
       try {
-        await window.nostr.signEvent(event);
+        await window.nostr!.signEvent(event);
         return { success: true, error: null };
       } catch (err) {
         return { 
@@ -110,7 +110,7 @@ test.describe("Approval Flow", () => {
 
     const result = await page.evaluate(async (event) => {
       try {
-        const signed = await window.nostr.signEvent(event);
+        const signed = await window.nostr!.signEvent(event);
         return { 
           success: true, 
           error: null,
@@ -155,7 +155,7 @@ test.describe("Approval Flow", () => {
 
     const result = await page.evaluate(async (event) => {
       try {
-        await window.nostr.signEvent(event);
+        await window.nostr!.signEvent(event);
         return { success: true, error: null };
       } catch (err) {
         return { 
@@ -203,7 +203,7 @@ test.describe("Approval Flow", () => {
     // First attempt - should require approval
     const firstResult = await page.evaluate(async (event) => {
       try {
-        await window.nostr.signEvent(event);
+        await window.nostr!.signEvent(event);
         return { success: true, error: null };
       } catch (err) {
         return { 
@@ -239,7 +239,7 @@ test.describe("Approval Flow", () => {
     // within 60 seconds, the request should auto-deny
     const result = await page.evaluate(async (event) => {
       try {
-        await window.nostr.signEvent(event);
+        await window.nostr!.signEvent(event);
         return { success: true, error: null };
       } catch (err) {
         return { 
@@ -300,7 +300,7 @@ test.describe("Approval Flow", () => {
     const results = await page.evaluate(async (eventsToSign) => {
       const promises = eventsToSign.map(async (event) => {
         try {
-          await window.nostr.signEvent(event);
+          await window.nostr!.signEvent(event);
           return { success: true, error: null };
         } catch (err) {
           return { 
