@@ -141,12 +141,26 @@ export class VaultRpcHandler implements RpcModule {
       }
     }
 
-    const data = await context.vault.importKey(
-      message.keyInput,
-      message.password,
-      message.label
-    );
-    return { ok: true, data };
+    try {
+      const data = await context.vault.importKey(
+        message.keyInput,
+        message.password,
+        message.label
+      );
+      return { ok: true, data };
+    } catch (error) {
+      // Translate service errors to RPC codes
+      if (error instanceof Error) {
+        if (error.message === "key_already_exists") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.KEY_ALREADY_EXISTS,
+            details: "A key with this public key already exists",
+          };
+        }
+      }
+      throw error; // Re-throw unexpected errors
+    }
   }
 
   private async handleSelect(

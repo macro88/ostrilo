@@ -292,7 +292,7 @@ describe("RPC Router and Handlers", () => {
             .mockResolvedValue({ publicKey: "generated-key" }),
           importKey: vi.fn().mockResolvedValue({ publicKey: "imported-key" }),
           selectKey: vi.fn().mockResolvedValue(undefined),
-          sign: vi.fn().mockResolvedValue("a".repeat(128)), // 64-byte hex signature
+          sign: vi.fn().mockResolvedValue({ sigHex: "a".repeat(128), keyId: "key-1" }), // Returns object with sigHex and keyId
           listKeys: vi.fn().mockResolvedValue([
             {
               id: "key-1",

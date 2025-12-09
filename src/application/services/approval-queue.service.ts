@@ -34,6 +34,7 @@ interface QueueEntry {
 export class ApprovalQueueService {
   private queue: Map<string, QueueEntry> = new Map();
   private timeoutMs: number;
+  private timedOutRequests: Set<string> = new Set(); // Track which requests timed out
 
   constructor(timeoutMs: number = DEFAULT_TIMEOUT_MS) {
     this.timeoutMs = timeoutMs;
@@ -134,11 +135,26 @@ export class ApprovalQueueService {
       return;
     }
 
+    // Mark this request as timed out
+    this.timedOutRequests.add(requestId);
+
     // Remove from queue
     this.queue.delete(requestId);
 
     // Auto-deny on timeout (no policy change)
     entry.resolver("deny", "deny");
+  }
+
+  /**
+   * Check if a request timed out (used by handlers to return appropriate error code)
+   * @param requestId - The unique request ID
+   * @returns true if request timed out, false otherwise
+   */
+  wasTimeout(requestId: string): boolean {
+    const result = this.timedOutRequests.has(requestId);
+    // Clean up after checking
+    this.timedOutRequests.delete(requestId);
+    return result;
   }
 
   /**
