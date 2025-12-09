@@ -1,4 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
+import { RPC_ERROR_CODES } from "../error-codes";
 import { KeyIdSchema } from "../../validation/schemas.js";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 
@@ -18,7 +19,8 @@ export class StateRpcHandler implements RpcModule {
       default:
         return {
           ok: false,
-          error: `unsupported_method: ${(message as any).type}`,
+          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+          details: (message as any).type,
         };
     }
   }

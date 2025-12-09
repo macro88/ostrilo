@@ -1,4 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
+import { RPC_ERROR_CODES } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
   PasswordSchema,
@@ -42,7 +43,8 @@ export class VaultRpcHandler implements RpcModule {
       default:
         return {
           ok: false,
-          error: `unsupported_method: ${(message as any).type}`,
+          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+          details: (message as any).type,
         };
     }
   }
@@ -56,7 +58,8 @@ export class VaultRpcHandler implements RpcModule {
     if (!passwordValidation.success) {
       return {
         ok: false,
-        error: `invalid_password: ${passwordValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+        details: passwordValidation.error.issues[0]?.message,
       };
     }
 
@@ -78,7 +81,8 @@ export class VaultRpcHandler implements RpcModule {
     if (!passwordValidation.success) {
       return {
         ok: false,
-        error: `invalid_password: ${passwordValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+        details: passwordValidation.error.issues[0]?.message,
       };
     }
 
@@ -88,7 +92,8 @@ export class VaultRpcHandler implements RpcModule {
       if (!labelValidation.success) {
         return {
           ok: false,
-          error: `invalid_label: ${labelValidation.error.issues[0]?.message}`,
+          error: RPC_ERROR_CODES.INVALID_REQUEST,
+          details: labelValidation.error.issues[0]?.message,
         };
       }
     }
@@ -109,7 +114,8 @@ export class VaultRpcHandler implements RpcModule {
     if (!keyInputValidation.success) {
       return {
         ok: false,
-        error: `invalid_key_input: ${keyInputValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_KEY_INPUT,
+        details: keyInputValidation.error.issues[0]?.message,
       };
     }
 
@@ -118,7 +124,8 @@ export class VaultRpcHandler implements RpcModule {
     if (!passwordValidation.success) {
       return {
         ok: false,
-        error: `invalid_password: ${passwordValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+        details: passwordValidation.error.issues[0]?.message,
       };
     }
 
@@ -128,7 +135,8 @@ export class VaultRpcHandler implements RpcModule {
       if (!labelValidation.success) {
         return {
           ok: false,
-          error: `invalid_label: ${labelValidation.error.issues[0]?.message}`,
+          error: RPC_ERROR_CODES.INVALID_REQUEST,
+          details: labelValidation.error.issues[0]?.message,
         };
       }
     }
@@ -150,7 +158,8 @@ export class VaultRpcHandler implements RpcModule {
     if (!keyIdValidation.success) {
       return {
         ok: false,
-        error: `invalid_key_id: ${keyIdValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: keyIdValidation.error.issues[0]?.message,
       };
     }
 
@@ -167,7 +176,8 @@ export class VaultRpcHandler implements RpcModule {
     if (!hashValidation.success) {
       return {
         ok: false,
-        error: `invalid_hash: ${hashValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_HASH,
+        details: hashValidation.error.issues[0]?.message,
       };
     }
 
@@ -177,7 +187,8 @@ export class VaultRpcHandler implements RpcModule {
       if (!keyIdValidation.success) {
         return {
           ok: false,
-          error: `invalid_key_id: ${keyIdValidation.error.issues[0]?.message}`,
+          error: RPC_ERROR_CODES.INVALID_REQUEST,
+          details: keyIdValidation.error.issues[0]?.message,
         };
       }
     }

@@ -9,6 +9,9 @@ import type {
   ApprovalAction,
 } from "@/domain/types";
 
+// Re-export error codes for convenience
+export { RPC_ERROR_CODES, type RpcErrorCode } from "./error-codes";
+
 export type RpcRequest =
   | { type: "policy.evaluate"; origin: string; kind: number }
   | { type: "vault.unlock"; password: string }
@@ -39,28 +42,28 @@ export type RpcRequest =
 // NIP-07 specific response types
 export type NostrGetPublicKeyResponse =
   | { ok: true; data: { pubkey: string } }
-  | { ok: false; error: string };
+  | { ok: false; error: string; details?: string };
 
 export type NostrSignEventResponse =
   | { ok: true; data: { event: SignedEvent } }
-  | { ok: false; error: string };
+  | { ok: false; error: string; details?: string };
 
 // Approval queue response types
 export type ApprovalGetNextResponse =
   | { ok: true; data: { request: PendingRequest | null } }
-  | { ok: false; error: string };
+  | { ok: false; error: string; details?: string };
 
 export type ApprovalResolveResponse =
   | { ok: true; data: { resolved: boolean } }
-  | { ok: false; error: string };
+  | { ok: false; error: string; details?: string };
 
 export type ApprovalCountResponse =
   | { ok: true; data: { count: number } }
-  | { ok: false; error: string };
+  | { ok: false; error: string; details?: string };
 
 export type RpcResponse =
   | { ok: true; data: unknown }
-  | { ok: false; error: string };
+  | { ok: false; error: string; details?: string };
 
 export type BgEvent = { __event: string };
 

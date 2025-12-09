@@ -3,6 +3,7 @@ import { PolicyRpcHandler } from "@/infrastructure/messaging/handlers/policy-rpc
 import { VaultRpcHandler } from "@/infrastructure/messaging/handlers/vault-rpc";
 import { CryptoRpcHandler } from "@/infrastructure/messaging/handlers/crypto-rpc";
 import { SettingsRpcHandler } from "@/infrastructure/messaging/handlers/settings-rpc";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/rpc";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
 
 describe("RPC Validation", () => {
@@ -57,7 +58,7 @@ describe("RPC Validation", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toContain("invalid_origin");
+        expect(result.error).toBe(RPC_ERROR_CODES.INVALID_ORIGIN);
       }
     });
 
@@ -72,7 +73,7 @@ describe("RPC Validation", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toContain("invalid_kind");
+        expect(result.error).toBe(RPC_ERROR_CODES.INVALID_REQUEST);
       }
     });
 
@@ -110,7 +111,7 @@ describe("RPC Validation", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toContain("invalid_password");
+        expect(result.error).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
       }
     });
 
@@ -125,7 +126,7 @@ describe("RPC Validation", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toContain("invalid_key_input");
+        expect(result.error).toBe(RPC_ERROR_CODES.INVALID_KEY_INPUT);
       }
     });
 
@@ -139,7 +140,7 @@ describe("RPC Validation", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toContain("invalid_hash");
+        expect(result.error).toBe(RPC_ERROR_CODES.INVALID_HASH);
       }
     });
 
@@ -180,7 +181,7 @@ describe("RPC Validation", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toContain("invalid_password");
+        expect(result.error).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
       }
     });
 
@@ -194,7 +195,7 @@ describe("RPC Validation", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toContain("invalid_key_input");
+        expect(result.error).toBe(RPC_ERROR_CODES.INVALID_KEY_INPUT);
       }
     });
   });
@@ -216,7 +217,7 @@ describe("RPC Validation", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toContain("invalid_patch");
+        expect(result.error).toBe(RPC_ERROR_CODES.INVALID_REQUEST);
       }
     });
 
@@ -230,7 +231,7 @@ describe("RPC Validation", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toContain("invalid_patch");
+        expect(result.error).toBe(RPC_ERROR_CODES.INVALID_REQUEST);
       }
     });
 

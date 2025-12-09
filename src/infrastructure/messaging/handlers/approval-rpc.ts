@@ -1,4 +1,5 @@
 import type { RpcRequest, RpcResponse } from "@/infrastructure/messaging/rpc";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import type {
   RpcModule,
   ServiceContext,
@@ -34,7 +35,8 @@ export class ApprovalRpcHandler implements RpcModule {
       default:
         return {
           ok: false,
-          error: `unsupported_method: ${(message as any).type}`,
+          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+          details: (message as any).type,
         };
     }
   }
@@ -50,7 +52,8 @@ export class ApprovalRpcHandler implements RpcModule {
     } catch (err) {
       return {
         ok: false,
-        error:
+        error: RPC_ERROR_CODES.APPROVAL_FAILED,
+        details:
           err instanceof Error ? err.message : "Failed to get next request",
       };
     }
@@ -74,7 +77,11 @@ export class ApprovalRpcHandler implements RpcModule {
       const request = this.queue.getById(requestId);
 
       if (!request) {
-        return { ok: false, error: "Request not found" };
+        return {
+          ok: false,
+          error: RPC_ERROR_CODES.INVALID_REQUEST,
+          details: "Request not found",
+        };
       }
 
       // If deny_remember, update policy before resolving
@@ -93,7 +100,9 @@ export class ApprovalRpcHandler implements RpcModule {
     } catch (err) {
       return {
         ok: false,
-        error: err instanceof Error ? err.message : "Failed to resolve request",
+        error: RPC_ERROR_CODES.APPROVAL_FAILED,
+        details:
+          err instanceof Error ? err.message : "Failed to resolve request",
       };
     }
   }
@@ -109,7 +118,8 @@ export class ApprovalRpcHandler implements RpcModule {
     } catch (err) {
       return {
         ok: false,
-        error: err instanceof Error ? err.message : "Failed to get count",
+        error: RPC_ERROR_CODES.APPROVAL_FAILED,
+        details: err instanceof Error ? err.message : "Failed to get count",
       };
     }
   }

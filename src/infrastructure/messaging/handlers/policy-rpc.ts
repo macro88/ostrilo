@@ -1,4 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
+import { RPC_ERROR_CODES } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
   validateOriginPolicyPatch,
@@ -38,7 +39,8 @@ export class PolicyRpcHandler implements RpcModule {
       default:
         return {
           ok: false,
-          error: `unsupported_method: ${(message as any).type}`,
+          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+          details: (message as any).type,
         };
     }
   }
@@ -52,7 +54,8 @@ export class PolicyRpcHandler implements RpcModule {
     if (!originValidation.success) {
       return {
         ok: false,
-        error: `invalid_origin: ${originValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+        details: originValidation.error.issues[0]?.message,
       };
     }
 
@@ -61,7 +64,8 @@ export class PolicyRpcHandler implements RpcModule {
     if (!kindValidation.success) {
       return {
         ok: false,
-        error: `invalid_kind: ${kindValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: kindValidation.error.issues[0]?.message,
       };
     }
 
@@ -81,7 +85,8 @@ export class PolicyRpcHandler implements RpcModule {
     if (!originValidation.success) {
       return {
         ok: false,
-        error: `invalid_origin: ${originValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+        details: originValidation.error.issues[0]?.message,
       };
     }
 
@@ -90,9 +95,10 @@ export class PolicyRpcHandler implements RpcModule {
     if (!validationResult.success) {
       return {
         ok: false,
-        error: `invalid_patch: ${validationResult.error.issues
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: validationResult.error.issues
           .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-          .join(", ")}`,
+          .join(", "),
       };
     }
 
@@ -109,7 +115,8 @@ export class PolicyRpcHandler implements RpcModule {
     if (!originValidation.success) {
       return {
         ok: false,
-        error: `invalid_origin: ${originValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+        details: originValidation.error.issues[0]?.message,
       };
     }
 
@@ -118,7 +125,8 @@ export class PolicyRpcHandler implements RpcModule {
     if (!kindValidation.success) {
       return {
         ok: false,
-        error: `invalid_kind: ${kindValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: kindValidation.error.issues[0]?.message,
       };
     }
 
@@ -127,7 +135,8 @@ export class PolicyRpcHandler implements RpcModule {
     if (!modeValidation.success) {
       return {
         ok: false,
-        error: `invalid_mode: ${modeValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: modeValidation.error.issues[0]?.message,
       };
     }
 
@@ -148,7 +157,8 @@ export class PolicyRpcHandler implements RpcModule {
     if (!originValidation.success) {
       return {
         ok: false,
-        error: `invalid_origin: ${originValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+        details: originValidation.error.issues[0]?.message,
       };
     }
 
@@ -165,7 +175,8 @@ export class PolicyRpcHandler implements RpcModule {
     if (!originValidation.success) {
       return {
         ok: false,
-        error: `invalid_origin: ${originValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+        details: originValidation.error.issues[0]?.message,
       };
     }
 
@@ -182,7 +193,8 @@ export class PolicyRpcHandler implements RpcModule {
     if (!originValidation.success) {
       return {
         ok: false,
-        error: `invalid_origin: ${originValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+        details: originValidation.error.issues[0]?.message,
       };
     }
 

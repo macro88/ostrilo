@@ -1,4 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
+import { RPC_ERROR_CODES } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import type {
   SignedEvent,
@@ -43,7 +44,8 @@ export class NostrRpcHandler implements RpcModule {
       default:
         return {
           ok: false,
-          error: `unsupported_method: ${(message as any).type}`,
+          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+          details: (message as any).type,
         };
     }
   }
@@ -59,7 +61,7 @@ export class NostrRpcHandler implements RpcModule {
     if (lockState.isLocked) {
       return {
         ok: false,
-        error: "vault_locked",
+        error: RPC_ERROR_CODES.LOCKED,
       };
     }
 
@@ -70,7 +72,7 @@ export class NostrRpcHandler implements RpcModule {
     if (!selectedKey) {
       return {
         ok: false,
-        error: "no_key_selected",
+        error: RPC_ERROR_CODES.NO_KEY_SELECTED,
       };
     }
 
@@ -92,7 +94,8 @@ export class NostrRpcHandler implements RpcModule {
     if (!eventValidation.success) {
       return {
         ok: false,
-        error: `invalid_event: ${eventValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_EVENT,
+        details: eventValidation.error.issues[0]?.message,
       };
     }
 
@@ -101,7 +104,8 @@ export class NostrRpcHandler implements RpcModule {
     if (!originValidation.success) {
       return {
         ok: false,
-        error: `invalid_origin: ${originValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+        details: originValidation.error.issues[0]?.message,
       };
     }
 
@@ -110,7 +114,7 @@ export class NostrRpcHandler implements RpcModule {
     if (lockState.isLocked) {
       return {
         ok: false,
-        error: "vault_locked",
+        error: RPC_ERROR_CODES.LOCKED,
       };
     }
 
@@ -121,7 +125,7 @@ export class NostrRpcHandler implements RpcModule {
     if (!selectedKey) {
       return {
         ok: false,
-        error: "no_key_selected",
+        error: RPC_ERROR_CODES.NO_KEY_SELECTED,
       };
     }
 
@@ -146,7 +150,8 @@ export class NostrRpcHandler implements RpcModule {
     if (policyResult.mode === "deny") {
       return {
         ok: false,
-        error: "policy_denied",
+        error: RPC_ERROR_CODES.DENIED,
+        details: "policy denied",
       };
     }
 
@@ -157,7 +162,7 @@ export class NostrRpcHandler implements RpcModule {
         console.log("[NostrRpcHandler] No approval queue configured!");
         return {
           ok: false,
-          error: "approval_required",
+          error: RPC_ERROR_CODES.NEEDS_APPROVAL,
         };
       }
 
@@ -174,7 +179,8 @@ export class NostrRpcHandler implements RpcModule {
         if (decision !== "allow") {
           return {
             ok: false,
-            error: "user_denied",
+            error: RPC_ERROR_CODES.DENIED,
+            details: "user rejected",
           };
         }
         // Fall through to signing if approved
@@ -182,7 +188,8 @@ export class NostrRpcHandler implements RpcModule {
         console.error("[NostrRpcHandler] Approval error:", error);
         return {
           ok: false,
-          error: error instanceof Error ? error.message : "approval_failed",
+          error: RPC_ERROR_CODES.APPROVAL_FAILED,
+          details: error instanceof Error ? error.message : "approval failed",
         };
       }
     }
@@ -307,15 +314,18 @@ export class NostrRpcHandler implements RpcModule {
       );
     } catch (err) {
       console.error("[NostrRpcHandler] Failed to open approval popup:", err);
-      
+
       // Fallback: Set badge notification to alert user
       try {
         await this.setBadgeNotification();
         console.log("[NostrRpcHandler] Badge notification set as fallback");
       } catch (badgeErr) {
-        console.error("[NostrRpcHandler] Failed to set badge notification:", badgeErr);
+        console.error(
+          "[NostrRpcHandler] Failed to set badge notification:",
+          badgeErr
+        );
       }
-      
+
       throw err;
     }
   }
@@ -328,13 +338,13 @@ export class NostrRpcHandler implements RpcModule {
     try {
       // Set badge text to indicate pending approval
       await browser.action.setBadgeText({ text: "!" });
-      
+
       // Set badge background color to orange/warning color
       await browser.action.setBadgeBackgroundColor({ color: "#FF9500" });
-      
+
       // Set title to inform user
-      await browser.action.setTitle({ 
-        title: "Ostrilo - Approval Required (Click to open)" 
+      await browser.action.setTitle({
+        title: "Ostrilo - Approval Required (Click to open)",
       });
     } catch (err) {
       console.error("[NostrRpcHandler] Failed to set badge:", err);

@@ -1,4 +1,5 @@
 import type { RpcRequest, RpcResponse } from "./rpc";
+import { RPC_ERROR_CODES } from "./error-codes";
 import type { KeyVaultService } from "@/application/services/key-vault.service";
 import type { PolicyService } from "@/application/services/policy.service";
 import type { SettingsService } from "@/application/services/settings.service";
@@ -58,18 +59,26 @@ export class RpcRouter {
       const [namespace] = message.type.split(".");
 
       if (!namespace) {
-        return { ok: false, error: "invalid_message_type" };
+        return { ok: false, error: RPC_ERROR_CODES.INVALID_REQUEST };
       }
 
       const module = this.modules[namespace];
       if (!module) {
-        return { ok: false, error: `unknown_namespace: ${namespace}` };
+        return {
+          ok: false,
+          error: RPC_ERROR_CODES.UNKNOWN_NAMESPACE,
+          details: namespace,
+        };
       }
 
       return await module.handleRequest(message, context);
     } catch (error: any) {
       console.error("[RPC Router] Error handling request:", error);
-      return { ok: false, error: error?.message ?? String(error) };
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        details: error?.message ?? String(error),
+      };
     }
   }
 
@@ -101,7 +110,7 @@ export function createRpcMessageListener(
     // Validate message format
     if (!message || typeof message !== "object" || !("type" in message)) {
       console.log("[RPC] Invalid request format");
-      sendResponse({ ok: false, error: "invalid_request" });
+      sendResponse({ ok: false, error: RPC_ERROR_CODES.INVALID_REQUEST });
       return false;
     }
 
@@ -122,7 +131,8 @@ export function createRpcMessageListener(
       } catch (error: any) {
         const errorResult: RpcResponse = {
           ok: false,
-          error: error?.message ?? String(error),
+          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+          details: error?.message ?? String(error),
         };
         console.log(
           "[RPC] Error handling",

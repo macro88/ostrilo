@@ -1,4 +1,5 @@
 import { RpcRequest, RpcResponse, RpcHandler } from "../rpc.js";
+import { RPC_ERROR_CODES } from "../error-codes";
 import { PasswordSchema, KeyInputSchema } from "../../validation/schemas.js";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 
@@ -21,7 +22,8 @@ export class CryptoRpcHandler implements RpcModule {
       default:
         return {
           ok: false,
-          error: `unsupported_method: ${(message as any).type}`,
+          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+          details: (message as any).type,
         };
     }
   }
@@ -34,7 +36,8 @@ export class CryptoRpcHandler implements RpcModule {
     if (!passwordValidation.success) {
       return {
         ok: false,
-        error: `invalid_password: ${passwordValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+        details: passwordValidation.error.issues[0]?.message,
       };
     }
 
@@ -52,7 +55,8 @@ export class CryptoRpcHandler implements RpcModule {
     if (!keyInputValidation.success) {
       return {
         ok: false,
-        error: `invalid_key_input: ${keyInputValidation.error.issues[0]?.message}`,
+        error: RPC_ERROR_CODES.INVALID_KEY_INPUT,
+        details: keyInputValidation.error.issues[0]?.message,
       };
     }
 
