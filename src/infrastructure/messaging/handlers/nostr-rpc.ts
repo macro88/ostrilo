@@ -208,7 +208,7 @@ export class NostrRpcHandler implements RpcModule {
       // Sign the event hash with the selected key
       const signResult = await context.vault.sign(eventId, selectedKey.id);
 
-      if (!signResult || typeof signResult !== "string") {
+      if (!signResult || !signResult.sigHex) {
         return {
           ok: false,
           error: "signing_failed",
@@ -223,7 +223,7 @@ export class NostrRpcHandler implements RpcModule {
         kind: event.kind,
         tags: event.tags,
         content: event.content,
-        sig: signResult,
+        sig: signResult.sigHex,
       };
 
       return {
