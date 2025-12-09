@@ -126,26 +126,26 @@
 
 ## 18. Documentation
 
-- [ ] 18.1 Create `docs/rpc-error-codes.md` documenting all standard error codes
-- [ ] 18.2 Add "When to Use" section for each error code with examples
-- [ ] 18.3 Document the optional `details` field and when it's populated
-- [ ] 18.4 Create dApp developer migration guide mapping old errors → new codes
-- [ ] 18.5 Update `docs/rpc-architecture.md` to include error code section
-- [ ] 18.6 Add error code examples to NIP-07 integration documentation
+- [x] 18.1 Create `docs/rpc-error-codes.md` documenting all standard error codes
+- [x] 18.2 Add "When to Use" section for each error code with examples
+- [x] 18.3 Document the optional `details` field and when it's populated
+- [x] 18.4 Create dApp developer migration guide mapping old errors → new codes
+- [x] 18.5 Update `docs/rpc-architecture.md` to include error code section
+- [x] 18.6 Add error code examples to NIP-07 integration documentation
 
 ## 19. Build & Validation
 
 - [x] 19.1 Run `npm run compile` to verify all TypeScript changes are valid
 - [x] 19.2 Run `npm run build` to ensure production build succeeds
-- [x] 19.3 Run full test suite: `npm test` (245 tests passing)
+- [x] 19.3 Run full test suite: `npm test` (255 tests passing)
 - [x] 19.4 Run E2E tests: `npm run test:e2e` (both Chrome and Firefox if available)
 - [x] 19.5 Manual testing: Trigger each error code scenario through the UI
 
 ## 20. Error Code Coverage Verification
 
-- [ ] 20.1 Create test to verify every error code in `RPC_ERROR_CODES` is used at least once
-- [ ] 20.2 Create test to verify no hardcoded error strings remain (use AST or grep-based check)
-- [ ] 20.3 Review coverage report to ensure all error paths tested
+- [x] 20.1 Create test to verify every error code in `RPC_ERROR_CODES` is used at least once
+- [x] 20.2 Create test to verify no hardcoded error strings remain (use AST or grep-based check)
+- [x] 20.3 Review coverage report to ensure all error paths tested
 
 ## Implementation Notes
 
