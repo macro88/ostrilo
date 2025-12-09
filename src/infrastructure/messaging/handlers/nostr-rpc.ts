@@ -307,6 +307,37 @@ export class NostrRpcHandler implements RpcModule {
       );
     } catch (err) {
       console.error("[NostrRpcHandler] Failed to open approval popup:", err);
+      
+      // Fallback: Set badge notification to alert user
+      try {
+        await this.setBadgeNotification();
+        console.log("[NostrRpcHandler] Badge notification set as fallback");
+      } catch (badgeErr) {
+        console.error("[NostrRpcHandler] Failed to set badge notification:", badgeErr);
+      }
+      
+      throw err;
+    }
+  }
+
+  /**
+   * Set badge notification to alert user of pending approval request
+   * Fallback mechanism when popup creation fails
+   */
+  private async setBadgeNotification(): Promise<void> {
+    try {
+      // Set badge text to indicate pending approval
+      await browser.action.setBadgeText({ text: "!" });
+      
+      // Set badge background color to orange/warning color
+      await browser.action.setBadgeBackgroundColor({ color: "#FF9500" });
+      
+      // Set title to inform user
+      await browser.action.setTitle({ 
+        title: "Ostrilo - Approval Required (Click to open)" 
+      });
+    } catch (err) {
+      console.error("[NostrRpcHandler] Failed to set badge:", err);
       throw err;
     }
   }

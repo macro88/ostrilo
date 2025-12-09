@@ -63,22 +63,22 @@
 - [x] 8.1 Test popup creation on Chrome MV3 (builds successfully)
 - [x] 8.2 Test popup creation on Firefox MV2 (builds successfully)
 - [x] 8.3 Handle browser.windows.create differences between browsers (uses wxt/browser abstraction)
-- [ ] 8.4 Fallback to extension badge notification if popup fails
+- [x] 8.4 Fallback to extension badge notification if popup fails
 
 ## 9. Integration & Testing
 
 - [x] 9.1 Add unit tests for ApprovalQueueService (enqueue, resolve, timeout)
 - [x] 9.2 Add unit tests for approval RPC handlers
-- [ ] 9.3 Add E2E test: signEvent with `ask` policy → popup appears
-- [ ] 9.4 Add E2E test: click Allow → event signed and returned
-- [ ] 9.5 Add E2E test: click Deny → error returned to dApp
-- [ ] 9.6 Add E2E test: click Deny + Remember → deny rule created
-- [ ] 9.7 Add E2E test: timeout → auto-deny with timeout error
+- [x] 9.3 Add E2E test: signEvent with `ask` policy → popup appears
+- [x] 9.4 Add E2E test: click Allow → event signed and returned
+- [x] 9.5 Add E2E test: click Deny → error returned to dApp
+- [x] 9.6 Add E2E test: click Deny + Remember → deny rule created
+- [x] 9.7 Add E2E test: timeout → auto-deny with timeout error
 - [ ] 9.8 Manual test with Nostr web client requiring approval
 
 ## 10. Documentation
 
-- [ ] 10.1 Update `docs/developers_readme.md` with approval flow documentation
+- [x] 10.1 Update `docs/developers_readme.md` with approval flow documentation
 - [x] 10.2 Add user-facing help text in approval prompt explaining each action
 
 ## Dependencies
