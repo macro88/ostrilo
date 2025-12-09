@@ -18,7 +18,7 @@ Status legend:
 
 | ID | Title | Priority | Status | Notes | OpenSpec Proposal Prompt |
 |----|-------|----------|--------|-------|--------------------------|
-| NS-F-001 | NIP-07 provider | Must | ⬜ Not Started | Content script is a stub; `window.nostr.getPublicKey` and `signEvent` not implemented | "Create a proposal to implement NIP-07 provider in the content script that exposes `window.nostr.getPublicKey` and `signEvent` methods, proxying requests to the background script via message passing" |
+| NS-F-001 | NIP-07 provider | Must | ✅ Done | Content script and injected script implemented; `window.nostr` exposes `getPublicKey` and `signEvent`, message bridge forwards requests to the background, background validates requests and enforces per-origin policy; E2E tests: `tests/e2e/nip07-provider.spec.ts` | "Create a proposal to implement NIP-07 provider in the content script that exposes `window.nostr.getPublicKey` and `signEvent` methods, proxying requests to the background script via message passing" |
 | NS-F-002 | Background-only signing | Must | ✅ Done | All signing ops run in KeyVaultService via background RPC | |
 | NS-F-003 | Key import (nsec) | Must | ✅ Done | Supports nsec1 and hex formats in OnboardingImportKey | |
 | NS-F-003a | Key import (bech32 + hex) | Must | ✅ Done | parsePrivateKey handles both formats | |
@@ -84,6 +84,7 @@ Status legend:
 | NS-U-007 | Generate UI | Must | ✅ Done | OnboardingCreateKey with backup step | |
 | NS-U-008 | Password setup | Must | ✅ Done | Password strength validation | |
 | NS-U-009 | Success transition | Must | ✅ Done | Onboarding completes to HomeView | |
+| NS-U-010 | Approval prompt | Must | ✅ Done | Approval popup UI implemented (Allow, Allow Once, Deny, Deny + Remember), preview + countdown timer, request queueing and FIFO processing; E2E tests: `tests/e2e/approval-flow.spec.ts` | |
 
 ---
 
@@ -91,7 +92,7 @@ Status legend:
 
 | ID | Title | Priority | Status | Notes | OpenSpec Proposal Prompt |
 |----|-------|----------|--------|-------|--------------------------|
-| NS-P-001 | NIP-07 core | Must | ⬜ Not Started | Content script stub, no window.nostr | "Create a proposal to implement NIP-07 core functionality with getPublicKey and signEvent methods, including content script injection, message passing to background, and approval prompt UI" |
+| NS-P-001 | NIP-07 core | Must | ✅ Done | Injected provider, message bridge and background handlers implemented; signEvent/getPublicKey behavior validated (Zod, policy checks, error handling). Approval prompt integration completed by `add-approval-prompt` change; see `tests/e2e` and `openspec/changes/*` specs for details. | "Create a proposal to implement NIP-07 core functionality with getPublicKey and signEvent methods, including content script injection, message passing to background, and approval prompt UI" |
 | NS-P-002 | NIP-46 pairing | Could | ⬜ Not Started | Not implemented | "Create a proposal to implement NIP-46 remote signer support with QR code pairing and remote request approval flow" |
 | NS-P-003 | NIP-26 delegated keys | Could | ⬜ Not Started | Not implemented | "Create a proposal to implement NIP-26 delegation token creation and verification for delegated signing" |
 
@@ -102,7 +103,7 @@ Status legend:
 | ID | Title | Priority | Status | Notes | OpenSpec Proposal Prompt |
 |----|-------|----------|--------|-------|--------------------------|
 | NS-B-001 | Tooling | Must | ✅ Done | WXT + TS + React + shadcn; no nostr-tools in BG | |
-| NS-B-002 | Tests | Must | ✅ Done | Vitest unit (190 tests), Playwright E2E scaffolded | |
+| NS-B-002 | Tests | Must | ✅ Done | Vitest unit (190 tests), Playwright E2E for NIP-07 provider and approval flow included (`tests/e2e/nip07-provider.spec.ts`, `tests/e2e/approval-flow.spec.ts`) | |
 | NS-B-003 | Lint + type | Must | ✅ Done | ESLint, TS strict pass | |
 | NS-B-004 | Secrets scanning | Should | ⬜ Not Started | No CI secret scanning | "Create a proposal to add secret scanning to CI that checks repository for private key material and fails on matches" |
 | NS-B-005 | Versioning | Should | ⬜ Not Started | No CHANGELOG or semver process | "Create a proposal to establish semver versioning with automated CHANGELOG generation on release" |
@@ -123,9 +124,9 @@ Status legend:
 
 | Status | Count |
 |--------|-------|
-| ✅ Done | 37 |
+| ✅ Done | 39 |
 | 🔄 In Progress | 8 |
-| ⬜ Not Started | 15 |
+| ⬜ Not Started | 13 |
 | ❌ Removed | 0 |
 
 **Total Requirements:** 60
@@ -134,12 +135,14 @@ Status legend:
 
 ## Next Priority Items
 
-Based on MVP requirements (Must priority, Not Started):
+Based on MVP requirements (Must priority, Not Started / In Progress):
 
-1. **NS-F-001 / NS-P-001** - NIP-07 Provider (Core MVP functionality)
-2. **NS-F-015** - Error Surfacing (Developer experience)
-3. **NS-N-005** - No Remote Code Validation (Security)
-4. **NS-N-004** - Auto-lock Timer (Security)
+1. **NS-F-015** - Error Surfacing (Developer experience) — standardize RPC error codes across the RPC layer and guarantee stable errors for dApps
+2. **NS-N-005** - No Remote Code Validation (Security) — add CI validation for CSP and ensure no remote scripts or eval in builds
+3. **NS-N-004** - Auto-lock Timer (Security) — implement background timer and suspend handling to auto-lock vaults
+4. **NS-F-008** - Activity Log (UX) — connect ActivityView to persistent activity log storage and implement filtering/pagination
+
+Completed recently: **NS-F-001 / NS-P-001 (NIP-07 Provider)** and **NS-U-010 (Approval Prompt)** — see details above and `openspec/changes/add-nip07-provider` and `openspec/changes/add-approval-prompt` for specs and tests.
 
 ## Constraints & Out-of-Scope (MVP)
 

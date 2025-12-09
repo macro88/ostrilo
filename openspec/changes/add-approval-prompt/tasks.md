@@ -74,7 +74,7 @@
 - [x] 9.5 Add E2E test: click Deny → error returned to dApp
 - [x] 9.6 Add E2E test: click Deny + Remember → deny rule created
 - [x] 9.7 Add E2E test: timeout → auto-deny with timeout error
-- [ ] 9.8 Manual test with Nostr web client requiring approval
+- [x] 9.8 Manual test with Nostr web client requiring approval
 
 ## 10. Documentation
 
