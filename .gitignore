@@ -29,4 +29,4 @@ coverage
 
 # Test artifacts
 test-results/
-playwright-report/
+playwright-report/*.bak
