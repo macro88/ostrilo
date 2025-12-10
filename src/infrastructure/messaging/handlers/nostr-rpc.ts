@@ -176,6 +176,15 @@ export class NostrRpcHandler implements RpcModule {
 
         console.log("[NostrRpcHandler] Approval decision:", decision);
 
+        // Handle timeout separately
+        if (decision === "timeout") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.TIMEOUT,
+            details: "Approval request timed out",
+          };
+        }
+
         if (decision !== "allow") {
           return {
             ok: false,
@@ -208,7 +217,7 @@ export class NostrRpcHandler implements RpcModule {
       // Sign the event hash with the selected key
       const signResult = await context.vault.sign(eventId, selectedKey.id);
 
-      if (!signResult || !signResult.sigHex) {
+      if (!signResult || typeof signResult !== "string") {
         return {
           ok: false,
           error: "signing_failed",
@@ -231,11 +240,27 @@ export class NostrRpcHandler implements RpcModule {
         data: { event: signedEvent },
       };
     } catch (error) {
+      // Translate service errors to RPC codes
+      if (error instanceof Error) {
+        if (error.message === "key_locked_or_missing") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.LOCKED,
+          };
+        }
+        if (error.message === "hash_must_be_32_bytes") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.INVALID_HASH,
+            details: "Event ID must be 32 bytes",
+          };
+        }
+      }
+      // Generic signing error fallback
       return {
         ok: false,
-        error: `signing_error: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
+        error: RPC_ERROR_CODES.DENIED,
+        details: error instanceof Error ? error.message : "Signing failed",
       };
     }
   }
@@ -246,13 +271,13 @@ export class NostrRpcHandler implements RpcModule {
    *
    * @param origin - The origin of the requesting dapp
    * @param event - The unsigned event to sign
-   * @returns Promise resolving to the user's decision
+   * @returns Promise resolving to the user's decision or "timeout" if timed out
    */
   private async requestApproval(
     origin: string,
     event: UnsignedEvent
-  ): Promise<ApprovalDecision> {
-    return new Promise<ApprovalDecision>((resolve, reject) => {
+  ): Promise<ApprovalDecision | "timeout"> {
+    return new Promise<ApprovalDecision | "timeout">((resolve, reject) => {
       // Enqueue the request with a resolver callback
       const pendingRequest = this.approvalQueue!.enqueue(
         origin,
@@ -262,7 +287,16 @@ export class NostrRpcHandler implements RpcModule {
             "[NostrRpcHandler] Request resolved with decision:",
             decision
           );
-          resolve(decision);
+
+          // Check if this was a timeout
+          if (
+            decision === "deny" &&
+            this.approvalQueue!.wasTimeout(pendingRequest.id)
+          ) {
+            resolve("timeout");
+          } else {
+            resolve(decision);
+          }
         }
       );
 

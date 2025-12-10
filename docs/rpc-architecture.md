@@ -88,13 +88,42 @@ router.registerModule("newnamespace", new NewRpcHandler());
 
 ## Error Handling
 
-The router provides centralized error handling:
+The router and handlers use standardized error codes for predictable error handling. All error codes are defined in `src/infrastructure/messaging/error-codes.ts`.
 
-- **Unknown namespace**: Returns `{ ok: false, error: "unknown_namespace: X" }`
-- **Invalid message**: Returns `{ ok: false, error: "invalid_message_type" }`  
-- **Handler errors**: Returns `{ ok: false, error: error.message }`
+### Error Response Format
 
-Individual handlers should also validate inputs and return appropriate error responses.
+```typescript
+{
+  ok: false,
+  error: string,      // Standard error code from RPC_ERROR_CODES
+  details?: string    // Optional diagnostic information
+}
+```
+
+### Common Error Codes
+
+- **Unknown namespace**: Returns `RPC_ERROR_CODES.UNKNOWN_NAMESPACE` when namespace not registered
+- **Invalid message**: Returns `RPC_ERROR_CODES.INVALID_REQUEST` for malformed messages
+- **Unknown method**: Returns `RPC_ERROR_CODES.UNKNOWN_METHOD` when handler doesn't support method
+- **Locked vault**: Returns `RPC_ERROR_CODES.LOCKED` when operation requires unlocked vault
+- **Validation failures**: Returns specific codes like `INVALID_EVENT`, `INVALID_ORIGIN`, `INVALID_PASSWORD`, etc.
+
+### Using Error Codes
+
+```typescript
+import { RPC_ERROR_CODES } from '@/infrastructure/messaging/error-codes';
+
+// In handler
+if (!isValid(input)) {
+  return {
+    ok: false,
+    error: RPC_ERROR_CODES.INVALID_REQUEST,
+    details: "Input validation failed"
+  };
+}
+```
+
+For complete error code reference, see [RPC Error Codes documentation](./rpc-error-codes.md).
 
 ## Testing
 
