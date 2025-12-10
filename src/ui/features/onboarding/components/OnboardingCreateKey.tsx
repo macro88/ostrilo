@@ -61,6 +61,7 @@ export function OnboardingCreateKey({
 
     try {
       const strength = await evaluatePasswordStrength(password);
+      // Use score instead of meetsMinimum property - score of 3+ is recommended for strong passwords
       if (strength.score < 3) {
         setPasswordError("Password does not meet minimum requirements");
         return false;
