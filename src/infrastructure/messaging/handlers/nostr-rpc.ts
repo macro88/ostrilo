@@ -217,6 +217,13 @@ export class NostrRpcHandler implements RpcModule {
       // Sign the event hash with the selected key
       const signResult = await context.vault.sign(eventId, selectedKey.id);
 
+      if (!signResult || typeof signResult !== "string") {
+        return {
+          ok: false,
+          error: "signing_failed",
+        };
+      }
+
       // Construct the signed event
       const signedEvent: SignedEvent = {
         id: eventId,
@@ -280,9 +287,12 @@ export class NostrRpcHandler implements RpcModule {
             "[NostrRpcHandler] Request resolved with decision:",
             decision
           );
-          
+
           // Check if this was a timeout
-          if (decision === "deny" && this.approvalQueue!.wasTimeout(pendingRequest.id)) {
+          if (
+            decision === "deny" &&
+            this.approvalQueue!.wasTimeout(pendingRequest.id)
+          ) {
             resolve("timeout");
           } else {
             resolve(decision);

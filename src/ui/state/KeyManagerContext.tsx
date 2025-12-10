@@ -22,6 +22,7 @@ import {
   selectKey as rpcSelectKey,
 } from "@/infrastructure/messaging/client";
 import { KeyRecord } from "@/domain/types";
+import { hexToBytes, publicKeyToBech32 } from "@/domain/utils/encoding";
 
 // Secure UI-only types - no plaintext private keys
 export interface UIKeyInfo {
@@ -46,22 +47,30 @@ interface KeyManagerContextType {
   isLoading: boolean;
   selectedKeyInfo?: UIKeyInfo;
   hasKeys: boolean;
-  
+
   // Actions (all via RPC)
   lock: () => Promise<void>;
   unlock: (password: string) => Promise<boolean>;
   generateKey: (password: string, label?: string) => Promise<string>;
-  importKey: (keyInput: string, password: string, label?: string) => Promise<string>;
+  importKey: (
+    keyInput: string,
+    password: string,
+    label?: string
+  ) => Promise<string>;
   selectKey: (keyId: string) => Promise<void>;
   refreshKeys: () => Promise<void>;
 }
 
-const KeyManagerContext = createContext<KeyManagerContextType | undefined>(undefined);
+const KeyManagerContext = createContext<KeyManagerContextType | undefined>(
+  undefined
+);
 
 export function useKeyManagerContext() {
   const context = useContext(KeyManagerContext);
   if (!context) {
-    throw new Error("useKeyManagerContext must be used within KeyManagerProvider");
+    throw new Error(
+      "useKeyManagerContext must be used within KeyManagerProvider"
+    );
   }
   return context;
 }
@@ -87,7 +96,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
           getLockState(),
           listKeys(),
         ]);
-        
+
         setLockState({
           isLocked: lockStateResult.isLocked,
           selectedKeyId: lockStateResult.selectedKeyId,
@@ -99,12 +108,12 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
           id: key.id,
           label: key.label || "Unnamed",
           publicKeyHex: key.pubkey,
-          publicKeyBech32: `npub1${key.pubkey}`, // Simplified - background should provide this
+          publicKeyBech32: publicKeyToBech32(hexToBytes(key.pubkey)),
           createdAt: key.createdAt,
           lastUsedAt: key.lastUsedAt || key.createdAt, // Use createdAt as fallback
           isSelected: key.isSelected || false,
         }));
-        
+
         setKeys(uiKeys);
       } catch (error) {
         console.error("Failed to load key manager state:", error);
@@ -123,7 +132,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
         id: key.id,
         label: key.label || "Unnamed",
         publicKeyHex: key.pubkey,
-        publicKeyBech32: `npub1${key.pubkey}`, // Simplified
+        publicKeyBech32: publicKeyToBech32(hexToBytes(key.pubkey)),
         createdAt: key.createdAt,
         lastUsedAt: key.lastUsedAt || key.createdAt, // Use createdAt as fallback
         isSelected: key.isSelected || false,
@@ -165,48 +174,61 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     }
   }, []);
 
-  const generateKey = useCallback(async (password: string, label?: string): Promise<string> => {
-    try {
-      setIsLoading(true);
-      const keyRecord = await rpcGenerateKey(password, label);
-      await refreshKeys(); // Refresh to get the new key
-      return keyRecord.id; // Return just the ID
-    } catch (error) {
-      console.error("Generate key failed:", error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [refreshKeys]);
+  const generateKey = useCallback(
+    async (password: string, label?: string): Promise<string> => {
+      try {
+        setIsLoading(true);
+        const keyRecord = await rpcGenerateKey(password, label);
+        await refreshKeys(); // Refresh to get the new key
+        return keyRecord.id; // Return just the ID
+      } catch (error) {
+        console.error("Generate key failed:", error);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [refreshKeys]
+  );
 
-  const importKey = useCallback(async (keyInput: string, password: string, label?: string): Promise<string> => {
-    try {
-      setIsLoading(true);
-      const keyRecord = await rpcImportKey(keyInput, password, label);
-      await refreshKeys(); // Refresh to get the new key
-      return keyRecord.id; // Return just the ID
-    } catch (error) {
-      console.error("Import key failed:", error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [refreshKeys]);
+  const importKey = useCallback(
+    async (
+      keyInput: string,
+      password: string,
+      label?: string
+    ): Promise<string> => {
+      try {
+        setIsLoading(true);
+        const keyRecord = await rpcImportKey(keyInput, password, label);
+        await refreshKeys(); // Refresh to get the new key
+        return keyRecord.id; // Return just the ID
+      } catch (error) {
+        console.error("Import key failed:", error);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [refreshKeys]
+  );
 
-  const selectKey = useCallback(async (keyId: string) => {
-    try {
-      await rpcSelectKey(keyId);
-      setLockState((prev) => ({ ...prev, selectedKeyId: keyId }));
-      await refreshKeys(); // Refresh to update isSelected flags
-    } catch (error) {
-      console.error("Select key failed:", error);
-      throw error;
-    }
-  }, [refreshKeys]);
+  const selectKey = useCallback(
+    async (keyId: string) => {
+      try {
+        await rpcSelectKey(keyId);
+        setLockState((prev) => ({ ...prev, selectedKeyId: keyId }));
+        await refreshKeys(); // Refresh to update isSelected flags
+      } catch (error) {
+        console.error("Select key failed:", error);
+        throw error;
+      }
+    },
+    [refreshKeys]
+  );
 
   // Get selected key info (public data only)
   const selectedKeyInfo = lockState.selectedKeyId
-    ? keys.find(key => key.id === lockState.selectedKeyId)
+    ? keys.find((key) => key.id === lockState.selectedKeyId)
     : undefined;
 
   const contextValue: KeyManagerContextType = {
@@ -215,7 +237,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     isLoading,
     selectedKeyInfo,
     hasKeys: keys.length > 0,
-    
+
     // Actions
     lock,
     unlock,

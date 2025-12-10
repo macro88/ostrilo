@@ -65,10 +65,10 @@ test.describe("NIP-07 Provider", () => {
     // Test that getPublicKey rejects when vault is locked (default state)
     const error = await page.evaluate(async () => {
       try {
-        await window.nostr.getPublicKey();
+        await window.nostr!.getPublicKey();
         return null;
       } catch (err) {
-        return err.message;
+        return err instanceof Error ? err.message : String(err);
       }
     });
 
@@ -108,10 +108,10 @@ test.describe("NIP-07 Provider", () => {
     // Call signEvent - it should reject since vault is locked by default
     const error = await page.evaluate(async (event) => {
       try {
-        await window.nostr.signEvent(event);
+        await window.nostr!.signEvent(event);
         return null;
       } catch (err) {
-        return err.message;
+        return err instanceof Error ? err.message : String(err);
       }
     }, unsignedEvent);
 
@@ -145,10 +145,10 @@ test.describe("NIP-07 Provider", () => {
     // Call signEvent and expect it to fail because vault is locked
     const error = await page.evaluate(async (event) => {
       try {
-        await window.nostr.signEvent(event);
+        await window.nostr!.signEvent(event);
         return null; // Should not reach here
       } catch (err) {
-        return err.message;
+        return err instanceof Error ? err.message : String(err);
       }
     }, unsignedEvent);
 
@@ -231,8 +231,8 @@ test.describe("NIP-07 Provider", () => {
     const invalidEventError = await page.evaluate(async () => {
       try {
         // Intentionally passing invalid event to test error handling
-        const invalidEvent = { invalid: 'event' } as unknown as Parameters<typeof window.nostr.signEvent>[0];
-        await window.nostr.signEvent(invalidEvent);
+        const invalidEvent = { invalid: 'event' } as any;
+        await window.nostr!.signEvent(invalidEvent);
         return null;
       } catch (err: unknown) {
         return err instanceof Error ? err.message : String(err);
@@ -247,8 +247,8 @@ test.describe("NIP-07 Provider", () => {
     const missingFieldsError = await page.evaluate(async () => {
       try {
         // Intentionally passing incomplete event to test error handling
-        const incompleteEvent = { kind: 1 } as unknown as Parameters<typeof window.nostr.signEvent>[0];
-        await window.nostr.signEvent(incompleteEvent);
+        const incompleteEvent = { kind: 1 } as any;
+        await window.nostr!.signEvent(incompleteEvent);
         return null;
       } catch (err: unknown) {
         return err instanceof Error ? err.message : String(err);
