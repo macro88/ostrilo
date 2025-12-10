@@ -127,6 +127,13 @@ export async function signHash(hashHex: string, keyId?: string) {
   });
 }
 
+export async function exportKey(keyId?: string) {
+  return rpc<{ nsec: string; hex: string }>({
+    type: "vault.export",
+    keyId,
+  });
+}
+
 // Settings caching to prevent excessive RPC calls
 let settingsCache: {
   data: import("@/domain/types").AppSettingsV1 | undefined;

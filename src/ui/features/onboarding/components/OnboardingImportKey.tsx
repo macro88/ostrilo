@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
+import { useOnboarding } from "../hooks/useOnboarding";
 import {
   importKey as rpcImportKey,
   unlockVault,
@@ -34,6 +35,7 @@ export function OnboardingImportKey({
   onComplete,
 }: OnboardingImportKeyProps) {
   const { isLoading } = useKeyManager();
+  const { markOnboardingComplete } = useOnboarding();
   const [currentStep, setCurrentStep] = useState<ImportStep>("import");
   const [backupChecked, setBackupChecked] = useState(false);
 
@@ -395,6 +397,7 @@ export function OnboardingImportKey({
         <Button
           onClick={async () => {
             if (!backupChecked) return;
+            await markOnboardingComplete();
             onComplete();
           }}
           disabled={!backupChecked}

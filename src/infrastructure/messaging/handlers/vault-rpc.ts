@@ -11,7 +11,7 @@ import {
 
 /**
  * RPC handler for vault-related operations
- * Handles: vault.unlock, vault.lock, vault.generate, vault.import, vault.select, vault.sign, keys.list
+ * Handles: vault.unlock, vault.lock, vault.generate, vault.import, vault.select, vault.sign, vault.export, keys.list
  */
 export class VaultRpcHandler implements RpcModule {
   async handleRequest(
@@ -36,6 +36,9 @@ export class VaultRpcHandler implements RpcModule {
 
       case "vault.sign":
         return this.handleSign(message, context);
+
+      case "vault.export":
+        return this.handleExport(message, context);
 
       case "keys.list":
         return this.handleListKeys(context);
@@ -208,6 +211,26 @@ export class VaultRpcHandler implements RpcModule {
     }
 
     const data = await context.vault.sign(message.hashHex, message.keyId);
+    return { ok: true, data };
+  }
+
+  private async handleExport(
+    message: Extract<RpcRequest, { type: "vault.export" }>,
+    context: ServiceContext
+  ): Promise<RpcResponse> {
+    // Validate key ID if provided
+    if (message.keyId !== undefined) {
+      const keyIdValidation = KeyIdSchema.safeParse(message.keyId);
+      if (!keyIdValidation.success) {
+        return {
+          ok: false,
+          error: RPC_ERROR_CODES.INVALID_REQUEST,
+          details: keyIdValidation.error.issues[0]?.message,
+        };
+      }
+    }
+
+    const data = await context.vault.exportKey(message.keyId);
     return { ok: true, data };
   }
 
