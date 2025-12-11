@@ -19,6 +19,7 @@ export type RpcRequest =
   | { type: "vault.generate"; password: string; label?: string }
   | { type: "vault.import"; keyInput: string; password: string; label?: string }
   | { type: "vault.select"; id: string }
+  | { type: "vault.export"; keyId?: string }
   | { type: "keys.list" }
   | { type: "state.getLock" }
   | { type: "vault.sign"; hashHex: string; keyId?: string }

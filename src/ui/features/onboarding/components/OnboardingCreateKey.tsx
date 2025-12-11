@@ -8,6 +8,7 @@ import {
   generateKey as rpcGenerateKey,
   unlockVault,
   evaluatePasswordStrength,
+  exportKey,
 } from "@/infrastructure/messaging/client";
 import { useOnboarding } from "../hooks/useOnboarding";
 import {
@@ -16,6 +17,10 @@ import {
   ArrowRight,
   CheckCircle,
   Fingerprint,
+  Copy,
+  Download,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 interface OnboardingCreateKeyProps {
@@ -36,6 +41,12 @@ export function OnboardingCreateKey({
   const [isGenerating, setIsGenerating] = useState(false);
   const [backupChecked, setBackupChecked] = useState(false);
   const [step, setStep] = useState<"input" | "backup">("input");
+  const [privateKey, setPrivateKey] = useState<{
+    nsec: string;
+    hex: string;
+  } | null>(null);
+  const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const validatePassword = async () => {
     if (!password) {
@@ -50,7 +61,8 @@ export function OnboardingCreateKey({
 
     try {
       const strength = await evaluatePasswordStrength(password);
-      if (strength.score < 3) { // Use score instead of meetsMinimum property
+      // Use score instead of meetsMinimum property - score of 3+ is recommended for strong passwords
+      if (strength.score < 3) {
         setPasswordError("Password does not meet minimum requirements");
         return false;
       }
@@ -77,6 +89,9 @@ export function OnboardingCreateKey({
       await rpcGenerateKey(password, keyName.trim());
       // Immediately unlock session so user can proceed
       await unlockVault(password);
+      // Export the private key for backup
+      const exported = await exportKey();
+      setPrivateKey(exported);
       setStep("backup");
     } catch (error) {
       setPasswordError(
@@ -85,6 +100,38 @@ export function OnboardingCreateKey({
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleCopyKey = async () => {
+    if (!privateKey) return;
+    try {
+      await navigator.clipboard.writeText(privateKey.nsec);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy key:", error);
+    }
+  };
+
+  const handleDownloadKey = () => {
+    if (!privateKey) return;
+    const keyData = {
+      name: keyName,
+      privateKey: privateKey.nsec,
+      privateKeyHex: privateKey.hex,
+      createdAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(keyData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ostrilo-key-${keyName.replace(/\s+/g, "-")}-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -130,8 +177,8 @@ export function OnboardingCreateKey({
                       Backup Reminder
                     </div>
                     <div className="text-blue-600">
-                      You can backup your private key later from Settings →
-                      Export Key. Keep your password safe!
+                      After creating your key, you will be shown your private
+                      key for backup. Keep your password safe!
                     </div>
                   </div>
                 </div>
@@ -161,10 +208,88 @@ export function OnboardingCreateKey({
               <CheckCircle className="h-12 w-12 mx-auto text-green-500" />
               <h2 className="text-2xl font-bold">Backup Your Key</h2>
               <p className="text-muted-foreground">
-                Make sure you’ve safely backed up your key. You can export it
-                later from Settings → Export Key.
+                Save your private key somewhere safe. You'll need it to restore
+                your account if you lose access.
               </p>
             </div>
+
+            {/* Private key display */}
+            {privateKey && (
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="privateKey">
+                    Private Key (nsec format)
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="privateKey"
+                      type={showPrivateKey ? "text" : "password"}
+                      value={privateKey.nsec}
+                      readOnly
+                      className="pr-10 font-mono text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPrivateKey(!showPrivateKey)}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                    >
+                      {showPrivateKey ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleCopyKey}
+                    className="flex-1"
+                  >
+                    {copySuccess ? (
+                      <>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy Key
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadKey}
+                    className="flex-1"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Backup
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Security warning */}
+            <div className="p-4 bg-amber-50 dark:bg-amber-950 border-2 border-amber-200 dark:border-amber-800 rounded-lg">
+              <div className="flex items-start gap-3">
+                <Key className="h-5 w-5 text-amber-600 mt-0.5" />
+                <div className="text-sm">
+                  <div className="font-medium text-amber-600 mb-1">
+                    Keep This Safe
+                  </div>
+                  <div className="text-amber-600">
+                    Anyone with access to your private key can control your
+                    Nostr identity. Never share it with anyone and store it
+                    securely.
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-start space-x-2 p-3 border rounded">
               <input
                 id="backupConfirm"
@@ -174,7 +299,8 @@ export function OnboardingCreateKey({
                 onChange={(e) => setBackupChecked(e.target.checked)}
               />
               <Label htmlFor="backupConfirm" className="text-sm">
-                I have safely backed up my key.
+                I have safely backed up my private key and understand that I
+                cannot recover it if I lose it.
               </Label>
             </div>
             <div className="flex space-x-3">

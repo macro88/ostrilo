@@ -291,4 +291,18 @@ export class KeyVaultService {
       .join("");
     return { sigHex, keyId: id };
   }
+
+  /**
+   * Export private key in nsec bech32 format
+   * Requires vault to be unlocked
+   */
+  async exportKey(keyId?: string): Promise<{ nsec: string; hex: string }> {
+    const { sk } = this.ensureUnlockedKey(keyId);
+    // Convert to nsec bech32 format
+    const words = bech32.toWords(sk);
+    const nsec = bech32.encode("nsec", words);
+    // Also provide hex format
+    const hex = this.toHex(sk);
+    return { nsec, hex };
+  }
 }
