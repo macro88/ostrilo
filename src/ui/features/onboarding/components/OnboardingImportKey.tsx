@@ -39,8 +39,9 @@ export function OnboardingImportKey({
   const [currentStep, setCurrentStep] = useState<ImportStep>("import");
   const [backupChecked, setBackupChecked] = useState(false);
 
-  // Import state - Use ref for private key to avoid storing in React state
+  // Import state - Use refs to avoid storing secret in React state
   const privateKeyRef = useRef<HTMLInputElement>(null);
+  const privateKeyValueRef = useRef<string | null>(null);
   const [keyName, setKeyName] = useState("");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [importError, setImportError] = useState("");
@@ -68,6 +69,7 @@ export function OnboardingImportKey({
       // Convert array back to Uint8Array since RPC returns arrays
       const parsedKey = new Uint8Array(parsed);
       setParsedKey(parsedKey);
+      privateKeyValueRef.current = keyInput;
       setImportError("");
       return true;
     } catch (error) {
@@ -113,7 +115,7 @@ export function OnboardingImportKey({
   const handleSetPassword = async () => {
     if (!(await validatePassword()) || !parsedKey) return;
 
-    const keyInput = privateKeyRef.current?.value.trim();
+    const keyInput = privateKeyValueRef.current;
     if (!keyInput) {
       setPasswordError("Private key is no longer available");
       return;
@@ -127,6 +129,8 @@ export function OnboardingImportKey({
       if (privateKeyRef.current) {
         privateKeyRef.current.value = "";
       }
+      privateKeyValueRef.current = null;
+      setParsedKey(null);
 
       setCurrentStep("success");
     } catch (error) {
