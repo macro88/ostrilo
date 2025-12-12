@@ -27,7 +27,7 @@
 - [x] Implement `handleGetRecent()` method
 - [x] Implement `handleFilterBy()` method
 - [x] Implement `handleClear()` method
-- [ ] Add Zod schemas for activity request validation in `validation/schemas.ts`
+- [x] Add Zod schemas for activity request validation in `validation/schemas.ts`
 
 ### Phase 4: Background Integration
 - [x] Instantiate `ActivityLogService` in `src/extension/background.ts`

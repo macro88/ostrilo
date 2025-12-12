@@ -176,3 +176,39 @@ export const validateUnsignedEvent = (data: unknown) =>
 
 export const validateSignedEvent = (data: unknown) =>
   SignedEventSchema.safeParse(data);
+
+// ============================================
+// Activity Log Validation Schemas
+// ============================================
+
+/**
+ * Activity log request validation schemas
+ * For runtime validation of activity.* RPC requests
+ */
+
+export const ActivityGetRecentRequestSchema = z.object({
+  limit: z.number().int().min(1).max(100).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+
+export const ActivityFilterByRequestSchema = z.object({
+  origin: OriginSchema.optional(),
+  kind: EventKindSchema.optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+
+// Infer types from schemas
+export type ActivityGetRecentRequest = z.infer<
+  typeof ActivityGetRecentRequestSchema
+>;
+export type ActivityFilterByRequest = z.infer<
+  typeof ActivityFilterByRequestSchema
+>;
+
+// Export validation functions
+export const validateActivityGetRecentRequest = (data: unknown) =>
+  ActivityGetRecentRequestSchema.safeParse(data);
+
+export const validateActivityFilterByRequest = (data: unknown) =>
+  ActivityFilterByRequestSchema.safeParse(data);
