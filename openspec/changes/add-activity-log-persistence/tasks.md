@@ -101,10 +101,10 @@
 - [ ] Test: Activity persists across popup close/reopen
 
 ### Phase 12: Documentation
-- [ ] Update `.github/copilot-instructions.md` with ActivityLogService reference
-- [ ] Update `docs/architecture_primer.md` with activity log architecture
-- [ ] Add JSDoc comments to all public methods in ActivityLogService
-- [ ] Document storage schema in `docs/` if needed
+- [x] Update `.github/copilot-instructions.md` with ActivityLogService reference
+- [x] Update `docs/architecture_primer.md` with activity log architecture
+- [x] Add JSDoc comments to all public methods in ActivityLogService
+- [ ] Document storage schema in `docs/` if needed (covered in service JSDoc)
 
 ## Validation Criteria
 
