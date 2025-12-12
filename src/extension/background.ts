@@ -8,6 +8,7 @@ import {
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import { PolicyService } from "@/application/services/policy.service";
 import { SettingsService } from "@/application/services/settings.service";
+import { ActivityLogService } from "@/application/services/activity-log.service";
 import {
   RpcRouter,
   createRpcMessageListener,
@@ -20,6 +21,7 @@ import {
   StateRpcHandler,
   NostrRpcHandler,
   ApprovalRpcHandler,
+  ActivityRpcHandler,
 } from "@/infrastructure/messaging/handlers";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 
@@ -34,12 +36,14 @@ export default defineBackground(() => {
   );
   const policy = new PolicyService(storage);
   const settings = new SettingsService(storage);
+  const activityLog = new ActivityLogService(storage.local);
 
   // Create service context
   const serviceContext = {
     vault,
     policy,
     settings,
+    activityLog,
   };
 
   // Create approval queue service
@@ -50,11 +54,12 @@ export default defineBackground(() => {
   router.registerModule("vault", new VaultRpcHandler());
   router.registerModule("policy", new PolicyRpcHandler());
   router.registerModule("settings", new SettingsRpcHandler());
-  router.registerModule("crypto", new CryptoRpcHandler());
-  router.registerModule("state", new StateRpcHandler());
+  router.registerModule("crypto", new CryptoRpcHandler()); // Crypto utility operations
+  router.registerModule("state", new StateRpcHandler()); // State queries (lock status, etc.)
   router.registerModule("keys", new VaultRpcHandler()); // keys.list is handled by VaultRpcHandler
   router.registerModule("nostr", new NostrRpcHandler(approvalQueue)); // NIP-07 operations with approval
   router.registerModule("approval", new ApprovalRpcHandler(approvalQueue)); // Approval queue operations
+  router.registerModule("activity", new ActivityRpcHandler()); // Activity log operations
 
   console.log(
     "[Background] Registered RPC modules:",

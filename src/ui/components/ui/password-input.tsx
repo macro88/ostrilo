@@ -8,8 +8,7 @@ import { Eye, EyeOff, Shield, Check, X } from "lucide-react";
 interface PasswordStrength {
   score: number;
   feedback: string[];
-  warning: string;
-  meetsMinimum: boolean; // Add this property that was used in the component
+  meetsMinimum: boolean;
 }
 
 interface PasswordInputProps {
@@ -45,14 +44,13 @@ export function PasswordInput({
       return;
     }
 
-    evaluatePasswordStrength(value).then(result => {
-      setStrength({
-        ...result,
-        meetsMinimum: result.score >= 3 // Define minimum strength requirement
+    evaluatePasswordStrength(value)
+      .then((result) => {
+        setStrength(result);
+      })
+      .catch(() => {
+        setStrength(null);
       });
-    }).catch(() => {
-      setStrength(null);
-    });
   }, [showStrengthMeter, value]);
 
   const confirmError = useMemo(() => {

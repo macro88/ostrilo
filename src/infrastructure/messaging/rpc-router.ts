@@ -3,6 +3,7 @@ import { RPC_ERROR_CODES } from "./error-codes";
 import type { KeyVaultService } from "@/application/services/key-vault.service";
 import type { PolicyService } from "@/application/services/policy.service";
 import type { SettingsService } from "@/application/services/settings.service";
+import type { ActivityLogService } from "@/application/services/activity-log.service";
 
 /**
  * Service context passed to RPC handlers containing all application services
@@ -11,6 +12,7 @@ export interface ServiceContext {
   vault: KeyVaultService;
   policy: PolicyService;
   settings: SettingsService;
+  activityLog: ActivityLogService;
 }
 
 /**

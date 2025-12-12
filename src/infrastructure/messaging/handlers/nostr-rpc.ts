@@ -148,6 +148,14 @@ export class NostrRpcHandler implements RpcModule {
     );
 
     if (policyResult.mode === "deny") {
+      // Record denial in activity log
+      await context.activityLog.addEntry({
+        origin: message.origin,
+        kind: event.kind,
+        decision: "deny",
+        contentPreview: event.content.substring(0, 100),
+      });
+
       return {
         ok: false,
         error: RPC_ERROR_CODES.DENIED,
@@ -178,6 +186,14 @@ export class NostrRpcHandler implements RpcModule {
 
         // Handle timeout separately
         if (decision === "timeout") {
+          // Record timeout as denial
+          await context.activityLog.addEntry({
+            origin: message.origin,
+            kind: event.kind,
+            decision: "deny",
+            contentPreview: event.content.substring(0, 100),
+          });
+
           return {
             ok: false,
             error: RPC_ERROR_CODES.TIMEOUT,
@@ -186,6 +202,14 @@ export class NostrRpcHandler implements RpcModule {
         }
 
         if (decision !== "allow") {
+          // Record user denial
+          await context.activityLog.addEntry({
+            origin: message.origin,
+            kind: event.kind,
+            decision: "deny",
+            contentPreview: event.content.substring(0, 100),
+          });
+
           return {
             ok: false,
             error: RPC_ERROR_CODES.DENIED,
@@ -217,7 +241,7 @@ export class NostrRpcHandler implements RpcModule {
       // Sign the event hash with the selected key
       const signResult = await context.vault.sign(eventId, selectedKey.id);
 
-      if (!signResult || typeof signResult !== "string") {
+      if (!signResult || !signResult.sigHex) {
         return {
           ok: false,
           error: "signing_failed",
@@ -234,6 +258,15 @@ export class NostrRpcHandler implements RpcModule {
         content: event.content,
         sig: signResult.sigHex,
       };
+
+      // Record successful signing in activity log
+      await context.activityLog.addEntry({
+        origin: message.origin,
+        kind: event.kind,
+        decision: "allow",
+        contentPreview: event.content.substring(0, 100),
+        keyId: selectedKey.id,
+      });
 
       return {
         ok: true,

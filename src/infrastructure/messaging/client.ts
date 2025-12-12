@@ -218,7 +218,7 @@ export async function policyRemoveOrigin(origin: string) {
 }
 
 export async function evaluatePasswordStrength(password: string) {
-  return rpc<{ score: number; feedback: string[]; warning: string }>({
+  return rpc<{ score: number; feedback: string[]; meetsMinimum: boolean }>({
     type: "crypto.evaluatePassword",
     password,
   });
@@ -251,4 +251,41 @@ export async function resolveApprovalRequest(
 
 export async function getApprovalCount() {
   return rpc<{ count: number }>({ type: "approval.count" });
+}
+
+// Activity log operations
+export async function activityGetRecent(options?: {
+  limit?: number;
+  offset?: number;
+}) {
+  return rpc<{
+    entries: import("@/domain/types").ActivityLogEntry[];
+    total: number;
+  }>({
+    type: "activity.getRecent",
+    limit: options?.limit,
+    offset: options?.offset,
+  });
+}
+
+export async function activityFilterBy(filters: {
+  origin?: string;
+  kind?: number;
+  limit?: number;
+  offset?: number;
+}) {
+  return rpc<{
+    entries: import("@/domain/types").ActivityLogEntry[];
+    total: number;
+  }>({
+    type: "activity.filterBy",
+    origin: filters.origin,
+    kind: filters.kind,
+    limit: filters.limit,
+    offset: filters.offset,
+  });
+}
+
+export async function activityClear() {
+  return rpc<null>({ type: "activity.clear" });
 }

@@ -127,7 +127,10 @@ export function OnboardingCreateKey({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ostrilo-key-${keyName.replace(/\s+/g, "-")}-${Date.now()}.json`;
+    a.download = `ostrilo-key-${keyName.replace(
+      /\s+/g,
+      "-"
+    )}-${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -217,9 +220,7 @@ export function OnboardingCreateKey({
             {privateKey && (
               <div className="space-y-3">
                 <div>
-                  <Label htmlFor="privateKey">
-                    Private Key (nsec format)
-                  </Label>
+                  <Label htmlFor="privateKey">Private Key (nsec format)</Label>
                   <div className="relative">
                     <Input
                       id="privateKey"

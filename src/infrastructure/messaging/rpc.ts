@@ -7,6 +7,8 @@ import type {
   SignedEvent,
   PendingRequest,
   ApprovalAction,
+  ActivityLogEntry,
+  ActivityFilters,
 } from "@/domain/types";
 
 // Re-export error codes for convenience
@@ -38,7 +40,17 @@ export type RpcRequest =
   // Approval queue operations
   | { type: "approval.getNext" }
   | { type: "approval.resolve"; requestId: string; action: ApprovalAction }
-  | { type: "approval.count" };
+  | { type: "approval.count" }
+  // Activity log operations
+  | { type: "activity.getRecent"; limit?: number; offset?: number }
+  | {
+      type: "activity.filterBy";
+      origin?: string;
+      kind?: number;
+      limit?: number;
+      offset?: number;
+    }
+  | { type: "activity.clear" };
 
 // NIP-07 specific response types
 export type NostrGetPublicKeyResponse =
@@ -49,17 +61,21 @@ export type NostrSignEventResponse =
   | { ok: true; data: { event: SignedEvent } }
   | { ok: false; error: string; details?: string };
 
-// Approval queue response types
-export type ApprovalGetNextResponse =
-  | { ok: true; data: { request: PendingRequest | null } }
-  | { ok: false; error: string; details?: string };
-
-export type ApprovalResolveResponse =
-  | { ok: true; data: { resolved: boolean } }
-  | { ok: false; error: string; details?: string };
-
 export type ApprovalCountResponse =
   | { ok: true; data: { count: number } }
+  | { ok: false; error: string; details?: string };
+
+// Activity log response types
+export type ActivityGetRecentResponse =
+  | { ok: true; data: { entries: ActivityLogEntry[]; total: number } }
+  | { ok: false; error: string; details?: string };
+
+export type ActivityFilterResponse =
+  | { ok: true; data: { entries: ActivityLogEntry[]; total: number } }
+  | { ok: false; error: string; details?: string };
+
+export type ActivityClearResponse =
+  | { ok: true; data: null }
   | { ok: false; error: string; details?: string };
 
 export type RpcResponse =

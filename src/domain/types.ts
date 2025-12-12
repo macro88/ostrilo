@@ -402,3 +402,48 @@ export interface PendingRequest {
   /** Unix timestamp when the request will auto-deny (seconds) */
   timeoutAt: number;
 }
+
+// ============================================
+// Activity Log Types
+// ============================================
+
+/**
+ * Activity log entry tracking signing operations
+ * Stored in local storage for audit trail
+ */
+export interface ActivityLogEntry {
+  /** Unique entry ID (UUID) */
+  id: string;
+  /** Unix timestamp in seconds */
+  timestamp: number;
+  /** Origin of the dApp (e.g., "https://primal.net") */
+  origin: string;
+  /** Nostr event kind number */
+  kind: number;
+  /** User decision: "allow" | "deny" */
+  decision: "allow" | "deny";
+  /** Content preview (first 100 chars, sanitized) */
+  contentPreview?: string;
+  /** Key ID used for signing (if allowed) */
+  keyId?: string;
+}
+
+/**
+ * Activity log storage schema
+ * Stored in browser.storage.local under key "activityLog"
+ */
+export interface ActivityLogStorage {
+  __version: "activityLog.v1";
+  maxEntries: number;
+  entries: ActivityLogEntry[];
+}
+
+/**
+ * Filters for querying activity log entries
+ */
+export interface ActivityFilters {
+  origin?: string;
+  kind?: number;
+  limit?: number;
+  offset?: number;
+}
