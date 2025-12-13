@@ -3,56 +3,56 @@
 ## Phase 1: Core Infrastructure (Domain & Application Layers)
 
 ### Task 1.1: Define ProfileMetadata Domain Types
-**Status:** Not Started  
+**Status:** ✅ Completed  
 **Estimated Effort:** 2 hours  
 **Dependencies:** None  
 **Verification:** Type definitions compile, exports verified
 
-- [ ] Create `src/domain/profile/types.ts`
-- [ ] Define `ProfileMetadata` interface with NIP-01 fields (name, about, picture, banner, website, nip05, lud16, lud06, display_name)
-- [ ] Define `ProfileCacheEntry` interface (pubkey, metadata, fetchedAt, ttl, eventId?, createdAt?)
-- [ ] Add Zod validation schema for ProfileMetadata with constraints:
+- [x] Create `src/domain/profile/types.ts`
+- [x] Define `ProfileMetadata` interface with NIP-01 fields (name, about, picture, banner, website, nip05, lud16, lud06, display_name)
+- [x] Define `ProfileCacheEntry` interface (pubkey, metadata, fetchedAt, ttl, eventId?, createdAt?)
+- [x] Add Zod validation schema for ProfileMetadata with constraints:
   - `name` max 50 chars
   - `about` max 500 chars
   - URL fields validated with URL constructor
   - `nip05` and `lud16` match email-like format
-- [ ] Export types from `src/domain/types.ts`
-- [ ] Run `npm run compile` to verify type definitions
+- [x] Export types from `src/domain/types.ts`
+- [x] Run `npm run compile` to verify type definitions
 
 ---
 
 ### Task 1.2: Define INostrRelay Port Interface
-**Status:** Not Started  
+**Status:** ✅ Completed  
 **Estimated Effort:** 1 hour  
 **Dependencies:** None  
 **Verification:** Interface compiles, port abstraction clean
 
-- [ ] Create `src/application/ports/relay.ts`
-- [ ] Define `INostrRelay` interface with methods:
+- [x] Create `src/application/ports/relay.ts`
+- [x] Define `INostrRelay` interface with methods:
   - `subscribe(filter: NostrFilter, onEvent: (e: NostrEvent) => void, onEOSE?: () => void): string`
   - `publish(event: NostrEvent): Promise<void>`
   - `close(subId: string): void`
   - `disconnect(): void`
-- [ ] Define `NostrFilter` type (kinds, authors, ids, since, until, limit, etc.)
-- [ ] Define `NostrEvent` type (id, pubkey, created_at, kind, tags, content, sig)
-- [ ] Export interface from `src/application/ports/index.ts` (create if needed)
-- [ ] Run `npm run compile`
+- [x] Define `NostrFilter` type (kinds, authors, ids, since, until, limit, etc.)
+- [x] Define `NostrEvent` type (id, pubkey, created_at, kind, tags, content, sig)
+- [x] Export interface from `src/application/ports/index.ts` (create if needed)
+- [x] Run `npm run compile`
 
 ---
 
 ### Task 1.3: Implement ProfileService
-**Status:** Not Started  
+**Status:** ✅ Completed  
 **Estimated Effort:** 6 hours  
 **Dependencies:** Task 1.1, Task 1.2  
 **Verification:** Service compiles, unit tests pass
 
-- [ ] Create `src/application/services/profile.service.ts`
-- [ ] Implement constructor accepting:
+- [x] Create `src/application/services/profile.service.ts`
+- [x] Implement constructor accepting:
   - `storage: StorageSuite`
   - `relay: INostrRelay`
   - `keyVault: KeyVaultService`
-- [ ] Implement `getProfile(pubkey: string, forceFetch = false): Promise<ProfileMetadata | null>`:
-  - Check cache in storage (`profileCache:${pubkey}`)
+- [x] Implement `getProfile(pubkey: string, forceFetch = false): Promise<ProfileMetadata | null>`:
+  - Check cache in storage (single `profileCache` object)
   - If cached and not expired (age <= ttl), return metadata
   - If forceFetch or cache miss/expired, query relays
   - Subscribe to kind:0 events by author (pubkey)
@@ -61,31 +61,32 @@
   - Parse content as JSON, validate with Zod
   - Cache result with current timestamp and default TTL (3600s)
   - Return ProfileMetadata or null
-- [ ] Implement `getAllProfiles(): Promise<Map<string, ProfileMetadata>>`:
+- [x] Implement `getAllProfiles(): Promise<Map<string, ProfileMetadata>>`:
   - Fetch all key pubkeys from KeyVaultService
   - Call `getProfile(pubkey)` for each
   - Return Map of pubkey → metadata (omit nulls)
-- [ ] Implement `updateProfile(metadata: ProfileMetadata): Promise<void>`:
+- [x] Implement `updateProfile(metadata: ProfileMetadata): Promise<void>`:
   - Validate metadata with Zod schema
   - Get selected key pubkey from KeyVaultService
   - Construct unsigned kind:0 event (content = JSON.stringify(metadata), created_at = now)
-  - Sign via KeyVaultService
+  - Sign via KeyVaultService.signEvent() (added this method)
   - Publish to relays via INostrRelay.publish()
   - Update cache optimistically
   - Resolve on success, reject on publish error
-- [ ] Implement `clearCache(pubkey?: string): Promise<void>`:
-  - If pubkey provided, remove `profileCache:${pubkey}`
-  - If not provided, remove all `profileCache:*` entries
-- [ ] Implement cache eviction logic (LRU, max 50 entries):
+- [x] Implement `clearCache(pubkey?: string): Promise<void>`:
+  - If pubkey provided, remove from cache object
+  - If not provided, remove entire `profileCache` storage key
+- [x] Implement cache eviction logic (LRU, max 50 entries):
   - On cache write, check total profileCache entries
   - If >= 50, find oldest by `fetchedAt`, evict
-- [ ] Export ProfileService from `src/application/services/index.ts`
-- [ ] Run `npm run compile`
+- [x] Export ProfileService from `src/application/services/index.ts`
+- [x] Run `npm run compile`
+- [x] Added KeyVaultService.signEvent() method for NIP-01 event signing
 
 ---
 
 ### Task 1.4: Write ProfileService Unit Tests
-**Status:** Not Started  
+**Status:** ⏸️ Deferred  
 **Estimated Effort:** 4 hours  
 **Dependencies:** Task 1.3  
 **Verification:** All tests pass with `npm run test:unit`
@@ -113,54 +114,55 @@
 ## Phase 2: Infrastructure Layer (Relay Adapter)
 
 ### Task 2.1: Implement NostrRelayAdapter
-**Status:** Not Started  
+**Status:** ✅ Completed  
 **Estimated Effort:** 8 hours  
 **Dependencies:** Task 1.2  
 **Verification:** Adapter compiles, integration tests pass
 
-- [ ] Create `src/infrastructure/relay/nostr-relay.adapter.ts`
-- [ ] Implement `NostrRelayAdapter` class implementing `INostrRelay`
-- [ ] Constructor accepts `relayUrl: string`
-- [ ] Implement `connect(): Promise<void>`:
+- [x] Create `src/infrastructure/relay/nostr-relay.adapter.ts`
+- [x] Implement `NostrRelayAdapter` class implementing `INostrRelay`
+- [x] Constructor accepts `relayUrl: string`
+- [x] Implement `connect(): Promise<void>`:
   - Create WebSocket to relayUrl
   - Wait for 'open' event or timeout (10s)
   - Register message handler
   - Resolve on open, reject on error/timeout
-- [ ] Implement `subscribe(filter, onEvent, onEOSE)`:
+- [x] Implement `subscribe(filter, onEvent, onEOSE)`:
   - Generate unique subscription ID (crypto.randomUUID())
   - Store handler in internal map: `subscriptions.set(subId, {onEvent, onEOSE})`
   - Send `["REQ", subId, filter]` via WebSocket
   - Return subId
-- [ ] Implement message handler:
+- [x] Implement message handler:
   - Parse incoming message as JSON
   - If `["EVENT", subId, event]`, call `subscriptions.get(subId)?.onEvent(event)`
   - If `["EOSE", subId]`, call `subscriptions.get(subId)?.onEOSE?.()`
   - If `["OK", eventId, success, message]`, resolve/reject pending publish
-- [ ] Implement `publish(event)`:
+- [x] Implement `publish(event)`:
   - Send `["EVENT", event]` via WebSocket
   - Return promise that resolves on OK true, rejects on OK false or 5s timeout
   - Store pending publish in map with eventId key
-- [ ] Implement `close(subId)`:
+- [x] Implement `close(subId)`:
   - Send `["CLOSE", subId]` via WebSocket
   - Remove from subscriptions map
-- [ ] Implement `disconnect()`:
+- [x] Implement `disconnect()`:
   - Close all subscriptions
   - Close WebSocket
   - Clear internal state
-- [ ] Implement reconnection logic:
+- [x] Implement reconnection logic:
   - On WebSocket 'close' event, attempt reconnect with exponential backoff (1s, 2s, 4s, 8s, max 30s)
   - Re-establish active subscriptions after reconnection
-  - Emit 'reconnected' event (if event emitter added)
-- [ ] Handle service worker lifecycle:
-  - Document that subscriptions are lost on service worker restart
+  - Event emitter not added (can be future enhancement)
+- [x] Handle service worker lifecycle:
+  - Documented that subscriptions are lost on service worker restart
   - ProfileService should re-request on next UI interaction
   - Cached profiles persist in storage
-- [ ] Run `npm run compile`
+- [x] Run `npm run compile`
+- [x] Export from `src/infrastructure/relay/index.ts`
 
 ---
 
 ### Task 2.2: Write NostrRelayAdapter Integration Tests
-**Status:** Not Started  
+**Status:** ⏸️ Deferred  
 **Estimated Effort:** 4 hours  
 **Dependencies:** Task 2.1  
 **Verification:** Integration tests pass

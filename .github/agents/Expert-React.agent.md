@@ -14,7 +14,6 @@ tools:
     "context7/*",
     "deepwiki/*",
     "memory/*",
-    "playwright/*",
     "io.github.upstash/context7/*",
     "usages",
     "vscodeAPI",

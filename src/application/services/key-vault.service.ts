@@ -7,7 +7,7 @@ import type {
 import { AppSettingsV1, KeyRecord } from "@/domain/types";
 import { randomBytes } from "@noble/hashes/utils";
 import { bech32 } from "@scure/base";
-import { zeroize } from "@/domain/utils/crypto";
+import { zeroize, computeEventId, signEventHash } from "@/domain/utils/crypto";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
 
 const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
@@ -290,6 +290,53 @@ export class KeyVaultService {
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
     return { sigHex, keyId: id };
+  }
+
+  /**
+   * Sign a Nostr event (NIP-01).
+   * Computes event ID and signature for an unsigned event.
+   *
+   * @param unsignedEvent - Event without id and sig fields
+   * @param keyId - Optional key ID (uses selected key if omitted)
+   * @returns Signed event with id and sig
+   */
+  async signEvent(
+    unsignedEvent: {
+      pubkey: string;
+      created_at: number;
+      kind: number;
+      tags: string[][];
+      content: string;
+    },
+    keyId?: string
+  ): Promise<{
+    id: string;
+    pubkey: string;
+    created_at: number;
+    kind: number;
+    tags: string[][];
+    content: string;
+    sig: string;
+  }> {
+    const { sk } = this.ensureUnlockedKey(keyId);
+
+    // Compute event ID per NIP-01
+    const eventId = computeEventId(
+      unsignedEvent.pubkey,
+      unsignedEvent.created_at,
+      unsignedEvent.kind,
+      unsignedEvent.tags,
+      unsignedEvent.content
+    );
+
+    // Sign the event ID
+    const sig = signEventHash(eventId, sk);
+
+    return {
+      id: eventId,
+      ...unsignedEvent,
+      sig,
+    };
   }
 
   /**

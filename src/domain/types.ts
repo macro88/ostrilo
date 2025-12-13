@@ -1,5 +1,8 @@
 // Settings types and defaults based on the requirements document
 
+// Re-export profile types
+export * from "./profile/types";
+
 // Enums
 export type Theme = "dark" | "light" | "system";
 export type Authorisation = "allow" | "deny" | "ask";
