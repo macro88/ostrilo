@@ -70,13 +70,13 @@ export function LockScreen({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-8 space-y-6 text-center bg-background">
+    <div className="flex flex-col items-center justify-center h-full p-4 space-y-4 text-center bg-background">
       {/* Mascot and title */}
-      <img src={mascotLogo} alt="Ostrilo Mascot" className="w-24 h-24" />
+      <img src={mascotLogo} alt="Ostrilo Mascot" className="w-20 h-20" />
 
-      <div className="space-y-2">
-        <h1 className="text-2xl font-display">{title}</h1>
-        <p className="text-muted-foreground">
+      <div className="space-y-1">
+        <h1 className="text-xl font-display">{title}</h1>
+        <p className="text-muted-foreground text-sm">
           Enter your master password to access your keys
         </p>
       </div>

@@ -96,8 +96,8 @@ export function SettingsView() {
   };
 
   return (
-    <div className="p-4 space-y-6 max-h-full overflow-y-auto">
-      <div className="text-center mb-6">
+    <div className="h-full overflow-y-auto p-3 space-y-4">
+      <div className="text-center mb-4">
         <h2 className="text-xl font-semibold">Settings</h2>
         <p className="text-muted-foreground">Configure your signer</p>
       </div>

@@ -7,7 +7,7 @@ import { ApprovalPrompt } from "@/ui/features/approval/components/ApprovalPrompt
  */
 export default function ApprovalApp() {
   return (
-    <div className="w-[400px] min-h-[480px] bg-background text-foreground">
+    <div className="w-[420px] h-[640px] bg-background text-foreground overflow-hidden">
       <ApprovalPrompt />
     </div>
   );

@@ -416,10 +416,10 @@ export function OnboardingImportKey({
   );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-6">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <div className="w-full max-w-md">
         {/* Progress indicator */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             {["import", "password", "success"].map((step, index) => (
               <div

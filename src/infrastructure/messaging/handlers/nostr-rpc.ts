@@ -20,8 +20,8 @@ import { ApprovalQueueService } from "@/application/services/approval-queue.serv
 import { browser } from "wxt/browser";
 
 /** Approval popup dimensions */
-const POPUP_WIDTH = 400;
-const POPUP_HEIGHT = 520;
+const POPUP_WIDTH = 420;
+const POPUP_HEIGHT = 640;
 
 /**
  * RPC handler for NIP-07 Nostr operations
@@ -368,13 +368,46 @@ export class NostrRpcHandler implements RpcModule {
     console.log("[NostrRpcHandler] Opening approval popup at:", approvalUrl);
 
     try {
+      // Get current window to center the popup
+      let left: number | undefined;
+      let top: number | undefined;
+
+      try {
+        const currentWindow = await browser.windows.getCurrent();
+        if (
+          currentWindow.left !== undefined &&
+          currentWindow.top !== undefined &&
+          currentWindow.width !== undefined &&
+          currentWindow.height !== undefined
+        ) {
+          // Center popup on current window
+          left =
+            currentWindow.left +
+            Math.floor((currentWindow.width - POPUP_WIDTH) / 2);
+          top =
+            currentWindow.top +
+            Math.floor((currentWindow.height - POPUP_HEIGHT) / 2);
+        }
+      } catch (err) {
+        console.warn(
+          "[NostrRpcHandler] Could not get current window for centering:",
+          err
+        );
+      }
+
       const win = await browser.windows.create({
         url: approvalUrl,
         type: "popup",
         width: POPUP_WIDTH,
         height: POPUP_HEIGHT,
+        left,
+        top,
         focused: true,
       });
+
+      // Update badge with pending count
+      await this.updateBadgeCount();
+
       console.log(
         "[NostrRpcHandler] Approval popup opened, window id:",
         win?.id
@@ -382,15 +415,12 @@ export class NostrRpcHandler implements RpcModule {
     } catch (err) {
       console.error("[NostrRpcHandler] Failed to open approval popup:", err);
 
-      // Fallback: Set badge notification to alert user
+      // Fallback: Update badge to alert user
       try {
-        await this.setBadgeNotification();
-        console.log("[NostrRpcHandler] Badge notification set as fallback");
+        await this.updateBadgeCount();
+        console.log("[NostrRpcHandler] Badge updated as fallback");
       } catch (badgeErr) {
-        console.error(
-          "[NostrRpcHandler] Failed to set badge notification:",
-          badgeErr
-        );
+        console.error("[NostrRpcHandler] Failed to update badge:", badgeErr);
       }
 
       throw err;
@@ -398,23 +428,31 @@ export class NostrRpcHandler implements RpcModule {
   }
 
   /**
-   * Set badge notification to alert user of pending approval request
-   * Fallback mechanism when popup creation fails
+   * Update badge to show count of pending approval requests
+   * Shows number on extension icon when there are pending requests
    */
-  private async setBadgeNotification(): Promise<void> {
+  private async updateBadgeCount(): Promise<void> {
     try {
-      // Set badge text to indicate pending approval
-      await browser.action.setBadgeText({ text: "!" });
+      const count = this.approvalQueue?.count() ?? 0;
 
-      // Set badge background color to orange/warning color
-      await browser.action.setBadgeBackgroundColor({ color: "#FF9500" });
+      if (count > 0) {
+        // Show count on badge
+        await browser.action.setBadgeText({ text: count.toString() });
 
-      // Set title to inform user
-      await browser.action.setTitle({
-        title: "Ostrilo - Approval Required (Click to open)",
-      });
+        // Set badge background color to primary/accent color
+        await browser.action.setBadgeBackgroundColor({ color: "#9333ea" });
+
+        // Update title to inform user
+        await browser.action.setTitle({
+          title: `Ostrilo - ${count} approval${count > 1 ? "s" : ""} pending`,
+        });
+      } else {
+        // Clear badge when no pending requests
+        await browser.action.setBadgeText({ text: "" });
+        await browser.action.setTitle({ title: "Ostrilo Signer" });
+      }
     } catch (err) {
-      console.error("[NostrRpcHandler] Failed to set badge:", err);
+      console.error("[NostrRpcHandler] Failed to update badge:", err);
       throw err;
     }
   }

@@ -18,10 +18,12 @@ export function AppLayout({
   onTabChange,
 }: AppLayoutProps) {
   return (
-    <div className="flex flex-col h-screen min-h-screen bg-background">
+    <div className="flex flex-col h-screen w-full overflow-hidden bg-background">
       <Header selectedKey={selectedKey} avatar={avatar} />
 
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto overflow-x-hidden w-full">
+        {children}
+      </main>
 
       <BottomTabs activeTab={activeTab} onTabChange={onTabChange} />
     </div>

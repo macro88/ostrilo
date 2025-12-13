@@ -63,27 +63,27 @@ export function ActivityView() {
   };
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="h-full overflow-y-auto p-3 space-y-3">
       {/* Header */}
-      <div className="text-center mb-6">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <Activity className="h-6 w-6 text-primary" />
-          <h2 className="text-xl font-semibold">Recent Activity</h2>
+      <div className="text-center mb-4">
+        <div className="flex items-center justify-center gap-2 mb-1">
+          <Activity className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold">Recent Activity</h2>
         </div>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-xs">
           Your signing history and interactions
         </p>
       </div>
 
       {/* Filters */}
       {(entries.length > 0 || originFilter || kindFilter) && (
-        <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex gap-2 flex-col sm:flex-row">
           {/* Origin Filter */}
           <Select
             value={originFilter || "all"}
             onValueChange={handleOriginChange}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full h-8 text-xs">
               <SelectValue placeholder="All Origins" />
             </SelectTrigger>
             <SelectContent>
@@ -101,7 +101,7 @@ export function ActivityView() {
             value={kindFilter?.toString() || "all"}
             onValueChange={handleKindChange}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full h-8 text-xs">
               <SelectValue placeholder="All Kinds" />
             </SelectTrigger>
             <SelectContent>
@@ -120,7 +120,7 @@ export function ActivityView() {
               variant="outline"
               size="sm"
               onClick={handleClearFilters}
-              className="ml-auto"
+              className="w-full h-8 text-xs"
             >
               Clear Filters
             </Button>

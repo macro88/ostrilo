@@ -33,7 +33,7 @@ const tabs = [
 
 export function BottomTabs({ activeTab, onTabChange }: BottomTabsProps) {
   return (
-    <nav className="flex items-center justify-around p-2 bg-background border-t border-border">
+    <nav className="flex items-center justify-between p-2 bg-background border-t border-border w-full max-w-full overflow-hidden gap-1">
       {tabs.map(({ key, label, icon: Icon }) => {
         const isActive = activeTab === key;
         return (
@@ -41,14 +41,16 @@ export function BottomTabs({ activeTab, onTabChange }: BottomTabsProps) {
             key={key}
             variant="ghost"
             onClick={() => onTabChange(key)}
-            className={`flex flex-col items-center gap-1 h-auto py-2 px-4 rounded-lg transition-colors ${
+            className={`flex-1 min-w-0 flex flex-col items-center gap-0.5 h-auto py-2 px-1 rounded-lg transition-colors ${
               isActive
                 ? "text-primary bg-primary/10"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
             }`}
           >
-            <Icon className="w-6 h-6" />
-            <span className="text-xs font-medium">{label}</span>
+            <Icon className="w-5 h-5 shrink-0" />
+            <span className="text-[11px] font-medium leading-none truncate w-full text-center">
+              {label}
+            </span>
           </Button>
         );
       })}

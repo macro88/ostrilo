@@ -138,14 +138,14 @@ export function OnboardingCreateKey({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-6">
-      <div className="w-full max-w-md space-y-6">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <div className="w-full max-w-md space-y-4">
         {step === "input" && (
           <>
             <div className="text-center space-y-2">
-              <Key className="h-12 w-12 mx-auto text-blue-500" />
-              <h2 className="text-2xl font-bold">Create Your Nostr Key</h2>
-              <p className="text-muted-foreground">
+              <Key className="h-10 w-10 mx-auto text-blue-500" />
+              <h2 className="text-xl font-bold">Create Your Nostr Key</h2>
+              <p className="text-muted-foreground text-sm">
                 Set up a secure password to protect your new identity
               </p>
             </div>

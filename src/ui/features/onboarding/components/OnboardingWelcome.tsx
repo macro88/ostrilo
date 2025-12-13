@@ -17,30 +17,30 @@ export function OnboardingWelcome({
   >(null);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-6">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 space-y-4">
       {/* Mascot and welcome text */}
       <div className="text-center space-y-2">
-        <div className="w-18 h-18 mx-auto mb-6">
-          <AppLogo size={96} />
+        <div className="w-16 h-16 mx-auto mb-4">
+          <AppLogo size={64} />
         </div>
 
-        <h1 className="text-3xl font-bold text-foreground">
+        <h1 className="text-2xl font-bold text-foreground">
           Welcome to Ostrilo
         </h1>
 
-        <p className="text-lg text-muted-foreground max-w-md">
+        <p className="text-base text-muted-foreground max-w-md">
           Your secure Nostr signing companion.
         </p>
       </div>
       {/* Action selection */}
-      <div className="w-full max-w-md space-y-4">
-        <h2 className="text-xl font-semibold text-center mb-6">
+      <div className="w-full max-w-md space-y-3">
+        <h2 className="text-lg font-semibold text-center mb-4">
           How would you like to get started?
         </h2>
 
         {/* Create new key option */}
         <div
-          className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+          className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
             selectedOption === "create"
               ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
               : "border-border hover:border-blue-300"
@@ -48,15 +48,15 @@ export function OnboardingWelcome({
           onClick={() => setSelectedOption("create")}
         >
           <div className="flex items-center space-x-3">
-            <Key className="h-6 w-6 text-blue-500" />
+            <Key className="h-5 w-5 text-blue-500" />
             <div className="flex-1">
-              <h3 className="font-semibold">Create New Key</h3>
-              <p className="text-sm text-muted-foreground">
+              <h3 className="font-semibold text-sm">Create New Key</h3>
+              <p className="text-xs text-muted-foreground">
                 Generate a fresh Nostr key
               </p>
             </div>
             <div
-              className={`w-4 h-4 border-2 rounded-full ${
+              className={`w-3 h-3 border-2 rounded-full ${
                 selectedOption === "create"
                   ? "border-blue-500 bg-blue-500"
                   : "border-muted-foreground"
@@ -67,7 +67,7 @@ export function OnboardingWelcome({
 
         {/* Import existing key option */}
         <div
-          className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+          className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
             selectedOption === "import"
               ? "border-green-500 bg-green-50 dark:bg-green-950"
               : "border-border hover:border-green-300"
@@ -75,15 +75,15 @@ export function OnboardingWelcome({
           onClick={() => setSelectedOption("import")}
         >
           <div className="flex items-center space-x-3">
-            <FileKey className="h-6 w-6 text-green-500" />
+            <FileKey className="h-5 w-5 text-green-500" />
             <div className="flex-1">
-              <h3 className="font-semibold">Import Existing Key</h3>
-              <p className="text-sm text-muted-foreground">
+              <h3 className="font-semibold text-sm">Import Existing Key</h3>
+              <p className="text-xs text-muted-foreground">
                 Use your existing nsec private key
               </p>
             </div>
             <div
-              className={`w-4 h-4 border-2 rounded-full ${
+              className={`w-3 h-3 border-2 rounded-full ${
                 selectedOption === "import"
                   ? "border-green-500 bg-green-500"
                   : "border-muted-foreground"

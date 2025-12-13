@@ -6,6 +6,7 @@ import type {
 } from "@/infrastructure/messaging/rpc-router";
 import type { ApprovalAction } from "@/domain/types";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
+import { browser } from "wxt/browser";
 
 /**
  * RPC handler for approval queue operations
@@ -96,6 +97,9 @@ export class ApprovalRpcHandler implements RpcModule {
       // Resolve the request
       const resolved = this.queue.resolve(requestId, action);
 
+      // Update badge count after resolving
+      await this.updateBadgeCount();
+
       return { ok: true, data: { resolved } };
     } catch (err) {
       return {
@@ -121,6 +125,28 @@ export class ApprovalRpcHandler implements RpcModule {
         error: RPC_ERROR_CODES.APPROVAL_FAILED,
         details: err instanceof Error ? err.message : "Failed to get count",
       };
+    }
+  }
+
+  /**
+   * Update badge to show count of pending approval requests
+   */
+  private async updateBadgeCount(): Promise<void> {
+    try {
+      const count = this.queue.count();
+
+      if (count > 0) {
+        await browser.action.setBadgeText({ text: count.toString() });
+        await browser.action.setBadgeBackgroundColor({ color: "#9333ea" });
+        await browser.action.setTitle({
+          title: `Ostrilo - ${count} approval${count > 1 ? "s" : ""} pending`,
+        });
+      } else {
+        await browser.action.setBadgeText({ text: "" });
+        await browser.action.setTitle({ title: "Ostrilo Signer" });
+      }
+    } catch (err) {
+      console.error("[ApprovalRpcHandler] Failed to update badge:", err);
     }
   }
 }

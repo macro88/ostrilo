@@ -2,7 +2,8 @@ import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import mascotLogo from "@/assets/ostrilo_mascot_front.svg";
-import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager"; "@/ui/features/authentication/hooks/useKeyManager";
+import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
+("@/ui/features/authentication/hooks/useKeyManager");
 
 interface HeaderProps {
   selectedKey?: string;
@@ -25,21 +26,21 @@ export function Header({ selectedKey, avatar }: HeaderProps) {
     : "No key selected";
 
   return (
-    <header className="flex items-center justify-between p-4 bg-background border-b border-border">
+    <header className="flex items-center justify-between px-3 py-3 bg-background border-b border-border w-full max-w-full">
       {/* Left side - Menu/hamburger placeholder */}
 
-      <img src={mascotLogo} alt="Ostrilo Mascot" className="w-6 h-6" />
+      <img src={mascotLogo} alt="Ostrilo Mascot" className="w-6 h-6 shrink-0" />
 
       {/* Center - Wallet name */}
       <h1
-        className="text-lg font-semibold text-foreground"
+        className="text-lg font-semibold text-foreground truncate mx-2"
         onClick={() => lock()}
       >
         Ostrilo Signer
       </h1>
 
       {/* Right side - Avatar and key */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {/* Avatar placeholder */}
         <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
           {avatar ? (
@@ -58,11 +59,11 @@ export function Header({ selectedKey, avatar }: HeaderProps) {
           variant="ghost"
           size="sm"
           onClick={handleCopyKey}
-          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground max-w-[150px] overflow-hidden"
           disabled={!selectedKey}
         >
-          <span className="mr-1">{truncatedKey}</span>
-          <Copy className="w-3 h-3" />
+          <span className="mr-1 truncate max-w-[110px]">{truncatedKey}</span>
+          <Copy className="w-3 h-3 shrink-0" />
         </Button>
       </div>
     </header>

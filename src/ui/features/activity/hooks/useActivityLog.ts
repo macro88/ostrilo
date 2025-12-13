@@ -53,12 +53,6 @@ export function useActivityLog(
 
         // Use filterBy if origin or kind specified, otherwise getRecent
         if (origin !== undefined || kind !== undefined) {
-          console.log("[useActivityLog] Fetching with filters:", {
-            origin,
-            kind,
-            limit: PAGE_SIZE,
-            offset: currentOffset,
-          });
           result = await activityFilterBy({
             origin,
             kind,
@@ -66,17 +60,11 @@ export function useActivityLog(
             offset: currentOffset,
           });
         } else {
-          console.log("[useActivityLog] Fetching recent:", {
-            limit: PAGE_SIZE,
-            offset: currentOffset,
-          });
           result = await activityGetRecent({
             limit: PAGE_SIZE,
             offset: currentOffset,
           });
         }
-
-        console.log("[useActivityLog] Received result:", result);
 
         if (append) {
           setEntries((prev) => [...prev, ...result.entries]);
