@@ -43,6 +43,13 @@ Ostrilo is a Nostr protocol signer browser extension built with WXT (Web Extensi
 - `lib/crypto.ts` - Core cryptographic functions using Noble libraries
 - `hooks/useKeyManager.ts` - Key management and encryption state
 
+### Application Services
+- `application/services/key-vault.service.ts` - Key management and cryptographic operations
+- `application/services/policy.service.ts` - Permission policy evaluation and management
+- `application/services/settings.service.ts` - User settings persistence
+- `application/services/activity-log.service.ts` - Activity log with ring buffer (50-500 entries)
+- `application/services/approval-queue.service.ts` - Pending approval request management
+
 ### Build Outputs
 - Production: `.output/chrome-mv3/` and `.output/firefox-mv2/`
 - Development: `.output/chrome-mv3-dev/` and `.output/firefox-mv2-dev/`

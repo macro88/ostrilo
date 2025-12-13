@@ -210,7 +210,7 @@ Let's see how this looks in the Ostrilo codebase:
 - **`src/application` (The Application Layer):** This layer orchestrates the domain logic. It defines the application's capabilities.
 
   - `ports/`: Defines the interfaces (output ports) for external services. For example, `src/application/ports/storage.ts` defines the `IStorage` interface, which specifies a contract for storage, and `crypto.ts` defines interfaces like `CryptoAead` and `Schnorr`.
-  - `services/`: Contains the application services that implement core use cases. For example, `KeyVaultService` manages keys, and `PolicyService` manages permissions. These services are the primary entry point (input ports) to the application logic.
+  - `services/`: Contains the application services that implement core use cases. For example, `KeyVaultService` manages keys, `PolicyService` manages permissions, `SettingsService` manages user settings, `ActivityLogService` manages the persistent activity log with a ring buffer, and `ApprovalQueueService` manages pending approval requests. These services are the primary entry point (input ports) to the application logic.
 
 - **`src/infrastructure` (The Adapters):** This is where the ports are implemented. It's the bridge between the application and the outside world.
 
