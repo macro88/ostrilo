@@ -1,0 +1,135 @@
+import type { RpcRequest, RpcResponse } from "../rpc";
+import { RPC_ERROR_CODES } from "../error-codes";
+import type { RpcModule, ServiceContext } from "../rpc-router";
+import { ProfileMetadataSchema } from "@/domain/profile/types";
+
+/**
+ * RPC handler for profile-related operations
+ * Handles: profile.get, profile.getAll, profile.update, profile.clearCache
+ */
+export class ProfileRpcHandler implements RpcModule {
+  async handleRequest(
+    message: RpcRequest,
+    context: ServiceContext
+  ): Promise<RpcResponse> {
+    switch (message.type) {
+      case "profile.get":
+        return this.handleGet(message, context);
+
+      case "profile.getAll":
+        return this.handleGetAll(context);
+
+      case "profile.update":
+        return this.handleUpdate(message, context);
+
+      case "profile.clearCache":
+        return this.handleClearCache(message, context);
+
+      default:
+        return {
+          ok: false,
+          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+          details: (message as any).type,
+        };
+    }
+  }
+
+  private async handleGet(
+    message: Extract<RpcRequest, { type: "profile.get" }>,
+    context: ServiceContext
+  ): Promise<RpcResponse> {
+    try {
+      const { pubkey, forceFetch } = (message as any).params || {};
+
+      if (!pubkey || typeof pubkey !== "string") {
+        return {
+          ok: false,
+          error: RPC_ERROR_CODES.INVALID_REQUEST,
+          details: "pubkey parameter is required and must be a string",
+        };
+      }
+
+      const data = await context.profile.getProfile(pubkey, forceFetch);
+      return { ok: true, data };
+    } catch (error) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        details: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  private async handleGetAll(context: ServiceContext): Promise<RpcResponse> {
+    try {
+      const profilesMap = await context.profile.getAllProfiles();
+
+      // Convert Map to plain object for JSON serialization
+      const data = Object.fromEntries(profilesMap);
+
+      return { ok: true, data };
+    } catch (error) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        details: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  private async handleUpdate(
+    message: Extract<RpcRequest, { type: "profile.update" }>,
+    context: ServiceContext
+  ): Promise<RpcResponse> {
+    try {
+      const { metadata } = (message as any).params || {};
+
+      if (!metadata || typeof metadata !== "object") {
+        return {
+          ok: false,
+          error: RPC_ERROR_CODES.INVALID_REQUEST,
+          details: "metadata parameter is required and must be an object",
+        };
+      }
+
+      // Validate metadata with Zod
+      const validationResult = ProfileMetadataSchema.safeParse(metadata);
+      if (!validationResult.success) {
+        return {
+          ok: false,
+          error: RPC_ERROR_CODES.INVALID_REQUEST,
+          details: `Invalid metadata: ${validationResult.error.errors
+            .map((e) => `${e.path.join(".")}: ${e.message}`)
+            .join(", ")}`,
+        };
+      }
+
+      await context.profile.updateProfile(validationResult.data);
+      return { ok: true, data: null };
+    } catch (error) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        details: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  private async handleClearCache(
+    message: Extract<RpcRequest, { type: "profile.clearCache" }>,
+    context: ServiceContext
+  ): Promise<RpcResponse> {
+    try {
+      const { pubkey } = (message as any).params || {};
+
+      await context.profile.clearCache(pubkey);
+      return { ok: true, data: null };
+    } catch (error) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        details: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+}

@@ -6,3 +6,4 @@ export { StateRpcHandler } from "./state-rpc";
 export { NostrRpcHandler } from "./nostr-rpc";
 export { ApprovalRpcHandler } from "./approval-rpc";
 export { ActivityRpcHandler } from "./activity-rpc";
+export { ProfileRpcHandler } from "./profile-rpc";

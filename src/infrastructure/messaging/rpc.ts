@@ -50,7 +50,12 @@ export type RpcRequest =
       limit?: number;
       offset?: number;
     }
-  | { type: "activity.clear" };
+  | { type: "activity.clear" }
+  // Profile operations
+  | { type: "profile.get"; params: { pubkey: string; forceFetch?: boolean } }
+  | { type: "profile.getAll" }
+  | { type: "profile.update"; params: { metadata: unknown } }
+  | { type: "profile.clearCache"; params?: { pubkey?: string } };
 
 // NIP-07 specific response types
 export type NostrGetPublicKeyResponse =

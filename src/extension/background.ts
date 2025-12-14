@@ -9,6 +9,8 @@ import { KeyVaultService } from "@/application/services/key-vault.service";
 import { PolicyService } from "@/application/services/policy.service";
 import { SettingsService } from "@/application/services/settings.service";
 import { ActivityLogService } from "@/application/services/activity-log.service";
+import { ProfileService } from "@/application/services/profile.service";
+import { RelayManager } from "@/infrastructure/relay";
 import {
   RpcRouter,
   createRpcMessageListener,
@@ -22,6 +24,7 @@ import {
   NostrRpcHandler,
   ApprovalRpcHandler,
   ActivityRpcHandler,
+  ProfileRpcHandler,
 } from "@/infrastructure/messaging/handlers";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 
@@ -38,12 +41,24 @@ export default defineBackground(() => {
   const settings = new SettingsService(storage);
   const activityLog = new ActivityLogService(storage.local);
 
+  // Initialize relay manager with default relays
+  const defaultRelays = [
+    "wss://relay.damus.io",
+    "wss://relay.nostr.band",
+    "wss://nos.lol",
+  ];
+  const relayManager = new RelayManager(defaultRelays);
+
+  // Initialize profile service
+  const profile = new ProfileService(storage, relayManager, vault);
+
   // Create service context
   const serviceContext = {
     vault,
     policy,
     settings,
     activityLog,
+    profile,
   };
 
   // Create approval queue service
@@ -60,6 +75,7 @@ export default defineBackground(() => {
   router.registerModule("nostr", new NostrRpcHandler(approvalQueue)); // NIP-07 operations with approval
   router.registerModule("approval", new ApprovalRpcHandler(approvalQueue)); // Approval queue operations
   router.registerModule("activity", new ActivityRpcHandler()); // Activity log operations
+  router.registerModule("profile", new ProfileRpcHandler()); // Profile metadata operations
 
   console.log(
     "[Background] Registered RPC modules:",

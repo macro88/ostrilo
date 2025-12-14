@@ -2,7 +2,7 @@
 
 **Change ID:** `add-profile-metadata-management`  
 **Date:** December 13, 2025  
-**Status:** ✅ Core Infrastructure Complete (Phases 1-2)
+**Status:** ✅ Core Implementation Complete (Phases 1-3)
 
 ## ✅ Completed Work
 
@@ -98,6 +98,101 @@
 - Reconnection logic:
   - Exponential backoff (1s, 2s, 4s, 8s, max 30s)
   - Re-establishes active subscriptions after reconnect
+
+---
+
+#### Task 2.3: RelayManager & Integration ✅
+**Files Created:**
+- `src/infrastructure/relay/relay-manager.ts` - Multi-relay manager
+- `src/infrastructure/messaging/handlers/profile-rpc.ts` - RPC handler
+
+**Files Modified:**
+- `src/extension/background.ts` - Service initialization
+- `src/infrastructure/messaging/rpc-router.ts` - ServiceContext update
+- `src/infrastructure/messaging/rpc.ts` - RPC request types
+- `src/infrastructure/messaging/handlers/index.ts` - Handler exports
+
+**Implementation Details:**
+- `RelayManager` implementing `INostrRelay` with multi-relay support:
+  - Manages multiple `NostrRelayAdapter` instances
+  - Deduplicates events by ID across relays
+  - Publishes to all relays in parallel (succeeds if ≥1 accepts)
+  - Aggregates EOSE signals from all relays
+  - Composite subscription IDs for coordinated close()
+- Background service integration:
+  - Default relays: `wss://relay.damus.io`, `wss://relay.nostr.band`, `wss://nos.lol`
+  - ProfileService initialized with RelayManager
+  - Added to service context for RPC handlers
+- ProfileRpcHandler:
+  - `profile.get` - Fetch profile by pubkey
+  - `profile.getAll` - Fetch all managed profiles
+  - `profile.update` - Update and publish profile
+  - `profile.clearCache` - Clear profile cache
+  - Zod validation for metadata updates
+  - Proper error handling and RPC response formatting
+
+---
+
+### Phase 3: UI Layer (ProfileView Integration)
+
+#### Task 3.1: ProfileView Display Mode ✅
+**Files Created:**
+- `src/ui/hooks/useProfile.ts` - Profile management hook
+
+**Files Modified:**
+- `src/ui/features/profile/components/ProfileView.tsx` - Full display mode implementation
+
+**Implementation Details:**
+- `useProfile` hook:
+  - Fetches profile via RPC on pubkey change
+  - Auto-refresh when pubkey changes
+  - Loading/error state management
+  - `updateProfile()` method with optimistic updates
+  - `refresh()` method for force-fetch
+- ProfileView display mode:
+  - Loads selected key from settings on mount
+  - Displays profile picture or initials fallback
+  - Shows all profile fields with proper fallbacks:
+    - Name/display_name
+    - About/bio
+    - Website
+    - NIP-05 (conditional)
+    - Lightning address/lud16 (conditional)
+  - Loading spinner during fetch
+  - Error state with retry button
+  - Manual refresh button (force-fetch)
+  - Responsive design with Tailwind CSS
+
+---
+
+#### Task 3.2: ProfileView Edit Mode ✅
+**Files Modified:**
+- `src/ui/features/profile/components/ProfileView.tsx` - Full edit mode implementation
+
+**Implementation Details:**
+- Edit mode toggle with state management
+- Complete edit form with fields:
+  - Name (Input, 50 char max with counter)
+  - Display Name (Input, 50 char max with counter)
+  - About (Textarea, 500 char max with counter)
+  - Picture URL (Input with URL validation)
+  - Banner URL (Input with URL validation)
+  - Website (Input with URL validation)
+  - NIP-05 (Input with email-like validation)
+  - Lightning Address/lud16 (Input with email-like validation)
+- Form validation:
+  - Character counters for text fields
+  - HTML5 validation (URL, email types)
+  - Zod schema validation via ProfileRpcHandler
+  - All fields optional per NIP-01 spec
+- Save/Cancel functionality:
+  - Save handler validates, publishes, updates cache
+  - Cancel handler reverts without saving
+  - Saving indicator during publish
+  - Error display if save fails
+  - Success returns to display mode
+- Form data initialization from current profile
+- Empty fields automatically removed before saving
   - Handles service worker lifecycle (documented limitations)
 - Clean disconnect with resource cleanup
 
