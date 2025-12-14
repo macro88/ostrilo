@@ -281,18 +281,24 @@
 ---
 
 ### Task 3.3: Add Profile Picture Upload (Optional Enhancement)
-**Status:** Not Started  
+**Status:** ✅ Completed  
 **Estimated Effort:** 4 hours (optional)  
 **Dependencies:** Task 3.2  
 **Verification:** User can upload image and get URL
 
-- [ ] Add file input for profile picture in edit mode
-- [ ] Implement image upload to free image host (e.g., nostr.build API)
-- [ ] Show upload progress indicator
-- [ ] On successful upload, populate picture URL field
-- [ ] Handle upload errors gracefully
-- [ ] Add "Remove Picture" button to clear URL
-- [ ] Run `npm run compile` and test in browser
+- [x] Add file input for profile picture in edit mode
+- [x] Implement image upload to free image host (e.g., nostr.build API)
+- [x] Show upload progress indicator
+- [x] On successful upload, populate picture URL field
+- [x] Handle upload errors gracefully
+- [x] Add "Remove Picture" button to clear URL
+- [x] Run `npm run compile` and test in browser
+- [x] Added file type validation (JPEG, PNG, GIF, WebP)
+- [x] Added file size validation (max 5MB)
+- [x] Implemented upload progress bar with simulated progress
+- [x] Disabled inputs during upload to prevent concurrent uploads
+- [x] Clear file input after upload to allow re-selection
+- [x] User-friendly error messages for validation and upload failures
 
 ---
 
