@@ -66,10 +66,10 @@
 - [x] Add loading skeleton during initial fetch
 
 ### Phase 8: Settings Integration (Optional)
-- [ ] Add `maxActivityEntries` to `AppSettingsV1` schema
-- [ ] Add settings control in SettingsView for max entries
-- [ ] Update `ActivityLogService` when settings change
-- [ ] Add "Clear Activity Log" button in settings with confirmation
+- [x] Add `maxActivityEntries` to `AppSettingsV1` schema
+- [x] Add settings control in SettingsView for max entries
+- [x] Update `ActivityLogService` when settings change
+- [x] Add "Clear Activity Log" button in settings with confirmation
 
 ### Phase 9: Testing - Unit Tests
 - [ ] Create `tests/unit/application/activity-log.service.test.ts`
