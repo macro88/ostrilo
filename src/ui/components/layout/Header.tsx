@@ -1,9 +1,8 @@
-import { Copy } from "lucide-react";
+import { Copy, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import mascotLogo from "@/assets/ostrilo_mascot_front.svg";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
-("@/ui/features/authentication/hooks/useKeyManager");
 
 interface HeaderProps {
   selectedKey?: string;
@@ -32,15 +31,21 @@ export function Header({ selectedKey, avatar }: HeaderProps) {
       <img src={mascotLogo} alt="Ostrilo Mascot" className="w-6 h-6 shrink-0" />
 
       {/* Center - Wallet name */}
-      <h1
-        className="text-lg font-semibold text-foreground truncate mx-2"
-        onClick={() => lock()}
-      >
+      <h1 className="text-lg font-semibold text-foreground truncate mx-2">
         Ostrilo Signer
       </h1>
 
       {/* Right side - Avatar and key */}
       <div className="flex items-center gap-2 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          onClick={() => lock()}
+          aria-label="Lock extension"
+        >
+          <Lock className="w-4 h-4" />
+        </Button>
         {/* Avatar placeholder */}
         <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
           {avatar ? (
