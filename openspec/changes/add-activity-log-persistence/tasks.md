@@ -72,33 +72,33 @@
 - [x] Add "Clear Activity Log" button in settings with confirmation
 
 ### Phase 9: Testing - Unit Tests
-- [ ] Create `tests/unit/application/activity-log.service.test.ts`
-- [ ] Test: Add entry to empty log
-- [ ] Test: Ring buffer rotation when maxEntries exceeded
-- [ ] Test: Filter by origin returns correct subset
-- [ ] Test: Filter by kind returns correct subset
-- [ ] Test: Pagination with limit/offset works correctly
-- [ ] Test: Clear all entries empties log
-- [ ] Test: Service initializes from existing storage
-- [ ] Create `tests/unit/infrastructure/activity-rpc.test.ts`
-- [ ] Test: RPC handler routes all activity.* methods
-- [ ] Test: Validation rejects invalid requests
+- [x] Create `tests/unit/application/activity-log.service.test.ts`
+- [x] Test: Add entry to empty log
+- [x] Test: Ring buffer rotation when maxEntries exceeded
+- [x] Test: Filter by origin returns correct subset
+- [x] Test: Filter by kind returns correct subset
+- [x] Test: Pagination with limit/offset works correctly
+- [x] Test: Clear all entries empties log
+- [x] Test: Service initializes from existing storage
+- [x] Create `tests/unit/infrastructure/activity-rpc.test.ts`
+- [x] Test: RPC handler routes all activity.* methods
+- [x] Test: Validation rejects invalid requests
 
 ### Phase 10: Testing - Integration Tests
-- [ ] Create `tests/integration/activity-log-integration.test.ts`
-- [ ] Test: Sign approval creates activity entry in storage
-- [ ] Test: Sign denial creates activity entry in storage
-- [ ] Test: Multiple sign operations maintain correct order (newest first)
-- [ ] Test: Ring buffer rotation works end-to-end
+- [x] Create `tests/integration/activity-log-integration.test.ts`
+- [x] Test: Sign approval creates activity entry in storage
+- [x] Test: Sign denial creates activity entry in storage
+- [x] Test: Multiple sign operations maintain correct order (newest first)
+- [x] Test: Ring buffer rotation works end-to-end
 
 ### Phase 11: Testing - E2E Tests
-- [ ] Create `tests/e2e/activity-view.spec.ts`
-- [ ] Test: ActivityView displays recent sign events after signing
-- [ ] Test: Filter by origin shows only matching entries
-- [ ] Test: Filter by kind shows only matching entries
-- [ ] Test: Pagination loads more entries when clicking Load More
-- [ ] Test: Empty state displays when no activity exists
-- [ ] Test: Activity persists across popup close/reopen
+- [x] Create `tests/e2e/activity-view.spec.ts`
+- [x] Test: ActivityView displays recent sign events after signing
+- [x] Test: Filter by origin shows only matching entries
+- [x] Test: Filter by kind shows only matching entries
+- [x] Test: Pagination loads more entries when clicking Load More
+- [x] Test: Empty state displays when no activity exists
+- [x] Test: Activity persists across popup close/reopen
 
 ### Phase 12: Documentation
 - [x] Update `.github/copilot-instructions.md` with ActivityLogService reference
@@ -135,9 +135,9 @@ Each task is considered complete when:
 - **Phase 1-5**: Core implementation (~2-3 hours) ✅ COMPLETE
 - **Phase 6-7**: UI implementation (~2-3 hours) ✅ COMPLETE  
 - **Phase 12**: Documentation (~1 hour) ✅ COMPLETE
-- **Phase 8**: Settings integration (~1 hour, optional) ⏸️ DEFERRED
-- **Phase 9-11**: Testing (~3-4 hours, optional) ⏸️ DEFERRED
+- **Phase 8**: Settings integration (~1 hour, optional) ✅ COMPLETE
+- **Phase 9-11**: Testing (~3-4 hours, optional) ✅ COMPLETE
 
-**Actual effort: ~6-7 hours for core functionality - NOW COMPLETE**
+**Actual effort: ~6-7 hours for core functionality + ~2 hours for testing - NOW COMPLETE**
 
-**Total estimated for optional enhancements: ~4-5 hours**
+**Total estimated for optional enhancements: ~4-5 hours - COMPLETED**
