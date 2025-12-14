@@ -104,7 +104,22 @@ export class ProfileRpcHandler implements RpcModule {
         };
       }
 
+      // Update profile (signs and publishes to relays)
       await context.profile.updateProfile(validationResult.data);
+
+      // Get selected key for activity log
+      const settings = await context.settings.get();
+      const selectedKeyId = settings?.selectedKeyId;
+
+      // Log the profile update activity
+      await context.activityLog.addEntry({
+        origin: "extension://profile", // Internal origin for extension UI actions
+        kind: 0, // NIP-01 kind:0 for profile metadata
+        decision: "allow",
+        contentPreview: JSON.stringify(validationResult.data).substring(0, 100),
+        keyId: selectedKeyId,
+      });
+
       return { ok: true, data: null };
     } catch (error) {
       return {
