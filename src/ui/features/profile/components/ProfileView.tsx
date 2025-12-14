@@ -5,6 +5,7 @@ import type { KeyRecord } from "@/domain/types";
 import type { ProfileMetadata } from "@/domain/profile/types";
 import { Input } from "@/ui/components/ui/input";
 import { Label } from "@/ui/components/ui/label";
+import { ImageUploadField } from "./ImageUploadField";
 
 export function ProfileView() {
   const [selectedPubkey, setSelectedPubkey] = useState<string | null>(null);
@@ -16,11 +17,6 @@ export function ProfileView() {
   const [formData, setFormData] = useState<ProfileMetadata>({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  
-  // Picture upload state
-  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Get selected key on mount
   useEffect(() => {
@@ -106,78 +102,6 @@ export function ProfileView() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handlePictureUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-    if (!validTypes.includes(file.type)) {
-      setUploadError("Please select a valid image file (JPEG, PNG, GIF, or WebP)");
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setUploadError("Image must be smaller than 5MB");
-      return;
-    }
-
-    try {
-      setIsUploadingPicture(true);
-      setUploadError(null);
-      setUploadProgress(0);
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      // Simulate progress since nostr.build doesn't provide upload progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => Math.min(prev + 10, 90));
-      }, 200);
-
-      const response = await fetch("https://nostr.build/api/v2/upload/files", {
-        method: "POST",
-        body: formData,
-      });
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      if (result.status === "success" && result.data && result.data[0]?.url) {
-        const imageUrl = result.data[0].url;
-        handleInputChange("picture", imageUrl);
-        setUploadProgress(0);
-      } else {
-        throw new Error("Invalid response from upload service");
-      }
-    } catch (err) {
-      console.error("Picture upload error:", err);
-      setUploadError(
-        err instanceof Error ? err.message : "Failed to upload image"
-      );
-      setUploadProgress(0);
-    } finally {
-      setIsUploadingPicture(false);
-      // Reset the file input so the same file can be selected again if needed
-      event.target.value = "";
-    }
-  };
-
-  const handleRemovePicture = () => {
-    handleInputChange("picture", "");
-    setUploadError(null);
-  };
-
   if (!selectedPubkey) {
     return (
       <div className="h-full overflow-y-auto p-3 space-y-3">
@@ -239,83 +163,14 @@ export function ProfileView() {
             </p>
           </div>
 
-          <div>
-            <Label htmlFor="picture">Profile Picture URL</Label>
-            <div className="space-y-2">
-              <Input
-                id="picture"
-                value={formData.picture || ""}
-                onChange={(e) => handleInputChange("picture", e.target.value)}
-                placeholder="https://example.com/avatar.jpg"
-                type="url"
-                disabled={isSaving || isUploadingPicture}
-              />
-              
-              <div className="flex gap-2">
-                <label
-                  htmlFor="picture-upload"
-                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm border border-border rounded-lg cursor-pointer hover:bg-muted transition-colors ${
-                    isSaving || isUploadingPicture
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  }`}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                  {isUploadingPicture ? "Uploading..." : "Upload Image"}
-                </label>
-                <input
-                  id="picture-upload"
-                  type="file"
-                  accept="image/jpeg,image/png,image/gif,image/webp"
-                  onChange={handlePictureUpload}
-                  disabled={isSaving || isUploadingPicture}
-                  className="hidden"
-                />
-                {formData.picture && (
-                  <button
-                    type="button"
-                    onClick={handleRemovePicture}
-                    disabled={isSaving || isUploadingPicture}
-                    className="px-3 py-2 text-sm border border-border rounded-lg hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-colors disabled:opacity-50"
-                    title="Remove picture"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-
-              {isUploadingPicture && uploadProgress > 0 && (
-                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                  <div
-                    className="bg-primary h-full transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-              )}
-
-              {uploadError && (
-                <p className="text-xs text-destructive">{uploadError}</p>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                Upload an image or paste a URL. Max 5MB (JPEG, PNG, GIF, WebP)
-              </p>
-            </div>
-          </div>
+          <ImageUploadField
+            id="picture"
+            label="Profile Picture URL"
+            value={formData.picture || ""}
+            onChange={(value) => handleInputChange("picture", value)}
+            disabled={isSaving}
+            placeholder="https://example.com/avatar.jpg"
+          />
 
           <div>
             <Label htmlFor="banner">Banner Image URL</Label>
