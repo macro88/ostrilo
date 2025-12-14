@@ -39,6 +39,7 @@ export function SettingsView() {
     isLoading,
     updateTheme,
     updateAutoLockMinutes,
+    updateMaxActivityEntries,
     updateSessionTTLMinutes,
     addRelay,
     removeRelay,
@@ -47,6 +48,7 @@ export function SettingsView() {
     setPerKindRule,
     setSessionGrant,
     removeOriginPolicy,
+    clearActivityLog,
   } = useAppSettings();
   const { selectedUnlockedKey } = useKeyManager();
   const [newRelay, setNewRelay] = useState("");
@@ -84,6 +86,10 @@ export function SettingsView() {
 
   const handleSessionTTLChange = (value: number[]) => {
     updateSessionTTLMinutes(value[0]);
+  };
+
+  const handleMaxActivityEntriesChange = (value: number[]) => {
+    updateMaxActivityEntries(value[0]);
   };
 
   const handleToggleMediumKind = (kind: number, enabled: boolean) => {
@@ -234,6 +240,50 @@ export function SettingsView() {
               Reset All Settings
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* Activity Log Section */}
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Clock className="h-4 w-4" />
+          <h3 className="font-medium">Activity Log</h3>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Max entries to keep</Label>
+              <span className="text-sm text-muted-foreground">
+                {settings.maxActivityEntries ?? 50} entries
+              </span>
+            </div>
+            <Slider
+              value={[settings.maxActivityEntries ?? 50]}
+              onValueChange={handleMaxActivityEntriesChange}
+              max={500}
+              min={10}
+              step={10}
+              className="w-full"
+            />
+          </div>
+
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              if (
+                confirm(
+                  "Clear all activity log entries? This action cannot be undone."
+                )
+              ) {
+                clearActivityLog();
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Clear Activity Log
+          </Button>
         </div>
       </div>
 

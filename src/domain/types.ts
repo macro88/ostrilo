@@ -40,6 +40,7 @@ export interface AppSettingsV1 {
   theme: Theme;
   sidePanel: boolean;
   autoLockMinutes: number;
+  maxActivityEntries?: number; // max items to keep in activity log ring buffer
   relays: string[]; // for profile fetch; no auto connect in BG
   // NOTE: keys are stored in local storage for security, not sync
   selectedKeyId?: string; // ID of the currently selected key
@@ -56,6 +57,7 @@ export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {
   theme: "system",
   sidePanel: false,
   autoLockMinutes: 5,
+  maxActivityEntries: 50,
   relays: ["wss://relay.damus.io", "wss://nostr.wine"],
   origins: [],
   mediumAllowKinds: [6, 16, 7, 10002], // Repost, Generic Repost, Reaction, Relay list

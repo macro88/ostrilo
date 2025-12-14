@@ -30,6 +30,10 @@ export class SettingsService {
       mediumAllowKinds: Array.isArray(existing?.mediumAllowKinds)
         ? (existing!.mediumAllowKinds as number[])
         : d.mediumAllowKinds,
+      maxActivityEntries:
+        typeof existing?.maxActivityEntries === "number"
+          ? existing.maxActivityEntries
+          : d.maxActivityEntries,
       sessionTTLMinutes:
         typeof existing?.sessionTTLMinutes === "number"
           ? (existing!.sessionTTLMinutes as number)
@@ -68,6 +72,7 @@ export function defaultSettings(): AppSettingsV1 {
     origins: [],
     mediumAllowKinds: [6, 16, 7, 10002],
     sessionTTLMinutes: 0,
+    maxActivityEntries: 50,
     selectedKeyId: undefined,
   };
 }

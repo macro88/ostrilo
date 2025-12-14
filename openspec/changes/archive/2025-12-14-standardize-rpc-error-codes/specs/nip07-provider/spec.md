@@ -4,7 +4,7 @@ Updates NIP-07 provider error responses to use standardized RPC error codes.
 
 ## MODIFIED Requirements
 
-### Requirement: Sign Event Error Responses
+### Requirement: Sign Event
 
 The extension SHALL provide a `window.nostr.signEvent(event)` method that signs Nostr events per NIP-01, using standardized error codes for all error conditions.
 
@@ -53,7 +53,7 @@ The extension SHALL provide a `window.nostr.signEvent(event)` method that signs 
 
 ---
 
-### Requirement: Get Public Key Error Responses
+### Requirement: Get Public Key
 
 The extension SHALL provide a `window.nostr.getPublicKey()` method with standardized error codes.
 

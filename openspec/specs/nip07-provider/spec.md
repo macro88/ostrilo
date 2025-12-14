@@ -72,44 +72,12 @@ The extension SHALL provide a `window.nostr.signEvent(event)` method that signs 
 - **WHEN** a dApp calls `window.nostr.signEvent(event)`
 - **THEN** the Promise SHALL reject with error message containing "denied"
 
-#### Scenario: Approval prompt when policy requires approval
+#### Scenario: Error when policy requires approval
 - **GIVEN** the vault is unlocked
 - **AND** policy evaluation returns "ask" for the origin and kind
 - **WHEN** a dApp calls `window.nostr.signEvent(event)`
-- **THEN** an approval prompt popup SHALL open
-- **AND** the popup SHALL display the requesting origin
-- **AND** the popup SHALL display the event kind with human-readable name
-- **AND** the popup SHALL display a preview of the event content
-- **AND** the popup SHALL display which key will be used for signing
-- **AND** the Promise SHALL remain pending until user decides or timeout
-
-#### Scenario: User approves signing request
-- **GIVEN** an approval prompt is displayed for a signing request
-- **WHEN** the user clicks "Allow" or "Allow Once"
-- **THEN** the event SHALL be signed and returned to the dApp
-- **AND** the approval popup SHALL close
-- **AND** no policy changes SHALL be made
-
-#### Scenario: User denies signing request
-- **GIVEN** an approval prompt is displayed for a signing request
-- **WHEN** the user clicks "Deny"
-- **THEN** the Promise SHALL reject with error message containing "denied"
-- **AND** the approval popup SHALL close
-- **AND** no policy changes SHALL be made
-
-#### Scenario: User denies with remember
-- **GIVEN** an approval prompt is displayed for a signing request
-- **WHEN** the user clicks "Deny + Remember"
-- **THEN** the Promise SHALL reject with error message containing "denied"
-- **AND** the approval popup SHALL close
-- **AND** a deny rule SHALL be created for the origin and event kind
-- **AND** future requests for the same origin and kind SHALL be auto-denied
-
-#### Scenario: Approval timeout
-- **GIVEN** an approval prompt is displayed for a signing request
-- **WHEN** 60 seconds pass without user action
-- **THEN** the Promise SHALL reject with error message containing "timeout"
-- **AND** the approval popup SHALL close
+- **THEN** the Promise SHALL reject with error message containing "needs_approval"
+- **AND** the error message SHALL indicate the user should adjust trust settings
 
 #### Scenario: Invalid event format
 - **WHEN** a dApp calls `window.nostr.signEvent(event)` with invalid event structure

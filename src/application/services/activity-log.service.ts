@@ -173,8 +173,10 @@ export class ActivityLogService {
     // Truncate if current entries exceed new max
     if (this.entries.length > this.maxEntries) {
       this.entries = this.entries.slice(0, this.maxEntries);
-      await this.saveToStorage();
     }
+
+    // Persist new max (even if no truncation occurred)
+    await this.saveToStorage();
   }
 
   /**

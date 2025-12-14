@@ -18,6 +18,7 @@ import {
   OriginPolicy,
 } from "@/domain/types";
 import type { AppSettingsPatch } from "@/infrastructure/validation/schemas";
+import { activityClear } from "@/infrastructure/messaging/client";
 
 // Global settings store to prevent multiple fetches
 class SettingsStore {
@@ -135,6 +136,13 @@ export function useAppSettings() {
     [updateSettings]
   );
 
+  const updateMaxActivityEntries = useCallback(
+    (maxActivityEntries: number) => {
+      return updateSettings({ maxActivityEntries });
+    },
+    [updateSettings]
+  );
+
   const updateRelays = useCallback(
     (relays: string[]) => {
       return updateSettings({ relays });
@@ -222,6 +230,7 @@ export function useAppSettings() {
         theme: DEFAULT_SETTINGS_V1.theme,
         sidePanel: DEFAULT_SETTINGS_V1.sidePanel,
         autoLockMinutes: DEFAULT_SETTINGS_V1.autoLockMinutes,
+        maxActivityEntries: DEFAULT_SETTINGS_V1.maxActivityEntries,
         relays: DEFAULT_SETTINGS_V1.relays,
         selectedKeyId: DEFAULT_SETTINGS_V1.selectedKeyId,
         mediumAllowKinds: DEFAULT_SETTINGS_V1.mediumAllowKinds,
@@ -245,6 +254,7 @@ export function useAppSettings() {
     updateTheme,
     updateSidePanel,
     updateAutoLockMinutes,
+    updateMaxActivityEntries,
     updateSessionTTLMinutes,
 
     // Relay management
@@ -262,5 +272,8 @@ export function useAppSettings() {
 
     // Reset
     resetSettings,
+
+    // Activity log
+    clearActivityLog: activityClear,
   };
 }

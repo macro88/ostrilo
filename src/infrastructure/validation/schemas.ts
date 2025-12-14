@@ -40,6 +40,7 @@ export const AppSettingsPatchSchema = z
     theme: ThemeSchema.optional(),
     sidePanel: z.boolean().optional(),
     autoLockMinutes: z.number().min(0).max(1440).optional(), // 0 to 24 hours
+    maxActivityEntries: z.number().int().min(10).max(500).optional(),
     relays: z.array(z.string().url()).optional(),
     selectedKeyId: z.string().uuid().optional(),
     mediumAllowKinds: z.array(z.number().min(0).max(65535)).optional(), // Valid Nostr kind range

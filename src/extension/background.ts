@@ -41,6 +41,16 @@ export default defineBackground(() => {
   const settings = new SettingsService(storage);
   const activityLog = new ActivityLogService(storage.local);
 
+  // Align activity log capacity with settings at startup
+  settings
+    .get()
+    .then((s) => {
+      if (s?.maxActivityEntries) {
+        activityLog.setMaxEntries(s.maxActivityEntries);
+      }
+    })
+    .catch((err) => console.warn("Failed to sync activity log settings", err));
+
   // Initialize relay manager with default relays
   const defaultRelays = [
     "wss://relay.damus.io",

@@ -2,7 +2,7 @@
 
 Exposes `window.nostr` API to web pages for Nostr key management and event signing per NIP-07 specification.
 
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Window Nostr Object Injection
 

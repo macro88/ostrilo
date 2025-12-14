@@ -50,6 +50,16 @@ export class SettingsRpcHandler implements RpcModule {
     }
 
     const data = await context.settings.update(validationResult.data);
+
+    if (validationResult.data.maxActivityEntries !== undefined) {
+      try {
+        await context.activityLog.setMaxEntries(
+          validationResult.data.maxActivityEntries
+        );
+      } catch (error) {
+        console.warn("Failed to update activity log max entries", error);
+      }
+    }
     return { ok: true, data };
   }
 }
