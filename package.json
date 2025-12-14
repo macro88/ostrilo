@@ -65,5 +65,8 @@
     "typescript": "^5.9.2",
     "vitest": "^2.0.5",
     "wxt": "^0.20.6"
+  },
+  "resolutions": {
+    "vite": "7.2.7"
   }
 }

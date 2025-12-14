@@ -1,6 +1,6 @@
-import { schnorr } from "@noble/curves/secp256k1";
-import { pbkdf2 } from "@noble/hashes/pbkdf2";
-import { sha256 } from "@noble/hashes/sha2";
+import { schnorr } from "@noble/curves/secp256k1.js";
+import { pbkdf2 } from "@noble/hashes/pbkdf2.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import type {
   CryptoAead,
   CryptoKdf,

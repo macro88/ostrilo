@@ -17,7 +17,12 @@ export default defineConfig({
     ],
   },
   vite: () => ({
-    plugins: [tailwindcss()],
+    // Cast because wxt bundles its own vite types; tailwindcss() returns Plugin[] from root Vite
+    plugins: tailwindcss() as unknown as any[],
+    css: {
+      // Tailwind Vite plugin currently expects PostCSS pipeline; LightningCSS lacks createIdResolver
+      transformer: "postcss",
+    },
     resolve: {
       alias: {
         "@/components": path.resolve(__dirname, "./src/ui/components"),

@@ -5,7 +5,7 @@ import type {
   Schnorr,
 } from "@/application/ports/crypto";
 import { AppSettingsV1, KeyRecord } from "@/domain/types";
-import { randomBytes } from "@noble/hashes/utils";
+import { randomBytes } from "@noble/hashes/utils.js";
 import { bech32 } from "@scure/base";
 import { zeroize, computeEventId, signEventHash } from "@/domain/utils/crypto";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";

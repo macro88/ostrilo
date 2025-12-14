@@ -8,10 +8,10 @@
  * - NS-N-003: Overwrite Uint8Array secrets on lock/unload
  */
 
-import { secp256k1, schnorr } from "@noble/curves/secp256k1";
-import { sha256 } from "@noble/hashes/sha2";
-import { pbkdf2 } from "@noble/hashes/pbkdf2";
-import { randomBytes } from "@noble/hashes/utils";
+import { secp256k1, schnorr } from "@noble/curves/secp256k1.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { pbkdf2 } from "@noble/hashes/pbkdf2.js";
+import { randomBytes } from "@noble/hashes/utils.js";
 import { bech32 } from "@scure/base";
 
 // Constants
