@@ -29,7 +29,7 @@ export function QRCode({
         size={size}
         level={level}
         includeMargin={includeMargin}
-        className="border-4 border-white rounded-lg"
+        className="border-4 border-background rounded-lg shadow-lg"
       />
     </div>
   );
@@ -40,6 +40,7 @@ interface QRCodeModalProps {
   title?: string;
   onClose: () => void;
   size?: number;
+  showValue?: boolean; // Control whether to display the full value below QR code
 }
 
 /**
@@ -51,6 +52,7 @@ export function QRCodeModal({
   title = "QR Code",
   onClose,
   size = 280,
+  showValue = true,
 }: QRCodeModalProps) {
   return (
     <div
@@ -74,9 +76,11 @@ export function QRCodeModal({
           </Button>
         </div>
         <QRCode value={value} size={size} className="mb-4" />
-        <p className="text-xs text-muted-foreground text-center break-all font-mono">
-          {value}
-        </p>
+        {showValue && (
+          <p className="text-xs text-muted-foreground text-center break-all font-mono">
+            {value}
+          </p>
+        )}
       </div>
     </div>
   );
