@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Copy } from "lucide-react";
+import { Copy, QrCode } from "lucide-react";
+import { QRCodeModal } from "./qr-code";
 
 interface PubkeyProps {
   pubkey: string;
@@ -18,6 +19,7 @@ export function Pubkey({
   className = "",
 }: PubkeyProps) {
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   const display = pubkey
     ? `${pubkey.slice(0, startChars)}…${pubkey.slice(-endChars)}`
@@ -47,36 +49,55 @@ export function Pubkey({
   };
 
   return (
-    <div
-      className={`flex items-center justify-between gap-3 w-full ${className}`}
-      role="group"
-      aria-label="Public key display"
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        {label && (
-          <span className="text-sm text-muted-foreground truncate">
-            {label}
+    <>
+      <div
+        className={`flex items-center justify-between gap-3 w-full ${className}`}
+        role="group"
+        aria-label="Public key display"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          {label && (
+            <span className="text-sm text-muted-foreground truncate">
+              {label}
+            </span>
+          )}
+          <span className="font-mono text-sm bg-muted px-3 py-1 rounded-md truncate whitespace-nowrap">
+            {display}
           </span>
-        )}
-        <span className="font-mono text-sm bg-muted px-3 py-1 rounded-md truncate whitespace-nowrap">
-          {display}
-        </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Show QR code"
+            onClick={() => setShowQR(true)}
+            className="h-8 w-8 p-0"
+          >
+            <QrCode className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Copy public key"
+            onClick={handleCopy}
+            className="h-8 w-8 p-0"
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+          <span className="ml-2 text-xs text-muted-foreground" aria-hidden>
+            {copied ? "Copied" : ""}
+          </span>
+        </div>
       </div>
 
-      <div className="flex items-center">
-        <Button
-          size="icon"
-          variant="ghost"
-          aria-label="Copy public key"
-          onClick={handleCopy}
-          className="h-8 w-8 p-0"
-        >
-          <Copy className="h-4 w-4" />
-        </Button>
-        <span className="ml-2 text-xs text-muted-foreground" aria-hidden>
-          {copied ? "Copied" : ""}
-        </span>
-      </div>
-    </div>
+      {showQR && (
+        <QRCodeModal
+          value={pubkey}
+          title={label ? `${label} - Public Key` : "Public Key"}
+          onClose={() => setShowQR(false)}
+        />
+      )}
+    </>
   );
 }
