@@ -37,7 +37,6 @@ export function OnboardingImportKey({
   const { isLoading } = useKeyManager();
   const { markOnboardingComplete } = useOnboarding();
   const [currentStep, setCurrentStep] = useState<ImportStep>("import");
-  const [backupChecked, setBackupChecked] = useState(false);
 
   // Import state - Use refs to avoid storing secret in React state
   const privateKeyRef = useRef<HTMLInputElement>(null);
@@ -385,33 +384,17 @@ export function OnboardingImportKey({
         </div>
       </div>
 
-      <div className="space-y-3">
-        <div className="flex items-start space-x-2 p-3 border rounded">
-          <input
-            id="backupConfirmImport"
-            type="checkbox"
-            className="mt-1"
-            checked={backupChecked}
-            onChange={(e) => setBackupChecked(e.target.checked)}
-          />
-          <Label htmlFor="backupConfirmImport" className="text-sm">
-            I have safely backed up my key.
-          </Label>
-        </div>
-        <Button
-          onClick={async () => {
-            if (!backupChecked) return;
-            await markOnboardingComplete();
-            onComplete();
-          }}
-          disabled={!backupChecked}
-          className="w-full"
-          size="lg"
-        >
-          Get Started
-          <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
-      </div>
+      <Button
+        onClick={async () => {
+          await markOnboardingComplete();
+          onComplete();
+        }}
+        className="w-full"
+        size="lg"
+      >
+        Get Started
+        <ArrowRight className="ml-2 h-4 w-4" />
+      </Button>
     </div>
   );
 
