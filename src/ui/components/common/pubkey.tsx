@@ -94,7 +94,7 @@ export function Pubkey({
       {showQR && (
         <QRCodeModal
           value={pubkey}
-          title={label ? `${label} - Public Key` : "Public Key"}
+          title="Public Key"
           onClose={() => setShowQR(false)}
         />
       )}
