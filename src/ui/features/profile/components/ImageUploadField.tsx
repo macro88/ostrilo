@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Input } from "@/ui/components/ui/input";
 import { Label } from "@/ui/components/ui/label";
 
@@ -24,6 +24,16 @@ export function ImageUploadField({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, []);
 
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -56,7 +66,7 @@ export function ImageUploadField({
       formData.append("file", file);
 
       // Simulate progress since nostr.build doesn't provide upload progress
-      const progressInterval = setInterval(() => {
+      progressIntervalRef.current = setInterval(() => {
         setUploadProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
@@ -65,7 +75,10 @@ export function ImageUploadField({
         body: formData,
       });
 
-      clearInterval(progressInterval);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
       setUploadProgress(100);
 
       if (!response.ok) {
@@ -88,6 +101,11 @@ export function ImageUploadField({
       );
       setUploadProgress(0);
     } finally {
+      // Ensure interval is cleaned up in all cases
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
       setIsUploading(false);
       // Reset the file input so the same file can be selected again if needed
       event.target.value = "";
@@ -115,9 +133,24 @@ export function ImageUploadField({
         <div className="flex gap-2">
           <label
             htmlFor={`${id}-upload`}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm border border-border rounded-lg cursor-pointer hover:bg-muted transition-colors ${
-              disabled || isUploading ? "opacity-50 cursor-not-allowed" : ""
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm border border-border rounded-lg transition-colors ${
+              disabled || isUploading
+                ? "opacity-50 cursor-not-allowed pointer-events-none"
+                : "cursor-pointer hover:bg-muted"
             }`}
+            aria-disabled={disabled || isUploading}
+            onKeyDown={(e) => {
+              if (disabled || isUploading) {
+                e.preventDefault();
+                return;
+              }
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                document.getElementById(`${id}-upload`)?.click();
+              }
+            }}
+            tabIndex={disabled || isUploading ? -1 : 0}
+            role="button"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -158,7 +191,14 @@ export function ImageUploadField({
         </div>
 
         {isUploading && uploadProgress > 0 && (
-          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+          <div
+            className="w-full bg-muted rounded-full h-2 overflow-hidden"
+            role="progressbar"
+            aria-valuenow={uploadProgress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Image upload progress"
+          >
             <div
               className="bg-primary h-full transition-all duration-300"
               style={{ width: `${uploadProgress}%` }}
