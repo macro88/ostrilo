@@ -31,7 +31,7 @@ export class ActivityLogService {
     private readonly storage: StoragePort,
     maxEntries: number = DEFAULT_MAX_ENTRIES
   ) {
-    this.maxEntries = Math.min(Math.max(maxEntries, 10), 500); // Clamp 10-500
+    this.maxEntries = Math.min(Math.max(maxEntries, 1), 500); // Clamp 1-500
     this.initPromise = this.loadFromStorage();
   }
 
@@ -163,12 +163,12 @@ export class ActivityLogService {
 
   /**
    * Update maximum entries limit
-   * @param max - New maximum (clamped to 10-500)
+   * @param max - New maximum (clamped to 1-500)
    */
   async setMaxEntries(max: number): Promise<void> {
     await this.ensureInitialized();
 
-    this.maxEntries = Math.min(Math.max(max, 10), 500);
+    this.maxEntries = Math.min(Math.max(max, 1), 500);
 
     // Truncate if current entries exceed new max
     if (this.entries.length > this.maxEntries) {
