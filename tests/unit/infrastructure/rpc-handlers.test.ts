@@ -321,6 +321,14 @@ describe("RPC Router and Handlers", () => {
           get: vi.fn().mockResolvedValue({ theme: "dark" }),
           update: vi.fn().mockResolvedValue({ theme: "light" }),
         },
+        activityLog: {
+          addEntry: vi.fn().mockResolvedValue(undefined),
+          getRecent: vi.fn().mockResolvedValue([]),
+          filterBy: vi.fn().mockResolvedValue([]),
+          count: vi.fn().mockResolvedValue(0),
+          getUniqueOrigins: vi.fn().mockResolvedValue([]),
+          clear: vi.fn().mockResolvedValue(undefined),
+        },
       } as any;
     });
 

@@ -46,7 +46,7 @@ export default defineConfig({
       },
     },
     // Performance optimizations
-    isolate: false, // Faster test execution
+    isolate: true, // Proper isolation to avoid worker thread issues
     pool: "threads",
     poolOptions: {
       threads: {

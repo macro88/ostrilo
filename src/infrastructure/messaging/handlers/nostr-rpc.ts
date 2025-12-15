@@ -244,7 +244,7 @@ export class NostrRpcHandler implements RpcModule {
       if (!signResult || !signResult.sigHex) {
         return {
           ok: false,
-          error: "signing_failed",
+          error: RPC_ERROR_CODES.SIGNING_FAILED,
         };
       }
 

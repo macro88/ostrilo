@@ -69,7 +69,6 @@ describe("Activity Log Integration", () => {
         content: "test",
         tags: [],
         created_at: 1234567890,
-        pubkey: "pubkey",
       },
     };
 
@@ -92,7 +91,6 @@ describe("Activity Log Integration", () => {
         content: "test",
         tags: [],
         created_at: 1234567890,
-        pubkey: "pubkey",
       },
     };
 
@@ -116,7 +114,6 @@ describe("Activity Log Integration", () => {
           content: "deny1",
           tags: [],
           created_at: 1,
-          pubkey: "pubkey",
         },
       } as any,
       context
@@ -133,7 +130,6 @@ describe("Activity Log Integration", () => {
           content: "allow1",
           tags: [],
           created_at: 2,
-          pubkey: "pubkey",
         },
       } as any,
       context

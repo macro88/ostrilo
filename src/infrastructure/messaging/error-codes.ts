@@ -62,6 +62,9 @@ export const RPC_ERROR_CODES = {
 
   /** Approval queue encountered an error */
   APPROVAL_FAILED: "approval_failed",
+
+  /** Cryptographic signing operation failed */
+  SIGNING_FAILED: "signing_failed",
 } as const;
 
 /**
