@@ -10,7 +10,7 @@ import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager"
 export function ProfileView() {
   const { selectedUnlockedKey } = useKeyManager();
   const selectedPubkey = selectedUnlockedKey?.publicKeyHex || null;
-  
+
   const [isEditing, setIsEditing] = useState(false);
   const { profile, loading, error, updateProfile, refresh } =
     useProfile(selectedPubkey);
@@ -21,9 +21,7 @@ export function ProfileView() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const npub = selectedPubkey ? hexToNpub(selectedPubkey) : "";
-  const truncatedNpub = npub
-    ? `${npub.slice(0, 10)}...${npub.slice(-6)}`
-    : "";
+  const truncatedNpub = npub ? `${npub.slice(0, 10)}...${npub.slice(-6)}` : "";
 
   // Initialize form data when entering edit mode
   useEffect(() => {

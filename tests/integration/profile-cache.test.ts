@@ -7,9 +7,15 @@ import type { KeyVaultService } from "@/application/services/key-vault.service";
 // Mock Storage
 class MockStorage implements StoragePort {
   private store = new Map<string, any>();
-  async get<T>(key: string): Promise<T | undefined> { return this.store.get(key); }
-  async set<T>(key: string, value: T): Promise<void> { this.store.set(key, value); }
-  async remove(key: string): Promise<void> { this.store.delete(key); }
+  async get<T>(key: string): Promise<T | undefined> {
+    return this.store.get(key);
+  }
+  async set<T>(key: string, value: T): Promise<void> {
+    this.store.set(key, value);
+  }
+  async remove(key: string): Promise<void> {
+    this.store.delete(key);
+  }
 }
 
 describe("Profile Cache Isolation", () => {
@@ -48,9 +54,19 @@ describe("Profile Cache Isolation", () => {
     relay.subscribe = vi.fn((filter, onEvent, onEOSE) => {
       const author = filter.authors?.[0];
       if (author === pubkeyA) {
-        onEvent({ content: JSON.stringify(profileA), created_at: 100, kind: 0, pubkey: pubkeyA } as any);
+        onEvent({
+          content: JSON.stringify(profileA),
+          created_at: 100,
+          kind: 0,
+          pubkey: pubkeyA,
+        } as any);
       } else if (author === pubkeyB) {
-        onEvent({ content: JSON.stringify(profileB), created_at: 100, kind: 0, pubkey: pubkeyB } as any);
+        onEvent({
+          content: JSON.stringify(profileB),
+          created_at: 100,
+          kind: 0,
+          pubkey: pubkeyB,
+        } as any);
       }
       if (onEOSE) onEOSE?.();
       return "subId";
