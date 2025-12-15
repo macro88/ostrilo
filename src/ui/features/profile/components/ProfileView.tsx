@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
 import { useProfile } from "@/ui/hooks/useProfile";
-import { getSettings, listKeys } from "@/infrastructure/messaging/client";
-import type { KeyRecord } from "@/domain/types";
 import type { ProfileMetadata } from "@/domain/profile/types";
 import { Input } from "@/ui/components/ui/input";
 import { Label } from "@/ui/components/ui/label";
 import { ImageUploadField } from "./ImageUploadField";
+import { hexToNpub } from "@/domain/utils/crypto";
+import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 
 export function ProfileView() {
-  const [selectedPubkey, setSelectedPubkey] = useState<string | null>(null);
+  const { selectedUnlockedKey } = useKeyManager();
+  const selectedPubkey = selectedUnlockedKey?.publicKeyHex || null;
+  
   const [isEditing, setIsEditing] = useState(false);
   const { profile, loading, error, updateProfile, refresh } =
     useProfile(selectedPubkey);
@@ -18,29 +20,10 @@ export function ProfileView() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Get selected key on mount
-  useEffect(() => {
-    const loadSelectedKey = async () => {
-      try {
-        const settings = await getSettings();
-        const selectedKeyId = settings?.selectedKeyId;
-
-        if (selectedKeyId) {
-          const keys = await listKeys();
-          const selectedKey = keys.find(
-            (k: KeyRecord) => k.id === selectedKeyId
-          );
-          if (selectedKey) {
-            setSelectedPubkey(selectedKey.pubkey);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load selected key:", err);
-      }
-    };
-
-    loadSelectedKey();
-  }, []);
+  const npub = selectedPubkey ? hexToNpub(selectedPubkey) : "";
+  const truncatedNpub = npub
+    ? `${npub.slice(0, 10)}...${npub.slice(-6)}`
+    : "";
 
   // Initialize form data when entering edit mode
   useEffect(() => {
@@ -266,6 +249,11 @@ export function ProfileView() {
           </div>
         )}
         <h2 className="text-xl font-semibold">Profile Settings</h2>
+        {truncatedNpub && (
+          <p className="text-xs text-muted-foreground font-mono mb-1">
+            {truncatedNpub}
+          </p>
+        )}
         <p className="text-muted-foreground text-sm">
           Manage your Nostr identity
         </p>

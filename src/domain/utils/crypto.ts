@@ -523,3 +523,19 @@ export function verifyEventSignature(
     return false;
   }
 }
+
+/**
+ * Convert hex public key to npub (bech32)
+ */
+export function hexToNpub(hex: string): string {
+  try {
+    const bytes = new Uint8Array(
+      hex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
+    );
+    const words = bech32.toWords(bytes);
+    return bech32.encode(NOSTR_PUBLIC_KEY_PREFIX, words, 5000);
+  } catch (e) {
+    console.error("Failed to convert hex to npub:", e);
+    return hex; // Fallback to hex
+  }
+}

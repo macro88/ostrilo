@@ -9,3 +9,6 @@ export interface StorageSuite {
   sync: StoragePort;
   session: StoragePort;
 }
+
+// Dummy export to prevent "empty module" issues in Vitest
+export const STORAGE_PORT_VERSION = "1.0.0";

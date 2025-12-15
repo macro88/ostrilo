@@ -1,4 +1,4 @@
-import { StorageSuite } from "@/application/ports/storage";
+import type { StorageSuite } from "@/application/ports/storage";
 import type { AppSettingsV1, Theme } from "@/domain/types";
 
 const SETTINGS_KEY = "appSettings";

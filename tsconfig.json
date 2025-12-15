@@ -4,6 +4,7 @@
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
+
     "paths": {
       "@/*": ["./src/*"],
       "@/components/*": ["./src/ui/components/*"],

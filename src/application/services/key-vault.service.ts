@@ -1,4 +1,4 @@
-import { StorageSuite } from "@/application/ports/storage";
+import type { StorageSuite } from "@/application/ports/storage";
 import type {
   CryptoAead,
   CryptoKdf,
