@@ -9,11 +9,18 @@ import { SettingsView } from "@/ui/features/settings/components/SettingsView";
 import { TabKey } from "@/ui/components/navigation/BottomTabs";
 import { useOnboarding } from "@/ui/features/onboarding/hooks/useOnboarding";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
+import { AddKeyDialog } from "@/ui/components/dialogs/AddKeyDialog";
 
 export function MainApp() {
   const [activeTab, setActiveTab] = useState<TabKey>("home");
+  const [isAddKeyDialogOpen, setIsAddKeyDialogOpen] = useState(false);
   const { needsOnboarding } = useOnboarding();
-  const { selectedUnlockedKey, isLoading, isLocked } = useKeyManager();
+  const { selectedUnlockedKey, isLoading, isLocked, refreshKeys } =
+    useKeyManager();
+
+  const handleAddKey = () => {
+    setIsAddKeyDialogOpen(true);
+  };
 
   // Show onboarding for first-time users
   if (needsOnboarding) {
@@ -60,12 +67,20 @@ export function MainApp() {
   };
 
   return (
-    <AppLayout
-      selectedKey={selectedUnlockedKey?.publicKeyBech32 || "No key selected"}
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
-    >
-      {renderTabContent()}
-    </AppLayout>
+    <>
+      <AppLayout
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onAddKey={handleAddKey}
+      >
+        {renderTabContent()}
+      </AppLayout>
+
+      <AddKeyDialog
+        isOpen={isAddKeyDialogOpen}
+        onClose={() => setIsAddKeyDialogOpen(false)}
+        onSuccess={refreshKeys}
+      />
+    </>
   );
 }

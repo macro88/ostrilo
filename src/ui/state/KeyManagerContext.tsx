@@ -46,6 +46,7 @@ interface KeyManagerContextType {
   isLocked: boolean;
   isLoading: boolean;
   selectedKeyInfo?: UIKeyInfo;
+  keys: UIKeyInfo[];
   hasKeys: boolean;
 
   // Actions (all via RPC)
@@ -236,6 +237,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     isLocked: lockState.isLocked,
     isLoading,
     selectedKeyInfo,
+    keys,
     hasKeys: keys.length > 0,
 
     // Actions

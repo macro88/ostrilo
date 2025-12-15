@@ -22,6 +22,7 @@ type LockState = {
 
 export class KeyVaultService {
   private unlocked: Map<string, Uint8Array> = new Map();
+  private _sessionPassword: string | null = null;
 
   constructor(
     private storage: StorageSuite,
@@ -90,10 +91,19 @@ export class KeyVaultService {
   }
 
   async generateKey(password: string, label?: string): Promise<KeyRecord> {
+    // If password is empty and vault is unlocked, use session password
+    let effectivePassword = password;
+    if (!password) {
+      if (!this._sessionPassword) {
+        throw new Error("vault_locked");
+      }
+      effectivePassword = this._sessionPassword;
+    }
+
     const sk = crypto.getRandomValues(new Uint8Array(32));
     try {
       const pub = await this.schnorr.getPublicKey(sk);
-      const enc = await this.encryptPrivateKey(sk, password);
+      const enc = await this.encryptPrivateKey(sk, effectivePassword);
       const record: KeyRecord = {
         id: crypto.randomUUID(),
         label,
@@ -133,13 +143,22 @@ export class KeyVaultService {
     password: string,
     label?: string
   ): Promise<KeyRecord> {
+    // If password is empty and vault is unlocked, use session password
+    let effectivePassword = password;
+    if (!password) {
+      if (!this._sessionPassword) {
+        throw new Error("vault_locked");
+      }
+      effectivePassword = this._sessionPassword;
+    }
+
     const sk = this.parsePrivateKey(input);
     try {
       const pub = await this.schnorr.getPublicKey(sk);
       const pubHex = this.toHex(pub);
       const existing = (await this.listKeys()).find((k) => k.pubkey === pubHex);
       if (existing) throw new Error("key_already_exists");
-      const enc = await this.encryptPrivateKey(sk, password);
+      const enc = await this.encryptPrivateKey(sk, effectivePassword);
       const record: KeyRecord = {
         id: crypto.randomUUID(),
         label,
@@ -195,6 +214,59 @@ export class KeyVaultService {
     }
   }
 
+  async renameKey(id: string, label: string): Promise<void> {
+    const records = await this.listKeys();
+    const keyIndex = records.findIndex((r) => r.id === id);
+
+    if (keyIndex === -1) {
+      throw new Error("key_not_found");
+    }
+
+    // Update the label
+    records[keyIndex] = { ...records[keyIndex], label };
+    await this.saveKeys(records);
+  }
+
+  async deleteKey(id: string): Promise<{ newSelectedKeyId?: string }> {
+    const records = await this.listKeys();
+
+    // Prevent deleting the last key
+    if (records.length === 1) {
+      throw new Error("cannot_delete_last_key");
+    }
+
+    const keyIndex = records.findIndex((r) => r.id === id);
+
+    if (keyIndex === -1) {
+      throw new Error("key_not_found");
+    }
+
+    // Remove the key from the list
+    const updatedRecords = records.filter((r) => r.id !== id);
+    await this.saveKeys(updatedRecords);
+
+    // Remove from unlocked map if present
+    const unlockedKey = this.unlocked.get(id);
+    if (unlockedKey) {
+      zeroize(unlockedKey);
+      this.unlocked.delete(id);
+    }
+
+    // Check if we deleted the currently selected key
+    const settings = await this.getSettings();
+    let newSelectedKeyId: string | undefined;
+
+    if (settings?.selectedKeyId === id) {
+      // Auto-select the first remaining key
+      newSelectedKeyId = updatedRecords[0]?.id;
+      if (newSelectedKeyId) {
+        await this.selectKey(newSelectedKeyId);
+      }
+    }
+
+    return { newSelectedKeyId };
+  }
+
   async unlock(password: string): Promise<{ selectedKeyId?: string }> {
     const [settings, records] = await Promise.all([
       this.getSettings(),
@@ -231,6 +303,11 @@ export class KeyVaultService {
       selectedKeyId,
       lastActivity: Date.now(),
     } as any);
+
+    // Store password in memory for adding new keys without re-prompting
+    // This is safer than storage.session as it doesn't persist beyond the process lifetime
+    this._sessionPassword = password;
+
     return { selectedKeyId };
   }
 
@@ -238,6 +315,10 @@ export class KeyVaultService {
     // zeroize all unlocked private keys
     this.unlocked.forEach((sk) => zeroize(sk));
     this.unlocked.clear();
+
+    // Clear session password
+    this._sessionPassword = null;
+
     await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
       isLocked: true,
       selectedKeyId: undefined,

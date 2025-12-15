@@ -8,12 +8,13 @@ import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
 
 export function useKeyManager() {
   const context = useKeyManagerContext();
-  
+
   return {
     // State - only public information, no plaintext private keys
     isLocked: context.isLocked,
     isLoading: context.isLoading,
     selectedUnlockedKey: context.selectedKeyInfo, // Renamed but same concept (public info only)
+    keys: context.keys, // All available keys
     hasKeys: context.hasKeys,
 
     // Actions - all via RPC to background service
