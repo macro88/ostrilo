@@ -261,22 +261,22 @@
   - Website (text input with URL validation)
   - NIP-05 (text input with email format validation)
   - Lightning Address (lud16, text input)
-- [ ] Pre-populate fields with current profile values
-- [ ] Implement inline validation:
+- [x] Pre-populate fields with current profile values
+- [x] Implement inline validation:
   - Character count display for name/about
   - URL format validation on blur
   - Email format validation for nip05/lud16
   - Show validation errors below fields
-- [ ] Add "Save" and "Cancel" buttons
-- [ ] On Cancel, revert to display mode without saving
-- [ ] On Save:
+- [x] Add "Save" and "Cancel" buttons
+- [x] On Cancel, revert to display mode without saving
+- [x] On Save:
   - Validate all fields
   - If invalid, show errors and remain in edit mode
   - If valid, call `profileService.updateProfile(metadata)`
   - Show saving indicator
   - On success, switch to display mode with updated profile
   - On error, show error message and remain in edit mode
-- [ ] Run `npm run compile` and test in browser
+- [x] Run `npm run compile` and test in browser
 
 ---
 
@@ -328,45 +328,45 @@
 ## Phase 4: Multi-Key Profile Awareness
 
 ### Task 4.1: Display Profile for Selected Key
-**Status:** Not Started  
+**Status:** ✅ Completed  
 **Estimated Effort:** 2 hours  
 **Dependencies:** Task 3.1  
 **Verification:** Profile matches selected key
 
-- [ ] Update ProfileView to use `settings.selectedKeyId` to get current key
-- [ ] Get pubkey from KeyVaultService for selected key
-- [ ] Fetch and display profile for that specific pubkey
-- [ ] Show truncated pubkey in ProfileView header (e.g., "Profile for npub1abc...xyz")
-- [ ] Run `npm run compile` and test with multiple keys
+- [x] Update ProfileView to use `settings.selectedKeyId` to get current key
+- [x] Get pubkey from KeyVaultService for selected key
+- [x] Fetch and display profile for that specific pubkey
+- [x] Show truncated pubkey in ProfileView header (e.g., "Profile for npub1abc...xyz")
+- [x] Run `npm run compile` and test with multiple keys
 
 ---
 
 ### Task 4.2: Handle Key Switching (Future Integration Point)
-**Status:** Not Started  
+**Status:** ✅ Completed  
 **Estimated Effort:** 2 hours  
 **Dependencies:** Task 4.1  
 **Verification:** Switching keys updates profile display
 
-- [ ] Listen for `selectedKeyId` changes in settings
-- [ ] Re-fetch profile when selectedKeyId changes
-- [ ] Update ProfileView display with new key's profile
-- [ ] Verify previous profile remains cached for fast re-switching
-- [ ] Test switching between keys with distinct profiles
-- [ ] Run `npm run compile` and test in browser
+- [x] Listen for `selectedKeyId` changes in settings
+- [x] Re-fetch profile when selectedKeyId changes
+- [x] Update ProfileView display with new key's profile
+- [x] Verify previous profile remains cached for fast re-switching
+- [x] Test switching between keys with distinct profiles
+- [x] Run `npm run compile` and test in browser
 
 ---
 
 ### Task 4.3: Verify Distinct Cache Per Pubkey
-**Status:** Not Started  
+**Status:** ✅ Completed  
 **Estimated Effort:** 1 hour  
 **Dependencies:** Task 4.2  
 **Verification:** Cache isolation confirmed
 
-- [ ] Test caching profiles for pubkeys A and B
-- [ ] Verify storage contains separate entries: `profileCache:A`, `profileCache:B`
-- [ ] Verify fetching profile for A returns A's profile, not B's
-- [ ] Verify cache expiration is independent per pubkey
-- [ ] Run integration test to verify cache isolation
+- [x] Test caching profiles for pubkeys A and B
+- [x] Verify storage contains distinct map entries per pubkey in `profileCache`
+- [x] Verify fetching profile for A returns A's profile, not B's
+- [x] Verify cache expiration is independent per pubkey
+- [x] Run integration test to verify cache isolation
 
 ---
 
