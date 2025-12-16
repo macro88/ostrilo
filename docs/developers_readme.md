@@ -62,7 +62,13 @@ This directory contains the core business logic of the application. It is the mo
 This layer orchestrates the flow of data and commands between the UI and the domain. It contains the application services and ports.
 
 -   `ports/`: Defines the interfaces (ports) for external services like storage and cryptography. These ports are the only way the application layer communicates with the outside world.
--   `services/`: Contains the application services that implement the core use cases of the application. For example, the `KeyVaultService` is responsible for managing keys, and the `PolicyService` is responsible for managing policies.
+-   `services/`: Contains the application services that implement the core use cases of the application. For example:
+    -   `KeyVaultService` - Manages keys and signing operations
+    -   `PolicyService` - Manages per-origin permission policies
+    -   `ProfileService` - Fetches, caches, and publishes Nostr profile metadata (NIP-01 kind:0 events)
+    -   `SettingsService` - Manages user settings and preferences
+    -   `ActivityLogService` - Maintains activity logs with ring buffer
+    -   `ApprovalQueueService` - Manages pending approval requests
 
 ### `src/infrastructure`
 
@@ -70,8 +76,11 @@ This layer provides the concrete implementations (adapters) for the ports define
 
 -   `crypto/`: Contains the implementation of the cryptography port.
 -   `storage/`: Contains the implementation of the storage port.
+-   `relay/`: Contains WebSocket-based Nostr relay adapters implementing the `INostrRelay` port:
+    -   `NostrRelayAdapter` - WebSocket client for single relay connection
+    -   `RelayManager` - Multi-relay manager with parallel queries and deduplication
 -   `messaging/`: Contains the logic for communication between different parts of the extension.
-    -   `handlers/`: Contains RPC handlers including `nostr-rpc.ts` for NIP-07 operations.
+    -   `handlers/`: Contains RPC handlers including `nostr-rpc.ts` for NIP-07 operations and `profile-rpc.ts` for profile management.
 
 ### `src/extension`
 
@@ -281,6 +290,104 @@ await window.nostr.signEvent({
   created_at: Math.floor(Date.now() / 1000),
 });
 ```
+
+## Profile Metadata Management
+
+Ostrilo includes comprehensive profile metadata management that implements NIP-01 kind:0 events for Nostr profiles.
+
+### ProfileService API
+
+The `ProfileService` manages fetching, caching, and publishing Nostr profile metadata for user identities.
+
+#### Key Methods
+
+```typescript
+// Fetch profile for a specific public key (cache-first)
+async getProfile(pubkey: string, forceFetch = false): Promise<ProfileMetadata | null>
+
+// Get all profiles for managed keys
+async getAllProfiles(): Promise<Map<string, ProfileMetadata>>
+
+// Update and publish profile for current selected key
+async updateProfile(metadata: ProfileMetadata): Promise<void>
+
+// Clear cached profile(s)
+async clearCache(pubkey?: string): Promise<void>
+```
+
+#### ProfileMetadata Type
+
+Per NIP-01 specification, all fields are optional:
+
+```typescript
+interface ProfileMetadata {
+  name?: string;           // Display name (max 50 chars)
+  display_name?: string;   // Alternative display name
+  about?: string;          // Bio/description (max 500 chars)
+  picture?: string;        // Avatar URL
+  banner?: string;         // Header image URL
+  website?: string;        // Personal website
+  nip05?: string;          // NIP-05 identifier (user@domain.com)
+  lud16?: string;          // Lightning address
+}
+```
+
+### Multi-Relay Architecture
+
+ProfileService uses a multi-relay strategy for reliability:
+
+- **Default Relays:** `wss://relay.damus.io`, `wss://relay.nostr.band`, `wss://nos.lol`
+- **Query Strategy:** Parallel queries to all configured relays
+- **Deduplication:** Events deduplicated by ID across relays
+- **Event Selection:** Highest `created_at` timestamp wins
+- **Publish Strategy:** Publishes to all relays (succeeds if ≥1 accepts)
+
+### Caching Strategy
+
+Profiles are cached locally for performance:
+
+- **TTL:** 3600 seconds (1 hour) default
+- **Cache Size:** Max 50 profiles with LRU eviction
+- **Storage Key:** `profileCache` (Record<pubkey, ProfileCacheEntry>)
+- **Cache Behavior:**
+  - Zero relay queries for cached, non-expired profiles
+  - Automatic refresh on cache miss or expiration
+  - Manual refresh via `forceFetch` parameter
+
+### UI Integration
+
+The ProfileView component (`src/ui/features/profile/components/ProfileView.tsx`) provides:
+
+- **Display Mode:** Shows profile fields with fallbacks for missing data
+- **Edit Mode:** Form with validation for all NIP-01 fields
+- **Image Upload:** Upload profile pictures to nostr.build
+- **Loading States:** Spinner during fetch, error states with retry
+- **Multi-Identity:** Displays profile for currently selected key
+
+### Testing Profile Management
+
+```javascript
+// Test profile fetching in browser console
+import { rpcClient } from '@/infrastructure/messaging/client';
+
+// Get profile for current key
+const profile = await rpcClient.send('profile.get', { pubkey: '<pubkey>' });
+
+// Update profile
+await rpcClient.send('profile.update', {
+  metadata: { name: 'Alice', about: 'Nostr enthusiast' }
+});
+
+// Clear cache and force refresh
+await rpcClient.send('profile.clearCache', {});
+```
+
+### Security Considerations
+
+- **Private key isolation:** Signing happens in KeyVaultService, private keys never exposed
+- **URL sanitization:** All URLs validated with Zod schemas before rendering
+- **XSS prevention:** React auto-escaping, no `dangerouslySetInnerHTML`
+- **Untrusted content:** Profile data treated as user input, validated and sanitized
 
 ## UI Components
 
