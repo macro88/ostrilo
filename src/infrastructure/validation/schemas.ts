@@ -213,3 +213,34 @@ export const validateActivityGetRecentRequest = (data: unknown) =>
 
 export const validateActivityFilterByRequest = (data: unknown) =>
   ActivityFilterByRequestSchema.safeParse(data);
+
+// ============================================
+// Approval Queue Validation Schemas
+// ============================================
+
+/**
+ * Approval queue request validation schemas
+ * For runtime validation of approval.* RPC requests
+ */
+
+export const ApprovalActionSchema = z.enum([
+  "allow",
+  "allow_once",
+  "deny",
+  "deny_remember",
+]);
+
+export const ApprovalResolveRequestSchema = z.object({
+  requestId: z.string().uuid("Invalid request ID format"),
+  action: ApprovalActionSchema,
+});
+
+// Infer types from schemas
+export type ApprovalAction = z.infer<typeof ApprovalActionSchema>;
+export type ApprovalResolveRequest = z.infer<
+  typeof ApprovalResolveRequestSchema
+>;
+
+// Export validation functions
+export const validateApprovalResolveRequest = (data: unknown) =>
+  ApprovalResolveRequestSchema.safeParse(data);

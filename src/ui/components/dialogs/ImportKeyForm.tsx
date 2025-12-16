@@ -2,7 +2,6 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
 import {
   importKey as rpcImportKey,
   parsePrivateKey,
@@ -15,12 +14,12 @@ interface ImportKeyFormProps {
 }
 
 /**
- * Simplified key import form for adding keys to an already-unlocked vault.
- * Unlike OnboardingImportKey, this doesn't ask for a password - it uses
- * the vault's existing password automatically.
+ * Simplified key import form for adding keys to a vault.
+ * Requires password re-entry for security (zero-retention password handling).
  */
 export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
   const privateKeyRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
   const [keyName, setKeyName] = useState("");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -32,6 +31,12 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
     const keyInput = privateKeyRef.current?.value.trim();
     if (!keyInput) {
       setError("Private key is required");
+      return;
+    }
+
+    const password = passwordRef.current?.value;
+    if (!password) {
+      setError("Password is required");
       return;
     }
 
@@ -47,13 +52,15 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
       // Validate the key format first
       await parsePrivateKey(keyInput);
 
-      // Import key using vault's existing password
-      // The background service will use the current unlocked session's password
-      await rpcImportKey(keyInput, "", keyName.trim());
+      // Import key with password
+      await rpcImportKey(keyInput, password, keyName.trim());
 
-      // Clear the private key from the input for security
+      // Clear the private key and password from the inputs for security
       if (privateKeyRef.current) {
         privateKeyRef.current.value = "";
+      }
+      if (passwordRef.current) {
+        passwordRef.current.value = "";
       }
 
       onSuccess();
@@ -67,6 +74,20 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
 
   return (
     <form onSubmit={handleImportKey} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="password">Vault Password</Label>
+        <Input
+          ref={passwordRef}
+          id="password"
+          type="password"
+          placeholder="Enter your vault password"
+          disabled={isImporting}
+        />
+        <p className="text-xs text-muted-foreground">
+          Re-enter your password to encrypt the imported key
+        </p>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="privateKey">Private Key (nsec or hex)</Label>
         <div className="relative">

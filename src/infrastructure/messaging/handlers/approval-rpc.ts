@@ -7,6 +7,7 @@ import type {
 import type { ApprovalAction } from "@/domain/types";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 import { browser } from "wxt/browser";
+import { ApprovalResolveRequestSchema } from "@/infrastructure/validation/schemas";
 
 /**
  * RPC handler for approval queue operations
@@ -73,9 +74,23 @@ export class ApprovalRpcHandler implements RpcModule {
     action: ApprovalAction,
     context: ServiceContext
   ): Promise<RpcResponse> {
+    // Validate input
+    const validation = ApprovalResolveRequestSchema.safeParse({
+      requestId,
+      action,
+    });
+
+    if (!validation.success) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: validation.error.issues[0]?.message,
+      };
+    }
+
     try {
       // Get the request before resolving (for deny_remember)
-      const request = this.queue.getById(requestId);
+      const request = this.queue.getById(validation.data.requestId);
 
       if (!request) {
         return {
@@ -86,7 +101,7 @@ export class ApprovalRpcHandler implements RpcModule {
       }
 
       // If deny_remember, update policy before resolving
-      if (action === "deny_remember") {
+      if (validation.data.action === "deny_remember") {
         await context.policy.setPerKindRule(
           request.origin,
           request.event.kind,
@@ -95,7 +110,10 @@ export class ApprovalRpcHandler implements RpcModule {
       }
 
       // Resolve the request
-      const resolved = this.queue.resolve(requestId, action);
+      const resolved = this.queue.resolve(
+        validation.data.requestId,
+        validation.data.action
+      );
 
       // Update badge count after resolving
       await this.updateBadgeCount();

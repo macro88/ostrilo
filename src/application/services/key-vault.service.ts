@@ -22,7 +22,6 @@ type LockState = {
 
 export class KeyVaultService {
   private unlocked: Map<string, Uint8Array> = new Map();
-  private _sessionPassword: string | null = null;
 
   constructor(
     private storage: StorageSuite,
@@ -90,20 +89,53 @@ export class KeyVaultService {
     }
   }
 
-  async generateKey(password: string, label?: string): Promise<KeyRecord> {
-    // If password is empty and vault is unlocked, use session password
-    let effectivePassword = password;
-    if (!password) {
-      if (!this._sessionPassword) {
-        throw new Error("vault_locked");
-      }
-      effectivePassword = this._sessionPassword;
+  /**
+   * Validates that the provided password can decrypt existing keys.
+   * Throws an error if the password is incorrect.
+   * This ensures all keys in the vault use the same password.
+   */
+  private async validatePasswordAgainstExistingKeys(
+    password: string
+  ): Promise<void> {
+    const records = await this.listKeys();
+
+    // If this is the first key, no validation needed
+    if (records.length === 0) {
+      return;
     }
+
+    // Try to decrypt the first key to validate the password
+    const firstKey = records[0];
+    const salt = new Uint8Array(firstKey.salt);
+    const iv = new Uint8Array(firstKey.iv);
+    const ct = new Uint8Array(firstKey.ct);
+    const rawKey = await this.kdf.deriveKey(password, salt);
+
+    try {
+      const key = await this.aead.importKey(rawKey, ["decrypt"]);
+      const pt = await this.aead.decrypt(key, iv, ct);
+      // Successfully decrypted - password is correct
+      zeroize(pt);
+    } catch (error) {
+      // Decryption failed - wrong password
+      throw new Error("incorrect_password");
+    } finally {
+      zeroize(rawKey);
+    }
+  }
+
+  async generateKey(password: string, label?: string): Promise<KeyRecord> {
+    if (!password) {
+      throw new Error("password_required");
+    }
+
+    // Validate password can decrypt existing keys (if any)
+    await this.validatePasswordAgainstExistingKeys(password);
 
     const sk = crypto.getRandomValues(new Uint8Array(32));
     try {
       const pub = await this.schnorr.getPublicKey(sk);
-      const enc = await this.encryptPrivateKey(sk, effectivePassword);
+      const enc = await this.encryptPrivateKey(sk, password);
       const record: KeyRecord = {
         id: crypto.randomUUID(),
         label,
@@ -143,14 +175,12 @@ export class KeyVaultService {
     password: string,
     label?: string
   ): Promise<KeyRecord> {
-    // If password is empty and vault is unlocked, use session password
-    let effectivePassword = password;
     if (!password) {
-      if (!this._sessionPassword) {
-        throw new Error("vault_locked");
-      }
-      effectivePassword = this._sessionPassword;
+      throw new Error("password_required");
     }
+
+    // Validate password can decrypt existing keys (if any)
+    await this.validatePasswordAgainstExistingKeys(password);
 
     const sk = this.parsePrivateKey(input);
     try {
@@ -158,7 +188,7 @@ export class KeyVaultService {
       const pubHex = this.toHex(pub);
       const existing = (await this.listKeys()).find((k) => k.pubkey === pubHex);
       if (existing) throw new Error("key_already_exists");
-      const enc = await this.encryptPrivateKey(sk, effectivePassword);
+      const enc = await this.encryptPrivateKey(sk, password);
       const record: KeyRecord = {
         id: crypto.randomUUID(),
         label,
@@ -273,28 +303,36 @@ export class KeyVaultService {
       this.listKeys(),
     ]);
 
-    // Derive and decrypt each key into memory
-    this.unlocked.clear();
-    for (const rec of records) {
-      const salt = new Uint8Array(rec.salt);
-      const iv = new Uint8Array(rec.iv);
-      const ct = new Uint8Array(rec.ct);
-      const rawKey = await this.kdf.deriveKey(password, salt);
-      let pt: Uint8Array | null = null;
-      try {
-        const key = await this.aead.importKey(rawKey, ["decrypt"]);
-        pt = await this.aead.decrypt(key, iv, ct);
-        this.unlocked.set(rec.id, pt);
-        // Clear the local reference after storing
-        pt = null;
-      } finally {
-        // Always zeroize derived key material
-        zeroize(rawKey);
-        // Zeroize the plaintext if it exists and wasn't stored
-        if (pt) {
-          zeroize(pt);
+    // Convert password to buffer for zeroization
+    const passwordBuffer = new TextEncoder().encode(password);
+
+    try {
+      // Derive and decrypt each key into memory
+      this.unlocked.clear();
+      for (const rec of records) {
+        const salt = new Uint8Array(rec.salt);
+        const iv = new Uint8Array(rec.iv);
+        const ct = new Uint8Array(rec.ct);
+        const rawKey = await this.kdf.deriveKey(password, salt);
+        let pt: Uint8Array | null = null;
+        try {
+          const key = await this.aead.importKey(rawKey, ["decrypt"]);
+          pt = await this.aead.decrypt(key, iv, ct);
+          this.unlocked.set(rec.id, pt);
+          // Clear the local reference after storing
+          pt = null;
+        } finally {
+          // Always zeroize derived key material
+          zeroize(rawKey);
+          // Zeroize the plaintext if it exists and wasn't stored
+          if (pt) {
+            zeroize(pt);
+          }
         }
       }
+    } finally {
+      // Always zeroize password buffer
+      zeroize(passwordBuffer);
     }
 
     const selectedKeyId = settings?.selectedKeyId ?? records[0]?.id;
@@ -304,10 +342,6 @@ export class KeyVaultService {
       lastActivity: Date.now(),
     } as any);
 
-    // Store password in memory for adding new keys without re-prompting
-    // This is safer than storage.session as it doesn't persist beyond the process lifetime
-    this._sessionPassword = password;
-
     return { selectedKeyId };
   }
 
@@ -315,9 +349,6 @@ export class KeyVaultService {
     // zeroize all unlocked private keys
     this.unlocked.forEach((sk) => zeroize(sk));
     this.unlocked.clear();
-
-    // Clear session password
-    this._sessionPassword = null;
 
     await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
       isLocked: true,

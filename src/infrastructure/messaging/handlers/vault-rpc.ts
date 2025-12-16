@@ -85,17 +85,14 @@ export class VaultRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "vault.generate" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Only validate password if it's provided (non-empty)
-    // Empty password is allowed when vault is unlocked - service will use session password
-    if (message.password) {
-      const passwordValidation = PasswordSchema.safeParse(message.password);
-      if (!passwordValidation.success) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_PASSWORD,
-          details: passwordValidation.error.issues[0]?.message,
-        };
-      }
+    // Validate password (required)
+    const passwordValidation = PasswordSchema.safeParse(message.password);
+    if (!passwordValidation.success) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+        details: passwordValidation.error.issues[0]?.message,
+      };
     }
 
     // Validate label if provided
@@ -118,12 +115,22 @@ export class VaultRpcHandler implements RpcModule {
       return { ok: true, data };
     } catch (error) {
       // Translate service errors to RPC codes
-      if (error instanceof Error && error.message === "vault_locked") {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.LOCKED,
-          details: "Vault is locked. Please unlock first.",
-        };
+      if (error instanceof Error) {
+        if (error.message === "password_required") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+            details: "Password is required",
+          };
+        }
+        if (error.message === "incorrect_password") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+            details:
+              "Incorrect password. Please use the same password as your existing keys.",
+          };
+        }
       }
       throw error; // Re-throw unexpected errors
     }
@@ -143,17 +150,14 @@ export class VaultRpcHandler implements RpcModule {
       };
     }
 
-    // Only validate password if it's provided (non-empty)
-    // Empty password is allowed when vault is unlocked - service will use session password
-    if (message.password) {
-      const passwordValidation = PasswordSchema.safeParse(message.password);
-      if (!passwordValidation.success) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_PASSWORD,
-          details: passwordValidation.error.issues[0]?.message,
-        };
-      }
+    // Validate password (required)
+    const passwordValidation = PasswordSchema.safeParse(message.password);
+    if (!passwordValidation.success) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+        details: passwordValidation.error.issues[0]?.message,
+      };
     }
 
     // Validate label if provided
@@ -183,6 +187,14 @@ export class VaultRpcHandler implements RpcModule {
             ok: false,
             error: RPC_ERROR_CODES.KEY_ALREADY_EXISTS,
             details: "A key with this public key already exists",
+          };
+        }
+        if (error.message === "incorrect_password") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+            details:
+              "Incorrect password. Please use the same password as your existing keys.",
           };
         }
         if (error.message === "vault_locked") {

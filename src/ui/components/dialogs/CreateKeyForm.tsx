@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,17 +11,23 @@ interface CreateKeyFormProps {
 }
 
 /**
- * Simplified key creation form for adding keys to an already-unlocked vault.
- * Unlike OnboardingCreateKey, this doesn't ask for a password - it uses
- * the vault's existing password automatically.
+ * Simplified key creation form for adding keys to a vault.
+ * Requires password re-entry for security (zero-retention password handling).
  */
 export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
+  const passwordRef = useRef<HTMLInputElement>(null);
   const [keyName, setKeyName] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
 
   const handleGenerateKey = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const password = passwordRef.current?.value;
+    if (!password) {
+      setError("Password is required");
+      return;
+    }
 
     if (!keyName.trim()) {
       setError("Key name is required");
@@ -32,9 +38,11 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
     setError("");
 
     try {
-      // Generate key using vault's existing password
-      // The background service will use the current unlocked session's password
-      await rpcGenerateKey("", keyName.trim());
+      await rpcGenerateKey(password, keyName.trim());
+      // Clear password from input
+      if (passwordRef.current) {
+        passwordRef.current.value = "";
+      }
       onSuccess();
     } catch (error) {
       console.error("Failed to generate key:", error);
@@ -49,6 +57,21 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
   return (
     <form onSubmit={handleGenerateKey} className="space-y-4">
       <div className="space-y-2">
+        <Label htmlFor="password">Vault Password</Label>
+        <Input
+          ref={passwordRef}
+          id="password"
+          type="password"
+          placeholder="Enter your vault password"
+          disabled={isGenerating}
+          autoFocus
+        />
+        <p className="text-xs text-muted-foreground">
+          Re-enter your password to encrypt the new key
+        </p>
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="keyName">Key Name (Optional)</Label>
         <Input
           id="keyName"
@@ -57,7 +80,6 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
           placeholder="e.g., Personal, Work, Gaming"
           disabled={isGenerating}
           maxLength={50}
-          autoFocus
         />
         <p className="text-xs text-muted-foreground">
           Give this key a memorable name to identify it later
@@ -91,14 +113,6 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
             "Create Key"
           )}
         </Button>
-      </div>
-
-      <div className="p-3 bg-muted/50 rounded-lg border border-border">
-        <p className="text-xs text-muted-foreground">
-          <strong>Note:</strong> The new key will be encrypted with your vault's
-          existing password. You can export and backup the private key from the
-          Settings page after creation.
-        </p>
       </div>
     </form>
   );
