@@ -89,7 +89,49 @@ export class KeyVaultService {
     }
   }
 
+  /**
+   * Validates that the provided password can decrypt existing keys.
+   * Throws an error if the password is incorrect.
+   * This ensures all keys in the vault use the same password.
+   */
+  private async validatePasswordAgainstExistingKeys(
+    password: string
+  ): Promise<void> {
+    const records = await this.listKeys();
+
+    // If this is the first key, no validation needed
+    if (records.length === 0) {
+      return;
+    }
+
+    // Try to decrypt the first key to validate the password
+    const firstKey = records[0];
+    const salt = new Uint8Array(firstKey.salt);
+    const iv = new Uint8Array(firstKey.iv);
+    const ct = new Uint8Array(firstKey.ct);
+    const rawKey = await this.kdf.deriveKey(password, salt);
+
+    try {
+      const key = await this.aead.importKey(rawKey, ["decrypt"]);
+      const pt = await this.aead.decrypt(key, iv, ct);
+      // Successfully decrypted - password is correct
+      zeroize(pt);
+    } catch (error) {
+      // Decryption failed - wrong password
+      throw new Error("incorrect_password");
+    } finally {
+      zeroize(rawKey);
+    }
+  }
+
   async generateKey(password: string, label?: string): Promise<KeyRecord> {
+    if (!password) {
+      throw new Error("password_required");
+    }
+
+    // Validate password can decrypt existing keys (if any)
+    await this.validatePasswordAgainstExistingKeys(password);
+
     const sk = crypto.getRandomValues(new Uint8Array(32));
     try {
       const pub = await this.schnorr.getPublicKey(sk);
@@ -133,6 +175,13 @@ export class KeyVaultService {
     password: string,
     label?: string
   ): Promise<KeyRecord> {
+    if (!password) {
+      throw new Error("password_required");
+    }
+
+    // Validate password can decrypt existing keys (if any)
+    await this.validatePasswordAgainstExistingKeys(password);
+
     const sk = this.parsePrivateKey(input);
     try {
       const pub = await this.schnorr.getPublicKey(sk);
@@ -195,34 +244,95 @@ export class KeyVaultService {
     }
   }
 
+  async renameKey(id: string, label: string): Promise<void> {
+    const records = await this.listKeys();
+    const keyIndex = records.findIndex((r) => r.id === id);
+
+    if (keyIndex === -1) {
+      throw new Error("key_not_found");
+    }
+
+    // Update the label
+    records[keyIndex] = { ...records[keyIndex], label };
+    await this.saveKeys(records);
+  }
+
+  async deleteKey(id: string): Promise<{ newSelectedKeyId?: string }> {
+    const records = await this.listKeys();
+
+    // Prevent deleting the last key
+    if (records.length === 1) {
+      throw new Error("cannot_delete_last_key");
+    }
+
+    const keyIndex = records.findIndex((r) => r.id === id);
+
+    if (keyIndex === -1) {
+      throw new Error("key_not_found");
+    }
+
+    // Remove the key from the list
+    const updatedRecords = records.filter((r) => r.id !== id);
+    await this.saveKeys(updatedRecords);
+
+    // Remove from unlocked map if present
+    const unlockedKey = this.unlocked.get(id);
+    if (unlockedKey) {
+      zeroize(unlockedKey);
+      this.unlocked.delete(id);
+    }
+
+    // Check if we deleted the currently selected key
+    const settings = await this.getSettings();
+    let newSelectedKeyId: string | undefined;
+
+    if (settings?.selectedKeyId === id) {
+      // Auto-select the first remaining key
+      newSelectedKeyId = updatedRecords[0]?.id;
+      if (newSelectedKeyId) {
+        await this.selectKey(newSelectedKeyId);
+      }
+    }
+
+    return { newSelectedKeyId };
+  }
+
   async unlock(password: string): Promise<{ selectedKeyId?: string }> {
     const [settings, records] = await Promise.all([
       this.getSettings(),
       this.listKeys(),
     ]);
 
-    // Derive and decrypt each key into memory
-    this.unlocked.clear();
-    for (const rec of records) {
-      const salt = new Uint8Array(rec.salt);
-      const iv = new Uint8Array(rec.iv);
-      const ct = new Uint8Array(rec.ct);
-      const rawKey = await this.kdf.deriveKey(password, salt);
-      let pt: Uint8Array | null = null;
-      try {
-        const key = await this.aead.importKey(rawKey, ["decrypt"]);
-        pt = await this.aead.decrypt(key, iv, ct);
-        this.unlocked.set(rec.id, pt);
-        // Clear the local reference after storing
-        pt = null;
-      } finally {
-        // Always zeroize derived key material
-        zeroize(rawKey);
-        // Zeroize the plaintext if it exists and wasn't stored
-        if (pt) {
-          zeroize(pt);
+    // Convert password to buffer for zeroization
+    const passwordBuffer = new TextEncoder().encode(password);
+
+    try {
+      // Derive and decrypt each key into memory
+      this.unlocked.clear();
+      for (const rec of records) {
+        const salt = new Uint8Array(rec.salt);
+        const iv = new Uint8Array(rec.iv);
+        const ct = new Uint8Array(rec.ct);
+        const rawKey = await this.kdf.deriveKey(password, salt);
+        let pt: Uint8Array | null = null;
+        try {
+          const key = await this.aead.importKey(rawKey, ["decrypt"]);
+          pt = await this.aead.decrypt(key, iv, ct);
+          this.unlocked.set(rec.id, pt);
+          // Clear the local reference after storing
+          pt = null;
+        } finally {
+          // Always zeroize derived key material
+          zeroize(rawKey);
+          // Zeroize the plaintext if it exists and wasn't stored
+          if (pt) {
+            zeroize(pt);
+          }
         }
       }
+    } finally {
+      // Always zeroize password buffer
+      zeroize(passwordBuffer);
     }
 
     const selectedKeyId = settings?.selectedKeyId ?? records[0]?.id;
@@ -231,6 +341,7 @@ export class KeyVaultService {
       selectedKeyId,
       lastActivity: Date.now(),
     } as any);
+
     return { selectedKeyId };
   }
 
@@ -238,6 +349,7 @@ export class KeyVaultService {
     // zeroize all unlocked private keys
     this.unlocked.forEach((sk) => zeroize(sk));
     this.unlocked.clear();
+
     await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
       isLocked: true,
       selectedKeyId: undefined,

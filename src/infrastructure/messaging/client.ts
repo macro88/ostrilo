@@ -113,6 +113,14 @@ export async function selectKey(id: string) {
   return rpc<null>({ type: "vault.select", id });
 }
 
+export async function renameKey(id: string, label: string) {
+  return rpc<null>({ type: "vault.renameKey", id, label });
+}
+
+export async function deleteKey(id: string) {
+  return rpc<{ newSelectedKeyId?: string }>({ type: "vault.deleteKey", id });
+}
+
 export async function getLockState() {
   return rpc<{ isLocked: boolean; selectedKeyId?: string }>({
     type: "state.getLock",

@@ -21,6 +21,8 @@ export type RpcRequest =
   | { type: "vault.generate"; password: string; label?: string }
   | { type: "vault.import"; keyInput: string; password: string; label?: string }
   | { type: "vault.select"; id: string }
+  | { type: "vault.renameKey"; id: string; label: string }
+  | { type: "vault.deleteKey"; id: string }
   | { type: "vault.export"; keyId?: string }
   | { type: "keys.list" }
   | { type: "state.getLock" }

@@ -50,6 +50,9 @@ export const RPC_ERROR_CODES = {
   /** A key with the same public key already exists */
   KEY_ALREADY_EXISTS: "key_already_exists",
 
+  /** The specified key ID was not found in the vault */
+  KEY_NOT_FOUND: "key_not_found",
+
   // Operation Errors
   /** Approval request exceeded time limit */
   TIMEOUT: "timeout",

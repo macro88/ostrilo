@@ -43,6 +43,12 @@ export class VaultRpcHandler implements RpcModule {
       case "keys.list":
         return this.handleListKeys(context);
 
+      case "vault.renameKey":
+        return this.handleRenameKey(message, context);
+
+      case "vault.deleteKey":
+        return this.handleDeleteKey(message, context);
+
       default:
         return {
           ok: false,
@@ -79,7 +85,7 @@ export class VaultRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "vault.generate" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Validate password
+    // Validate password (required)
     const passwordValidation = PasswordSchema.safeParse(message.password);
     if (!passwordValidation.success) {
       return {
@@ -101,11 +107,33 @@ export class VaultRpcHandler implements RpcModule {
       }
     }
 
-    const data = await context.vault.generateKey(
-      message.password,
-      message.label
-    );
-    return { ok: true, data };
+    try {
+      const data = await context.vault.generateKey(
+        message.password,
+        message.label
+      );
+      return { ok: true, data };
+    } catch (error) {
+      // Translate service errors to RPC codes
+      if (error instanceof Error) {
+        if (error.message === "password_required") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+            details: "Password is required",
+          };
+        }
+        if (error.message === "incorrect_password") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+            details:
+              "Incorrect password. Please use the same password as your existing keys.",
+          };
+        }
+      }
+      throw error; // Re-throw unexpected errors
+    }
   }
 
   private async handleImport(
@@ -122,7 +150,7 @@ export class VaultRpcHandler implements RpcModule {
       };
     }
 
-    // Validate password
+    // Validate password (required)
     const passwordValidation = PasswordSchema.safeParse(message.password);
     if (!passwordValidation.success) {
       return {
@@ -159,6 +187,21 @@ export class VaultRpcHandler implements RpcModule {
             ok: false,
             error: RPC_ERROR_CODES.KEY_ALREADY_EXISTS,
             details: "A key with this public key already exists",
+          };
+        }
+        if (error.message === "incorrect_password") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+            details:
+              "Incorrect password. Please use the same password as your existing keys.",
+          };
+        }
+        if (error.message === "vault_locked") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.LOCKED,
+            details: "Vault is locked. Please unlock first.",
           };
         }
       }
@@ -237,5 +280,82 @@ export class VaultRpcHandler implements RpcModule {
   private async handleListKeys(context: ServiceContext): Promise<RpcResponse> {
     const data = await context.vault.listKeys();
     return { ok: true, data };
+  }
+
+  private async handleRenameKey(
+    message: Extract<RpcRequest, { type: "vault.renameKey" }>,
+    context: ServiceContext
+  ): Promise<RpcResponse> {
+    // Validate key ID
+    const keyIdValidation = KeyIdSchema.safeParse(message.id);
+    if (!keyIdValidation.success) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: keyIdValidation.error.issues[0]?.message,
+      };
+    }
+
+    // Validate label
+    const labelValidation = LabelSchema.safeParse(message.label);
+    if (!labelValidation.success) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: labelValidation.error.issues[0]?.message,
+      };
+    }
+
+    try {
+      await context.vault.renameKey(message.id, message.label);
+      return { ok: true, data: null };
+    } catch (error) {
+      if (error instanceof Error && error.message === "key_not_found") {
+        return {
+          ok: false,
+          error: RPC_ERROR_CODES.KEY_NOT_FOUND,
+          details: "The specified key does not exist",
+        };
+      }
+      throw error;
+    }
+  }
+
+  private async handleDeleteKey(
+    message: Extract<RpcRequest, { type: "vault.deleteKey" }>,
+    context: ServiceContext
+  ): Promise<RpcResponse> {
+    // Validate key ID
+    const keyIdValidation = KeyIdSchema.safeParse(message.id);
+    if (!keyIdValidation.success) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: keyIdValidation.error.issues[0]?.message,
+      };
+    }
+
+    try {
+      const data = await context.vault.deleteKey(message.id);
+      return { ok: true, data };
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === "key_not_found") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.KEY_NOT_FOUND,
+            details: "The specified key does not exist",
+          };
+        }
+        if (error.message === "cannot_delete_last_key") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.INVALID_REQUEST,
+            details: "Cannot delete the last remaining key",
+          };
+        }
+      }
+      throw error;
+    }
   }
 }

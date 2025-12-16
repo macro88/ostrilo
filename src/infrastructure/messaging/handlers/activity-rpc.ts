@@ -1,6 +1,10 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
 import { RPC_ERROR_CODES } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
+import {
+  ActivityGetRecentRequestSchema,
+  ActivityFilterByRequestSchema,
+} from "@/infrastructure/validation/schemas";
 
 /**
  * RPC handler for activity log operations
@@ -34,8 +38,22 @@ export class ActivityRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "activity.getRecent" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    const limit = message.limit ?? 10;
-    const offset = message.offset ?? 0;
+    // Validate input
+    const validation = ActivityGetRecentRequestSchema.safeParse({
+      limit: message.limit,
+      offset: message.offset,
+    });
+
+    if (!validation.success) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: validation.error.issues[0]?.message,
+      };
+    }
+
+    const limit = validation.data.limit ?? 10;
+    const offset = validation.data.offset ?? 0;
 
     const entries = await context.activityLog.getRecent(limit, offset);
     const total = await context.activityLog.count();
@@ -50,11 +68,27 @@ export class ActivityRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "activity.filterBy" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    const filters = {
+    // Validate input
+    const validation = ActivityFilterByRequestSchema.safeParse({
       origin: message.origin,
       kind: message.kind,
-      limit: message.limit ?? 10,
-      offset: message.offset ?? 0,
+      limit: message.limit,
+      offset: message.offset,
+    });
+
+    if (!validation.success) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.INVALID_REQUEST,
+        details: validation.error.issues[0]?.message,
+      };
+    }
+
+    const filters = {
+      origin: validation.data.origin,
+      kind: validation.data.kind,
+      limit: validation.data.limit ?? 10,
+      offset: validation.data.offset ?? 0,
     };
 
     const entries = await context.activityLog.filterBy(filters);

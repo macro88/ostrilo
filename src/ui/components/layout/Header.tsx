@@ -3,31 +3,27 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import mascotLogo from "@/assets/ostrilo_mascot_front.svg";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
+import { KeySelector } from "./KeySelector";
 
 interface HeaderProps {
-  selectedKey?: string;
-  avatar?: string;
+  onAddKey?: () => void;
 }
 
-export function Header({ selectedKey, avatar }: HeaderProps) {
+export function Header({ onAddKey }: HeaderProps) {
   const [copied, setCopied] = useState(false);
-  const { lock } = useKeyManager();
+  const { lock, selectedUnlockedKey } = useKeyManager();
+
   const handleCopyKey = async () => {
-    if (selectedKey) {
-      await navigator.clipboard.writeText(selectedKey);
+    if (selectedUnlockedKey?.publicKeyBech32) {
+      await navigator.clipboard.writeText(selectedUnlockedKey.publicKeyBech32);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const truncatedKey = selectedKey
-    ? `${selectedKey.slice(0, 8)}...${selectedKey.slice(-4)}`
-    : "No key selected";
-
   return (
     <header className="flex items-center justify-between px-3 py-3 bg-background border-b border-border w-full max-w-full">
-      {/* Left side - Menu/hamburger placeholder */}
-
+      {/* Left side - Logo */}
       <img src={mascotLogo} alt="Ostrilo Mascot" className="w-6 h-6 shrink-0" />
 
       {/* Center - Wallet name */}
@@ -35,7 +31,7 @@ export function Header({ selectedKey, avatar }: HeaderProps) {
         Ostrilo Signer
       </h1>
 
-      {/* Right side - Avatar and key */}
+      {/* Right side - Key selector and actions */}
       <div className="flex items-center gap-2 shrink-0">
         <Button
           variant="ghost"
@@ -46,29 +42,21 @@ export function Header({ selectedKey, avatar }: HeaderProps) {
         >
           <Lock className="w-4 h-4" />
         </Button>
-        {/* Avatar placeholder */}
-        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-          {avatar ? (
-            <img src={avatar} alt="Avatar" className="w-8 h-8 rounded-full" />
-          ) : (
-            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-              <span className="text-xs text-primary font-semibold">
-                {selectedKey ? selectedKey.slice(0, 1).toUpperCase() : "?"}
-              </span>
-            </div>
-          )}
-        </div>
+
+        {/* Key Selector - replaces old avatar + key display */}
+        <KeySelector onAddKey={onAddKey} />
 
         {/* Copy key button */}
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={handleCopyKey}
-          className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground max-w-[150px] overflow-hidden"
-          disabled={!selectedKey}
+          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          disabled={!selectedUnlockedKey}
+          aria-label={copied ? "Copied!" : "Copy public key"}
+          title={copied ? "Copied!" : "Copy public key"}
         >
-          <span className="mr-1 truncate max-w-[110px]">{truncatedKey}</span>
-          <Copy className="w-3 h-3 shrink-0" />
+          <Copy className="w-4 h-4" />
         </Button>
       </div>
     </header>

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -12,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Avatar, AvatarFallback, AvatarImage } from "@/ui/components/ui/avatar";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import {
   Theme,
@@ -29,9 +31,13 @@ import {
   Trash2,
   Computer,
   Fingerprint,
+  Edit,
+  Check,
 } from "lucide-react";
 import { Pubkey } from "@/components/common/pubkey";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
+import { useProfileMetadata } from "@/ui/hooks/useProfileMetadata";
+import { renameKey, deleteKey } from "@/infrastructure/messaging/client";
 
 export function SettingsView() {
   const {
@@ -50,10 +56,17 @@ export function SettingsView() {
     removeOriginPolicy,
     clearActivityLog,
   } = useAppSettings();
-  const { selectedUnlockedKey } = useKeyManager();
+  const { selectedUnlockedKey, keys, selectKey } = useKeyManager();
   const [newRelay, setNewRelay] = useState("");
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+
+  // Fetch profile metadata for all keys
+  const pubkeys = keys.map((key) => key.publicKeyHex);
+  const { profiles } = useProfileMetadata(pubkeys);
+
   useState(() => {
     // Check if biometric authentication is available
     if ("credentials" in navigator && "create" in navigator.credentials) {
@@ -101,6 +114,58 @@ export function SettingsView() {
     }
   };
 
+  const handleSetActiveKey = async (keyId: string) => {
+    try {
+      await selectKey(keyId);
+    } catch (error) {
+      console.error("Failed to set active key:", error);
+    }
+  };
+
+  const handleStartEdit = (keyId: string, currentLabel: string) => {
+    setEditingKeyId(keyId);
+    setEditLabel(currentLabel);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingKeyId(null);
+    setEditLabel("");
+  };
+
+  const handleSaveEdit = async (keyId: string) => {
+    try {
+      await renameKey(keyId, editLabel);
+      setEditingKeyId(null);
+      setEditLabel("");
+    } catch (error) {
+      console.error("Failed to rename key:", error);
+      alert("Failed to rename key. Please try again.");
+    }
+  };
+
+  const handleDeleteKey = async (keyId: string) => {
+    if (keys.length === 1) {
+      alert("Cannot delete the last key. At least one key must remain.");
+      return;
+    }
+
+    if (
+      !confirm(
+        "Are you sure you want to delete this key? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await deleteKey(keyId);
+      // If this was the active key, the service will auto-select another
+    } catch (error) {
+      console.error("Failed to delete key:", error);
+      alert("Failed to delete key. Please try again.");
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto p-3 space-y-4">
       <div className="text-center mb-4">
@@ -125,6 +190,131 @@ export function SettingsView() {
         ) : (
           <p className="text-sm text-muted-foreground">No key selected</p>
         )}
+      </div>
+
+      {/* Keys & Identities Section */}
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Key className="h-4 w-4" aria-hidden="true" />
+          <h3 className="font-medium">Keys & Identities</h3>
+        </div>
+        <div
+          className="space-y-3"
+          role="list"
+          aria-label="Manage your Nostr keys"
+        >
+          {keys.map((key) => {
+            const profile = profiles.get(key.publicKeyHex);
+            const displayName =
+              profile?.display_name ||
+              profile?.name ||
+              key.label ||
+              "Unnamed Key";
+            const avatarUrl = profile?.picture;
+            const isActive = key.id === selectedUnlockedKey?.id;
+            const isEditing = editingKeyId === key.id;
+            const truncatedNpub = key.publicKeyBech32
+              ? `${key.publicKeyBech32.slice(
+                  0,
+                  16
+                )}...${key.publicKeyBech32.slice(-8)}`
+              : "";
+
+            return (
+              <div
+                key={key.id}
+                className={cn(
+                  "flex items-center gap-3 p-3 rounded-lg border",
+                  isActive ? "border-primary bg-primary/5" : "border-border"
+                )}
+              >
+                <Avatar className="h-10 w-10">
+                  {avatarUrl && (
+                    <AvatarImage src={avatarUrl} alt={displayName} />
+                  )}
+                  <AvatarFallback className="text-sm">
+                    {displayName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+
+                <div className="flex-1 min-w-0">
+                  {isEditing ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editLabel}
+                        onChange={(e) => setEditLabel(e.target.value)}
+                        className="h-8"
+                        placeholder="Enter label"
+                        autoFocus
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleSaveEdit(key.id)}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleCancelEdit}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">
+                          {displayName}
+                        </span>
+                        {isActive && (
+                          <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {truncatedNpub}
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {!isEditing && (
+                  <div className="flex items-center gap-1">
+                    {!isActive && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleSetActiveKey(key.id)}
+                        className="text-xs h-8"
+                      >
+                        Set Active
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleStartEdit(key.id, key.label)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteKey(key.id)}
+                      disabled={keys.length === 1}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Theme Section */}
