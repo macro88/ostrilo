@@ -13,10 +13,45 @@ import { useProfileMetadata } from "@/ui/hooks/useProfileMetadata";
 import { cn } from "@/lib/utils";
 import type { UIKeyInfo } from "@/ui/state/KeyManagerContext";
 
+/**
+ * Props for the KeySelector component
+ */
 interface KeySelectorProps {
+  /**
+   * Optional callback invoked when the "Add Key" button is clicked.
+   * If not provided, the "Add Key" button will not be shown.
+   */
   onAddKey?: () => void;
 }
 
+/**
+ * Multi-Key Selector Component
+ * 
+ * Displays a dropdown menu that allows users to switch between multiple Nostr keys.
+ * Shows the currently active key with profile avatar and display name, fetched from
+ * Nostr relays. Integrates with the KeyManagerContext for key operations.
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <KeySelector onAddKey={() => setShowAddDialog(true)} />
+ * ```
+ * 
+ * Features:
+ * - Profile-aware key display with avatars and names from Nostr metadata
+ * - Dropdown menu with all available keys
+ * - Visual indicator (checkmark) for currently selected key
+ * - Optional "Add Key" action at bottom of dropdown
+ * - Loading states during key switching
+ * - Keyboard navigation support (Arrow keys, Enter, Escape)
+ * - WCAG 2.1 AA compliant with proper ARIA attributes
+ * - Memoized for performance optimization
+ * 
+ * @remarks
+ * This component uses Radix UI DropdownMenu for accessible dropdown behavior.
+ * Profile metadata is fetched via useProfileMetadata hook and cached for 5 minutes.
+ * All keys share the same vault password and are encrypted at rest.
+ */
 export const KeySelector = memo(function KeySelector({
   onAddKey,
 }: KeySelectorProps) {

@@ -44,7 +44,7 @@ describe("KeySelector component logic", () => {
         publicKeyBech32: "npub1abc123def456",
       };
       
-      const profile = {
+      const profile: { name: string; display_name?: string } = {
         name: "Bob Jones",
       };
       
@@ -62,8 +62,7 @@ describe("KeySelector component logic", () => {
       };
       
       const profile = undefined;
-      
-      const displayName = profile?.display_name || profile?.name || key.label || "Unnamed Key";
+      const displayName = (profile as any)?.display_name || (profile as any)?.name || key.label || "Unnamed Key";
       
       expect(displayName).toBe("Work Account");
     });
@@ -73,11 +72,11 @@ describe("KeySelector component logic", () => {
         id: "key1",
         publicKeyHex: "abc123",
         publicKeyBech32: "npub1abc123def456",
+        // no label
       };
       
       const profile = undefined;
-      
-      const displayName = profile?.display_name || profile?.name || key.label || "Unnamed Key";
+      const displayName = (profile as any)?.display_name || (profile as any)?.name || (key as any).label || "Unnamed Key";
       
       expect(displayName).toBe("Unnamed Key");
     });
@@ -108,10 +107,14 @@ describe("KeySelector component logic", () => {
       
       const selectedKeyId = "key2";
       
-      keys.forEach((key) => {
+      const results = keys.map((key) => {
         const isSelected = key.id === selectedKeyId;
-        expect(isSelected).toBe(key.id === "key2");
+        return { id: key.id, isSelected };
       });
+      
+      expect(results[0].isSelected).toBe(false);
+      expect(results[1].isSelected).toBe(true);
+      expect(results[2].isSelected).toBe(false);
     });
 
     it("should prevent switching when already switching", () => {
@@ -119,8 +122,8 @@ describe("KeySelector component logic", () => {
       const targetKeyId = "key2";
       const currentKeyId = "key1";
       
-      // Logic from handleSelectKey
-      const shouldSwitch = !(targetKeyId === currentKeyId || isSwitching);
+      // Logic from handleSelectKey  
+      const shouldSwitch = targetKeyId !== currentKeyId && !isSwitching;
       
       expect(shouldSwitch).toBe(false);
     });
@@ -130,7 +133,7 @@ describe("KeySelector component logic", () => {
       const targetKeyId = "key1";
       const currentKeyId = "key1";
       
-      const shouldSwitch = !(targetKeyId === currentKeyId || isSwitching);
+      const shouldSwitch = targetKeyId !== currentKeyId && !isSwitching;
       
       expect(shouldSwitch).toBe(false);
     });
@@ -140,7 +143,7 @@ describe("KeySelector component logic", () => {
       const targetKeyId = "key2";
       const currentKeyId = "key1";
       
-      const shouldSwitch = !(targetKeyId === currentKeyId || isSwitching);
+      const shouldSwitch = targetKeyId !== currentKeyId && !isSwitching;
       
       expect(shouldSwitch).toBe(true);
     });

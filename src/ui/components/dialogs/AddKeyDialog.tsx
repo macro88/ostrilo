@@ -10,14 +10,72 @@ import { KeyRound, Upload } from "lucide-react";
 import { CreateKeyForm } from "./CreateKeyForm";
 import { ImportKeyForm } from "./ImportKeyForm";
 
+/**
+ * Props for the AddKeyDialog component
+ */
 interface AddKeyDialogProps {
+  /**
+   * Controls whether the dialog is visible
+   */
   isOpen: boolean;
+  
+  /**
+   * Callback invoked when the dialog should be closed
+   */
   onClose: () => void;
+  
+  /**
+   * Optional callback invoked after a key is successfully created or imported.
+   * Receives the ID of the newly added key.
+   */
   onSuccess?: (keyId: string) => void;
 }
 
+/**
+ * Flow step type for the add key dialog
+ */
 type FlowStep = "choose" | "create" | "import";
 
+/**
+ * Add Key Dialog Component
+ * 
+ * Modal dialog for adding additional Nostr keys to the vault after initial onboarding.
+ * Supports both creating new keys and importing existing ones.
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * const [isDialogOpen, setIsDialogOpen] = useState(false);
+ * 
+ * <AddKeyDialog
+ *   isOpen={isDialogOpen}
+ *   onClose={() => setIsDialogOpen(false)}
+ *   onSuccess={(keyId) => {
+ *     console.log('New key added:', keyId);
+ *     selectKey(keyId);
+ *   }}
+ * />
+ * ```
+ * 
+ * Features:
+ * - Two-step flow: Choose action → Create or Import
+ * - Reuses session password when vault is unlocked (no password prompt)
+ * - Auto-selects newly created/imported key
+ * - Validates imported key format (nsec1 or hex)
+ * - Shows success/error notifications
+ * - Accessible with keyboard navigation and screen readers
+ * 
+ * Flow:
+ * 1. **Choose Step**: User selects "Create New Key" or "Import Existing Key"
+ * 2. **Create Step**: Shows CreateKeyForm with label input and generate button
+ * 3. **Import Step**: Shows ImportKeyForm with private key and label inputs
+ * 4. **Success**: Dialog closes and onSuccess callback is invoked
+ * 
+ * @remarks
+ * This component uses Radix UI Dialog for accessible modal behavior.
+ * All key operations go through the KeyVaultService via RPC.
+ * Private keys are encrypted with AES-GCM before storage.
+ */
 export function AddKeyDialog({
   isOpen,
   onClose,

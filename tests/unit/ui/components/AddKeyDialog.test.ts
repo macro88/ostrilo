@@ -98,14 +98,20 @@ describe("AddKeyDialog component logic", () => {
     });
 
     it("should handle missing onSuccess callback gracefully", () => {
+      let executed = false;
       const onSuccess = undefined;
       
       // handleSuccess logic - should not throw
-      expect(() => {
-        if (onSuccess) {
-          onSuccess();
+      try {
+        if (onSuccess !== undefined) {
+          (onSuccess as any)("");
         }
-      }).not.toThrow();
+        executed = true;
+      } catch (error) {
+        executed = false;
+      }
+      
+      expect(executed).toBe(true);
     });
 
     it("should close dialog and reset after success", () => {
