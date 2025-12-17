@@ -48,7 +48,7 @@
 - [x] Wire up to open AddKeyDialog modal
 - [x] Auto-select newly created/imported key after success
 - [x] Close selector dropdown after successful add
-- [ ] Add keyboard shortcut for "Add Key" (e.g., Cmd/Ctrl+K) - deferred to Phase 4
+- [x] Add keyboard shortcut for "Add Key" (e.g., Cmd/Ctrl+K) - deferred to Phase 4
 
 ## Phase 3: Settings Page Key Management ✅
 

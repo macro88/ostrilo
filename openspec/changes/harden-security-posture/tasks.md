@@ -22,8 +22,8 @@
 - [x] Ensure `AddKeyDialog` passes password to `generateKey`/`importKey` RPCs
 
 ## Phase 4: Secure Key Backup (Full Stack)
-- [ ] Update `generateKey` RPC to return only `{ id, pubkey }` (remove `nsec`)
-- [ ] Implement `revealKey` RPC method in `KeyVaultService` and `VaultRpcHandler`
-- [ ] Update `OnboardingCreateKey` to use `revealKey` for backup step
-- [ ] Ensure `OnboardingCreateKey` does not store `nsec` in `useState`
-- [ ] Verify "Copy to Clipboard" functionality works without state persistence
+- [x] Update `generateKey` RPC to return only `{ id, pubkey }` (remove `nsec`)
+- [x] Implement `revealKey` RPC method in `KeyVaultService` and `VaultRpcHandler`
+- [x] Update `OnboardingCreateKey` to use `revealKey` for backup step
+- [x] Ensure `OnboardingCreateKey` does not store `nsec` in `useState`
+- [x] Verify "Copy to Clipboard" functionality works without state persistence

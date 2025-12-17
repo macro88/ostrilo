@@ -464,4 +464,58 @@ export class KeyVaultService {
     const hex = this.toHex(sk);
     return { nsec, hex };
   }
+
+  /**
+   * Reveal private key with password re-verification.
+   * This is a security-hardened alternative to exportKey that requires
+   * password re-entry to prevent UI state from holding sensitive keys.
+   */
+  async revealKey(
+    password: string,
+    keyId?: string
+  ): Promise<{ nsec: string; hex: string }> {
+    if (!password) {
+      throw new Error("password_required");
+    }
+
+    // Get the key record
+    const records = await this.listKeys();
+    const targetId = keyId || (await this.getSettings())?.selectedKeyId;
+    if (!targetId) {
+      throw new Error("vault_locked");
+    }
+
+    const record = records.find((r) => r.id === targetId);
+    if (!record) {
+      throw new Error("key_not_found");
+    }
+
+    // Verify password by attempting to decrypt the key
+    const rawKey = await this.kdf.deriveKey(
+      password,
+      new Uint8Array(record.salt)
+    );
+    try {
+      const key = await this.aead.importKey(rawKey, ["decrypt"]);
+      const iv = new Uint8Array(record.iv);
+      const ct = new Uint8Array(record.ct);
+      const sk = await this.aead.decrypt(key, iv, ct);
+
+      try {
+        // Convert to nsec bech32 format
+        const words = bech32.toWords(sk);
+        const nsec = bech32.encode("nsec", words);
+        // Also provide hex format
+        const hex = this.toHex(sk);
+        return { nsec, hex };
+      } finally {
+        // Zeroize decrypted private key
+        zeroize(sk);
+      }
+    } catch (error) {
+      throw new Error("incorrect_password");
+    } finally {
+      zeroize(rawKey);
+    }
+  }
 }

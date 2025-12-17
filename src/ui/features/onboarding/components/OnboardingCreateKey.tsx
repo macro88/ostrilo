@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import {
   generateKey as rpcGenerateKey,
   unlockVault,
   evaluatePasswordStrength,
-  exportKey,
+  revealKey,
 } from "@/infrastructure/messaging/client";
 import { useOnboarding } from "../hooks/useOnboarding";
 import {
@@ -41,12 +41,12 @@ export function OnboardingCreateKey({
   const [isGenerating, setIsGenerating] = useState(false);
   const [backupChecked, setBackupChecked] = useState(false);
   const [step, setStep] = useState<"input" | "backup">("input");
-  const [privateKey, setPrivateKey] = useState<{
-    nsec: string;
-    hex: string;
-  } | null>(null);
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+
+  // Use refs for ephemeral sensitive data (not useState)
+  const privateKeyRef = useRef<{ nsec: string; hex: string } | null>(null);
+  const passwordBackupRef = useRef<string>("");
 
   const validatePassword = async () => {
     if (!password) {
@@ -89,9 +89,8 @@ export function OnboardingCreateKey({
       await rpcGenerateKey(password, keyName.trim());
       // Immediately unlock session so user can proceed
       await unlockVault(password);
-      // Export the private key for backup
-      const exported = await exportKey();
-      setPrivateKey(exported);
+      // Store password in ref for backup step (not in state)
+      passwordBackupRef.current = password;
       setStep("backup");
     } catch (error) {
       setPasswordError(
@@ -102,7 +101,27 @@ export function OnboardingCreateKey({
     }
   };
 
+  const handleRevealKey = async () => {
+    if (!passwordBackupRef.current) {
+      setPasswordError("Password not available");
+      return;
+    }
+
+    try {
+      // Reveal key with password verification - stored ephemerally in ref
+      const revealed = await revealKey(passwordBackupRef.current);
+      privateKeyRef.current = revealed;
+      // Trigger re-render
+      setShowPrivateKey(false);
+    } catch (error) {
+      setPasswordError(
+        error instanceof Error ? error.message : "Failed to reveal key"
+      );
+    }
+  };
+
   const handleCopyKey = async () => {
+    const privateKey = privateKeyRef.current;
     if (!privateKey) return;
     try {
       await navigator.clipboard.writeText(privateKey.nsec);
@@ -114,6 +133,7 @@ export function OnboardingCreateKey({
   };
 
   const handleDownloadKey = () => {
+    const privateKey = privateKeyRef.current;
     if (!privateKey) return;
     const keyData = {
       name: keyName,
@@ -216,8 +236,15 @@ export function OnboardingCreateKey({
               </p>
             </div>
 
+            {/* Reveal key button if not yet revealed */}
+            {!privateKeyRef.current && (
+              <Button onClick={handleRevealKey} className="w-full">
+                Reveal Private Key
+              </Button>
+            )}
+
             {/* Private key display */}
-            {privateKey && (
+            {privateKeyRef.current && (
               <div className="space-y-3">
                 <div>
                   <Label htmlFor="privateKey">Private Key (nsec format)</Label>
@@ -225,7 +252,7 @@ export function OnboardingCreateKey({
                     <Input
                       id="privateKey"
                       type={showPrivateKey ? "text" : "password"}
-                      value={privateKey.nsec}
+                      value={privateKeyRef.current.nsec}
                       readOnly
                       className="pr-10 font-mono text-sm"
                     />
@@ -316,6 +343,9 @@ export function OnboardingCreateKey({
               <Button
                 onClick={async () => {
                   if (!backupChecked) return;
+                  // Clear sensitive data from refs
+                  privateKeyRef.current = null;
+                  passwordBackupRef.current = "";
                   await markOnboardingComplete();
                   onComplete();
                 }}

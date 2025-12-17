@@ -142,6 +142,14 @@ export async function exportKey(keyId?: string) {
   });
 }
 
+export async function revealKey(password: string, keyId?: string) {
+  return rpc<{ nsec: string; hex: string }>({
+    type: "vault.reveal",
+    password,
+    keyId,
+  });
+}
+
 // Settings caching to prevent excessive RPC calls
 let settingsCache: {
   data: import("@/domain/types").AppSettingsV1 | undefined;

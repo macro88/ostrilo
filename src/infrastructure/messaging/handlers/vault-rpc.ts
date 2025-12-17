@@ -11,7 +11,7 @@ import {
 
 /**
  * RPC handler for vault-related operations
- * Handles: vault.unlock, vault.lock, vault.generate, vault.import, vault.select, vault.sign, vault.export, keys.list
+ * Handles: vault.unlock, vault.lock, vault.generate, vault.import, vault.select, vault.sign, vault.export, vault.reveal, keys.list
  */
 export class VaultRpcHandler implements RpcModule {
   async handleRequest(
@@ -39,6 +39,9 @@ export class VaultRpcHandler implements RpcModule {
 
       case "vault.export":
         return this.handleExport(message, context);
+
+      case "vault.reveal":
+        return this.handleReveal(message, context);
 
       case "keys.list":
         return this.handleListKeys(context);
@@ -275,6 +278,74 @@ export class VaultRpcHandler implements RpcModule {
 
     const data = await context.vault.exportKey(message.keyId);
     return { ok: true, data };
+  }
+
+  private async handleReveal(
+    message: Extract<RpcRequest, { type: "vault.reveal" }>,
+    context: ServiceContext
+  ): Promise<RpcResponse> {
+    // Validate password (required)
+    const passwordValidation = PasswordSchema.safeParse(message.password);
+    if (!passwordValidation.success) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+        details: passwordValidation.error.issues[0]?.message,
+      };
+    }
+
+    // Validate key ID if provided
+    if (message.keyId !== undefined) {
+      const keyIdValidation = KeyIdSchema.safeParse(message.keyId);
+      if (!keyIdValidation.success) {
+        return {
+          ok: false,
+          error: RPC_ERROR_CODES.INVALID_REQUEST,
+          details: keyIdValidation.error.issues[0]?.message,
+        };
+      }
+    }
+
+    try {
+      const data = await context.vault.revealKey(
+        message.password,
+        message.keyId
+      );
+      return { ok: true, data };
+    } catch (error) {
+      // Translate service errors to RPC codes
+      if (error instanceof Error) {
+        if (error.message === "password_required") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+            details: "Password is required",
+          };
+        }
+        if (error.message === "incorrect_password") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+            details: "Incorrect password",
+          };
+        }
+        if (error.message === "key_not_found") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.KEY_NOT_FOUND,
+            details: "Key not found",
+          };
+        }
+        if (error.message === "vault_locked") {
+          return {
+            ok: false,
+            error: RPC_ERROR_CODES.LOCKED,
+            details: "Vault is locked",
+          };
+        }
+      }
+      throw error; // Re-throw unexpected errors
+    }
   }
 
   private async handleListKeys(context: ServiceContext): Promise<RpcResponse> {
