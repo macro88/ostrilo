@@ -1,9 +1,9 @@
 import { Copy, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import mascotLogo from "@/assets/ostrilo_mascot_front.svg";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { KeySelector } from "./KeySelector";
+import { Logo } from "../logo/Logo";
 
 interface HeaderProps {
   onAddKey?: () => void;
@@ -24,7 +24,8 @@ export function Header({ onAddKey }: HeaderProps) {
   return (
     <header className="flex items-center justify-between px-3 py-3 bg-background border-b border-border w-full max-w-full">
       {/* Left side - Logo */}
-      <img src={mascotLogo} alt="Ostrilo Mascot" className="w-6 h-6 shrink-0" />
+      {/* <img src={mascotLogo} alt="Ostrilo Mascot" className="w-6 h-6 shrink-0" /> */}
+      <Logo size="max" />
 
       {/* Center - Wallet name */}
       <h1 className="text-lg font-semibold text-foreground truncate mx-2">
@@ -46,18 +47,7 @@ export function Header({ onAddKey }: HeaderProps) {
         {/* Key Selector - replaces old avatar + key display */}
         <KeySelector onAddKey={onAddKey} />
 
-        {/* Copy key button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleCopyKey}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          disabled={!selectedUnlockedKey}
-          aria-label={copied ? "Copied!" : "Copy public key"}
-          title={copied ? "Copied!" : "Copy public key"}
-        >
-          <Copy className="w-4 h-4" />
-        </Button>
+
       </div>
     </header>
   );

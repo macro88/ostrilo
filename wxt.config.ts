@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  modules: ["@wxt-dev/module-react"],
+  modules: ["@wxt-dev/module-react", '@wxt-dev/auto-icons'],
   srcDir: "src",
   entrypointsDir: "extension",
   manifest: {
@@ -14,7 +14,7 @@ export default defineConfig({
         resources: ["injected.js"],
         matches: ["http://*/*", "https://*/*"],
       },
-    ],
+    ]
   },
   vite: () => ({
     // Cast because wxt bundles its own vite types; tailwindcss() returns Plugin[] from root Vite
@@ -23,6 +23,7 @@ export default defineConfig({
       // Tailwind Vite plugin currently expects PostCSS pipeline; LightningCSS lacks createIdResolver
       transformer: "postcss",
     },
+    assetsInclude: ["**/*.glb", "**/*.gltf"],
     resolve: {
       alias: {
         "@/components": path.resolve(__dirname, "./src/ui/components"),
@@ -48,7 +49,7 @@ export default defineConfig({
       },
     },
     optimizeDeps: {
-      include: ["@noble/curves", "@noble/hashes", "@scure/base"],
+      include: ["@noble/curves", "@noble/hashes", "@scure/base", "three"],
     },
   }),
 });

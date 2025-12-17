@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useKeyManager } from "../hooks/useKeyManager";
-import mascotLogo from "@/assets/ostrilo_mascot_front.svg";
 import {
   Lock,
   Unlock,
@@ -14,6 +13,7 @@ import {
   Shield,
   Key,
 } from "lucide-react";
+import { Logo } from "@/ui/components/logo/Logo";
 
 interface LockScreenProps {
   onUnlock?: () => void;
@@ -72,7 +72,10 @@ export function LockScreen({
   return (
     <div className="flex flex-col items-center justify-center h-full p-4 space-y-4 text-center bg-background">
       {/* Mascot and title */}
-      <img src={mascotLogo} alt="Ostrilo Mascot" className="w-20 h-20" />
+      {/* <img src={mascotLogo} alt="Ostrilo Mascot" className="w-20 h-20" /> */}
+      <div className="w-24 h-24 mx-auto mb-2">  
+      <Logo size="max" />
+      </div>
 
       <div className="space-y-1">
         <h1 className="text-xl font-display">{title}</h1>

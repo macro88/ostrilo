@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Key, Shield, Zap, ArrowRight, FileKey, Download } from "lucide-react";
 import { AppLogo } from "@/components/common/app-logo";
+import { Logo } from "@/ui/components/logo/Logo";
 
 interface OnboardingWelcomeProps {
   onCreateKey: () => void;
@@ -17,11 +18,11 @@ export function OnboardingWelcome({
   >(null);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 space-y-4">
+    <div className="flex flex-col items-center justify-center min-h-screen px-4 space-y-4">
       {/* Mascot and welcome text */}
       <div className="text-center space-y-2">
-        <div className="w-16 h-16 mx-auto mb-4">
-          <AppLogo size={64} />
+        <div className="w-32 h-32 mx-auto mb-4">
+          <Logo size="max" />
         </div>
 
         <h1 className="text-2xl font-bold text-foreground">

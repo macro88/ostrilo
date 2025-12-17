@@ -1,4 +1,4 @@
-import mascotLogo from "@/assets/ostrilo_mascot_front.svg";
+import mascotLogo from "@/assets/ostrilo_front.svg";
 
 interface AppLogoProps {
   className?: string;

@@ -31,7 +31,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Pubkey } from "@/components/common/pubkey";
-import mascotLogo from "@/assets/ostrilo_mascot_front.svg";
+import mascotLogo from "@/assets/ostrilo_front.svg";
 
 /** Maximum content preview length */
 const MAX_CONTENT_PREVIEW = 150;
