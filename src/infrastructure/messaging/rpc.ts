@@ -24,6 +24,7 @@ export type RpcRequest =
   | { type: "vault.renameKey"; id: string; label: string }
   | { type: "vault.deleteKey"; id: string }
   | { type: "vault.export"; keyId?: string }
+  | { type: "vault.reveal"; keyId?: string; password: string }
   | { type: "keys.list" }
   | { type: "state.getLock" }
   | { type: "vault.sign"; hashHex: string; keyId?: string }
