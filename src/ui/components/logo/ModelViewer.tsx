@@ -244,13 +244,18 @@ class OstrichViewer {
   }
 
   onPointerMove = (e: PointerEvent) => {
-    const rect = this.container.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Calculate mouse position relative to viewport center
+    // This makes the logo look forward when mouse is at screen center,
+    // regardless of where the container is positioned
+    const viewportCenterX = window.innerWidth / 3;
+    const viewportCenterY = window.innerHeight / 4;
     
-    // NDC -1 to 1
-    const nX = (x / rect.width) * 2 - 1;
-    const nY = -(y / rect.height) * 2 + 1;
+    const offsetX = e.clientX - viewportCenterX;
+    const offsetY = e.clientY - viewportCenterY;
+    
+    // Normalize to -1 to 1 range based on viewport dimensions
+    const nX = offsetX / (window.innerWidth / 2);
+    const nY = -offsetY / (window.innerHeight / 2);
 
     this.mouse.set(nX, nY);
   }
@@ -274,7 +279,7 @@ class OstrichViewer {
 
     const targetY = THREE.MathUtils.clamp(this.mouse.x, -maxRad, maxRad);
     const targetX = THREE.MathUtils.clamp(-this.mouse.y, -maxRad, maxRad);
-
+//console.log(targetX, targetY);
     const smooth = this.config.smoothness;
     this.currentRotation.x = THREE.MathUtils.lerp(this.currentRotation.x, targetX, smooth);
     this.currentRotation.y = THREE.MathUtils.lerp(this.currentRotation.y, targetY, smooth);
