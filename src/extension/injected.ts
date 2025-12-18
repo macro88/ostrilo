@@ -94,7 +94,22 @@ export default defineUnlistedScript(() => {
     pendingRequests.delete(data.id);
 
     if (data.error) {
-      pending.reject(new Error(data.error));
+      // Provide helpful error messages for common cases
+      if (data.error.includes("locked")) {
+        console.warn(
+          "[Ostrilo] Extension is locked. Please click the Ostrilo icon and unlock with your password."
+        );
+        pending.reject(
+          new Error(
+            "Ostrilo extension is locked. Please unlock to sign events."
+          )
+        );
+      } else if (data.error === "denied") {
+        console.warn("[Ostrilo] Request was denied by policy or user");
+        pending.reject(new Error(data.error));
+      } else {
+        pending.reject(new Error(data.error));
+      }
     } else {
       pending.resolve(data.result);
     }
@@ -166,13 +181,7 @@ export default defineUnlistedScript(() => {
     },
   };
 
-  // Define window.nostr as non-writable, non-configurable to prevent tampering
-  Object.defineProperty(window, "nostr", {
-    value: nostr,
-    writable: false,
-    configurable: false,
-    enumerable: true,
-  });
+  (window as any).nostr = nostr;
 
   console.log("[Ostrilo] NIP-07 window.nostr provider injected");
 });

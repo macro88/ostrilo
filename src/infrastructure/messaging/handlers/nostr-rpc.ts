@@ -111,10 +111,18 @@ export class NostrRpcHandler implements RpcModule {
 
     // Check if vault is unlocked
     const lockState = await context.vault.getLockState();
+    console.log(
+      "[NostrRpcHandler] Vault lock state:",
+      lockState.isLocked ? "LOCKED" : "UNLOCKED"
+    );
     if (lockState.isLocked) {
+      console.log(
+        "[NostrRpcHandler] Vault is locked, returning LOCKED error to trigger unlock prompt"
+      );
       return {
         ok: false,
         error: RPC_ERROR_CODES.LOCKED,
+        details: "Extension is locked. Please unlock to sign events.",
       };
     }
 
@@ -148,6 +156,23 @@ export class NostrRpcHandler implements RpcModule {
     );
 
     if (policyResult.mode === "deny") {
+      console.log(
+        "[NostrRpcHandler] Policy denied request. Reason:",
+        policyResult.reason
+      );
+
+      // If policy denied due to lock state mismatch, return LOCKED error instead
+      if (policyResult.reason === "locked") {
+        console.warn(
+          "[NostrRpcHandler] Policy denied due to lock state - vault check passed but policy check failed!"
+        );
+        return {
+          ok: false,
+          error: RPC_ERROR_CODES.LOCKED,
+          details: "Extension is locked. Please unlock to sign events.",
+        };
+      }
+
       // Record denial in activity log
       await context.activityLog.addEntry({
         origin: message.origin,
@@ -159,7 +184,7 @@ export class NostrRpcHandler implements RpcModule {
       return {
         ok: false,
         error: RPC_ERROR_CODES.DENIED,
-        details: "policy denied",
+        details: `Policy denied: ${policyResult.reason}`,
       };
     }
 

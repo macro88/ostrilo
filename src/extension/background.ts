@@ -97,6 +97,29 @@ export default defineBackground(() => {
     createRpcMessageListener(router, serviceContext)
   );
 
+  // Handle unlock prompt requests
+  browser.runtime.onMessage.addListener((message) => {
+    if (message.type === "openUnlockPrompt") {
+      console.log("[Background] Opening unlock prompt...");
+      // Open the extension popup to prompt unlock
+      browser.action.openPopup().catch((err) => {
+        console.warn("[Background] Failed to open popup:", err);
+        // Fallback: open in new tab or window
+        browser.windows
+          .create({
+            url: browser.runtime.getURL("/popup.html"),
+            type: "popup",
+            width: 400,
+            height: 600,
+          })
+          .catch((err2) =>
+            console.error("[Background] Failed to open popup window:", err2)
+          );
+      });
+      return true; // Keep message channel open
+    }
+  });
+
   // Side panel behavior management
   async function apply() {
     const result = await browser.storage.sync.get("isDocked");
