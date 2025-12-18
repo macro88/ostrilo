@@ -1,5 +1,5 @@
 import { Computer } from "lucide-react";
-import { SidePanelToggle } from "@/components/navigation/sidepanel-toggle";
+import { OpenInSelector } from "@/components/navigation/open-in-selector";
 import { ThemeSelector } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
 
@@ -30,7 +30,7 @@ export function GeneralSettingsTab() {
           <h3 className="font-medium">Display</h3>
         </div>
         <ThemeSelector value={settings.theme} onChange={updateTheme} />
-        <SidePanelToggle />
+        <OpenInSelector />
       </div>
     </div>
   );

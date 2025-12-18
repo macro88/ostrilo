@@ -21,6 +21,9 @@ export function BasicSettings() {
     }
   };
 
+  // Note: useAppSettings hook already handles storage changes internally via useWxtStorage
+  // Settings components will re-render automatically when values change
+
   if (isLoading) {
     return (
       <div className="p-4 text-center">

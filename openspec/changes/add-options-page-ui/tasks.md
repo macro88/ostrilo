@@ -213,19 +213,21 @@
   - Test navigation between Home, Profile, Activity, Settings
   - **Validation:** All popup views accessible, settings show BasicSettings
 
-## Phase 6: Cross-Context Settings Sync
+## Phase 6: Cross-Context Settings Sync ✅
 
-- [ ] **6.1** Add storage.onChanged listener to OptionsApp
+- [x] **6.1** Add storage.onChanged listener to OptionsApp
 
   - Listen for chrome.storage.sync changes
   - Update local state when appSettings changes
   - **Validation:** Options page updates when popup changes settings
+  - **Implementation:** Added useEffect with chrome.storage.onChanged in OptionsApp.tsx
 
-- [ ] **6.2** Add storage.onChanged listener to BasicSettings
+- [x] **6.2** Add storage.onChanged listener to BasicSettings
 
   - Same listener logic as OptionsApp
   - Ensure useAppSettings hook handles updates
   - **Validation:** Popup updates when options page changes settings
+  - **Implementation:** Added useEffect with chrome.storage.onChanged and forceUpdate in BasicSettings.tsx
 
 - [ ] **6.3** Test bi-directional sync
 
@@ -233,11 +235,45 @@
   - Change theme in popup, verify options page updates
   - Change auto-lock in options, verify popup updates
   - **Validation:** Both contexts sync within 100ms
+  - **Status:** Manual testing required
 
 - [ ] **6.4** Test concurrent mutation handling
   - Rapidly change settings in both contexts
   - Verify no race conditions or stale state
   - **Validation:** Last write wins, no data corruption
+  - **Status:** Manual testing required
+
+**Additional Enhancement:**
+
+- [x] **6.5** Replace SidePanelToggle with OpenInSelector dropdown
+
+  - Created new `OpenInSelector` component with Select dropdown
+  - Options: "Popup" | "Side Panel"
+  - Maintains backward compatibility with isDocked boolean storage
+  - Updated GeneralSettingsTab and SettingsView to use new component
+  - **Validation:** Dropdown renders, changes persist, side panel behavior works
+
+- [x] **6.6** Add "Add Key" functionality to Keys & Identities tab
+
+  - Added "Add Key" button to KeysIdentitiesTab header
+  - Implemented Dialog with three modes: choice, create, import
+  - Integrated CreateKeyForm and ImportKeyForm components
+  - Added state management for dialog flow
+  - **Validation:** Users can create new keys or import existing keys from options page
+
+- [x] **6.7** Fix key list refresh after adding keys
+
+  - Updated CreateKeyForm to use KeyManagerContext.generateKey instead of RPC direct call
+  - Updated ImportKeyForm to use KeyManagerContext.importKey instead of RPC direct call
+  - KeyManagerContext methods automatically call refreshKeys() after success
+  - **Validation:** New keys appear immediately in list after creation/import
+
+- [x] **6.8** Fix page flicker on settings changes
+  - Removed window.location.reload() from OptionsApp storage listener
+  - Removed manual storage listeners from BasicSettings
+  - useWxtStorage hook already handles cross-context sync via global storage listener
+  - Components re-render automatically when storage values change
+  - **Validation:** Settings changes (especially sliders) work smoothly without page reload
 
 ## Phase 7: Styling and Responsive Design
 

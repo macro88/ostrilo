@@ -66,6 +66,10 @@ export function OptionsApp() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeTab]);
 
+  // Cross-context settings sync - listen for changes from popup/sidepanel
+  // Note: useAppSettings hook already handles storage changes internally via useWxtStorage
+  // No need for explicit listener here - settings components will re-render automatically
+
   return (
     <KeyManagerProvider>
       <div className="min-h-screen bg-background">

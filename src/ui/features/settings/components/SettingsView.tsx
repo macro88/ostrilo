@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SidePanelToggle } from "@/components/navigation/sidepanel-toggle";
+import { OpenInSelector } from "@/components/navigation/open-in-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -336,7 +336,7 @@ export function SettingsView() {
             </SelectContent>
           </Select>
         </div>
-        <SidePanelToggle />
+        <OpenInSelector />
       </div>
 
       {/* Security Section */}

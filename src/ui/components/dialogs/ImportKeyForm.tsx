@@ -2,10 +2,8 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  importKey as rpcImportKey,
-  parsePrivateKey,
-} from "@/infrastructure/messaging/client";
+import { parsePrivateKey } from "@/infrastructure/messaging/client";
+import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
 import { ArrowLeft, Loader2, Eye, EyeOff } from "lucide-react";
 
 interface ImportKeyFormProps {
@@ -18,6 +16,7 @@ interface ImportKeyFormProps {
  * Requires password re-entry for security (zero-retention password handling).
  */
 export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
+  const { importKey } = useKeyManagerContext();
   const privateKeyRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const [keyName, setKeyName] = useState("");
@@ -53,7 +52,7 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
       await parsePrivateKey(keyInput);
 
       // Import key with password
-      await rpcImportKey(keyInput, password, keyName.trim());
+      await importKey(keyInput, password, keyName.trim());
 
       // Clear the private key and password from the inputs for security
       if (privateKeyRef.current) {

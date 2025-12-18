@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { generateKey as rpcGenerateKey } from "@/infrastructure/messaging/client";
+import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 interface CreateKeyFormProps {
@@ -15,6 +15,7 @@ interface CreateKeyFormProps {
  * Requires password re-entry for security (zero-retention password handling).
  */
 export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
+  const { generateKey } = useKeyManagerContext();
   const passwordRef = useRef<HTMLInputElement>(null);
   const [keyName, setKeyName] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -38,7 +39,7 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
     setError("");
 
     try {
-      await rpcGenerateKey(password, keyName.trim());
+      await generateKey(password, keyName.trim());
       // Clear password from input
       if (passwordRef.current) {
         passwordRef.current.value = "";
