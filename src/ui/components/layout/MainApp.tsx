@@ -5,7 +5,7 @@ import { OnboardingContainer } from "@/ui/features/onboarding/components/Onboard
 import { HomeView } from "@/ui/features/home/components/HomeView";
 import { ProfileView } from "@/ui/features/profile/components/ProfileView";
 import { ActivityView } from "@/ui/features/activity/components/ActivityView";
-import { SettingsView } from "@/ui/features/settings/components/SettingsView";
+import { BasicSettings } from "@/ui/features/settings/components/BasicSettings";
 import { TabKey } from "@/ui/components/navigation/BottomTabs";
 import { useOnboarding } from "@/ui/features/onboarding/hooks/useOnboarding";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
@@ -60,7 +60,7 @@ export function MainApp() {
       case "activity":
         return <ActivityView />;
       case "settings":
-        return <SettingsView />;
+        return <BasicSettings />;
       default:
         return <HomeView />;
     }

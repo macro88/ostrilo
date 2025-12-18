@@ -1,90 +1,90 @@
 # Implementation Tasks: Add Options Page UI
 
-## Phase 1: Extract Shared Components
+## Phase 1: Extract Shared Components ✅
 
-- [ ] **1.1** Create shared components directory structure
+- [x] **1.1** Create shared components directory structure
 
   - Create `src/ui/features/settings/components/shared/` directory
   - Move component extraction target files to this location
   - **Validation:** Directory exists, ready for component extraction
 
-- [ ] **1.2** Extract KeySelectorCard component
+- [x] **1.2** Extract KeySelectorCard component
 
   - Extract active key display from SettingsView
   - Accept props: `keys`, `selectedKey`, `onSelectKey`
   - Include avatar, name, pubkey display
   - **Validation:** Component renders correctly in isolation, accepts props
 
-- [ ] **1.3** Extract ThemeSelector component
+- [x] **1.3** Extract ThemeSelector component
 
   - Extract theme dropdown logic from SettingsView
   - Accept props: `value`, `onChange`
   - Use shadcn/ui Select component
   - **Validation:** Component changes theme when value changes
 
-- [ ] **1.4** Extract AutoLockSlider component
+- [x] **1.4** Extract AutoLockSlider component
 
   - Extract auto-lock slider from SettingsView Security section
   - Accept props: `value`, `onChange`, `min`, `max`, `step`
   - Display current value with units ("5 min", "Never")
   - **Validation:** Slider updates on drag, calls onChange
 
-- [ ] **1.5** Extract SessionTTLSlider component
+- [x] **1.5** Extract SessionTTLSlider component
 
   - Extract session TTL slider from SettingsView Security section
   - Accept props: `value`, `onChange`
   - Display "Until lock" for 0 value
   - **Validation:** Component renders and updates correctly
 
-- [ ] **1.6** Extract RelayList component
+- [x] **1.6** Extract RelayList component
 
   - Extract relay management UI from SettingsView
   - Accept props: `relays`, `onAdd`, `onRemove`
   - Include add relay input with validation
   - **Validation:** Can add/remove relays, validates wss:// URLs
 
-- [ ] **1.7** Extract ActivityLogConfig component
+- [x] **1.7** Extract ActivityLogConfig component
 
   - Extract activity log settings section
   - Accept props: `maxEntries`, `onChange`, `onClear`, `onExport`
   - Include slider and action buttons
   - **Validation:** All actions work correctly
 
-- [ ] **1.8** Extract OriginPolicyTable component
+- [x] **1.8** Extract OriginPolicyTable component
 
   - Extract per-origin policy table from SettingsView
   - Accept props: `origins`, `onUpdateTrust`, `onRemove`, `onToggleSession`
   - Build table with sortable columns
   - **Validation:** Table displays, actions work correctly
 
-- [ ] **1.9** Extract MediumKindToggles component
+- [x] **1.9** Extract MediumKindToggles component
   - Extract medium trust kind toggles section
   - Accept props: `mediumAllowKinds`, `onToggle`
   - Map over COMMON_EVENT_KINDS
   - **Validation:** Toggles update mediumAllowKinds array
 
-## Phase 2: Create Options Page Entrypoint
+## Phase 2: Create Options Page Entrypoint ✅
 
-- [ ] **2.1** Create options page directory structure
+- [x] **2.1** Create options page directory structure
 
   - Create `src/extension/options/` directory
   - Add `index.html`, `main.tsx`, `OptionsApp.tsx`, `style.css`
   - **Validation:** Files created, WXT detects options entrypoint
 
-- [ ] **2.2** Configure WXT manifest for options page
+- [x] **2.2** Configure WXT manifest for options page
 
   - Update `wxt.config.ts` manifest
   - Add `options_ui: { page: "options.html", open_in_tab: true }`
   - **Validation:** `npm run build` includes options.html in output
 
-- [ ] **2.3** Create options page HTML entrypoint
+- [x] **2.3** Create options page HTML entrypoint
 
   - Create `src/extension/options/index.html`
   - Include React root div, script tag for main.tsx
   - Match popup HTML structure
   - **Validation:** HTML validates, loads correctly
 
-- [ ] **2.4** Create options page React root
+- [x] **2.4** Create options page React root
 
   - Create `src/extension/options/main.tsx`
   - Set up React rendering to #root
@@ -92,23 +92,23 @@
   - Include ThemeProvider wrapper
   - **Validation:** Options page renders React app
 
-- [ ] **2.5** Create OptionsApp skeleton component
+- [x] **2.5** Create OptionsApp skeleton component
   - Create `src/extension/options/OptionsApp.tsx`
   - Add header with logo and version
   - Add empty tab navigation (Tabs component)
   - Add footer with auto-save message
   - **Validation:** Options page loads, shows header/footer
 
-## Phase 3: Build Tab Components
+## Phase 3: Build Tab Components ✅
 
-- [ ] **3.1** Create GeneralSettingsTab component
+- [x] **3.1** Create GeneralSettingsTab component
 
   - Create `src/ui/features/settings/components/GeneralSettingsTab.tsx`
   - Use ThemeSelector and SidePanelToggle components
   - Group settings by category with headings
   - **Validation:** Tab renders, theme and side panel settings work
 
-- [ ] **3.2** Create KeysIdentitiesTab component
+- [x] **3.2** Create KeysIdentitiesTab component
 
   - Create `src/ui/features/settings/components/KeysIdentitiesTab.tsx`
   - Use KeySelectorCard in list layout
@@ -116,7 +116,7 @@
   - Include import/export buttons (disabled for now)
   - **Validation:** Multi-key management works, active key updates
 
-- [ ] **3.3** Create SecuritySettingsTab component
+- [x] **3.3** Create SecuritySettingsTab component
 
   - Create `src/ui/features/settings/components/SecuritySettingsTab.tsx`
   - Use AutoLockSlider and SessionTTLSlider
@@ -124,7 +124,7 @@
   - Add action buttons: Change Password, Export Key, Clear Sessions
   - **Validation:** Security settings update correctly
 
-- [ ] **3.4** Create PermissionsTab component
+- [x] **3.4** Create PermissionsTab component
 
   - Create `src/ui/features/settings/components/PermissionsTab.tsx`
   - Use OriginPolicyTable component
@@ -132,83 +132,83 @@
   - Add remove origin confirmation dialogs
   - **Validation:** Origin policies update, removals work
 
-- [ ] **3.5** Create ActivityLogTab component
+- [x] **3.5** Create ActivityLogTab component
 
   - Create `src/ui/features/settings/components/ActivityLogTab.tsx`
   - Use ActivityLogConfig component
   - Add activity log preview (last 10 entries)
   - **Validation:** Log config updates, clear/export work
 
-- [ ] **3.6** Create RelaysTab component
+- [x] **3.6** Create RelaysTab component
 
   - Create `src/ui/features/settings/components/RelaysTab.tsx`
   - Use RelayList component
   - Add relay status indicators (future)
   - **Validation:** Relay management works correctly
 
-- [ ] **3.7** Create AdvancedTab component
+- [x] **3.7** Create AdvancedTab component
   - Create `src/ui/features/settings/components/AdvancedTab.tsx`
   - Use MediumKindToggles component
   - Add debug info panel (dev mode only)
   - Add raw settings JSON viewer
   - **Validation:** Advanced settings accessible, debug info displays
 
-## Phase 4: Integrate Tabs into OptionsApp
+## Phase 4: Integrate Tabs into OptionsApp ✅
 
-- [ ] **4.1** Add tab navigation to OptionsApp
+- [x] **4.1** Add tab navigation to OptionsApp
 
   - Import all tab components
   - Add Tabs, TabsList, TabsTrigger components
   - Define tabs: General, Keys, Security, Permissions, Activity, Relays, Advanced
   - **Validation:** All tabs render, navigation works
 
-- [ ] **4.2** Implement tab content rendering
+- [x] **4.2** Implement tab content rendering
 
   - Add TabsContent for each tab
   - Lazy render inactive tabs for performance
   - **Validation:** Only active tab content is rendered
 
-- [ ] **4.3** Add URL hash navigation
+- [x] **4.3** Add URL hash navigation
 
   - Read window.location.hash on mount
   - Set active tab based on hash
   - Update hash when tab changes
   - **Validation:** URL hash reflects active tab, deep links work
 
-- [ ] **4.4** Add keyboard tab navigation
+- [x] **4.4** Add keyboard tab navigation
 
   - Handle arrow key events for tab navigation
   - Focus management when switching tabs
   - **Validation:** Left/Right arrow keys navigate tabs
 
-- [ ] **4.5** Add footer with reset and export actions
+- [x] **4.5** Add footer with reset and export actions
   - Add "Reset All Settings" button with confirmation
   - Add "Export Settings" button (download JSON)
   - Show "Changes are saved automatically" message
   - **Validation:** Footer actions work correctly
 
-## Phase 5: Create BasicSettings for Popup
+## Phase 5: Create BasicSettings for Popup ✅
 
-- [ ] **5.1** Create BasicSettings component
+- [x] **5.1** Create BasicSettings component
 
   - Create `src/ui/features/settings/components/BasicSettings.tsx`
   - Use KeySelectorCard, ThemeSelector, AutoLockSlider
   - Add "Advanced Settings" button
   - **Validation:** Component renders in popup, fits within dimensions
 
-- [ ] **5.2** Implement openOptionsPage action
+- [x] **5.2** Implement openOptionsPage action
 
   - Import `browser` from wxt/browser
   - Add click handler: `browser.runtime.openOptionsPage()`
   - **Validation:** Button opens options page in new tab
 
-- [ ] **5.3** Replace SettingsView with BasicSettings in popup
+- [x] **5.3** Replace SettingsView with BasicSettings in popup
 
   - Update `src/ui/components/layout/MainApp.tsx`
   - Replace `<SettingsView />` with `<BasicSettings />`
   - **Validation:** Popup shows BasicSettings, no errors
 
-- [ ] **5.4** Update popup navigation to use BasicSettings
+- [x] **5.4** Update popup navigation to use BasicSettings
   - Verify popup routing still works
   - Test navigation between Home, Profile, Activity, Settings
   - **Validation:** All popup views accessible, settings show BasicSettings

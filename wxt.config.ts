@@ -14,7 +14,12 @@ export default defineConfig({
         resources: ["injected.js"],
         matches: ["http://*/*", "https://*/*"],
       },
-    ]
+    ],
+    options_ui: {
+      page: "options.html",
+      open_in_tab: true,
+    },
+
   },
   vite: () => ({
     // Cast because wxt bundles its own vite types; tailwindcss() returns Plugin[] from root Vite
