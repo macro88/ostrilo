@@ -1,14 +1,15 @@
 import { Globe } from "lucide-react";
 import { RelayList } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
 
 export function RelaysTab() {
   const { settings, isLoading, addRelay, removeRelay } = useAppSettings();
 
   if (isLoading) {
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Loading settings...</p>
+      <div className="py-12">
+        <LoadingSpinner label="Loading settings..." />
       </div>
     );
   }

@@ -1,6 +1,8 @@
 import { Shield } from "lucide-react";
 import { OriginPolicyTable } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
+import { EmptyState } from "@/ui/components/common/EmptyState";
 
 export function PermissionsTab() {
   const {
@@ -13,8 +15,8 @@ export function PermissionsTab() {
 
   if (isLoading) {
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Loading settings...</p>
+      <div className="py-12">
+        <LoadingSpinner label="Loading settings..." />
       </div>
     );
   }
@@ -25,6 +27,8 @@ export function PermissionsTab() {
       setPerKindRule(origin, kind, rule);
     }
   };
+
+  const hasOrigins = settings.origins && settings.origins.length > 0;
 
   return (
     <div className="bg-card border border-border rounded-lg p-6 space-y-6">
@@ -40,12 +44,20 @@ export function PermissionsTab() {
         <h3 className="font-medium">Per-Origin Policies</h3>
       </div>
 
-      <OriginPolicyTable
-        origins={settings.origins}
-        onRemove={removeOriginPolicy}
-        onToggleSession={setSessionGrant}
-        onSetPerKindRule={handleSetPerKindRule}
-      />
+      {!hasOrigins ? (
+        <EmptyState
+          icon={Shield}
+          title="No Origins Configured"
+          description="Origin policies will appear here once you interact with websites that request Nostr signing. You can configure trust levels and per-kind rules for each origin."
+        />
+      ) : (
+        <OriginPolicyTable
+          origins={settings.origins}
+          onRemove={removeOriginPolicy}
+          onToggleSession={setSessionGrant}
+          onSetPerKindRule={handleSetPerKindRule}
+        />
+      )}
     </div>
   );
 }

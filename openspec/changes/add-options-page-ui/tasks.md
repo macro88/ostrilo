@@ -275,29 +275,29 @@
   - Components re-render automatically when storage values change
   - **Validation:** Settings changes (especially sliders) work smoothly without page reload
 
-## Phase 7: Styling and Responsive Design
+## Phase 7: Styling and Responsive Design ✅
 
-- [ ] **7.1** Add options page specific styles
+- [x] **7.1** Add options page specific styles
 
   - Create `src/extension/options/style.css`
   - Add container max-width constraints
   - Add tab content padding and spacing
   - **Validation:** Options page looks polished
 
-- [ ] **7.2** Implement responsive breakpoints
+- [x] **7.2** Implement responsive breakpoints
 
   - Test at 1280x720, 1920x1080, 2560x1440
   - Ensure tabs don't overflow horizontally
   - Ensure content is readable at all sizes
   - **Validation:** No layout breaks at common resolutions
 
-- [ ] **7.3** Add loading states
+- [x] **7.3** Add loading states
 
   - Show spinner while settings load
   - Disable inputs while mutations in progress
   - **Validation:** Loading states display correctly
 
-- [ ] **7.4** Add empty states
+- [x] **7.4** Add empty states
   - Show message when no origins configured
   - Show message when no relays added
   - **Validation:** Empty states are helpful and clear

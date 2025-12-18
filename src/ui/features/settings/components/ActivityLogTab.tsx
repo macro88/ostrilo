@@ -1,6 +1,7 @@
 import { Clock } from "lucide-react";
 import { ActivityLogConfig } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
 
 export function ActivityLogTab() {
   const {
@@ -12,8 +13,8 @@ export function ActivityLogTab() {
 
   if (isLoading) {
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Loading settings...</p>
+      <div className="py-12">
+        <LoadingSpinner label="Loading settings..." />
       </div>
     );
   }

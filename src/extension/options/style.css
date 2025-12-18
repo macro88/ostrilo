@@ -8,3 +8,144 @@ html, body, #root {
   min-height: 100vh;
 }
 
+/* Container constraints for optimal readability */
+.options-container {
+  max-width: 1200px;
+  min-width: 640px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.tab-content-wrapper {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Tab content spacing and padding */
+.tab-content {
+  padding: 1.5rem 0;
+}
+
+.tab-section {
+  margin-bottom: 2rem;
+}
+
+.tab-section:last-child {
+  margin-bottom: 0;
+}
+
+.tab-section-header {
+  margin-bottom: 1rem;
+}
+
+.tab-section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.tab-section-description {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+/* Form field spacing */
+.form-field {
+  margin-bottom: 1.5rem;
+}
+
+.form-field:last-child {
+  margin-bottom: 0;
+}
+
+/* Loading states */
+.loading-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--muted);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-overlay {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Empty states */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+}
+
+.empty-state-icon {
+  font-size: 3rem;
+  color: var(--muted-foreground);
+  margin-bottom: 1rem;
+}
+
+.empty-state-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state-description {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  margin-bottom: 1.5rem;
+}
+
+/* Responsive breakpoints */
+@media (max-width: 1024px) {
+  .options-container {
+    padding: 0 1rem;
+  }
+  
+  .tab-content-wrapper {
+    max-width: 100%;
+  }
+  
+  .tab-content {
+    padding: 1rem 0;
+  }
+  
+  .tab-section {
+    margin-bottom: 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .options-container {
+    padding: 0 0.75rem;
+  }
+  
+  .tab-content {
+    padding: 0.75rem 0;
+  }
+  
+  .empty-state {
+    padding: 2rem 1rem;
+  }
+}
+
+/* Accessibility improvements */
+.tab-content:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions */
+.tab-content,
+.loading-overlay {
+  transition: opacity 0.2s ease-in-out;
+}

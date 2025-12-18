@@ -8,6 +8,7 @@ import { PermissionsTab } from "@/ui/features/settings/components/PermissionsTab
 import { ActivityLogTab } from "@/ui/features/settings/components/ActivityLogTab";
 import { RelaysTab } from "@/ui/features/settings/components/RelaysTab";
 import { AdvancedTab } from "@/ui/features/settings/components/AdvancedTab";
+import { Logo } from "@/ui/components/logo/Logo";
 
 const TABS = [
   "general",
@@ -72,16 +73,20 @@ export function OptionsApp() {
 
   return (
     <KeyManagerProvider>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex flex-col">
         {/* Header */}
-        <header className="border-b border-border bg-card">
-          <div className="max-w-5xl mx-auto px-6 py-4">
+        <header className="bg-card mt-4">
+          <div className="options-container py-4">
             <div className="flex items-center justify-between">
-              <div>
+               
+              <div className="flex items-center-safe">
+                 <Logo size="lg" />
+                <div className="flex justify-center flex-col ml-3">
                 <h1 className="text-2xl font-bold">Ostrilo Settings</h1>
                 <p className="text-sm text-muted-foreground">
                   Configure your Nostr signer
                 </p>
+              </div>
               </div>
               <div className="text-sm text-muted-foreground">
                 v1.0.0
@@ -91,51 +96,59 @@ export function OptionsApp() {
         </header>
 
         {/* Main Content */}
-        <main className="max-w-5xl mx-auto px-6 py-6">
+        <main className="flex-1 mt-4">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsList className="mb-6">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="keys">Keys & Identities</TabsTrigger>
-              <TabsTrigger value="security">Security</TabsTrigger>
-              <TabsTrigger value="permissions">Permissions</TabsTrigger>
-              <TabsTrigger value="activity">Activity Log</TabsTrigger>
-              <TabsTrigger value="relays">Relays</TabsTrigger>
-              <TabsTrigger value="advanced">Advanced</TabsTrigger>
-            </TabsList>
+            {/* Tab Navigation - Full Width */}
+            <div className="border-bx border-border bg-card">
+              <div className="options-container">
+                <TabsList className="w-full justify-start flex-wrap">
+                  <TabsTrigger value="general">General</TabsTrigger>
+                  <TabsTrigger value="keys">Keys & Identities</TabsTrigger>
+                  <TabsTrigger value="security">Security</TabsTrigger>
+                  <TabsTrigger value="permissions">Permissions</TabsTrigger>
+                  <TabsTrigger value="activity">Activity Log</TabsTrigger>
+                  <TabsTrigger value="relays">Relays</TabsTrigger>
+                  <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                </TabsList>
+              </div>
+            </div>
 
-            <TabsContent value="general">
-              <GeneralSettingsTab />
-            </TabsContent>
+            {/* Tab Content - Full Width */}
+            <div className="options-container py-6">
+              <TabsContent value="general" className="tab-content">
+                <GeneralSettingsTab />
+              </TabsContent>
 
-            <TabsContent value="keys">
-              <KeysIdentitiesTab />
-            </TabsContent>
+              <TabsContent value="keys" className="tab-content">
+                <KeysIdentitiesTab />
+              </TabsContent>
 
-            <TabsContent value="security">
-              <SecuritySettingsTab />
-            </TabsContent>
+              <TabsContent value="security" className="tab-content">
+                <SecuritySettingsTab />
+              </TabsContent>
 
-            <TabsContent value="permissions">
-              <PermissionsTab />
-            </TabsContent>
+              <TabsContent value="permissions" className="tab-content">
+                <PermissionsTab />
+              </TabsContent>
 
-            <TabsContent value="activity">
-              <ActivityLogTab />
-            </TabsContent>
+              <TabsContent value="activity" className="tab-content">
+                <ActivityLogTab />
+              </TabsContent>
 
-            <TabsContent value="relays">
-              <RelaysTab />
-            </TabsContent>
+              <TabsContent value="relays" className="tab-content">
+                <RelaysTab />
+              </TabsContent>
 
-            <TabsContent value="advanced">
-              <AdvancedTab />
-            </TabsContent>
+              <TabsContent value="advanced" className="tab-content">
+                <AdvancedTab />
+              </TabsContent>
+            </div>
           </Tabs>
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-border bg-card mt-12">
-          <div className="max-w-5xl mx-auto px-6 py-4">
+        <footer className="mb-8 bg-card mt-auto">
+          <div className="options-container py-4">
             <p className="text-sm text-muted-foreground text-center">
               Settings are automatically saved
             </p>
