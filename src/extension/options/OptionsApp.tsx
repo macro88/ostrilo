@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { KeyManagerProvider } from "@/ui/state/KeyManagerContext";
+import { useTheme } from "@/ui/hooks/useTheme";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralSettingsTab } from "@/ui/features/settings/components/GeneralSettingsTab";
 import { KeysIdentitiesTab } from "@/ui/features/settings/components/KeysIdentitiesTab";
@@ -21,6 +22,9 @@ const TABS = [
 ] as const;
 
 export function OptionsApp() {
+  // Apply theme based on settings and system preference
+  useTheme();
+
   const [activeTab, setActiveTab] = useState("general");
 
   // Handle URL hash navigation
