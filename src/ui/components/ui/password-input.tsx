@@ -5,9 +5,14 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Shield, Check, X } from "lucide-react";
 
 // Define PasswordStrength interface here since we're not importing it from crypto
+interface PasswordRequirement {
+  requirement: string;
+  passes: boolean;
+}
+
 interface PasswordStrength {
   score: number;
-  feedback: string[];
+  requirements: PasswordRequirement[];
   meetsMinimum: boolean;
 }
 
@@ -36,10 +41,14 @@ export function PasswordInput({
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [strength, setStrength] = useState<PasswordStrength | null>(null);
+  const [strength, setStrength] = useState<PasswordStrength | null>({
+    meetsMinimum: false,
+    score: 0,
+    requirements: [],
+  });
 
   useEffect(() => {
-    if (!showStrengthMeter || value.length === 0) {
+    if (!showStrengthMeter) {
       setStrength(null);
       return;
     }
@@ -161,26 +170,25 @@ export function PasswordInput({
           </div>
 
           {/* Requirements checklist */}
-          {strength.feedback.length > 0 && (
+          {strength.requirements.length > 0 && (
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">Requirements:</div>
-              {strength.feedback.map((requirement, index) => (
+              {strength.requirements.map((req, index) => (
                 <div key={index} className="flex items-center gap-2 text-xs">
-                  <X className="h-3 w-3 text-red-500" />
-                  <span className="text-muted-foreground">{requirement}</span>
-                </div>
-              ))}
-              {/* Show met requirements */}
-              {strength.score > 0 && (
-                <div className="flex items-center gap-2 text-xs">
-                  <Check className="h-3 w-3 text-green-500" />
-                  <span className="text-muted-foreground">
-                    {strength.score >= 2
-                      ? "Length and complexity"
-                      : "Minimum length"}
+                  {req.passes ? (
+                    <Check className="h-3 w-3 text-green-500" />
+                  ) : (
+                    <X className="h-3 w-3 text-red-500" />
+                  )}
+                  <span
+                    className={
+                      req.passes ? "text-foreground" : "text-muted-foreground"
+                    }
+                  >
+                    {req.requirement}
                   </span>
                 </div>
-              )}
+              ))}
             </div>
           )}
         </div>
@@ -228,14 +236,6 @@ export function PasswordInput({
         <div className="text-sm text-red-600 flex items-center gap-2">
           <X className="h-4 w-4" />
           {confirmError}
-        </div>
-      )}
-
-      {/* Success indicator */}
-      {showStrengthMeter && strength?.meetsMinimum && !error && (
-        <div className="text-sm text-green-600 flex items-center gap-2">
-          <Check className="h-4 w-4" />
-          Password meets security requirements
         </div>
       )}
     </div>

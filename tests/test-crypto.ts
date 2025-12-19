@@ -10,8 +10,8 @@ import {
   parsePrivateKey,
   privateKeyToBech32,
   publicKeyToBech32,
-  evaluatePasswordStrength,
 } from "./src/domain/utils/crypto";
+import { evaluatePasswordStrength } from "./src/domain/utils/validation";
 
 export async function testCrypto() {
   console.log("🔐 Testing Ostrilo Crypto Functions...");

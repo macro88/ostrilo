@@ -191,21 +191,6 @@ export function OnboardingCreateKey({
                 showStrengthMeter={true}
                 error={passwordError}
               />
-
-              <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
-                  <div className="text-sm">
-                    <div className="font-medium text-blue-600 mb-1">
-                      Backup Reminder
-                    </div>
-                    <div className="text-blue-600">
-                      After creating your key, you will be shown your private
-                      key for backup. Keep your password safe!
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="flex space-x-3">

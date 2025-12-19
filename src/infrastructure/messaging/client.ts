@@ -234,7 +234,11 @@ export async function policyRemoveOrigin(origin: string) {
 }
 
 export async function evaluatePasswordStrength(password: string) {
-  return rpc<{ score: number; feedback: string[]; meetsMinimum: boolean }>({
+  return rpc<{
+    score: number;
+    requirements: { requirement: string; passes: boolean }[];
+    meetsMinimum: boolean;
+  }>({
     type: "crypto.evaluatePassword",
     password,
   });

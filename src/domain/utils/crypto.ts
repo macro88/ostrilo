@@ -341,58 +341,6 @@ export function verifySignature(
 }
 
 /**
- * Password strength validation
- * Returns score 0-4 and requirements
- */
-export interface PasswordStrength {
-  score: number; // 0-4 (0=very weak, 4=very strong)
-  feedback: string[];
-  meetsMinimum: boolean;
-}
-
-export function evaluatePasswordStrength(password: string): PasswordStrength {
-  const feedback: string[] = [];
-  let score = 0;
-
-  // Length check
-  if (password.length >= 8) score++;
-  else feedback.push("At least 8 characters required");
-
-  if (password.length >= 12) score++;
-  else if (password.length >= 8) feedback.push("12+ characters recommended");
-
-  // Character variety
-  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) {
-    score++;
-  } else {
-    feedback.push("Mix of uppercase and lowercase letters");
-  }
-
-  if (/\d/.test(password)) {
-    score++;
-  } else {
-    feedback.push("At least one number");
-  }
-
-  if (/[^a-zA-Z0-9]/.test(password)) {
-    score++;
-  } else {
-    feedback.push("At least one special character");
-  }
-
-  // Adjust score for length bonus
-  if (password.length >= 16) score = Math.min(score + 1, 4);
-
-  const meetsMinimum = password.length >= 8 && score >= 2;
-
-  return {
-    score: Math.max(0, Math.min(4, score)),
-    feedback,
-    meetsMinimum,
-  };
-}
-
-/**
  * Check if Web Authentication API is available for biometric authentication
  */
 export function isWebAuthnAvailable(): boolean {

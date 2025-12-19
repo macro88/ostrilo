@@ -20,7 +20,7 @@ import { ApprovalQueueService } from "@/application/services/approval-queue.serv
 import { browser } from "wxt/browser";
 
 /** Approval popup dimensions */
-const POPUP_WIDTH = 420;
+const POPUP_WIDTH = 640;
 const POPUP_HEIGHT = 640;
 
 /**

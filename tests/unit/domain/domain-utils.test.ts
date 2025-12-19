@@ -30,15 +30,17 @@ describe("Domain Utils - Validation", () => {
       const strong = "MyStrongPassword123!";
       const result = evaluatePasswordStrength(strong);
       expect(result.score).toBeGreaterThan(2);
-      expect(result.isValid).toBe(true);
+      expect(result.meetsMinimum).toBe(true);
+      expect(result.requirements.every((r) => r.passes)).toBe(true);
     });
 
     it("identifies weak passwords", () => {
       const weak = "weak";
       const result = evaluatePasswordStrength(weak);
       expect(result.score).toBeLessThan(2);
-      expect(result.isValid).toBe(false);
-      expect(result.feedback.length).toBeGreaterThan(0);
+      expect(result.meetsMinimum).toBe(false);
+      expect(result.requirements.length).toBeGreaterThan(0);
+      expect(result.requirements.some((r) => !r.passes)).toBe(true);
     });
   });
 
@@ -189,7 +191,9 @@ describe("Domain Utils - Encoding", () => {
 
       // Parse from nsec
       const parsedFromNsec = parsePrivateKey(nsec);
-      expect(Array.from(parsedFromNsec)).toEqual(Array.from(keyPair.privateKey));
+      expect(Array.from(parsedFromNsec)).toEqual(
+        Array.from(keyPair.privateKey)
+      );
     });
   });
 });
