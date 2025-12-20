@@ -328,7 +328,7 @@ describe("ProfileView component logic", () => {
       let saveError: string | null = null;
 
       // Simulate unknown error type
-      const error = "string error";
+      const error: any = "string error";
       saveError = error instanceof Error ? error.message : "Failed to save profile";
 
       expect(saveError).toBe("Failed to save profile");

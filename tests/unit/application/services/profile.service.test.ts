@@ -97,7 +97,7 @@ describe("ProfileService Unit Tests", () => {
       };
 
       // Mock relay response
-      (relay.subscribe as any).mockImplementation((filter, onEvent, onEOSE) => {
+      (relay.subscribe as any).mockImplementation((filter: any, onEvent: any, onEOSE: any) => {
         onEvent({
           id: "event-id",
           pubkey,
@@ -148,7 +148,7 @@ describe("ProfileService Unit Tests", () => {
       });
 
       // Mock relay response
-      (relay.subscribe as any).mockImplementation((filter, onEvent, onEOSE) => {
+      (relay.subscribe as any).mockImplementation((filter: any, onEvent: any, onEOSE: any) => {
         onEvent({
           id: "new-event-id",
           pubkey,
@@ -187,7 +187,7 @@ describe("ProfileService Unit Tests", () => {
       });
 
       // Mock relay response
-      (relay.subscribe as any).mockImplementation((filter, onEvent, onEOSE) => {
+      (relay.subscribe as any).mockImplementation((filter: any, onEvent: any, onEOSE: any) => {
         onEvent({
           id: "fresh-event-id",
           pubkey,
@@ -216,7 +216,7 @@ describe("ProfileService Unit Tests", () => {
       const middleProfile: ProfileMetadata = { name: "Middle" };
 
       // Mock relay returning multiple events
-      (relay.subscribe as any).mockImplementation((filter, onEvent, onEOSE) => {
+      (relay.subscribe as any).mockImplementation((filter: any, onEvent: any, onEOSE: any) => {
         onEvent({
           id: "event-1",
           pubkey,
@@ -259,7 +259,7 @@ describe("ProfileService Unit Tests", () => {
       const pubkey = "test-pubkey";
 
       // Mock relay returning invalid JSON
-      (relay.subscribe as any).mockImplementation((filter, onEvent, onEOSE) => {
+      (relay.subscribe as any).mockImplementation((filter: any, onEvent: any, onEOSE: any) => {
         onEvent({
           id: "event-id",
           pubkey,
@@ -288,7 +288,7 @@ describe("ProfileService Unit Tests", () => {
         // Valid fields, validator should accept
       };
 
-      (relay.subscribe as any).mockImplementation((filter, onEvent, onEOSE) => {
+      (relay.subscribe as any).mockImplementation((filter: any, onEvent: any, onEOSE: any) => {
         onEvent({
           id: "event-id",
           pubkey,
@@ -359,7 +359,7 @@ describe("ProfileService Unit Tests", () => {
       (keyVault.listKeys as any).mockResolvedValue(keys);
 
       // Mock relay responses for both keys
-      (relay.subscribe as any).mockImplementation((filter, onEvent, onEOSE) => {
+      (relay.subscribe as any).mockImplementation((filter: any, onEvent: any, onEOSE: any) => {
         const pubkey = filter.authors[0];
         const profile = pubkey === "pubkey1" ? profile1 : profile2;
         onEvent({
@@ -556,7 +556,7 @@ describe("ProfileService Unit Tests", () => {
 
       // Add one more profile to trigger eviction
       const newProfile: ProfileMetadata = { name: "New User" };
-      (relay.subscribe as any).mockImplementation((filter, onEvent, onEOSE) => {
+      (relay.subscribe as any).mockImplementation((filter: any, onEvent: any, onEOSE: any) => {
         onEvent({
           id: "new-event-id",
           pubkey: "pubkey-new",
