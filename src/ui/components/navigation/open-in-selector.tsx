@@ -8,6 +8,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useWxtStorage } from "@/hooks/useWxtStorage";
 import { useSidePanelDock } from "@/hooks/useSidePanelDock";
+import { useAppSettings } from "@/hooks/useAppSettings";
 import { useEffect, useState } from "react";
 
 type DisplayMode = "popup" | "sidepanel";
@@ -20,24 +21,29 @@ type DisplayMode = "popup" | "sidepanel";
 export const OpenInSelector: React.FC = () => {
   const [isDocked, setIsDocked] = useWxtStorage("sync:isDocked", false);
   const { supported, enableDocking, disableDocking } = useSidePanelDock();
-  
-  // Derive display mode from isDocked for backward compatibility
+  const { settings, updateSidePanel } = useAppSettings();
+
+  // Derive display mode from settings.sidePanel if available
   const [displayMode, setDisplayMode] = useState<DisplayMode>(
-    isDocked ? "sidepanel" : "popup"
+    settings?.sidePanel ? "sidepanel" : "popup"
   );
 
-  // Sync local state with storage
+  // Sync display mode with settings (one-way sync to avoid loops)
   useEffect(() => {
-    setDisplayMode(isDocked ? "sidepanel" : "popup");
-  }, [isDocked]);
+    const mode = settings?.sidePanel ? "sidepanel" : "popup";
+    setDisplayMode(mode);
+  }, [settings?.sidePanel]);
 
   const handleModeChange = async (mode: DisplayMode) => {
     setDisplayMode(mode);
     const shouldDock = mode === "sidepanel";
     setIsDocked(shouldDock);
-    
+
+    // Also update the main app settings
+    await updateSidePanel(shouldDock);
+
     if (!supported) return;
-    
+
     if (shouldDock) {
       await enableDocking(true);
     } else {

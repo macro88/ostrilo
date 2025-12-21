@@ -26,6 +26,8 @@ import {
   getApprovalCount,
 } from "@/infrastructure/messaging/client";
 import { browser } from "wxt/browser";
+import { ApprovalPrompt } from "@/ui/features/approval/components/ApprovalPrompt";
+import { useAppSettings } from "@/ui/hooks/useAppSettings";
 
 /**
  * Format Unix timestamp to relative time
@@ -49,6 +51,8 @@ export function ActivityView() {
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [showPendingSection, setShowPendingSection] = useState(true);
+  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
+  const { settings } = useAppSettings();
 
   const { entries, loading, hasMore, loadMore, refresh } = useActivityLog({
     origin: originFilter,
@@ -76,26 +80,36 @@ export function ActivityView() {
     const handleMessage = (message: any) => {
       if (message && message.__event === "ostrilo.queue.updated") {
         fetchPendingApprovals();
+        // In sidepanel mode, auto-show the approval dialog when new request arrives
+        if (settings?.sidePanel && !showApprovalDialog) {
+          setShowApprovalDialog(true);
+        }
       }
     };
 
     browser.runtime.onMessage.addListener(handleMessage);
     return () => browser.runtime.onMessage.removeListener(handleMessage);
-  }, []);
+  }, [settings?.sidePanel, showApprovalDialog]);
 
-  // Open approval window
+  // Open approval window or show inline dialog based on sidepanel mode
   const handleOpenApprovalWindow = async () => {
-    try {
-      // Create or focus approval window
-      await browser.windows.create({
-        url: browser.runtime.getURL("/approval.html"),
-        type: "popup",
-        width: 640,
-        height: 640,
-        focused: true,
-      });
-    } catch (err) {
-      console.error("[ActivityView] Failed to open approval window:", err);
+    // Check if in sidepanel mode
+    if (settings?.sidePanel) {
+      // Show approval dialog inline
+      setShowApprovalDialog(true);
+    } else {
+      // Open popup window (original behavior)
+      try {
+        await browser.windows.create({
+          url: browser.runtime.getURL("/approval.html"),
+          type: "popup",
+          width: 640,
+          height: 640,
+          focused: true,
+        });
+      } catch (err) {
+        console.error("[ActivityView] Failed to open approval window:", err);
+      }
     }
   };
 
@@ -127,6 +141,25 @@ export function ActivityView() {
 
   return (
     <div className="h-full overflow-y-auto p-3 space-y-3">
+      {/* Approval Dialog Overlay (Sidepanel Mode) */}
+      {showApprovalDialog && settings?.sidePanel && (
+        <div className="fixed inset-0 bg-background z-50 flex flex-col">
+          <div className="flex items-center justify-between p-3 border-b">
+            <h2 className="text-lg font-semibold">Pending Approvals</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowApprovalDialog(false)}
+            >
+              ← Back to Activity
+            </Button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <ApprovalPrompt />
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="text-center mb-4">
         <div className="flex items-center justify-center gap-2 mb-1">
@@ -202,8 +235,17 @@ export function ActivityView() {
                   className="w-full mt-2 gap-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800"
                   size="sm"
                 >
-                  <ExternalLink className="h-3 w-3" />
-                  Open Approval Window
+                  {settings?.sidePanel ? (
+                    <>
+                      <Bell className="h-3 w-3" />
+                      Review Approvals
+                    </>
+                  ) : (
+                    <>
+                      <ExternalLink className="h-3 w-3" />
+                      Open Approval Window
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

@@ -64,12 +64,25 @@ export class ApprovalQueueService {
   }
 
   /**
-   * Enqueue a new approval request
-   * @param origin - The origin of the requesting dapp
-   * @param event - The unsigned event to be signed
+   * Enqueue a new approval request with automatic de-duplication.
+   *
+   * If an eventIdHash is provided and matches an existing queued request,
+   * the existing PendingRequest is returned instead of creating a duplicate.
+   * This ensures identical Nostr events (same content, kind, tags, created_at)
+   * result in a single approval prompt, with all callers receiving the same result.
+   *
+   * @param origin - The origin of the requesting dapp (e.g., "https://primal.net")
+   * @param event - The unsigned Nostr event to be signed (NIP-01 format)
    * @param resolver - Callback invoked when request is resolved or times out
-   * @param eventIdHash - Optional event ID hash for de-duplication
-   * @returns The created PendingRequest with unique ID
+   * @param eventIdHash - Optional SHA-256 hash of the event ID for de-duplication
+   * @returns The PendingRequest (new or existing if duplicate detected)
+   *
+   * @remarks
+   * - De-duplication uses event ID hash (computed via NIP-01 canonical serialization)
+   * - Duplicate detection logs a message but does NOT trigger change notifications
+   * - Both queue Map and eventIdMap are updated for new requests
+   * - Auto-timeout is set up for each request (default 5 minutes)
+   * - Change callback is invoked for new requests to trigger UI updates
    */
   enqueue(
     origin: string,

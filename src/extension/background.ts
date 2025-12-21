@@ -38,11 +38,33 @@ let approvalWindowId: number | null = null;
  * @param settings - Current app settings to check sidepanel mode
  * @returns Window ID of the approval window (or undefined if using sidepanel)
  */
+
+/**
+ * Focus or create the approval window based on mode settings.
+ *
+ * In sidepanel mode, this broadcasts a message to the active UI to switch
+ * to the Activity tab instead of creating a popup window. In popup mode,
+ * it reuses an existing approval window if open, or creates a new one.
+ *
+ * @param settings - SettingsService instance for checking sidePanel preference
+ * @returns Promise resolving to the window ID (popup mode) or undefined (sidepanel mode)
+ *
+ * @remarks
+ * - Sidepanel mode: Broadcasts "ostrilo.switchToActivity" message, returns undefined
+ * - Popup mode: Focuses existing window if available, or creates new 640x640 popup
+ * - Window ID tracking ensures single approval window across multiple requests
+ * - Window close events automatically clear the tracked window ID
+ */
 async function focusOrCreateApprovalWindow(
   settings: SettingsService
 ): Promise<number | undefined> {
   // Check if in sidepanel mode
   const appSettings = await settings.get();
+  console.log(
+    "[Background] focusOrCreateApprovalWindow - sidePanel setting:",
+    appSettings?.sidePanel
+  );
+
   if (appSettings?.sidePanel) {
     console.log(
       "[Background] Sidepanel mode enabled, sending message to switch to Activity tab"

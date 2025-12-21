@@ -422,15 +422,24 @@ export class NostrRpcHandler implements RpcModule {
     console.log(
       `[NostrRpcHandler] Opening/focusing approval window for request ${requestId}`
     );
+    console.log(
+      "[NostrRpcHandler] windowManager available:",
+      !!this.windowManager
+    );
 
     try {
       let windowId: number | undefined;
 
       if (this.windowManager) {
         // Use window manager callback to focus/create window (may return undefined in sidepanel mode)
+        console.log("[NostrRpcHandler] Calling windowManager...");
         windowId = await this.windowManager();
+        console.log("[NostrRpcHandler] windowManager returned:", windowId);
       } else {
         // Fallback: Create new popup window (old behavior)
+        console.log(
+          "[NostrRpcHandler] No windowManager, creating popup directly"
+        );
         const approvalUrl = browser.runtime.getURL(
           `/approval.html?requestId=${encodeURIComponent(
             requestId
