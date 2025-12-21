@@ -28,6 +28,65 @@ import {
 } from "@/infrastructure/messaging/handlers";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 
+// Window tracking state for approval popup
+let approvalWindowId: number | null = null;
+
+/**
+ * Focus existing approval window or create new one
+ * If in sidepanel mode, sends message to switch to Activity tab instead
+ * Ensures only one approval window exists at a time
+ * @param settings - Current app settings to check sidepanel mode
+ * @returns Window ID of the approval window (or undefined if using sidepanel)
+ */
+async function focusOrCreateApprovalWindow(
+  settings: SettingsService
+): Promise<number | undefined> {
+  // Check if in sidepanel mode
+  const appSettings = await settings.get();
+  if (appSettings?.sidePanel) {
+    console.log(
+      "[Background] Sidepanel mode enabled, sending message to switch to Activity tab"
+    );
+    // Send message to sidepanel/popup to switch to Activity tab
+    browser.runtime
+      .sendMessage({ __event: "ostrilo.switchToActivity" })
+      .catch(() => {
+        // Ignore if no listeners
+      });
+    return undefined;
+  }
+
+  // Try to focus existing window
+  if (approvalWindowId !== null) {
+    try {
+      await browser.windows.update(approvalWindowId, { focused: true });
+      console.log(
+        `[Background] Focused existing approval window ${approvalWindowId}`
+      );
+      return approvalWindowId;
+    } catch (error) {
+      // Window was closed by user
+      console.log(
+        `[Background] Previous approval window ${approvalWindowId} no longer exists`
+      );
+      approvalWindowId = null;
+    }
+  }
+
+  // Create new approval window
+  const window = await browser.windows.create({
+    url: browser.runtime.getURL("/approval.html"),
+    type: "popup",
+    width: 640,
+    height: 640,
+    focused: true,
+  });
+
+  approvalWindowId = window.id!;
+  console.log(`[Background] Created new approval window ${approvalWindowId}`);
+  return approvalWindowId;
+}
+
 export default defineBackground(() => {
   // Compose services
   const storage = createStorageSuite();
@@ -74,6 +133,24 @@ export default defineBackground(() => {
   // Create approval queue service
   const approvalQueue = new ApprovalQueueService();
 
+  // Set up callback to broadcast queue changes to UI
+  approvalQueue.setChangeCallback(() => {
+    // Broadcast queue.updated message to all listeners (approval window, activity page, etc.)
+    browser.runtime
+      .sendMessage({ __event: "ostrilo.queue.updated" })
+      .catch(() => {
+        // Ignore errors if no listeners are active
+      });
+  });
+
+  // Track approval window lifecycle
+  browser.windows.onRemoved.addListener((windowId) => {
+    if (windowId === approvalWindowId) {
+      console.log(`[Background] Approval window ${windowId} was closed`);
+      approvalWindowId = null;
+    }
+  });
+
   // Setup modular RPC router
   const router = new RpcRouter();
   router.registerModule("vault", new VaultRpcHandler());
@@ -82,7 +159,12 @@ export default defineBackground(() => {
   router.registerModule("crypto", new CryptoRpcHandler()); // Crypto utility operations
   router.registerModule("state", new StateRpcHandler()); // State queries (lock status, etc.)
   router.registerModule("keys", new VaultRpcHandler()); // keys.list is handled by VaultRpcHandler
-  router.registerModule("nostr", new NostrRpcHandler(approvalQueue)); // NIP-07 operations with approval
+  router.registerModule(
+    "nostr",
+    new NostrRpcHandler(approvalQueue, () =>
+      focusOrCreateApprovalWindow(settings)
+    )
+  ); // NIP-07 operations with approval
   router.registerModule("approval", new ApprovalRpcHandler(approvalQueue)); // Approval queue operations
   router.registerModule("activity", new ActivityRpcHandler()); // Activity log operations
   router.registerModule("profile", new ProfileRpcHandler()); // Profile metadata operations

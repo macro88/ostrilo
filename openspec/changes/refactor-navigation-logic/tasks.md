@@ -1,0 +1,17 @@
+# Tasks
+
+- [ ] Create `src/domain/events.ts`
+  - Define `BROADCAST_EVENTS` constant with `SWITCH_TO_ACTIVITY` and `QUEUE_UPDATED`.
+- [ ] Create `src/ui/hooks/useAppNavigation.ts`
+  - Implement `useAppNavigation` hook managing `activeTab` and listening for `SWITCH_TO_ACTIVITY`.
+- [ ] Refactor `src/ui/components/layout/MainApp.tsx`
+  - Replace local state and `useEffect` with `useAppNavigation`.
+- [ ] Update `src/extension/background.ts`
+  - Import and use `BROADCAST_EVENTS.SWITCH_TO_ACTIVITY` instead of hardcoded string.
+  - Import and use `BROADCAST_EVENTS.QUEUE_UPDATED` instead of hardcoded string (if applicable).
+- [ ] Update `src/application/services/approval-queue.service.ts`
+  - Update to use `BROADCAST_EVENTS.QUEUE_UPDATED` (if applicable/accessible).
+- [ ] Update `src/ui/features/approval/components/ApprovalPrompt.tsx`
+  - Update to use `BROADCAST_EVENTS.QUEUE_UPDATED`.
+- [ ] Update `src/ui/features/activity/components/ActivityView.tsx`
+  - Update to use `BROADCAST_EVENTS.QUEUE_UPDATED`.

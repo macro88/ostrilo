@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/ui/components/layout/AppLayout";
 import { LockScreen } from "@/ui/features/authentication/components/LockScreen";
 import { OnboardingContainer } from "@/ui/features/onboarding/components/OnboardingContainer";
@@ -10,6 +10,7 @@ import { TabKey } from "@/ui/components/navigation/BottomTabs";
 import { useOnboarding } from "@/ui/features/onboarding/hooks/useOnboarding";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { AddKeyDialog } from "@/ui/components/dialogs/AddKeyDialog";
+import { browser } from "wxt/browser";
 
 export function MainApp() {
   const [activeTab, setActiveTab] = useState<TabKey>("home");
@@ -21,6 +22,21 @@ export function MainApp() {
   const handleAddKey = () => {
     setIsAddKeyDialogOpen(true);
   };
+
+  // Listen for message to switch to Activity tab (for sidepanel mode)
+  useEffect(() => {
+    const handleMessage = (message: any) => {
+      if (message && message.__event === "ostrilo.switchToActivity") {
+        console.log(
+          "[MainApp] Switching to Activity tab for pending approvals"
+        );
+        setActiveTab("activity");
+      }
+    };
+
+    browser.runtime.onMessage.addListener(handleMessage);
+    return () => browser.runtime.onMessage.removeListener(handleMessage);
+  }, []);
 
   // Show onboarding for first-time users
   if (needsOnboarding) {

@@ -71,7 +71,7 @@ Ostrilo is a secure browser extension that provides Nostr key management and sig
 **TypeScript Configuration:**
 - Strict mode enabled
 - No implicit any
-- All code must pass `npm run compile` type checking before commit
+- All code must pass `yarn compile` type checking before commit
 
 ### Architecture Patterns
 
@@ -146,35 +146,35 @@ The extension uses a modular RPC system for communication between UI (popup/side
    - Domain utilities (validation, encoding, crypto)
    - Infrastructure adapters (crypto, storage)
    - UI hooks (useOnboarding)
-   - Run with: `npm run test:unit`
+   - Run with: `yarn test:unit`
 
 2. **Integration Tests (9 tests)** - `tests/integration/`
    - Cross-service interactions
    - RPC type safety and validation
    - Complete workflow testing
-   - Run with: `npm run test:integration`
+   - Run with: `yarn test:integration`
 
 3. **Security Tests (14 tests)** - `tests/security/`
    - Cryptographic security (entropy, salt uniqueness, signature randomness)
    - Memory zeroization
    - Attack resistance (timing, dictionary, brute force)
-   - Run with: `npm run test:security`
+   - Run with: `yarn test:security`
 
 4. **E2E Tests** - `tests/e2e/`
    - Onboarding flows (create, import)
    - Settings and origin policy management
    - Browser extension functionality
-   - Run with: `npm run test:e2e`
+   - Run with: `yarn test:e2e`
 
 **Testing Requirements:**
 - All new features require unit tests
 - Security-sensitive code requires dedicated security tests
 - E2E tests for user-facing workflows
-- Run `npm run compile` before committing to catch type errors
+- Run `yarn compile` before committing to catch type errors
 - All tests must pass in CI before merge
 
 **Coverage Goals:**
-- Unit test coverage tracked with `npm run test:coverage`
+- Unit test coverage tracked with `yarn test:coverage`
 - Critical paths (crypto, key management) require 100% coverage
 - Security functions must have comprehensive test vectors
 
@@ -186,19 +186,19 @@ The extension uses a modular RPC system for communication between UI (popup/side
 - Conventional commit messages recommended
 
 **Pre-Commit Checks:**
-1. `npm run compile` - TypeScript type checking (REQUIRED)
-2. `npm run test` - Run all tests
-3. `npm run build && npm run build:firefox` - Ensure both browser builds succeed
+1. `yarn compile` - TypeScript type checking (REQUIRED)
+2. `yarn test` - Run all tests
+3. `yarn build && yarn build:firefox` - Ensure both browser builds succeed
 
 **Build Validation:**
 - Always test both Chrome and Firefox builds when making changes
-- Development builds available via `npm run dev` and `npm run dev:firefox`
+- Development builds available via `yarn dev` and `yarn dev:firefox`
 - Load unpacked extension from `.output/chrome-mv3/` or `.output/firefox-mv2/`
 
 **Important Timeouts:**
 - `npm install` takes ~47 seconds - NEVER CANCEL, set timeout to 90+ seconds
-- `npm run build` takes ~8 seconds - NEVER CANCEL, set timeout to 30+ seconds
-- `npm run compile` takes ~2 seconds - Quick validation check
+- `yarn build` takes ~8 seconds - NEVER CANCEL, set timeout to 30+ seconds
+- `yarn compile` takes ~2 seconds - Quick validation check
 
 ## Domain Context
 

@@ -28,7 +28,10 @@ const POPUP_HEIGHT = 640;
  * Handles: nostr.getPublicKey, nostr.signEvent
  */
 export class NostrRpcHandler implements RpcModule {
-  constructor(private approvalQueue?: ApprovalQueueService) {}
+  constructor(
+    private approvalQueue?: ApprovalQueueService,
+    private windowManager?: () => Promise<number | undefined>
+  ) {}
 
   async handleRequest(
     message: RpcRequest,
@@ -204,8 +207,29 @@ export class NostrRpcHandler implements RpcModule {
       );
 
       try {
+        // Compute event ID for de-duplication
+        const eventIdHash = computeEventId(
+          pubkey,
+          event.created_at,
+          event.kind,
+          event.tags,
+          event.content
+        );
+
+        console.log(
+          `[NostrRpcHandler] Computed event ID hash: ${eventIdHash.substring(
+            0,
+            16
+          )}...`
+        );
+
         // Wait for user approval
-        const decision = await this.requestApproval(message.origin, event);
+        const decision = await this.requestApproval(
+          message.origin,
+          event,
+          pubkey,
+          eventIdHash
+        );
 
         console.log("[NostrRpcHandler] Approval decision:", decision);
 
@@ -331,12 +355,24 @@ export class NostrRpcHandler implements RpcModule {
    * @param event - The unsigned event to sign
    * @returns Promise resolving to the user's decision or "timeout" if timed out
    */
+  /**
+   * Request user approval for signing an event
+   * Opens the approval popup and waits for user decision
+   *
+   * @param origin - The origin of the requesting dapp
+   * @param event - The unsigned event to sign
+   * @param pubkey - The public key hex that will sign the event
+   * @param eventIdHash - Computed event ID hash for de-duplication
+   * @returns Promise resolving to the user's decision or "timeout" if timed out
+   */
   private async requestApproval(
     origin: string,
-    event: UnsignedEvent
+    event: UnsignedEvent,
+    pubkey: string,
+    eventIdHash: string
   ): Promise<ApprovalDecision | "timeout"> {
     return new Promise<ApprovalDecision | "timeout">((resolve, reject) => {
-      // Enqueue the request with a resolver callback
+      // Enqueue the request with event ID hash for de-duplication
       const pendingRequest = this.approvalQueue!.enqueue(
         origin,
         event,
@@ -355,7 +391,8 @@ export class NostrRpcHandler implements RpcModule {
           } else {
             resolve(decision);
           }
-        }
+        },
+        eventIdHash
       );
 
       console.log(
@@ -377,65 +414,53 @@ export class NostrRpcHandler implements RpcModule {
   }
 
   /**
-   * Open the approval popup window
-   *
+   * Open or focus the approval popup window
+   * Uses window manager callback if provided, otherwise creates new window
    * @param requestId - The ID of the pending request
    */
   private async openApprovalPopup(requestId: string): Promise<void> {
-    // Get the extension URL for the approval page
-    // Use type assertion since approval.html is dynamically registered
-    const approvalUrl = browser.runtime.getURL(
-      `/approval.html?requestId=${encodeURIComponent(
-        requestId
-      )}` as `/popup.html${string}`
+    console.log(
+      `[NostrRpcHandler] Opening/focusing approval window for request ${requestId}`
     );
 
-    console.log("[NostrRpcHandler] Opening approval popup at:", approvalUrl);
-
     try {
-      // Get current window to center the popup
-      let left: number | undefined;
-      let top: number | undefined;
+      let windowId: number | undefined;
 
-      try {
-        const currentWindow = await browser.windows.getCurrent();
-        if (
-          currentWindow.left !== undefined &&
-          currentWindow.top !== undefined &&
-          currentWindow.width !== undefined &&
-          currentWindow.height !== undefined
-        ) {
-          // Center popup on current window
-          left =
-            currentWindow.left +
-            Math.floor((currentWindow.width - POPUP_WIDTH) / 2);
-          top =
-            currentWindow.top +
-            Math.floor((currentWindow.height - POPUP_HEIGHT) / 2);
-        }
-      } catch (err) {
-        console.warn(
-          "[NostrRpcHandler] Could not get current window for centering:",
-          err
+      if (this.windowManager) {
+        // Use window manager callback to focus/create window (may return undefined in sidepanel mode)
+        windowId = await this.windowManager();
+      } else {
+        // Fallback: Create new popup window (old behavior)
+        const approvalUrl = browser.runtime.getURL(
+          `/approval.html?requestId=${encodeURIComponent(
+            requestId
+          )}` as `/popup.html${string}`
         );
+
+        const win = await browser.windows.create({
+          url: approvalUrl,
+          type: "popup",
+          width: POPUP_WIDTH,
+          height: POPUP_HEIGHT,
+          focused: true,
+        });
+
+        windowId = win.id!;
       }
 
-      const win = await browser.windows.create({
-        url: approvalUrl,
-        type: "popup",
-        width: POPUP_WIDTH,
-        height: POPUP_HEIGHT,
-        left,
-        top,
-        focused: true,
-      });
+      // If windowId is undefined, we're in sidepanel mode and the message was sent to switch tabs
+      if (windowId === undefined) {
+        console.log(
+          "[NostrRpcHandler] Sidepanel mode - message sent to switch to Activity tab"
+        );
+        return;
+      }
 
       // Update badge with pending count
       await this.updateBadgeCount();
 
       console.log(
-        "[NostrRpcHandler] Approval popup opened, window id:",
-        win?.id
+        `[NostrRpcHandler] Approval window ready, window id: ${windowId}`
       );
     } catch (err) {
       console.error("[NostrRpcHandler] Failed to open approval popup:", err);

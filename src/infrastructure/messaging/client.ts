@@ -258,6 +258,12 @@ export async function getNextApprovalRequest() {
   });
 }
 
+export async function getAllApprovalRequests() {
+  return rpc<{ requests: import("@/domain/types").PendingRequest[] }>({
+    type: "approval.getAll",
+  });
+}
+
 export async function resolveApprovalRequest(
   requestId: string,
   action: import("@/domain/types").ApprovalAction

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -7,9 +7,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { useActivityLog } from "../hooks/useActivityLog";
 import { getKindName, COMMON_EVENT_KINDS } from "@/domain/types";
-import { Loader2, CheckCircle, XCircle, Activity } from "lucide-react";
+import type { PendingRequest } from "@/domain/types";
+import {
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Activity,
+  Bell,
+  ExternalLink,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
+import {
+  getAllApprovalRequests,
+  getApprovalCount,
+} from "@/infrastructure/messaging/client";
+import { browser } from "wxt/browser";
 
 /**
  * Format Unix timestamp to relative time
@@ -30,11 +46,58 @@ export function ActivityView() {
     undefined
   );
   const [kindFilter, setKindFilter] = useState<number | undefined>(undefined);
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [showPendingSection, setShowPendingSection] = useState(true);
 
   const { entries, loading, hasMore, loadMore, refresh } = useActivityLog({
     origin: originFilter,
     kind: kindFilter,
   });
+
+  // Fetch pending approvals
+  const fetchPendingApprovals = async () => {
+    try {
+      const [{ requests }, { count }] = await Promise.all([
+        getAllApprovalRequests(),
+        getApprovalCount(),
+      ]);
+      setPendingRequests(requests);
+      setPendingCount(count);
+    } catch (err) {
+      console.error("[ActivityView] Failed to fetch pending approvals:", err);
+    }
+  };
+
+  // Initial fetch and listen for queue updates
+  useEffect(() => {
+    fetchPendingApprovals();
+
+    const handleMessage = (message: any) => {
+      if (message && message.__event === "ostrilo.queue.updated") {
+        fetchPendingApprovals();
+      }
+    };
+
+    browser.runtime.onMessage.addListener(handleMessage);
+    return () => browser.runtime.onMessage.removeListener(handleMessage);
+  }, []);
+
+  // Open approval window
+  const handleOpenApprovalWindow = async () => {
+    try {
+      // Create or focus approval window
+      await browser.windows.create({
+        url: browser.runtime.getURL("/approval.html"),
+        type: "popup",
+        width: 640,
+        height: 640,
+        focused: true,
+      });
+    } catch (err) {
+      console.error("[ActivityView] Failed to open approval window:", err);
+    }
+  };
 
   // Get unique origins for filter dropdown
   const uniqueOrigins = Array.from(
@@ -74,6 +137,79 @@ export function ActivityView() {
           Your signing history and interactions
         </p>
       </div>
+
+      {/* Pending Approvals Section */}
+      {pendingCount > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg overflow-hidden">
+          {/* Section Header */}
+          <button
+            onClick={() => setShowPendingSection(!showPendingSection)}
+            className="w-full flex items-center justify-between p-3 hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Bell className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span className="font-medium text-sm text-amber-900 dark:text-amber-100">
+                Pending Approvals
+              </span>
+              <Badge
+                variant="secondary"
+                className="bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100"
+              >
+                {pendingCount}
+              </Badge>
+            </div>
+            {showPendingSection ? (
+              <ChevronDown className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            )}
+          </button>
+
+          {/* Pending Requests List */}
+          {showPendingSection && (
+            <div className="border-t border-amber-200 dark:border-amber-800">
+              <div className="p-3 space-y-2">
+                {pendingRequests.slice(0, 3).map((request) => (
+                  <div
+                    key={request.id}
+                    className="bg-white dark:bg-background rounded-md p-2 text-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">
+                          {getKindName(request.event.kind)}
+                        </p>
+                        <p className="text-muted-foreground truncate">
+                          {new URL(request.origin).hostname}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-xs shrink-0">
+                        Kind {request.event.kind}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+
+                {pendingCount > 3 && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300 text-center pt-1">
+                    +{pendingCount - 3} more pending
+                  </p>
+                )}
+
+                {/* Open Approval Window Button */}
+                <Button
+                  onClick={handleOpenApprovalWindow}
+                  className="w-full mt-2 gap-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800"
+                  size="sm"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Open Approval Window
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       {(entries.length > 0 || originFilter || kindFilter) && (

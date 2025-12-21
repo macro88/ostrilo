@@ -237,4 +237,148 @@ describe("ApprovalQueueService", () => {
       expect(resolver2).toHaveBeenCalledWith("deny", "deny");
     });
   });
+
+  describe("event ID de-duplication", () => {
+    it("returns same request for duplicate event ID hash", () => {
+      const resolver1 = vi.fn();
+      const resolver2 = vi.fn();
+      const eventIdHash = "abc123hash";
+
+      const request1 = queue.enqueue(
+        "https://example.com",
+        mockEvent,
+        resolver1,
+        eventIdHash
+      );
+      const request2 = queue.enqueue(
+        "https://example.com",
+        mockEvent,
+        resolver2,
+        eventIdHash
+      );
+
+      // Should return the same request instance
+      expect(request2.id).toBe(request1.id);
+      expect(queue.count()).toBe(1);
+    });
+
+    it("creates separate entries for different event ID hashes", () => {
+      const resolver1 = vi.fn();
+      const resolver2 = vi.fn();
+
+      const request1 = queue.enqueue(
+        "https://example.com",
+        mockEvent,
+        resolver1,
+        "hash1"
+      );
+      const request2 = queue.enqueue(
+        "https://example.com",
+        mockEvent,
+        resolver2,
+        "hash2"
+      );
+
+      expect(request1.id).not.toBe(request2.id);
+      expect(queue.count()).toBe(2);
+    });
+
+    it("allows duplicate event from different origin to share queue entry", () => {
+      const resolver1 = vi.fn();
+      const resolver2 = vi.fn();
+      const eventIdHash = "same-event-hash";
+
+      const request1 = queue.enqueue(
+        "https://origin1.com",
+        mockEvent,
+        resolver1,
+        eventIdHash
+      );
+      const request2 = queue.enqueue(
+        "https://origin2.com",
+        mockEvent,
+        resolver2,
+        eventIdHash
+      );
+
+      // Should reuse same request even from different origin
+      expect(request2.id).toBe(request1.id);
+      expect(queue.count()).toBe(1);
+    });
+
+    it("clears event ID mapping after resolution", () => {
+      const resolver = vi.fn();
+      const eventIdHash = "event-hash";
+
+      const request = queue.enqueue(
+        "https://example.com",
+        mockEvent,
+        resolver,
+        eventIdHash
+      );
+
+      // Resolve the request
+      queue.resolve(request.id, "allow_once");
+
+      // Now the same event hash should create a new entry
+      const resolver2 = vi.fn();
+      const request2 = queue.enqueue(
+        "https://example.com",
+        mockEvent,
+        resolver2,
+        eventIdHash
+      );
+
+      expect(request2.id).not.toBe(request.id);
+    });
+
+    it("clears event ID mapping on timeout", () => {
+      const resolver = vi.fn();
+      const eventIdHash = "event-hash";
+
+      queue.enqueue("https://example.com", mockEvent, resolver, eventIdHash);
+
+      // Advance time to trigger timeout
+      vi.advanceTimersByTime(1000);
+
+      // Now the same event hash should create a new entry
+      const resolver2 = vi.fn();
+      const request2 = queue.enqueue(
+        "https://example.com",
+        mockEvent,
+        resolver2,
+        eventIdHash
+      );
+
+      expect(queue.count()).toBe(1);
+      expect(resolver).toHaveBeenCalledWith("deny", "deny");
+    });
+
+    it("getAllPending returns all requests in FIFO order", () => {
+      const resolver = vi.fn();
+      const request1 = queue.enqueue("https://first.com", mockEvent, resolver);
+      const request2 = queue.enqueue("https://second.com", mockEvent, resolver);
+      const request3 = queue.enqueue("https://third.com", mockEvent, resolver);
+
+      const allPending = queue.getAllPending();
+
+      expect(allPending).toHaveLength(3);
+      expect(allPending[0].id).toBe(request1.id);
+      expect(allPending[1].id).toBe(request2.id);
+      expect(allPending[2].id).toBe(request3.id);
+    });
+
+    it("getQueuedEventIds returns tracked event hashes", () => {
+      const resolver = vi.fn();
+      queue.enqueue("https://example.com", mockEvent, resolver, "hash1");
+      queue.enqueue("https://example.com", mockEvent, resolver, "hash2");
+      queue.enqueue("https://example.com", mockEvent, resolver); // No hash
+
+      const eventIds = queue.getQueuedEventIds();
+
+      expect(eventIds).toHaveLength(2);
+      expect(eventIds).toContain("hash1");
+      expect(eventIds).toContain("hash2");
+    });
+  });
 });

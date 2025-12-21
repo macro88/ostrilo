@@ -42,6 +42,7 @@ export type RpcRequest =
   | { type: "nostr.signEvent"; event: UnsignedEvent; origin: string }
   // Approval queue operations
   | { type: "approval.getNext" }
+  | { type: "approval.getAll" }
   | { type: "approval.resolve"; requestId: string; action: ApprovalAction }
   | { type: "approval.count" }
   // Activity log operations

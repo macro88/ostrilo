@@ -14,11 +14,15 @@ export type RequestResolver = (
   action: ApprovalAction
 ) => void;
 
+/** Callback type for when queue changes (enqueue, resolve, timeout) */
+export type QueueChangeCallback = () => void;
+
 /** Internal request entry with resolver callback */
 interface QueueEntry {
   request: PendingRequest;
   resolver: RequestResolver;
   timeoutId: ReturnType<typeof setTimeout>;
+  eventIdHash?: string; // Optional event ID hash for de-duplication
 }
 
 /**
@@ -33,11 +37,30 @@ interface QueueEntry {
  */
 export class ApprovalQueueService {
   private queue: Map<string, QueueEntry> = new Map();
+  private eventIdMap: Map<string, QueueEntry> = new Map(); // Track by event ID hash for de-duplication
   private timeoutMs: number;
   private timedOutRequests: Set<string> = new Set(); // Track which requests timed out
+  private changeCallback?: QueueChangeCallback; // Optional callback for queue changes
 
   constructor(timeoutMs: number = DEFAULT_TIMEOUT_MS) {
     this.timeoutMs = timeoutMs;
+  }
+
+  /**
+   * Set callback to be invoked when queue changes (enqueue, resolve, timeout)
+   * @param callback - Function to call when queue state changes
+   */
+  setChangeCallback(callback: QueueChangeCallback): void {
+    this.changeCallback = callback;
+  }
+
+  /**
+   * Notify listeners that queue has changed
+   */
+  private notifyChange(): void {
+    if (this.changeCallback) {
+      this.changeCallback();
+    }
   }
 
   /**
@@ -45,13 +68,28 @@ export class ApprovalQueueService {
    * @param origin - The origin of the requesting dapp
    * @param event - The unsigned event to be signed
    * @param resolver - Callback invoked when request is resolved or times out
+   * @param eventIdHash - Optional event ID hash for de-duplication
    * @returns The created PendingRequest with unique ID
    */
   enqueue(
     origin: string,
     event: UnsignedEvent,
-    resolver: RequestResolver
+    resolver: RequestResolver,
+    eventIdHash?: string
   ): PendingRequest {
+    // Check for duplicate by event ID hash
+    if (eventIdHash && this.eventIdMap.has(eventIdHash)) {
+      const existingEntry = this.eventIdMap.get(eventIdHash)!;
+      console.log(
+        `[ApprovalQueue] Duplicate event detected (hash: ${eventIdHash.substring(
+          0,
+          8
+        )}...), reusing existing request ${existingEntry.request.id}`
+      );
+      // Don't notify for duplicates - no actual queue change
+      return existingEntry.request;
+    }
+
     const now = Math.floor(Date.now() / 1000);
     const request: PendingRequest = {
       id: crypto.randomUUID(),
@@ -66,7 +104,17 @@ export class ApprovalQueueService {
       this.handleTimeout(request.id);
     }, this.timeoutMs);
 
-    this.queue.set(request.id, { request, resolver, timeoutId });
+    const entry: QueueEntry = { request, resolver, timeoutId, eventIdHash };
+    this.queue.set(request.id, entry);
+
+    // Track by event ID hash if provided
+    if (eventIdHash) {
+      this.eventIdMap.set(eventIdHash, entry);
+    }
+
+    // Notify listeners that queue has changed
+    this.notifyChange();
+
     return request;
   }
 
@@ -116,11 +164,17 @@ export class ApprovalQueueService {
     const decision: ApprovalDecision =
       action === "allow" || action === "allow_once" ? "allow" : "deny";
 
-    // Remove from queue before calling resolver (prevents double-resolve)
+    // Remove from queue and event ID map before calling resolver (prevents double-resolve)
     this.queue.delete(requestId);
+    if (entry.eventIdHash) {
+      this.eventIdMap.delete(entry.eventIdHash);
+    }
 
     // Call the resolver with the decision
     entry.resolver(decision, action);
+
+    // Notify listeners that queue has changed
+    this.notifyChange();
 
     return true;
   }
@@ -138,11 +192,17 @@ export class ApprovalQueueService {
     // Mark this request as timed out
     this.timedOutRequests.add(requestId);
 
-    // Remove from queue
+    // Remove from queue and event ID map
     this.queue.delete(requestId);
+    if (entry.eventIdHash) {
+      this.eventIdMap.delete(entry.eventIdHash);
+    }
 
     // Auto-deny on timeout (no policy change)
     entry.resolver("deny", "deny");
+
+    // Notify listeners that queue has changed
+    this.notifyChange();
   }
 
   /**
@@ -167,6 +227,7 @@ export class ApprovalQueueService {
       entry.resolver("deny", "deny");
     }
     this.queue.clear();
+    this.eventIdMap.clear();
   }
 
   /**
@@ -174,5 +235,21 @@ export class ApprovalQueueService {
    */
   hasPending(): boolean {
     return this.queue.size > 0;
+  }
+
+  /**
+   * Get all pending requests (for UI display)
+   * @returns Array of all pending requests in FIFO order
+   */
+  getAllPending(): PendingRequest[] {
+    return Array.from(this.queue.values()).map((entry) => entry.request);
+  }
+
+  /**
+   * Get queued event ID hashes (for diagnostics)
+   * @returns Array of currently queued event ID hashes
+   */
+  getQueuedEventIds(): string[] {
+    return Array.from(this.eventIdMap.keys());
   }
 }

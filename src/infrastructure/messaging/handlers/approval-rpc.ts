@@ -28,6 +28,9 @@ export class ApprovalRpcHandler implements RpcModule {
       case "approval.getNext":
         return this.handleGetNext();
 
+      case "approval.getAll":
+        return this.handleGetAll();
+
       case "approval.resolve":
         return this.handleResolve(message.requestId, message.action, context);
 
@@ -57,6 +60,24 @@ export class ApprovalRpcHandler implements RpcModule {
         error: RPC_ERROR_CODES.APPROVAL_FAILED,
         details:
           err instanceof Error ? err.message : "Failed to get next request",
+      };
+    }
+  }
+
+  /**
+   * Handle approval.getAll RPC request
+   * Returns all pending requests in the queue (FIFO order)
+   */
+  private async handleGetAll(): Promise<RpcResponse> {
+    try {
+      const requests = this.queue.getAllPending();
+      return { ok: true, data: { requests } };
+    } catch (err) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.APPROVAL_FAILED,
+        details:
+          err instanceof Error ? err.message : "Failed to get all requests",
       };
     }
   }
