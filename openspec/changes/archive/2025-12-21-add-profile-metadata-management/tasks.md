@@ -584,13 +584,13 @@
 - [x] Production-ready status confirmed
 
 **Pending for maintainer:**
-- [ ] Bump version in `package.json` (decision: 0.1.0 → 0.2.0 or other)
-- [ ] Update `wxt.config.ts` manifest version (same as package.json)
-- [ ] Run `npm run zip && npm run zip:firefox` to create distribution packages
-- [ ] Test packaged extensions in clean browser profiles (manual smoke test)
-- [ ] Create release notes based on FINAL_QA_REPORT.md
-- [ ] Tag release in git: `git tag vX.X.X`
-- [ ] Archive OpenSpec change: `openspec archive add-profile-metadata-management`
+- [x] Bump version in `package.json` (decision: 0.1.0 → 0.2.0 or other)
+- [x] Update `wxt.config.ts` manifest version (same as package.json)
+- [x] Run `npm run zip && npm run zip:firefox` to create distribution packages
+- [x] Test packaged extensions in clean browser profiles (manual smoke test)
+- [x] Create release notes based on FINAL_QA_REPORT.md
+- [x]] Tag release in git: `git tag vX.X.X`
+- [x] Archive OpenSpec change: `openspec archive add-profile-metadata-management`
 
 ---
 
