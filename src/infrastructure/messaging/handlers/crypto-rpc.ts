@@ -31,11 +31,20 @@ export class CryptoRpcHandler implements RpcModule {
   private async handleEvaluatePassword(
     message: Extract<RpcRequest, { type: "crypto.evaluatePassword" }>
   ): Promise<RpcResponse> {
+    const passwordValidation = PasswordSchema.safeParse(message.password);
+    if (!passwordValidation.success) {
+      return {
+        ok: false,
+        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+        details: passwordValidation.error.issues[0]?.message,
+      };
+    }
+
     // Import the function from domain validation utilities
     const { evaluatePasswordStrength } = await import(
       "@/domain/utils/validation"
     );
-    const strength = evaluatePasswordStrength(message.password);
+    const strength = evaluatePasswordStrength(passwordValidation.data);
     return { ok: true, data: strength };
   }
 

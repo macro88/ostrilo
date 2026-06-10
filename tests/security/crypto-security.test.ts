@@ -188,25 +188,40 @@ describe("Security Testing", () => {
     });
 
     it("handles empty and weak passwords gracefully", async () => {
-      // Empty password should work but not be secure
-      const emptyKey = await keyVault.generateKey("", "Empty Password");
-      expect(emptyKey.id).toBeDefined();
+      // Empty password should be rejected rather than creating an insecure key
+      await expect(keyVault.generateKey("", "Empty Password")).rejects.toThrow(
+        "password_required"
+      );
+
+      const createIsolatedVault = () =>
+        new KeyVaultService(
+          createMemoryStorage(),
+          WebCryptoAesGcm,
+          NoblePbkdf2,
+          NobleSchnorr
+        );
 
       // Very short password should work
-      const shortKey = await keyVault.generateKey("a", "Short Password");
+      const shortKey = await createIsolatedVault().generateKey("a", "Short Password");
       expect(shortKey.id).toBeDefined();
 
       // Spaces should be preserved
-      const spaceKey = await keyVault.generateKey("  spaces  ", "Space Password");
+      const spaceKey = await createIsolatedVault().generateKey(
+        "  spaces  ",
+        "Space Password"
+      );
       expect(spaceKey.id).toBeDefined();
 
       // Unicode should work
-      const unicodeKey = await keyVault.generateKey("🔐密码", "Unicode Password");
+      const unicodeKey = await createIsolatedVault().generateKey(
+        "🔐密码",
+        "Unicode Password"
+      );
       expect(unicodeKey.id).toBeDefined();
 
       // All keys should be different
-      const allKeys = new Set([emptyKey.id, shortKey.id, spaceKey.id, unicodeKey.id]);
-      expect(allKeys.size).toBe(4);
+      const allKeys = new Set([shortKey.id, spaceKey.id, unicodeKey.id]);
+      expect(allKeys.size).toBe(3);
     });
 
     it("salt provides protection against rainbow table attacks", async () => {

@@ -454,7 +454,11 @@ export class NostrRpcHandler implements RpcModule {
           focused: true,
         });
 
-        windowId = win.id!;
+        if (typeof win?.id !== "number") {
+          throw new Error("Approval popup was created without a window ID");
+        }
+
+        windowId = win.id;
       }
 
       // If windowId is undefined, we're in sidepanel mode and the message was sent to switch tabs

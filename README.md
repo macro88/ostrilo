@@ -30,30 +30,30 @@ Ostrilo follows a clean architecture pattern with clear separation of concerns:
 ### Prerequisites
 
 - Node.js 18+
-- npm or pnpm
+- pnpm 11+
 
 ### Installation
 
 ```bash
 git clone <repository-url>
 cd ostrilo
-npm install
+pnpm install
 ```
 
 ### Development Commands
 
 ```bash
 # Start development server
-npm run dev
+pnpm dev
 
 # Build for production
-npm run build
+pnpm build
 
 # Run tests
-npm run test
+pnpm test
 
 # Type checking
-npm run compile
+pnpm compile
 ```
 
 ### Testing

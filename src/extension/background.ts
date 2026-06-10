@@ -96,7 +96,7 @@ async function focusOrCreateApprovalWindow(
   }
 
   // Create new approval window
-  const window = await browser.windows.create({
+  const approvalWindow = await browser.windows.create({
     url: browser.runtime.getURL("/approval.html"),
     type: "popup",
     width: 640,
@@ -104,7 +104,11 @@ async function focusOrCreateApprovalWindow(
     focused: true,
   });
 
-  approvalWindowId = window.id!;
+  if (typeof approvalWindow?.id !== "number") {
+    throw new Error("Approval window was created without a window ID");
+  }
+
+  approvalWindowId = approvalWindow.id;
   console.log(`[Background] Created new approval window ${approvalWindowId}`);
   return approvalWindowId;
 }

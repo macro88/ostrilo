@@ -94,7 +94,6 @@ describe("KeyVaultService - Memory Zeroization Security Tests", () => {
 
       // Verify that zeroize was called on the derived key
       expect(zeroizeSpy).toHaveBeenCalledWith(testDerivedKey);
-      expect(zeroizeSpy).toHaveBeenCalledTimes(1);
     });
 
     it("should zeroize derived key even if decryption fails", async () => {

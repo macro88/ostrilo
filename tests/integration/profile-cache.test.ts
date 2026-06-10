@@ -51,7 +51,7 @@ describe("Profile Cache Isolation", () => {
     const profileB = { name: "Bob" };
 
     // Mock relay to return different profiles
-    relay.subscribe = vi.fn((filter, onEvent, onEOSE) => {
+    relay.subscribe = vi.fn(async (filter, onEvent, onEOSE) => {
       const author = filter.authors?.[0];
       if (author === pubkeyA) {
         onEvent({

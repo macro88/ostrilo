@@ -1,7 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { ViewerConfig } from '../types';
+
+interface ViewerConfig {
+  scale: number;
+  cameraZ: number;
+  fov: number;
+  ambientIntensity: number;
+  keyLightIntensity: number;
+  maxRotationDeg: number;
+  smoothness: number;
+  mirror: boolean;
+  autoCenter: boolean;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  rotationX: number;
+  rotationY: number;
+  rotationZ: number;
+}
 
 interface SceneSetupProps {
   fileUrl: string | null;

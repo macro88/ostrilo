@@ -602,8 +602,9 @@ describe("RPC Router and Handlers", () => {
 
     describe("approval.resolve", () => {
       it("should resolve request with allow action", async () => {
+        const requestId = "00000000-0000-4000-8000-000000000001";
         const mockRequest = {
-          id: "test-id",
+          id: requestId,
           origin: "https://example.com",
           event: { kind: 1, content: "test", tags: [], created_at: 123 },
           createdAt: 123,
@@ -614,14 +615,14 @@ describe("RPC Router and Handlers", () => {
 
         const message = {
           type: "approval.resolve",
-          requestId: "test-id",
+          requestId,
           action: "allow",
         } as const;
         const result = await handler.handleRequest(message, mockContext);
 
         expect(result.ok).toBe(true);
         expect((result as any).data.resolved).toBe(true);
-        expect(mockQueue.resolve).toHaveBeenCalledWith("test-id", "allow");
+        expect(mockQueue.resolve).toHaveBeenCalledWith(requestId, "allow");
       });
 
       it("should return error for non-existent request", async () => {
@@ -639,8 +640,9 @@ describe("RPC Router and Handlers", () => {
       });
 
       it("should update policy on deny_remember action", async () => {
+        const requestId = "00000000-0000-4000-8000-000000000002";
         const mockRequest = {
-          id: "test-id",
+          id: requestId,
           origin: "https://example.com",
           event: { kind: 1, content: "test", tags: [], created_at: 123 },
           createdAt: 123,
@@ -651,7 +653,7 @@ describe("RPC Router and Handlers", () => {
 
         const message = {
           type: "approval.resolve",
-          requestId: "test-id",
+          requestId,
           action: "deny_remember",
         } as const;
         const result = await handler.handleRequest(message, mockContext);
@@ -665,8 +667,9 @@ describe("RPC Router and Handlers", () => {
       });
 
       it("should not update policy on allow action", async () => {
+        const requestId = "00000000-0000-4000-8000-000000000003";
         const mockRequest = {
-          id: "test-id",
+          id: requestId,
           origin: "https://example.com",
           event: { kind: 1, content: "test", tags: [], created_at: 123 },
           createdAt: 123,
@@ -677,7 +680,7 @@ describe("RPC Router and Handlers", () => {
 
         const message = {
           type: "approval.resolve",
-          requestId: "test-id",
+          requestId,
           action: "allow",
         } as const;
         await handler.handleRequest(message, mockContext);

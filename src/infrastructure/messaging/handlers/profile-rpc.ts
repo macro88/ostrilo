@@ -98,7 +98,7 @@ export class ProfileRpcHandler implements RpcModule {
         return {
           ok: false,
           error: RPC_ERROR_CODES.INVALID_REQUEST,
-          details: `Invalid metadata: ${validationResult.error.errors
+          details: `Invalid metadata: ${validationResult.error.issues
             .map((e) => `${e.path.join(".")}: ${e.message}`)
             .join(", ")}`,
         };

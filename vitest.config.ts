@@ -29,6 +29,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "lcov"],
+      include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "**/tests/**",
         "**/entrypoints/**", // Browser extension entrypoints
@@ -37,7 +38,6 @@ export default defineConfig({
         "**/node_modules/**",
         "**/dist/**",
       ],
-      all: true,
       thresholds: {
         lines: 80,
         functions: 80,
@@ -48,11 +48,6 @@ export default defineConfig({
     // Performance optimizations
     isolate: true, // Proper isolation to avoid worker thread issues
     pool: "threads",
-    poolOptions: {
-      threads: {
-        minThreads: 1,
-        maxThreads: 4,
-      },
-    },
+    maxWorkers: 4,
   },
 });

@@ -119,8 +119,8 @@ describe("KeySelector component logic", () => {
 
     it("should prevent switching when already switching", () => {
       const isSwitching = true;
-      const targetKeyId = "key2";
-      const currentKeyId = "key1";
+      const targetKeyId: string = "key2";
+      const currentKeyId: string = "key1";
       
       // Logic from handleSelectKey  
       const shouldSwitch = targetKeyId !== currentKeyId && !isSwitching;
@@ -130,8 +130,8 @@ describe("KeySelector component logic", () => {
 
     it("should prevent switching to same key", () => {
       const isSwitching = false;
-      const targetKeyId = "key1";
-      const currentKeyId = "key1";
+      const targetKeyId: string = "key1";
+      const currentKeyId: string = "key1";
       
       const shouldSwitch = targetKeyId !== currentKeyId && !isSwitching;
       
@@ -140,8 +140,8 @@ describe("KeySelector component logic", () => {
 
     it("should allow switching when not switching and different key", () => {
       const isSwitching = false;
-      const targetKeyId = "key2";
-      const currentKeyId = "key1";
+      const targetKeyId: string = "key2";
+      const currentKeyId: string = "key1";
       
       const shouldSwitch = targetKeyId !== currentKeyId && !isSwitching;
       
