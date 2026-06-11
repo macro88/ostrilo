@@ -20,8 +20,9 @@ import { ApprovalQueueService } from "@/application/services/approval-queue.serv
 import { browser } from "wxt/browser";
 
 /** Approval popup dimensions */
-const POPUP_WIDTH = 640;
+const POPUP_WIDTH = 960;
 const POPUP_HEIGHT = 640;
+const APPROVAL_BADGE_COLOR = "#5f50a0";
 
 /**
  * RPC handler for NIP-07 Nostr operations
@@ -503,7 +504,9 @@ export class NostrRpcHandler implements RpcModule {
         await browser.action.setBadgeText({ text: count.toString() });
 
         // Set badge background color to primary/accent color
-        await browser.action.setBadgeBackgroundColor({ color: "#9333ea" });
+        await browser.action.setBadgeBackgroundColor({
+          color: APPROVAL_BADGE_COLOR,
+        });
 
         // Update title to inform user
         await browser.action.setTitle({

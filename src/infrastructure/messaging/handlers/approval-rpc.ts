@@ -6,8 +6,12 @@ import type {
 } from "@/infrastructure/messaging/rpc-router";
 import type { ApprovalAction } from "@/domain/types";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
-import { browser } from "wxt/browser";
 import { ApprovalResolveRequestSchema } from "@/infrastructure/validation/schemas";
+
+interface ApprovalRpcHandlerOptions {
+  closeApprovalWindow?: () => Promise<void>;
+  updateBadgeCount?: () => Promise<void>;
+}
 
 /**
  * RPC handler for approval queue operations
@@ -18,7 +22,10 @@ import { ApprovalResolveRequestSchema } from "@/infrastructure/validation/schema
  * - approval.count: Get the count of pending requests
  */
 export class ApprovalRpcHandler implements RpcModule {
-  constructor(private queue: ApprovalQueueService) {}
+  constructor(
+    private queue: ApprovalQueueService,
+    private options: ApprovalRpcHandlerOptions = {}
+  ) {}
 
   async handleRequest(
     message: RpcRequest,
@@ -139,6 +146,10 @@ export class ApprovalRpcHandler implements RpcModule {
       // Update badge count after resolving
       await this.updateBadgeCount();
 
+      if (this.queue.count() === 0) {
+        await this.options.closeApprovalWindow?.();
+      }
+
       return { ok: true, data: { resolved } };
     } catch (err) {
       return {
@@ -172,18 +183,7 @@ export class ApprovalRpcHandler implements RpcModule {
    */
   private async updateBadgeCount(): Promise<void> {
     try {
-      const count = this.queue.count();
-
-      if (count > 0) {
-        await browser.action.setBadgeText({ text: count.toString() });
-        await browser.action.setBadgeBackgroundColor({ color: "#9333ea" });
-        await browser.action.setTitle({
-          title: `Ostrilo - ${count} approval${count > 1 ? "s" : ""} pending`,
-        });
-      } else {
-        await browser.action.setBadgeText({ text: "" });
-        await browser.action.setTitle({ title: "Ostrilo Signer" });
-      }
+      await this.options.updateBadgeCount?.();
     } catch (err) {
       console.error("[ApprovalRpcHandler] Failed to update badge:", err);
     }

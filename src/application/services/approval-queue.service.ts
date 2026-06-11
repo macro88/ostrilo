@@ -20,7 +20,7 @@ export type QueueChangeCallback = () => void;
 /** Internal request entry with resolver callback */
 interface QueueEntry {
   request: PendingRequest;
-  resolver: RequestResolver;
+  resolvers: RequestResolver[];
   timeoutId: ReturnType<typeof setTimeout>;
   eventIdHash?: string; // Optional event ID hash for de-duplication
 }
@@ -93,6 +93,7 @@ export class ApprovalQueueService {
     // Check for duplicate by event ID hash
     if (eventIdHash && this.eventIdMap.has(eventIdHash)) {
       const existingEntry = this.eventIdMap.get(eventIdHash)!;
+      existingEntry.resolvers.push(resolver);
       console.log(
         `[ApprovalQueue] Duplicate event detected (hash: ${eventIdHash.substring(
           0,
@@ -108,6 +109,7 @@ export class ApprovalQueueService {
       id: crypto.randomUUID(),
       origin,
       event,
+      eventIdHash,
       createdAt: now,
       timeoutAt: now + Math.floor(this.timeoutMs / 1000),
     };
@@ -117,7 +119,12 @@ export class ApprovalQueueService {
       this.handleTimeout(request.id);
     }, this.timeoutMs);
 
-    const entry: QueueEntry = { request, resolver, timeoutId, eventIdHash };
+    const entry: QueueEntry = {
+      request,
+      resolvers: [resolver],
+      timeoutId,
+      eventIdHash,
+    };
     this.queue.set(request.id, entry);
 
     // Track by event ID hash if provided
@@ -183,8 +190,11 @@ export class ApprovalQueueService {
       this.eventIdMap.delete(entry.eventIdHash);
     }
 
-    // Call the resolver with the decision
-    entry.resolver(decision, action);
+    // Call every resolver attached to this queue entry. Duplicate callers share
+    // one visible approval but each pending RPC promise still needs a result.
+    for (const resolveRequest of entry.resolvers) {
+      resolveRequest(decision, action);
+    }
 
     // Notify listeners that queue has changed
     this.notifyChange();
@@ -212,7 +222,9 @@ export class ApprovalQueueService {
     }
 
     // Auto-deny on timeout (no policy change)
-    entry.resolver("deny", "deny");
+    for (const resolveRequest of entry.resolvers) {
+      resolveRequest("deny", "deny");
+    }
 
     // Notify listeners that queue has changed
     this.notifyChange();
@@ -224,10 +236,7 @@ export class ApprovalQueueService {
    * @returns true if request timed out, false otherwise
    */
   wasTimeout(requestId: string): boolean {
-    const result = this.timedOutRequests.has(requestId);
-    // Clean up after checking
-    this.timedOutRequests.delete(requestId);
-    return result;
+    return this.timedOutRequests.has(requestId);
   }
 
   /**
@@ -235,12 +244,15 @@ export class ApprovalQueueService {
    * All pending requests will be auto-denied
    */
   clear(): void {
-    for (const [id, entry] of this.queue.entries()) {
+    for (const entry of this.queue.values()) {
       clearTimeout(entry.timeoutId);
-      entry.resolver("deny", "deny");
+      for (const resolveRequest of entry.resolvers) {
+        resolveRequest("deny", "deny");
+      }
     }
     this.queue.clear();
     this.eventIdMap.clear();
+    this.timedOutRequests.clear();
   }
 
   /**

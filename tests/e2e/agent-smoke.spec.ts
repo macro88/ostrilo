@@ -83,7 +83,7 @@ async function completeCreateKeyOnboarding(
     .check();
   await page.getByRole("button", { name: "Finish" }).click();
 
-  await expect(page.getByRole("heading", { level: 2, name: "Ostrilo Signer" }))
+  await expect(page.getByRole("heading", { level: 2, name: "Agent Smoke Key" }))
     .toBeVisible({ timeout: 15_000 });
   await captureStepScreenshot(page, testInfo, "05-popup-home");
 }

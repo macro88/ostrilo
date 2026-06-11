@@ -98,15 +98,17 @@ export function ActivityView() {
       // Show approval dialog inline
       setShowApprovalDialog(true);
     } else {
-      // Open popup window (original behavior)
+      // Ask the background to open or focus the single managed approval window.
       try {
-        await browser.windows.create({
-          url: browser.runtime.getURL("/approval.html"),
-          type: "popup",
-          width: 640,
-          height: 640,
-          focused: true,
+        const response = await browser.runtime.sendMessage({
+          __command: "ostrilo.openApprovalWindow",
         });
+
+        if (!response?.ok) {
+          throw new Error(
+            response?.error ?? "Failed to open approval window"
+          );
+        }
       } catch (err) {
         console.error("[ActivityView] Failed to open approval window:", err);
       }

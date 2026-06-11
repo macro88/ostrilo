@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { PendingRequest, ApprovalAction, KeyRecord } from "@/domain/types";
 import { getKindName } from "@/domain/types";
@@ -24,8 +25,12 @@ export interface EventDetailViewProps {
   onResolve: (action: ApprovalAction) => void;
   /** Callback to return to queue list */
   onBack: () => void;
+  /** Whether to show the back button in compact layouts */
+  showBackButton?: boolean;
   /** Whether the resolve action is in progress */
   isResolving?: boolean;
+  /** Optional layout class */
+  className?: string;
 }
 
 /**
@@ -37,12 +42,20 @@ export function EventDetailView({
   countdown,
   onResolve,
   onBack,
+  showBackButton = true,
   isResolving = false,
+  className,
 }: EventDetailViewProps) {
   const [rememberChoice, setRememberChoice] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
   const kindName = getKindName(request.event.kind);
   const domain = formatDomain(request.origin);
+  const signingPubkey = signingKey?.pubkey ?? "";
+  const rawEnvelope = {
+    ...request.event,
+    pubkey: signingPubkey || undefined,
+    id: request.eventIdHash,
+  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -57,19 +70,26 @@ export function EventDetailView({
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className={["flex h-full min-h-0 flex-col bg-background", className]
+        .filter(Boolean)
+        .join(" ")}
+      data-testid="approval-detail"
+    >
       <div className="shrink-0 border-b border-border bg-card px-4 py-3">
         <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onBack}
-            aria-label="Back to approval queue"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
+          {showBackButton && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onBack}
+              aria-label="Back to approval queue"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
           <h1 className="min-w-0 flex-1 text-lg font-bold">
-            Signing request
+            {kindName} request
           </h1>
           <span className="seal-chip seal-chip-warning font-mono text-sm">
             {formatCountdown(countdown)}
@@ -78,25 +98,37 @@ export function EventDetailView({
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4">
-        <section className="text-center">
+        <section className="flex items-start gap-3">
           <SealMark
             label={domain}
             size="lg"
-            className="mx-auto mb-3 h-14 w-14 text-xl"
+            className="h-12 w-12 text-xl"
           />
-          <h2 className="text-xl font-bold">{domain}</h2>
-          <p className="text-sm font-semibold text-muted-foreground">
-            wants you to sign {kindName.toLowerCase()}
-          </p>
-          <span className="seal-chip seal-chip-accent mt-3">
-            Review required
-          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-bold">{domain}</h2>
+            <p className="text-sm font-semibold text-muted-foreground">
+              Wants you to sign {kindName.toLowerCase()}.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="seal-chip seal-chip-accent">Review required</span>
+              <span className="seal-chip seal-chip-warning font-mono">
+                Expires {formatCountdown(countdown)}
+              </span>
+            </div>
+          </div>
         </section>
 
         <section className="ink-card overflow-hidden">
           <FactRow
             label="Signing as"
-            value={signingKey?.label || "Selected key"}
+            value={
+              signingPubkey
+                ? truncateMiddle(signingPubkey)
+                : signingKey?.label || "Selected key"
+            }
+            mono
+            copyValue={signingPubkey}
+            onCopy={copyToClipboard}
           />
           <FactRow
             label="Kind"
@@ -107,6 +139,15 @@ export function EventDetailView({
             label="Created"
             value={formatTimestamp(request.event.created_at)}
           />
+          {request.eventIdHash && (
+            <FactRow
+              label="Event ID"
+              value={truncateMiddle(request.eventIdHash)}
+              mono
+              copyValue={request.eventIdHash}
+              onCopy={copyToClipboard}
+            />
+          )}
         </section>
 
         <section className="space-y-2">
@@ -136,6 +177,31 @@ export function EventDetailView({
           </div>
         </section>
 
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Tags · {request.event.tags.length}
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2"
+              onClick={() =>
+                copyToClipboard(JSON.stringify(request.event.tags, null, 2))
+              }
+              disabled={request.event.tags.length === 0}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy
+            </Button>
+          </div>
+          <JsonPanel
+            value={request.event.tags}
+            emptyLabel="[]"
+            testId="approval-tags-json"
+          />
+        </section>
+
         <button
           type="button"
           className="inline-flex items-center gap-2 text-sm font-bold text-[var(--ink-violet)]"
@@ -146,11 +212,7 @@ export function EventDetailView({
         </button>
 
         {showRawJson && (
-          <div className="code-panel">
-            <pre className="whitespace-pre-wrap break-all text-xs">
-              {JSON.stringify(request.event, null, 2)}
-            </pre>
-          </div>
+          <JsonPanel value={rawEnvelope} testId="approval-raw-json" />
         )}
 
         <p className="flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground">
@@ -198,21 +260,100 @@ function FactRow({
   label,
   value,
   mono,
+  copyValue,
+  onCopy,
 }: {
   label: string;
   value: string;
   mono?: boolean;
+  copyValue?: string;
+  onCopy?: (value: string) => void;
 }) {
   return (
     <div className="ink-row">
       <span className="w-24 shrink-0 text-sm font-semibold text-muted-foreground">
         {label}
       </span>
-      <span className={mono ? "font-mono text-xs" : "text-sm font-semibold"}>
+      <span
+        className={
+          mono
+            ? "min-w-0 flex-1 truncate font-mono text-xs"
+            : "min-w-0 flex-1 text-sm font-semibold"
+        }
+      >
         {value}
       </span>
+      {copyValue && onCopy && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => onCopy(copyValue)}
+          aria-label={`Copy ${label}`}
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </div>
   );
+}
+
+function JsonPanel({
+  value,
+  emptyLabel,
+  testId,
+}: {
+  value: unknown;
+  emptyLabel?: string;
+  testId?: string;
+}) {
+  const json = JSON.stringify(value, null, 2);
+
+  return (
+    <div className="code-panel" data-testid={testId}>
+      <pre className="whitespace-pre-wrap break-all text-xs">
+        {json ? syntaxHighlightJson(json) : emptyLabel}
+      </pre>
+    </div>
+  );
+}
+
+function syntaxHighlightJson(json: string): ReactNode[] {
+  const tokenPattern =
+    /("(?:\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(?=\s*:))|("(?:\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenPattern.exec(json)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(json.slice(lastIndex, match.index));
+    }
+
+    const [token, key, stringValue, literalValue, numberValue] = match;
+    const className = key
+      ? "text-[var(--ink-violet)]"
+      : stringValue
+        ? "text-foreground"
+        : literalValue
+          ? "text-[var(--ink-red)]"
+          : numberValue
+            ? "text-[var(--ink-amber)]"
+            : undefined;
+
+    nodes.push(
+      <span key={`${match.index}-${token}`} className={className}>
+        {token}
+      </span>
+    );
+    lastIndex = match.index + token.length;
+  }
+
+  if (lastIndex < json.length) {
+    nodes.push(json.slice(lastIndex));
+  }
+
+  return nodes;
 }
 
 function formatDomain(origin: string): string {
@@ -239,4 +380,12 @@ function formatCountdown(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function truncateMiddle(value: string, head = 10, tail = 8): string {
+  if (value.length <= head + tail + 1) {
+    return value;
+  }
+
+  return `${value.slice(0, head)}...${value.slice(-tail)}`;
 }
