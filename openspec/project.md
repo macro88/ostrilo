@@ -14,11 +14,12 @@ Ostrilo is a secure browser extension that provides Nostr key management and sig
 ## Tech Stack
 
 ### Core Framework & Build Tools
-- **WXT 0.20.11** - Web Extension Toolkit for cross-browser development
-- **TypeScript 5.9.2** - Type safety and strict compilation
-- **React 19.1.1** - UI framework for extension interfaces
-- **Vite** - Build tool integrated via WXT
-- **Node.js 20+** - Development runtime environment
+- **pnpm 11.5.2** - Package manager for all local scripts and dependency management
+- **WXT 0.20.26** - Web Extension Toolkit for cross-browser development
+- **TypeScript 6.0.3** - Type safety and strict compilation
+- **React 19.2.7** - UI framework for extension interfaces
+- **Vite 7.3.5** - Direct workspace Vite dependency; WXT manages its own internal build pipeline
+- **Node.js 24.x in current development environment** - Keep toolchain changes verified against WXT and Playwright
 
 ### Cryptography
 - **@noble/curves 2.0.0** - secp256k1 schnorr signatures (NIP-01 standard)
@@ -27,19 +28,19 @@ Ostrilo is a secure browser extension that provides Nostr key management and sig
 - **Web Crypto API** - AES-GCM encryption, PBKDF2 key derivation
 
 ### UI & Styling
-- **Tailwind CSS 4.1.13** - Utility-first styling framework
+- **Tailwind CSS 4.3.0** - Utility-first styling framework
 - **shadcn/ui** - Radix UI primitives (select, slider, switch, tabs, label)
-- **Lucide React 0.542.0** - Icon library
+- **Lucide React 1.17.0** - Icon library
 - **class-variance-authority** - Component variant management
 - **clsx + tailwind-merge** - Conditional className composition
 
 ### Testing Infrastructure
-- **Vitest 2.0.5** - Unit and integration testing (73+ tests passing)
-- **Playwright 1.55.0** - E2E testing for browser extension workflows
+- **Vitest 4.1.8** - Unit and integration testing
+- **Playwright 1.60.0** - E2E testing for browser extension workflows
 - **@vitest/coverage-v8** - Code coverage reporting
 
 ### Validation & Standards
-- **Zod 3.25.76** - Runtime schema validation for RPC messages and data
+- **Zod 4.4.3** - Runtime schema validation for RPC messages and data
 - **webextension-polyfill** - Cross-browser API compatibility
 
 ## Project Conventions
@@ -71,7 +72,8 @@ Ostrilo is a secure browser extension that provides Nostr key management and sig
 **TypeScript Configuration:**
 - Strict mode enabled
 - No implicit any
-- All code must pass `yarn compile` type checking before commit
+- All code must pass `pnpm run compile` type checking before commit
+- UI work must follow `docs/design/DESIGN_RULES.md`; do not reintroduce retired gradients, accent rails, dot-grid backgrounds, Arcade Plush class names, or pink/candy palette choices
 
 ### Architecture Patterns
 
@@ -139,42 +141,43 @@ The extension uses a modular RPC system for communication between UI (popup/side
 
 ### Testing Strategy
 
-**Test Pyramid (73 tests total):**
+**Test Pyramid:**
 
 1. **Unit Tests (50 tests)** - `tests/unit/`
    - Application services (KeyVaultService, PolicyService)
    - Domain utilities (validation, encoding, crypto)
    - Infrastructure adapters (crypto, storage)
    - UI hooks (useOnboarding)
-   - Run with: `yarn test:unit`
+   - Run with: `pnpm run test:unit`
 
 2. **Integration Tests (9 tests)** - `tests/integration/`
    - Cross-service interactions
    - RPC type safety and validation
    - Complete workflow testing
-   - Run with: `yarn test:integration`
+   - Run with: `pnpm run test:integration`
 
 3. **Security Tests (14 tests)** - `tests/security/`
    - Cryptographic security (entropy, salt uniqueness, signature randomness)
    - Memory zeroization
    - Attack resistance (timing, dictionary, brute force)
-   - Run with: `yarn test:security`
+   - Run with: `pnpm run test:security`
 
 4. **E2E Tests** - `tests/e2e/`
    - Onboarding flows (create, import)
    - Settings and origin policy management
    - Browser extension functionality
-   - Run with: `yarn test:e2e`
+   - Current full E2E target runs a Chromium extension project with real WXT build and extension context
+   - Run with: `pnpm run test:e2e`
 
 **Testing Requirements:**
 - All new features require unit tests
 - Security-sensitive code requires dedicated security tests
 - E2E tests for user-facing workflows
-- Run `yarn compile` before committing to catch type errors
+- Run `pnpm run compile` before committing to catch type errors
 - All tests must pass in CI before merge
 
 **Coverage Goals:**
-- Unit test coverage tracked with `yarn test:coverage`
+- Unit test coverage tracked with `pnpm run test:coverage`
 - Critical paths (crypto, key management) require 100% coverage
 - Security functions must have comprehensive test vectors
 
@@ -186,19 +189,19 @@ The extension uses a modular RPC system for communication between UI (popup/side
 - Conventional commit messages recommended
 
 **Pre-Commit Checks:**
-1. `yarn compile` - TypeScript type checking (REQUIRED)
-2. `yarn test` - Run all tests
-3. `yarn build && yarn build:firefox` - Ensure both browser builds succeed
+1. `pnpm run compile` - TypeScript type checking (REQUIRED)
+2. `pnpm test` - Run unit/integration/security tests
+3. `pnpm run build && pnpm run build:firefox` - Ensure both browser builds succeed
 
 **Build Validation:**
 - Always test both Chrome and Firefox builds when making changes
-- Development builds available via `yarn dev` and `yarn dev:firefox`
+- Development builds available via `pnpm dev` and `pnpm run dev:firefox`
 - Load unpacked extension from `.output/chrome-mv3/` or `.output/firefox-mv2/`
 
 **Important Timeouts:**
-- `npm install` takes ~47 seconds - NEVER CANCEL, set timeout to 90+ seconds
-- `yarn build` takes ~8 seconds - NEVER CANCEL, set timeout to 30+ seconds
-- `yarn compile` takes ~2 seconds - Quick validation check
+- `pnpm install` can take close to a minute - NEVER CANCEL, set timeout to 90+ seconds
+- `pnpm run build` takes several seconds - NEVER CANCEL, set timeout to 30+ seconds
+- `pnpm run compile` takes a few seconds - Quick validation check
 
 ## Domain Context
 

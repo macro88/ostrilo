@@ -1,6 +1,6 @@
 # Tasks
 
-- [ ] Create `src/domain/events.ts`
+- [ ] Create `src/infrastructure/messaging/events.ts`
   - Define `BROADCAST_EVENTS` constant with `SWITCH_TO_ACTIVITY` and `QUEUE_UPDATED`.
 - [ ] Create `src/ui/hooks/useAppNavigation.ts`
   - Implement `useAppNavigation` hook managing `activeTab` and listening for `SWITCH_TO_ACTIVITY`.
@@ -15,3 +15,7 @@
   - Update to use `BROADCAST_EVENTS.QUEUE_UPDATED`.
 - [ ] Update `src/ui/features/activity/components/ActivityView.tsx`
   - Update to use `BROADCAST_EVENTS.QUEUE_UPDATED`.
+- [ ] Add validation coverage
+  - Add or update a focused test for `useAppNavigation` message handling if local test utilities support it.
+  - Run `pnpm run compile`.
+  - Run the relevant Vitest target for navigation and messaging code.

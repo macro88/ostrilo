@@ -1,13 +1,37 @@
 # Implementation Tasks: Trust Level Policy System
 
+## 2026-06-11 Review Status
+
+Do not implement the full proposal until the product/security decisions in `proposal.md` are resolved. The local hardening slice can start now: centralize trust definitions, enforce protected kinds, and add tests around existing trust-level evaluation.
+
+Treat tasks that mention official policy fetching, NIP-78, global override, and source badges as blocked until the official pubkey, relay policy, and global High policy are decided.
+
+## Phase 0: Scope and Security Decisions
+
+- [ ] **0.1** Confirm implementation slice
+  - Decide whether this development pass is local hardening only or includes official directory fetching.
+  - **Validation:** Proposal status and task scope are updated before code changes.
+
+- [ ] **0.2** Decide protected and auto-sign kind policy
+  - Confirm protected kinds, Medium auto-sign kinds, and High auto-sign kinds.
+  - Decide whether explicit per-kind allow/session grants can ever override protected kinds.
+  - **Validation:** Decisions are documented in the proposal and tests.
+
+- [ ] **0.3** Resolve official-directory prerequisites
+  - Choose official policy pubkey and custody model.
+  - Choose relay list and timeout/privacy rules.
+  - Decide whether global High trust is allowed.
+  - **Validation:** Official directory phases are unblocked only after these decisions are recorded.
+
 ## Phase 1: Foundation & Data Structures
 
-- [ ] **1.1** Create `src/domain/policy/trust-definitions.ts` with hardcoded trust level definitions
+- [ ] **1.1** Create or extract `src/domain/policy/trust-definitions.ts` with hardcoded trust level definitions
 
-  - Export `TRUST_DEFINITIONS` constant with low/medium/high auto-sign arrays
+  - Preserve current `TrustLevel` behavior intentionally where it is still correct.
+  - Export `TRUST_DEFINITIONS` constant with low/medium/high auto-sign arrays.
   - Export `PROTECTED_KINDS` constant as `[1, 9734]`
   - Add JSDoc comments explaining each trust level's purpose
-  - **Validation:** `npm run compile` passes, constants are properly typed
+  - **Validation:** `pnpm run compile` passes, constants are properly typed
 
 - [ ] **1.2** Add NIP-78 policy types to `src/domain/types.ts`
 
@@ -267,9 +291,9 @@
 
 - [ ] **10.1** Run full test suite
 
-  - Unit tests: `npm run test:unit`
-  - Integration tests: `npm run test:integration`
-  - E2E tests: `npm run test:e2e`
+  - Unit tests: `pnpm run test:unit`
+  - Integration tests: `pnpm run test:integration`
+  - E2E tests: `pnpm run test:e2e`
   - **Validation:** All tests pass, no regressions
 
 - [ ] **10.2** Perform manual testing of all workflows
@@ -283,8 +307,8 @@
 
 - [ ] **10.3** Test browser compatibility
 
-  - Build for Chrome: `npm run build`
-  - Build for Firefox: `npm run build:firefox`
+  - Build for Chrome: `pnpm run build`
+  - Build for Firefox: `pnpm run build:firefox`
   - Load extension in both browsers
   - Verify all features work in both environments
   - **Validation:** Extension works in Chrome and Firefox

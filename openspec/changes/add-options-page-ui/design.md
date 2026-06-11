@@ -1,5 +1,16 @@
 # Design: Options Page UI
 
+## 2026-06-11 Review Note
+
+The core options page UI is already implemented on `main`. Treat this design as historical architecture plus remaining hardening guidance, not as instructions to recreate the UI from scratch.
+
+Current implementation differs from the early mock in a few important ways:
+
+- Follow `docs/design/DESIGN_RULES.md` and the current Inkline component styling.
+- `SettingsView.tsx` is legacy/unmounted; active surfaces are `BasicSettings` and `OptionsApp`.
+- Cross-context local settings updates are handled by existing storage-backed hooks; do not add page reloads.
+- The NIP-78 "Settings Sync Architecture" section below is future reference only and is out of scope for the current options page change.
+
 ## Architecture Overview
 
 The Options Page follows a **multi-tab layout pattern** with shared state management. It reuses existing hooks and components from the popup while providing a full-page interface for complex settings.

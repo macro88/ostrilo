@@ -3,9 +3,30 @@
 ## Status
 
 - **Created:** 2025-12-18
-- **Status:** Draft
+- **Status:** Needs product/security decisions before full development
 - **Author:** AI Assistant
 - **Approver:** TBD
+
+## 2026-06-11 Review Status
+
+Current code already has a local `TrustLevel` type, per-origin `trustLevel`, `mediumAllowKinds`, and trust-based evaluation in `src/domain/policy/evaluate.ts`. The missing pieces are protected-kind enforcement, source tracking, global override, official NIP-78 directory fetch/cache, and UI surfacing.
+
+Development readiness: not ready as a full proposal. The local hardening slice is ready to develop, but the official directory and sync-backed trust assignment work is blocked until product/security decisions are made.
+
+Ready local hardening slice:
+
+- Extract/centralize trust definitions and protected kinds.
+- Enforce protected kinds before explicit rules and session grants.
+- Add tests proving kind 1 and kind 9734 never auto-sign.
+- Align default medium/high kind lists with the final product policy.
+
+Blocked decisions before official-directory development:
+
+- Official Ostrilo policy pubkey and key custody/rotation plan.
+- Relay list and fetch failure behavior.
+- Whether global High trust is allowed at all.
+- Whether official trust assignments may preselect first-connection trust.
+- Whether NIP-78 user override sync belongs here or in a separate sync proposal.
 
 ## Problem Statement
 
@@ -22,6 +43,12 @@ The current permission system requires users to manage per-kind permissions for 
 ## Proposed Solution
 
 Implement a **Hybrid Trust Level Policy System** that reduces popup fatigue while maintaining security guardrails. The system operates on three levels of trust (Low, Medium, High) with hardcoded auto-sign rules and remote/user-defined assignments.
+
+This proposal should be split during implementation:
+
+1. Local policy hardening and protected-kind enforcement.
+2. Official directory fetch/cache and source badges after the decisions above are resolved.
+3. Optional user sync via NIP-78 only if a separate privacy review approves it.
 
 ### Key Components
 
@@ -92,11 +119,13 @@ Implement a **Hybrid Trust Level Policy System** that reduces popup fatigue whil
 
 ## Open Questions
 
-1. Should we implement NIP-78 sync for user overrides in v1, or defer to v2?
-2. What should the official Ostrilo pubkey be?
-3. Which relays should be hardcoded for policy fetch?
+1. Should we implement NIP-78 sync for user overrides in v1, or defer to a separate sync proposal?
+2. What should the official Ostrilo pubkey be, and who controls/rotates the signing key?
+3. Which relays should be hardcoded for policy fetch, and what privacy assumptions do they create?
 4. Should we show a "Last Updated" timestamp for official policies in UI?
 5. Should users be able to disable official policy fetching entirely?
+6. Is global High trust allowed, or should the highest global override be Medium?
+7. Which exact event kinds belong in Medium and High trust after the protected-kind rule is applied?
 
 ## Alternatives Considered
 

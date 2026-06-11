@@ -1,12 +1,16 @@
 # Implementation Tasks: Standardize RPC Error Responses
 
+## 2026-06-11 Review Status
+
+This change is ready for development, but it is a breaking RPC migration. Keep it in one branch and update types, handlers, client parsing, content/injected propagation, and tests together.
+
 ## Task 1: Define JSON-RPC Error Types and Mapping
 **Status:** ⏸️ Not Started  
 **Estimated Effort:** 2–4 hours  
 **Dependencies:** None
 
 - [ ] Define a `RpcErrorObject` type with `{ code: number; message: string; data?: ... }`
-- [ ] Add/standardize canonical machine codes (including `rate_limited`, `network_error`)
+- [ ] Add/standardize canonical machine codes (including `invalid_params`, `rate_limited`, `network_error`)
 - [ ] Centralize mapping from machine code → numeric JSON-RPC code and default message
 - [ ] Add unit tests for mapping and message defaults
 
@@ -71,6 +75,6 @@
 ## Task 7: Validation
 **Status:** ⏸️ Not Started
 
-- [ ] Run `npm run compile`
-- [ ] Run `npm run build` and `npm run build:firefox`
+- [ ] Run `pnpm run compile`
+- [ ] Run `pnpm run build` and `pnpm run build:firefox`
 - [ ] Run relevant test suites (unit/integration/e2e as appropriate)

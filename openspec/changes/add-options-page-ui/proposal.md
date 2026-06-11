@@ -3,9 +3,23 @@
 ## Status
 
 - **Created:** 2025-12-18
-- **Status:** Draft
+- **Status:** Implemented core UI; hardening and documentation remaining
 - **Author:** AI Assistant
 - **Approver:** TBD
+
+## 2026-06-11 Review Status
+
+Current code already includes the options page entrypoint, `OptionsApp`, `BasicSettings`, shared settings components, Inkline-era styling, and popup-to-options navigation. This proposal is no longer a greenfield feature proposal.
+
+Development readiness: ready only for the remaining hardening slice: tests, accessibility review, documentation, cleanup of the legacy `SettingsView`, and Chrome/Firefox validation. Do not use this change to implement NIP-78 cross-device settings sync; that work should be split into its own proposal because it adds relay/network behavior, signing semantics, and privacy review beyond the options page UI.
+
+Current implementation anchors:
+
+- `src/extension/options/OptionsApp.tsx`
+- `src/ui/features/settings/components/BasicSettings.tsx`
+- `src/ui/features/settings/components/*Tab.tsx`
+- `src/ui/features/settings/components/shared/`
+- `wxt.config.ts` options page manifest configuration
 
 ## Problem Statement
 
@@ -72,15 +86,14 @@ Implement a dedicated **Options Page** that opens in a new browser tab using `br
 3. **Enable Scalability:** Support future settings additions without popup bloat
 4. **Follow Standards:** Use browser.runtime.openOptionsPage() per WebExtension best practices
 5. **Code Reusability:** Extract shared components between popup and options page
-6. **Enable Settings Sync:** Allow non-sensitive settings to sync across devices via Nostr events (NIP-78)
-7. **Security by Design:** Follow hexagonal architecture, never sync sensitive data (keys, passwords, origins)
+6. **Security by Design:** Follow hexagonal architecture and keep sensitive data local
 
 ## Non-Goals
 
 1. **Not** removing settings from popup entirely (keep basic settings accessible)
 2. **Not** creating multiple options pages (single page with tabs only)
 3. **Not** syncing sensitive data (private keys, passwords, per-origin policies)
-4. **Not** implementing automatic conflict resolution (last-write-wins only)
+4. **Not** implementing NIP-78 cross-device settings sync in this change
 5. **Not** requiring relay connection for local-only usage
 
 ## Success Metrics
@@ -96,9 +109,8 @@ Implement a dedicated **Options Page** that opens in a new browser tab using `br
 - WXT entrypoint configuration for options page
 - Shared UI components between popup and options
 - SettingsService (existing) for local storage operations
-- New SettingsSyncService following hexagonal architecture
-- NIP-78 (Arbitrary Custom App Data) for settings publishing
-- Relay access for settings fetch/publish (non-blocking)
+- Current Inkline design rules in `docs/design/DESIGN_RULES.md`
+- Existing WXT options page support and shared settings hooks
 
 ## Risks and Mitigations
 
@@ -109,9 +121,8 @@ Implement a dedicated **Options Page** that opens in a new browser tab using `br
 | Broken settings mutations                   | Critical | Comprehensive E2E tests for all settings changes                          |
 | Popup becomes too minimal                   | Low      | Iterate based on user feedback; keep essentials                           |
 | Options page too complex                    | Medium   | Use clear tab navigation and grouping                                     |
-| Accidental sync of sensitive data           | Critical | Strict allowlist of syncable fields, never include keys/origins/passwords |
-| Relay fetch failures blocking UI            | Medium   | Non-blocking sync with timeout, graceful degradation                      |
-| Settings conflict across devices            | Medium   | Last-write-wins with timestamp, show conflict indicator in UI             |
+| Legacy SettingsView drift                   | Medium   | Delete it or mark as deprecated once Options/BasicSettings coverage is complete |
+| Missing E2E coverage for options workflows  | Medium   | Add Playwright coverage for popup -> options, tab navigation, and settings persistence |
 
 ## Open Questions
 
@@ -119,9 +130,9 @@ Implement a dedicated **Options Page** that opens in a new browser tab using `br
 2. Should the popup have a "Quick Settings" mode with only 3-4 most common settings? **Yes** - BasicSettings component
 3. Should we add keyboard shortcuts to open options page? **No** - Not in v1
 4. Should the options page have a "Restore Defaults" button per tab or only global? **Global** - Single reset action
-5. Should sync be opt-in or automatic? **Opt-in** - User must explicitly enable sync in Settings
-6. Should we show sync status (last synced timestamp)? **Yes** - Display in Options page footer
-7. Should we allow manual "Sync Now" action? **Yes** - Button in General tab
+5. Should NIP-78 settings sync be included here? **No** - Split into a future proposal
+6. Should the legacy `SettingsView.tsx` be removed? **Yes, after tests prove no active references remain**
+7. Should Playwright cover cross-context settings updates? **Yes** - Add targeted coverage before archiving
 
 ## Alternatives Considered
 

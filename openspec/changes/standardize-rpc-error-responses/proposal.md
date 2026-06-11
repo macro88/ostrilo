@@ -4,7 +4,13 @@
 `standardize-rpc-error-responses`
 
 ## Status
-🔄 **Proposal** - Awaiting approval
+Proposal reviewed 2026-06-11 - ready for development with breaking-change coordination
+
+## 2026-06-11 Review Status
+
+Current code still uses `{ ok: false, error: string, details?: string }` in `src/infrastructure/messaging/rpc.ts` and across handlers, clients, tests, and Playwright helpers. `RPC_ERROR_CODES` exists, but it does not yet include `invalid_params`, `rate_limited`, or `network_error`.
+
+Development readiness: ready, but treat it as a coordinated breaking migration. Implement router/types/helpers, handlers, client propagation, injected/content boundary behavior, and tests in the same branch. Add a temporary client-side reader for the old shape only if needed to stage the migration safely.
 
 ## Overview
 Standardize all RPC error responses across Ostrilo’s messaging layer to use a single, uniform error shape based on the JSON-RPC 2.0 *error object* format (`{ code, message, data? }`). This includes:
@@ -61,6 +67,7 @@ Standardize (and document) a canonical set of machine codes (string values) incl
 - `locked`
 - `needs_approval`
 - `denied`
+- `invalid_params`
 - `invalid_event`
 - `rate_limited`
 - `network_error`

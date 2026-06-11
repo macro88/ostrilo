@@ -1,5 +1,11 @@
 # Implementation Tasks: Add Options Page UI
 
+## 2026-06-11 Review Status
+
+The core UI work in Phases 1-7 is implemented on `main`. Remaining development for this change should be limited to hardening, tests, documentation, cleanup, and validation in Phases 8-10.
+
+Phase 11 is explicitly deferred. Cross-device settings sync via NIP-78 needs a separate OpenSpec proposal because it introduces relay/network behavior, public Nostr events, signing semantics, and privacy/security review beyond the options page UI.
+
 ## Phase 1: Extract Shared Components ✅
 
 - [x] **1.1** Create shared components directory structure
@@ -379,15 +385,15 @@
 
 - [ ] **10.2** Run full test suite
 
-  - Unit: `npm run test:unit`
-  - Integration: `npm run test:integration`
-  - E2E: `npm run test:e2e`
+  - Unit: `pnpm run test:unit`
+  - Integration: `pnpm run test:integration`
+  - E2E: `pnpm run test:e2e`
   - **Validation:** All tests pass, no regressions
 
 - [ ] **10.3** Build for all browsers
 
-  - Chrome: `npm run build`
-  - Firefox: `npm run build:firefox`
+  - Chrome: `pnpm run build`
+  - Firefox: `pnpm run build:firefox`
   - Load extensions and manually test
   - **Validation:** Options page works in both browsers
 
@@ -405,23 +411,25 @@
   - Run formatter: `npx prettier --write .`
   - **Validation:** Code is clean, production-ready
 
-## Phase 11: Settings Sync Implementation
+## Phase 11: Deferred Future Proposal - Settings Sync Implementation
 
-- [ ] **11.1** Define SyncableSettings domain type
+Do not implement Phase 11 under `add-options-page-ui`. These tasks are retained as seed material for a separate change proposal.
+
+- **11.1 (future)** Define SyncableSettings domain type
 
   - Create `SyncableSettings` interface in `src/domain/types.ts`
   - Include only non-sensitive fields (theme, autoLock, relays, etc.)
   - Add JSDoc explaining sync safety
   - **Validation:** Type compiles, clearly documents included fields
 
-- [ ] **11.2** Define IRelayAdapter port interface
+- **11.2 (future)** Define IRelayAdapter port interface
 
   - Create `src/application/ports/relay.ts`
   - Define `IRelayAdapter` interface with publish/query methods
   - Define `RelayOptions` type for timeout configuration
   - **Validation:** Interface follows hexagonal port conventions
 
-- [ ] **11.3** Create SimpleRelayAdapter infrastructure
+- **11.3 (future)** Create SimpleRelayAdapter infrastructure
 
   - Create `src/infrastructure/relay/simple-relay-adapter.ts`
   - Implement IRelayAdapter using nostr-tools SimplePool
@@ -429,14 +437,14 @@
   - Add query() with timeout and event collection
   - **Validation:** Adapter implements interface, handles timeouts
 
-- [ ] **11.4** Create SettingsSyncService
+- **11.4 (future)** Create SettingsSyncService
 
   - Create `src/application/services/settings-sync.service.ts`
   - Accept StorageSuite, IRelayAdapter, ICryptoAdapter in constructor
   - Implement filterSyncableSettings() with strict allowlist
   - **Validation:** Service follows hexagonal architecture
 
-- [ ] **11.5** Implement publishSettings method
+- **11.5 (future)** Implement publishSettings method
 
   - Create NIP-78 event (kind 30078) in publishSettings()
   - Set tags: `["d", "ostrilo-settings-v1"]`, `["t", "ostrilo"]`
@@ -445,7 +453,7 @@
   - Publish to relays with 5-second timeout
   - **Validation:** Event published successfully, has correct format
 
-- [ ] **11.6** Implement fetchSettings method
+- **11.6 (future)** Implement fetchSettings method
 
   - Query relays for kind 30078 with user's pubkey
   - Filter by `#d` tag "ostrilo-settings-v1"
@@ -453,7 +461,7 @@
   - Parse content JSON into SyncableSettings
   - **Validation:** Fetches latest settings, handles no results
 
-- [ ] **11.7** Implement mergeRemoteSettings method
+- **11.7 (future)** Implement mergeRemoteSettings method
 
   - Load local AppSettingsV1 from storage
   - Spread remote syncable settings over local
@@ -461,21 +469,21 @@
   - Save merged settings to storage
   - **Validation:** Merge preserves local-only data
 
-- [ ] **11.8** Add SettingsSyncState to domain types
+- **11.8 (future)** Add SettingsSyncState to domain types
 
   - Create `SettingsSyncState` interface
   - Include: enabled, lastSyncedAt, syncInProgress, syncError
   - Store in chrome.storage.local
   - **Validation:** Type compiles, used in service and UI
 
-- [ ] **11.9** Wire SettingsSyncService into background
+- **11.9 (future)** Wire SettingsSyncService into background
 
   - Import and instantiate SettingsSyncService in background.ts
   - Pass existing storage, new relay adapter, crypto adapter
   - Add RPC handlers for: sync.enable, sync.disable, sync.now
   - **Validation:** Service available in background context
 
-- [ ] **11.10** Create useSettingsSync hook
+- **11.10 (future)** Create useSettingsSync hook
 
   - Create `src/ui/hooks/useSettingsSync.ts`
   - Load sync state from storage
@@ -483,7 +491,7 @@
   - Send RPC messages to background service
   - **Validation:** Hook updates state, calls background
 
-- [ ] **11.11** Add sync UI to GeneralSettingsTab
+- **11.11 (future)** Add sync UI to GeneralSettingsTab
 
   - Add "Settings Sync" section to General tab
   - Add enable/disable toggle with description
@@ -493,7 +501,7 @@
   - Add info alert explaining what is synced
   - **Validation:** Sync UI renders, controls work
 
-- [ ] **11.12** Implement automatic sync on enable
+- **11.12 (future)** Implement automatic sync on enable
 
   - When user enables sync, trigger immediate publish
   - Fetch remote settings and merge if found
@@ -501,7 +509,7 @@
   - Handle errors gracefully
   - **Validation:** Enabling sync publishes and fetches
 
-- [ ] **11.13** Add sync exclusion validation
+- **11.13 (future)** Add sync exclusion validation
 
   - Unit test: filterSyncableSettings excludes selectedKeyId
   - Unit test: filterSyncableSettings excludes origins
@@ -509,7 +517,7 @@
   - Security test: published event can be publicly read safely
   - **Validation:** All exclusion tests pass
 
-- [ ] **11.14** Write E2E test for cross-device sync
+- **11.14 (future)** Write E2E test for cross-device sync
 
   - Test: Enable sync on Device A (simulated)
   - Test: Change theme on Device A
@@ -518,7 +526,7 @@
   - Test: Verify theme synced, selectedKeyId not synced
   - **Validation:** Cross-device sync E2E test passes
 
-- [ ] **11.15** Add sync error handling
+- **11.15 (future)** Add sync error handling
 
   - Handle relay timeout gracefully
   - Handle invalid event format
@@ -527,7 +535,7 @@
   - Allow retry after error
   - **Validation:** All error scenarios handled
 
-- [ ] **11.16** Document sync security boundaries
+- **11.16 (future)** Document sync security boundaries
   - Update README with sync feature explanation
   - Document which fields are synced vs local-only
   - Explain NIP-78 event format
@@ -548,9 +556,9 @@
 - **Phase 8:** Testing (6-8 hours)
 - **Phase 9:** Documentation (2-3 hours)
 - **Phase 10:** Cleanup (2-3 hours)
-- **Phase 11:** Settings Sync (8-10 hours)
+- **Phase 11:** Deferred to a future proposal
 
-**Total:** 45-60 hours
+**Active remaining scope:** Phase 8-10 hardening, documentation, cleanup, and validation.
 
 ## Dependencies
 
@@ -558,13 +566,11 @@
 - Shadcn/ui Tabs component
 - chrome.runtime.openOptionsPage() API
 - chrome.storage.onChanged event API
-- NIP-78 (Arbitrary Custom App Data) specification
-- nostr-tools SimplePool for relay operations
 - Hexagonal architecture port/adapter pattern
 
 ## Rollout Strategy
 
-1. **Internal Testing:** Deploy to dev environment, test all tabs and sync
+1. **Internal Testing:** Deploy to dev environment, test all tabs and local cross-context settings updates
 2. **Beta Release:** Publish to small user group, gather feedback on UX
 3. **Monitor Feedback:** Track issues with navigation, sync, performance
 4. **Gradual Rollout:** Increase user base over 1 week
@@ -574,13 +580,10 @@
 
 - ✅ All tests pass (unit, integration, E2E)
 - ✅ Options page loads within 500ms
-- ✅ Settings sync within 100ms between contexts
+- ✅ Local settings updates propagate within 100ms between popup and options contexts
 - ✅ No layout breaks at desktop resolutions
 - ✅ All existing settings functionality preserved
 - ✅ BasicSettings fits in popup without scrolling
 - ✅ Extension builds for Chrome and Firefox
 - ✅ Zero regressions in existing workflows
-- ✅ Sync publishes only non-sensitive settings
-- ✅ Sync excluded fields validated in tests
-- ✅ Relay operations timeout properly
 - ✅ Extension functions fully without sync enabled

@@ -19,6 +19,7 @@ The RPC system SHALL define a canonical set of machine error codes.
   - `locked`
   - `needs_approval`
   - `denied`
+  - `invalid_params`
   - `invalid_event`
   - `rate_limited`
   - `network_error`

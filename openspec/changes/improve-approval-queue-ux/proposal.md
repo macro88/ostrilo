@@ -1,5 +1,13 @@
 # Change: Improve Approval Queue UX with De-duplication and Single Window
 
+## 2026-06-11 Review Status
+
+Status: Implemented and archive-ready.
+
+This change has already landed on `main` through the approval queue UX work. The task list is fully checked, and the current code includes the managed approval window, queue list/detail layout, event de-duplication, batch actions, Activity page queue access, and Playwright coverage in `tests/e2e/approval-queue-ux.spec.ts`.
+
+Development readiness: no new development should start from this proposal. The next OpenSpec action is archive/sync so the `nip07-provider` baseline spec reflects the implemented behavior.
+
 ## Why
 
 The current implementation creates a new popup window for each signing request, causing poor UX when dApps send multiple or duplicate events. When sites like Primal request several events simultaneously or retry the same event, users face:
