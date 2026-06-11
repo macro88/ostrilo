@@ -144,18 +144,39 @@ npm run test:ci
 ### End-to-End Tests
 
 ```bash
-# Run E2E tests
-npm run test:e2e
+# Run extension E2E tests
+pnpm run test:e2e
 
 # Run E2E with browser UI
-npm run test:e2e:headed
+pnpm run test:e2e:headed
+
+# Run the autonomous smoke path with named screenshot artifacts
+pnpm run test:e2e:smoke
 
 # Debug E2E tests
-npm run test:e2e:debug
+pnpm run test:e2e:debug
 
 # E2E test UI mode
-npm run test:e2e:ui
+pnpm run test:e2e:ui
 ```
+
+The Playwright harness builds the WXT Chrome extension before tests, starts the
+local fixture page on `127.0.0.1:8765`, and loads `.output/chrome-mv3` into a
+persistent Chromium extension context. It runs headless by default using
+Playwright's bundled Chromium channel. Set `OSTRILO_E2E_HEADED=1` or use
+`pnpm run test:e2e:headed` when you need to watch the browser.
+
+The agent smoke test creates a fresh key through the popup UI, captures
+extension screens, exercises `window.nostr` from the fixture dApp page, signs a
+real event, and verifies the activity log. Named PNG screenshots are written to:
+
+```text
+test-results/e2e-screenshots/
+```
+
+These screenshots are generated review artifacts rather than committed golden
+snapshots. They are suitable for human inspection or multimodal agent
+comparison while behavioral assertions keep the test deterministic.
 
 ## Test Configuration
 
@@ -185,14 +206,14 @@ npm run test:e2e:ui
 
 **Browser Support:**
 
-- Chrome/Chromium (primary)
-- Firefox
-- Safari/WebKit
+- Chromium extension context (primary automated E2E target)
+- Firefox and Safari/WebKit are covered by build validation and lower-level tests
 
 **Extension Testing:**
 
-- Custom extension fixture
-- Automated extension loading
+- Custom persistent Chromium extension fixture
+- Automated WXT extension build and loading
+- Named screenshot artifacts for autonomous visual review
 - Browser context isolation
 
 ## Test Patterns and Guidelines

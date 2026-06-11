@@ -42,6 +42,7 @@ export function OnboardingCreateKey({
   const [backupChecked, setBackupChecked] = useState(false);
   const [step, setStep] = useState<"input" | "backup">("input");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [hasRevealedPrivateKey, setHasRevealedPrivateKey] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
 
   // Use refs for ephemeral sensitive data (not useState)
@@ -111,7 +112,7 @@ export function OnboardingCreateKey({
       // Reveal key with password verification - stored ephemerally in ref
       const revealed = await revealKey(passwordBackupRef.current);
       privateKeyRef.current = revealed;
-      // Trigger re-render
+      setHasRevealedPrivateKey(true);
       setShowPrivateKey(false);
     } catch (error) {
       setPasswordError(
@@ -222,14 +223,14 @@ export function OnboardingCreateKey({
             </div>
 
             {/* Reveal key button if not yet revealed */}
-            {!privateKeyRef.current && (
+            {!hasRevealedPrivateKey && (
               <Button onClick={handleRevealKey} className="w-full">
                 Reveal Private Key
               </Button>
             )}
 
             {/* Private key display */}
-            {privateKeyRef.current && (
+            {hasRevealedPrivateKey && privateKeyRef.current && (
               <div className="space-y-3">
                 <div>
                   <Label htmlFor="privateKey">Private Key (nsec format)</Label>
@@ -331,6 +332,7 @@ export function OnboardingCreateKey({
                   // Clear sensitive data from refs
                   privateKeyRef.current = null;
                   passwordBackupRef.current = "";
+                  setHasRevealedPrivateKey(false);
                   await markOnboardingComplete();
                   onComplete();
                 }}

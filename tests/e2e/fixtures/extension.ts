@@ -1,11 +1,11 @@
 import path from "path";
+import fs from "node:fs";
 import {
   test as base,
   chromium,
   expect as baseExpect,
-  BrowserContext,
-  Page,
 } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 
 type ExtensionFixtures = {
   extensionContext: BrowserContext;
@@ -16,10 +16,11 @@ type ExtensionFixtures = {
 
 // Helper to resolve the built extension path (WXT output)
 const extensionPath = path.resolve(process.cwd(), ".output", "chrome-mv3");
+const isHeaded = process.env.OSTRILO_E2E_HEADED === "1";
 
 export const test = base.extend<ExtensionFixtures>({
   // Launch a persistent Chromium context with the extension loaded
-  extensionContext: async ({ browserName }, use, workerInfo) => {
+  extensionContext: async ({ browserName }, use, testInfo) => {
     if (browserName !== "chromium") {
       // Provide a dummy context to keep types happy; tests should guard by browser
       // but we won't create non-chromium extension contexts.
@@ -28,12 +29,18 @@ export const test = base.extend<ExtensionFixtures>({
       return;
     }
 
-    const userDataDir = path.join(
-      workerInfo.project.outputDir,
-      "chromium-user-data"
-    );
+    const userDataDir = path.join(testInfo.outputDir, "chromium-user-data");
+
+    if (!fs.existsSync(extensionPath)) {
+      throw new Error(
+        `Built extension not found at ${extensionPath}. Run pnpm run build before Playwright, or use pnpm run test:e2e.`
+      );
+    }
+
     const context = await chromium.launchPersistentContext(userDataDir, {
-      headless: false, // Extensions are not supported in headless mode
+      channel: "chromium",
+      headless: !isHeaded,
+      viewport: { width: 390, height: 700 },
       args: [
         `--disable-extensions-except=${extensionPath}`,
         `--load-extension=${extensionPath}`,
@@ -101,4 +108,4 @@ export const test = base.extend<ExtensionFixtures>({
 });
 
 export const expect = baseExpect;
-export { Page };
+export type { Page };
