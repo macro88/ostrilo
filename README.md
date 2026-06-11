@@ -100,4 +100,4 @@ For security issues, please review our security testing documentation and follow
 
 ## License
 
-[License information would go here]
+[MIT](./LICENSE)

@@ -3,6 +3,7 @@
   "description": "Nostr signer. Signs locally, never snoops",
   "private": true,
   "version": "0.0.1",
+  "license": "MIT",
   "packageManager": "pnpm@11.5.2",
   "type": "module",
   "scripts": {
