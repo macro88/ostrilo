@@ -11,7 +11,7 @@ export default function ApprovalApp() {
   useTheme();
 
   return (
-    <div className="w-[400px] h-[600px] bg-background text-foreground overflow-hidden">
+    <div className="app-canvas h-[600px] w-[400px] overflow-hidden bg-background text-foreground">
       <ApprovalPrompt />
     </div>
   );

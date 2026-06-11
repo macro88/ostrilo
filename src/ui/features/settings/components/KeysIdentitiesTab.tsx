@@ -18,7 +18,7 @@ import { useState } from "react";
 type AddKeyMode = "choice" | "create" | "import" | null;
 
 export function KeysIdentitiesTab() {
-  const { keys, selectKey } = useKeyManager();
+  const { keys, selectedUnlockedKey, selectKey } = useKeyManager();
   const pubkeys = keys.map((key) => key.publicKeyHex);
   const { profiles } = useProfileMetadata(pubkeys);
   const [addKeyMode, setAddKeyMode] = useState<AddKeyMode>(null);
@@ -48,10 +48,10 @@ export function KeysIdentitiesTab() {
   };
 
   return (
-    <div className="bg-card border border-border rounded-lg p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="plush-card space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold mb-2">Keys & Identities</h2>
+          <h2 className="screen-title">Keys & Identities</h2>
           <p className="text-sm text-muted-foreground">
             Manage your Nostr identities
           </p>
@@ -63,12 +63,15 @@ export function KeysIdentitiesTab() {
       </div>
 
       <div className="flex items-center gap-2 mb-4">
-        <Key className="h-4 w-4" />
+        <div className="icon-bubble h-8 w-8">
+          <Key className="h-4 w-4" />
+        </div>
         <h3 className="font-medium">Your Keys</h3>
       </div>
 
       <KeySelectorCard
         keys={keys}
+        selectedKeyId={selectedUnlockedKey?.id}
         profiles={profiles}
         onSelectKey={handleSelectKey}
         onRename={handleRename}

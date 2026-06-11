@@ -74,15 +74,15 @@ export function PasswordInput({
     switch (score) {
       case 0:
       case 1:
-        return "bg-red-500";
+        return "bg-destructive";
       case 2:
-        return "bg-yellow-500";
+        return "bg-[var(--plush-peach)]";
       case 3:
-        return "bg-blue-500";
+        return "bg-primary";
       case 4:
-        return "bg-green-500";
+        return "bg-[var(--plush-mint)]";
       default:
-        return "bg-gray-300";
+        return "bg-muted";
     }
   };
 
@@ -118,7 +118,7 @@ export function PasswordInput({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            className={error ? "border-red-500" : ""}
+            className={error ? "border-destructive" : ""}
           />
           <button
             type="button"
@@ -145,10 +145,10 @@ export function PasswordInput({
             <span
               className={`text-sm font-medium ${
                 strength.score >= 3
-                  ? "text-green-600"
+                  ? "text-[var(--plush-mint)]"
                   : strength.score >= 2
-                  ? "text-yellow-600"
-                  : "text-red-600"
+                  ? "text-[var(--plush-peach)]"
+                  : "text-destructive"
               }`}
             >
               {getStrengthLabel(strength.score)}
@@ -176,9 +176,9 @@ export function PasswordInput({
               {strength.requirements.map((req, index) => (
                 <div key={index} className="flex items-center gap-2 text-xs">
                   {req.passes ? (
-                    <Check className="h-3 w-3 text-green-500" />
+                    <Check className="h-3 w-3 text-[var(--plush-mint)]" />
                   ) : (
-                    <X className="h-3 w-3 text-red-500" />
+                    <X className="h-3 w-3 text-destructive" />
                   )}
                   <span
                     className={
@@ -206,7 +206,7 @@ export function PasswordInput({
               value={confirmValue}
               onChange={(e) => onConfirmChange(e.target.value)}
               disabled={disabled}
-              className={confirmError ? "border-red-500" : ""}
+              className={confirmError ? "border-destructive" : ""}
             />
             <button
               type="button"
@@ -226,14 +226,14 @@ export function PasswordInput({
 
       {/* Error messages */}
       {error && (
-        <div className="text-sm text-red-600 flex items-center gap-2">
+        <div className="stamp-chip status-danger flex">
           <X className="h-4 w-4" />
           {error}
         </div>
       )}
 
       {confirmError && (
-        <div className="text-sm text-red-600 flex items-center gap-2">
+        <div className="stamp-chip status-danger flex">
           <X className="h-4 w-4" />
           {confirmError}
         </div>

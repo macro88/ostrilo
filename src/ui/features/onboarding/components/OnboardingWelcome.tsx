@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Key, Shield, Zap, ArrowRight, FileKey, Download } from "lucide-react";
-import { AppLogo } from "@/components/common/app-logo";
+import { Key, Shield, ArrowRight, FileKey } from "lucide-react";
 import { Logo } from "@/ui/components/logo/Logo";
 
 interface OnboardingWelcomeProps {
@@ -18,10 +17,9 @@ export function OnboardingWelcome({
   >(null);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-4 space-y-4">
-      {/* Mascot and welcome text */}
-      <div className="text-center space-y-2">
-        <div className="w-32 h-32 mx-auto mb-4">
+    <div className="flex min-h-screen flex-col items-center justify-center space-y-5 px-4 py-6">
+      <div className="screen-header w-full max-w-md text-center">
+        <div className="mx-auto mb-4 flex h-32 w-32 items-center justify-center rounded-full bg-accent p-3 shadow-sm">
           <Logo size="max" />
         </div>
 
@@ -29,27 +27,29 @@ export function OnboardingWelcome({
           Welcome to Ostrilo
         </h1>
 
-        <p className="text-base text-muted-foreground max-w-md">
-          Your secure Nostr signing companion.
+        <p className="screen-description">
+          Your local signing buddy. Keys stay with you.
         </p>
       </div>
-      {/* Action selection */}
       <div className="w-full max-w-md space-y-3">
-        <h2 className="text-lg font-semibold text-center mb-4">
+        <h2 className="text-center text-lg font-semibold">
           How would you like to get started?
         </h2>
 
-        {/* Create new key option */}
-        <div
-          className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+        <button
+          type="button"
+          className={`w-full p-4 text-left transition-all ${
             selectedOption === "create"
-              ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
-              : "border-border hover:border-blue-300"
+              ? "plush-card border-primary bg-accent"
+              : "plush-card hover:border-primary/50"
           }`}
           onClick={() => setSelectedOption("create")}
+          aria-pressed={selectedOption === "create"}
         >
           <div className="flex items-center space-x-3">
-            <Key className="h-5 w-5 text-blue-500" />
+            <div className="icon-bubble">
+              <Key className="h-4 w-4" />
+            </div>
             <div className="flex-1">
               <h3 className="font-semibold text-sm">Create New Key</h3>
               <p className="text-xs text-muted-foreground">
@@ -57,26 +57,29 @@ export function OnboardingWelcome({
               </p>
             </div>
             <div
-              className={`w-3 h-3 border-2 rounded-full ${
+              className={`h-4 w-4 rounded-full border-2 ${
                 selectedOption === "create"
-                  ? "border-blue-500 bg-blue-500"
+                  ? "border-primary bg-primary"
                   : "border-muted-foreground"
               }`}
             />
           </div>
-        </div>
+        </button>
 
-        {/* Import existing key option */}
-        <div
-          className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+        <button
+          type="button"
+          className={`w-full p-4 text-left transition-all ${
             selectedOption === "import"
-              ? "border-green-500 bg-green-50 dark:bg-green-950"
-              : "border-border hover:border-green-300"
+              ? "plush-card border-primary bg-accent"
+              : "plush-card hover:border-primary/50"
           }`}
           onClick={() => setSelectedOption("import")}
+          aria-pressed={selectedOption === "import"}
         >
           <div className="flex items-center space-x-3">
-            <FileKey className="h-5 w-5 text-green-500" />
+            <div className="icon-bubble">
+              <FileKey className="h-4 w-4" />
+            </div>
             <div className="flex-1">
               <h3 className="font-semibold text-sm">Import Existing Key</h3>
               <p className="text-xs text-muted-foreground">
@@ -84,16 +87,15 @@ export function OnboardingWelcome({
               </p>
             </div>
             <div
-              className={`w-3 h-3 border-2 rounded-full ${
+              className={`h-4 w-4 rounded-full border-2 ${
                 selectedOption === "import"
-                  ? "border-green-500 bg-green-500"
+                  ? "border-primary bg-primary"
                   : "border-muted-foreground"
               }`}
             />
           </div>
-        </div>
+        </button>
 
-        {/* Continue button */}
         <div className="pt-4">
           <Button
             onClick={() => {
@@ -104,7 +106,7 @@ export function OnboardingWelcome({
               }
             }}
             disabled={!selectedOption}
-            className="w-full"
+            className="btn-plush w-full"
             size="lg"
           >
             Continue
@@ -113,8 +115,7 @@ export function OnboardingWelcome({
         </div>
       </div>
 
-      {/* Security notice */}
-      <div className="text-center text-xs text-muted-foreground max-w-md">
+      <div className="max-w-md text-center text-xs text-muted-foreground">
         <Shield className="h-4 w-4 inline mr-1" />
         Your private keys are encrypted and stored locally on your device.
         Ostrilo never has access to your keys or personal data.

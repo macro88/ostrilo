@@ -77,35 +77,35 @@ export function OptionsApp() {
 
   return (
     <KeyManagerProvider>
-      <div className="min-h-screen bg-background flex flex-col">
-        {/* Header */}
-        <header className="bg-card mt-4">
+      <div className="app-canvas flex min-h-screen flex-col bg-background">
+        <header className="border-b border-border bg-card/95 shadow-sm backdrop-blur">
           <div className="options-container py-4">
-            <div className="flex items-center justify-between">
-               
-              <div className="flex items-center-safe">
-                 <Logo size="lg" />
-                <div className="flex justify-center flex-col ml-3">
-                <h1 className="text-2xl font-bold">Ostrilo Settings</h1>
-                <p className="text-sm text-muted-foreground">
-                  Configure your Nostr signer
-                </p>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent p-1.5 shadow-sm">
+                  <Logo size="lg" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-2xl font-bold leading-tight">
+                    Ostrilo Settings
+                  </h1>
+                  <p className="text-sm text-muted-foreground">
+                    Configure your local Nostr signer
+                  </p>
+                </div>
               </div>
-              </div>
-              <div className="text-sm text-muted-foreground">
+              <div className="stamp-chip">
                 v1.0.0
               </div>
             </div>
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 mt-4">
+        <main className="mt-4 flex-1">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
-            {/* Tab Navigation - Full Width */}
-            <div className="border-bx border-border bg-card">
+            <div className="border-y border-border bg-card/85">
               <div className="options-container">
-                <TabsList className="w-full justify-start flex-wrap">
+                <TabsList className="options-tabs flex min-h-12 w-full flex-wrap justify-start gap-1 overflow-x-auto bg-transparent p-2">
                   <TabsTrigger value="general">General</TabsTrigger>
                   <TabsTrigger value="keys">Keys & Identities</TabsTrigger>
                   <TabsTrigger value="security">Security</TabsTrigger>
@@ -117,7 +117,6 @@ export function OptionsApp() {
               </div>
             </div>
 
-            {/* Tab Content - Full Width */}
             <div className="options-container py-6">
               <TabsContent value="general" className="tab-content">
                 <GeneralSettingsTab />
@@ -150,8 +149,7 @@ export function OptionsApp() {
           </Tabs>
         </main>
 
-        {/* Footer */}
-        <footer className="mb-8 bg-card mt-auto">
+        <footer className="mt-auto mb-8 bg-transparent">
           <div className="options-container py-4">
             <p className="text-sm text-muted-foreground text-center">
               Settings are automatically saved

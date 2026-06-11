@@ -102,7 +102,7 @@ export const KeySelector = memo(function KeySelector({
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger
         className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-lg",
+          "flex items-center gap-2 rounded-full px-3 py-2",
           "border border-border bg-card",
           "hover:bg-accent hover:border-primary/50 transition-all duration-200",
           "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
@@ -144,7 +144,7 @@ export const KeySelector = memo(function KeySelector({
 
       <DropdownMenuContent
         align="start"
-        className="w-[280px]"
+        className="w-[280px] max-w-[calc(100vw-1rem)]"
         role="listbox"
         id="key-selector-listbox"
         aria-label="Available keys"

@@ -16,7 +16,6 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle,
-  Fingerprint,
   Copy,
   Download,
   Eye,
@@ -159,19 +158,21 @@ export function OnboardingCreateKey({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-4">
         {step === "input" && (
           <>
-            <div className="text-center space-y-2">
-              <Key className="h-10 w-10 mx-auto text-blue-500" />
-              <h2 className="text-xl font-bold">Create Your Nostr Key</h2>
-              <p className="text-muted-foreground text-sm">
+            <div className="screen-header text-center">
+              <div className="icon-bubble mx-auto mb-3 h-12 w-12">
+                <Key className="h-5 w-5" />
+              </div>
+              <h2 className="screen-title">Create Your Nostr Key</h2>
+              <p className="screen-description">
                 Set up a secure password to protect your new identity
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="plush-card space-y-4">
               <div>
                 <Label htmlFor="keyName">Key Name</Label>
                 <Input
@@ -202,7 +203,7 @@ export function OnboardingCreateKey({
               <Button
                 onClick={handleGenerateKey}
                 disabled={isGenerating}
-                className="flex-1"
+                className="btn-plush flex-1"
               >
                 {isGenerating ? "Creating..." : "Create Key"}
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -213,10 +214,12 @@ export function OnboardingCreateKey({
 
         {step === "backup" && (
           <div className="space-y-6">
-            <div className="text-center space-y-2">
-              <CheckCircle className="h-12 w-12 mx-auto text-green-500" />
-              <h2 className="text-2xl font-bold">Backup Your Key</h2>
-              <p className="text-muted-foreground">
+            <div className="screen-header text-center">
+              <div className="icon-bubble status-success mx-auto mb-3 h-12 w-12">
+                <CheckCircle className="h-5 w-5" />
+              </div>
+              <h2 className="screen-title">Backup Your Key</h2>
+              <p className="screen-description">
                 Save your private key somewhere safe. You'll need it to restore
                 your account if you lose access.
               </p>
@@ -224,14 +227,14 @@ export function OnboardingCreateKey({
 
             {/* Reveal key button if not yet revealed */}
             {!hasRevealedPrivateKey && (
-              <Button onClick={handleRevealKey} className="w-full">
+              <Button onClick={handleRevealKey} className="btn-plush w-full">
                 Reveal Private Key
               </Button>
             )}
 
             {/* Private key display */}
             {hasRevealedPrivateKey && privateKeyRef.current && (
-              <div className="space-y-3">
+              <div className="plush-card space-y-3">
                 <div>
                   <Label htmlFor="privateKey">Private Key (nsec format)</Label>
                   <div className="relative">
@@ -288,14 +291,14 @@ export function OnboardingCreateKey({
             )}
 
             {/* Security warning */}
-            <div className="p-4 bg-amber-50 dark:bg-amber-950 border-2 border-amber-200 dark:border-amber-800 rounded-lg">
+            <div className="plush-card status-warning">
               <div className="flex items-start gap-3">
-                <Key className="h-5 w-5 text-amber-600 mt-0.5" />
+                <Key className="mt-0.5 h-5 w-5" />
                 <div className="text-sm">
-                  <div className="font-medium text-amber-600 mb-1">
+                  <div className="mb-1 font-medium">
                     Keep This Safe
                   </div>
-                  <div className="text-amber-600">
+                  <div>
                     Anyone with access to your private key can control your
                     Nostr identity. Never share it with anyone and store it
                     securely.
@@ -304,7 +307,7 @@ export function OnboardingCreateKey({
               </div>
             </div>
 
-            <div className="flex items-start space-x-2 p-3 border rounded">
+            <div className="flex items-start space-x-2 rounded-xl border border-border bg-card p-3">
               <input
                 id="backupConfirm"
                 type="checkbox"
@@ -337,7 +340,7 @@ export function OnboardingCreateKey({
                   onComplete();
                 }}
                 disabled={!backupChecked}
-                className="flex-1"
+                className="btn-plush flex-1"
               >
                 Finish
                 <ArrowRight className="ml-2 h-4 w-4" />

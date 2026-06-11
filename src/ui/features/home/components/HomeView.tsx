@@ -1,6 +1,7 @@
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
-import { Key, Settings, Shield, Globe } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Key, Settings, Shield, Globe, Sparkles } from "lucide-react";
 
 export function HomeView() {
   const { settings, isLoading: settingsLoading } = useAppSettings();
@@ -15,26 +16,36 @@ export function HomeView() {
 
   if (isLoading) {
     return (
-      <div className="p-4 text-center">
-        <p className="text-muted-foreground">Loading...</p>
+      <div className="screen-shell">
+        <div className="plush-card text-center">
+          <p className="text-sm text-muted-foreground">Loading home...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto p-3 space-y-3 max-w-full">
-      <div className="text-center">
-        <h2 className="text-xl font-semibold mb-1">Ostrilo Signer</h2>
-        <p className="text-muted-foreground text-sm">
-          Your Nostr identity manager
-        </p>
+    <div className="screen-shell">
+      <div className="screen-header">
+        <div className="flex items-start gap-3">
+          <div className="icon-bubble">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="screen-title">Local signing, zero snooping</h2>
+            <p className="screen-description">
+              Review identities, relays, and trusted origins before a site gets a stamp.
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Status Cards */}
-      <div className="grid grid-cols-2 gap-2 w-full max-w-full">
-        <div className="bg-card border border-border rounded-lg p-3 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Key className="h-4 w-4 text-muted-foreground shrink-0" />
+      <div className="grid w-full max-w-full grid-cols-2 gap-3">
+        <div className="metric-card">
+          <div className="mb-2 flex items-center gap-2">
+            <div className="icon-bubble h-7 w-7">
+              <Key className="h-3.5 w-3.5" />
+            </div>
             <span className="text-sm font-medium truncate">Keys</span>
           </div>
           <p className="text-lg font-semibold truncate">
@@ -45,9 +56,11 @@ export function HomeView() {
           </p>
         </div>
 
-        <div className="bg-card border border-border rounded-lg p-3 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Shield className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="metric-card">
+          <div className="mb-2 flex items-center gap-2">
+            <div className="icon-bubble h-7 w-7">
+              <Shield className="h-3.5 w-3.5" />
+            </div>
             <span className="text-sm font-medium truncate">Security</span>
           </div>
           <p className="text-lg font-semibold truncate">
@@ -58,9 +71,11 @@ export function HomeView() {
           <p className="text-xs text-muted-foreground truncate">Auto-lock</p>
         </div>
 
-        <div className="bg-card border border-border rounded-lg p-3 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="metric-card">
+          <div className="mb-2 flex items-center gap-2">
+            <div className="icon-bubble h-7 w-7">
+              <Globe className="h-3.5 w-3.5" />
+            </div>
             <span className="text-sm font-medium truncate">Relays</span>
           </div>
           <p className="text-lg font-semibold truncate">
@@ -69,9 +84,11 @@ export function HomeView() {
           <p className="text-xs text-muted-foreground truncate">Configured</p>
         </div>
 
-        <div className="bg-card border border-border rounded-lg p-3 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="metric-card">
+          <div className="mb-2 flex items-center gap-2">
+            <div className="icon-bubble h-7 w-7">
+              <Settings className="h-3.5 w-3.5" />
+            </div>
             <span className="text-sm font-medium truncate">Origins</span>
           </div>
           <p className="text-lg font-semibold truncate">
@@ -81,9 +98,8 @@ export function HomeView() {
         </div>
       </div>
 
-      {/* Current Settings Summary */}
-      <div className="bg-card border border-border rounded-lg p-3 w-full max-w-full">
-        <h3 className="font-medium mb-2 text-sm">Current Settings</h3>
+      <div className="plush-card w-full max-w-full">
+        <h3 className="mb-3 text-sm font-semibold">Current Settings</h3>
         <div className="space-y-2 text-xs">
           <div className="flex justify-between gap-2">
             <span className="text-muted-foreground truncate">Theme:</span>
@@ -114,22 +130,22 @@ export function HomeView() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-card border border-border rounded-lg p-3 w-full max-w-full">
-        <h3 className="font-medium mb-3">Quick Actions</h3>
+      <div className="plush-card w-full max-w-full">
+        <h3 className="mb-3 text-sm font-semibold">Quick Actions</h3>
         <div className="space-y-2">
-          <button
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-3 rounded-lg font-medium"
+          <Button
+            className="btn-plush w-full"
             onClick={() => generateKey("", "New Key")}
           >
             Generate New Key
-          </button>
-          <button
-            className="w-full bg-muted hover:bg-muted/80 text-foreground py-2 px-3 rounded-lg font-medium"
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
             disabled
           >
             Import Key
-          </button>
+          </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2 text-center">
           Key management features coming soon

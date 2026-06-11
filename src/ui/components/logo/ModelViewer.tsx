@@ -352,11 +352,10 @@ const SceneSetup: React.FC<SceneSetupProps> = ({ fileUrl, textureUrl, config }) 
             <div ref={containerRef} className="w-full h-full" />
             
             {isLoading && (
-                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="flex flex-col items-center justify-center text-white w-32">
-                        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-2"></div>
-                        <span className="text-sm font-medium shadow-black drop-shadow-md">Loading...</span>
-                    </div>
+                <div
+                    className="absolute inset-0 rounded-full bg-accent/40 animate-pulse pointer-events-none"
+                    aria-hidden="true"
+                >
                 </div>
             )}
         </div>

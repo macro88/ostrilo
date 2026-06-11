@@ -61,9 +61,8 @@ export function EventDetailView({
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="bg-muted/50 p-3 border-b shrink-0">
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 border-b border-border bg-card p-3 shadow-sm">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -78,7 +77,7 @@ export function EventDetailView({
           <div className="flex-1 min-w-0">
             <h1 className="font-semibold text-sm">Event Details</h1>
           </div>
-          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border bg-background shrink-0">
+          <span className="stamp-chip shrink-0">
             <Clock className="w-3 h-3" />
             {countdown}s
           </span>
@@ -86,7 +85,7 @@ export function EventDetailView({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-3 space-y-3 min-h-0">
+      <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3">
         {/* Origin */}
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -108,7 +107,7 @@ export function EventDetailView({
           </div>
         </div>
 
-        <hr className="border-border" />
+        <hr className="soft-divider" />
 
         {/* Event Kind */}
         <div className="space-y-1">
@@ -117,14 +116,14 @@ export function EventDetailView({
             <span>Event Type</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 text-xs rounded-md bg-muted">
+            <span className="stamp-chip">
               Kind {request.event.kind}
             </span>
             <span className="text-sm font-medium">{kindName}</span>
           </div>
         </div>
 
-        <hr className="border-border" />
+        <hr className="soft-divider" />
 
         {/* Timestamp */}
         <div className="space-y-1">
@@ -137,7 +136,7 @@ export function EventDetailView({
           </p>
         </div>
 
-        <hr className="border-border" />
+        <hr className="soft-divider" />
 
         {/* Full Content */}
         <div className="space-y-1">
@@ -145,7 +144,7 @@ export function EventDetailView({
             <FileText className="w-3.5 h-3.5" />
             <span>Content</span>
           </div>
-          <div className="bg-muted/50 rounded-md p-3 max-h-40 overflow-y-auto">
+          <div className="code-panel">
             {request.event.content ? (
               <pre className="text-xs font-mono whitespace-pre-wrap break-all">
                 {request.event.content}
@@ -158,7 +157,7 @@ export function EventDetailView({
           </div>
         </div>
 
-        <hr className="border-border" />
+        <hr className="soft-divider" />
 
         {/* Tags (JSON formatted) */}
         <div className="space-y-1">
@@ -166,7 +165,7 @@ export function EventDetailView({
             <FileText className="w-3.5 h-3.5" />
             <span>Tags</span>
           </div>
-          <div className="bg-muted/50 rounded-md p-3 max-h-40 overflow-y-auto">
+          <div className="code-panel">
             {request.event.tags.length > 0 ? (
               <pre className="text-xs font-mono whitespace-pre-wrap">
                 {JSON.stringify(request.event.tags, null, 2)}
@@ -179,7 +178,7 @@ export function EventDetailView({
           </div>
         </div>
 
-        <hr className="border-border" />
+        <hr className="soft-divider" />
 
         {/* Signing Key */}
         <div className="space-y-1">
@@ -203,7 +202,7 @@ export function EventDetailView({
           )}
         </div>
 
-        <hr className="border-border" />
+        <hr className="soft-divider" />
 
         {/* Request Metadata */}
         <div className="space-y-1">
@@ -240,13 +239,13 @@ export function EventDetailView({
       </div>
 
       {/* Action Buttons */}
-      <div className="p-3 border-t bg-muted/30 space-y-2 shrink-0">
+      <div className="shrink-0 space-y-2 border-t border-border bg-card p-3">
         {/* Allow Button Group */}
         <ButtonGroup className="w-full">
           <Button
             onClick={() => onResolve("allow_once")}
             disabled={isResolving}
-            className="flex-1 flex items-center justify-center gap-2"
+            className="btn-plush flex-1 items-center justify-center gap-2"
           >
             <Check className="w-4 h-4" />
             Allow Once

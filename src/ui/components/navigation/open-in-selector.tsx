@@ -55,7 +55,7 @@ export const OpenInSelector: React.FC = () => {
     <div className="space-y-2 pt-4">
       <Label htmlFor="open-in-mode">Open extension in:</Label>
       <Select value={displayMode} onValueChange={handleModeChange}>
-        <SelectTrigger id="open-in-mode">
+        <SelectTrigger id="open-in-mode" className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

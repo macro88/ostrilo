@@ -10,6 +10,7 @@ import { TabKey } from "@/ui/components/navigation/BottomTabs";
 import { useOnboarding } from "@/ui/features/onboarding/hooks/useOnboarding";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { AddKeyDialog } from "@/ui/components/dialogs/AddKeyDialog";
+import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
 import { browser } from "wxt/browser";
 
 export function MainApp() {
@@ -58,11 +59,8 @@ export function MainApp() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
+      <div className="app-canvas flex min-h-screen items-center justify-center">
+        <LoadingSpinner label="Opening Ostrilo..." />
       </div>
     );
   }

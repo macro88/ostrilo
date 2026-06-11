@@ -11,7 +11,7 @@ html, body, #root {
 /* Container constraints for optimal readability */
 .options-container {
   max-width: 1200px;
-  min-width: 640px;
+  width: min(100%, 1200px);
   margin: 0 auto;
   padding: 0 1.5rem;
 }
@@ -24,6 +24,12 @@ html, body, #root {
 /* Tab content spacing and padding */
 .tab-content {
   padding: 1.5rem 0;
+}
+
+.options-tabs {
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior-inline: contain;
 }
 
 .tab-section {

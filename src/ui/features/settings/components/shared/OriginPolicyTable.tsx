@@ -31,15 +31,15 @@ export function OriginPolicyTable({
   return (
     <div className="space-y-3">
       {origins.map((o) => (
-        <div key={o.origin} className="border rounded p-3">
-          <div className="flex items-center justify-between">
-            <div>
+        <div key={o.origin} className="rounded-2xl border border-border bg-muted/35 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
               <div className="font-medium text-sm">{o.name || o.origin}</div>
               <div className="text-xs text-muted-foreground">
                 Trust: {o.trustLevel}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Label className="text-xs">Session grant</Label>
               <Switch
                 checked={!!o.sessionGrantAll}
@@ -64,14 +64,14 @@ export function OriginPolicyTable({
             </div>
           </div>
           {onSetPerKindRule && (
-            <div className="mt-2 text-xs text-muted-foreground">
+            <div className="mt-3 text-xs text-muted-foreground">
               Quick rules:
               <div className="flex gap-2 mt-2 flex-wrap">
                 {[1, 6, 7, 9735].map((kind) => (
                   <Button
                     key={kind}
                     size="sm"
-                    variant="outline"
+                    variant={(o.rules as any)?.[kind] === "deny" ? "secondary" : "outline"}
                     onClick={() =>
                       onSetPerKindRule(
                         o.origin,

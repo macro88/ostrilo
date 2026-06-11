@@ -61,7 +61,7 @@ export function Pubkey({
               {label}
             </span>
           )}
-          <span className="font-mono text-sm bg-muted px-3 py-1 rounded-md truncate whitespace-nowrap">
+          <span className="truncate whitespace-nowrap rounded-full bg-muted px-3 py-1 font-mono text-sm">
             {display}
           </span>
         </div>

@@ -103,8 +103,9 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
           <button
             type="button"
             onClick={() => setShowPrivateKey(!showPrivateKey)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
             tabIndex={-1}
+            aria-label={showPrivateKey ? "Hide private key" : "Show private key"}
           >
             {showPrivateKey ? (
               <EyeOff className="h-4 w-4" />
@@ -134,7 +135,7 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
       </div>
 
       {error && (
-        <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+        <div className="plush-card status-danger">
           <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
@@ -150,7 +151,7 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <Button type="submit" disabled={isImporting} className="flex-1">
+        <Button type="submit" disabled={isImporting} className="btn-plush flex-1">
           {isImporting ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -162,7 +163,7 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
         </Button>
       </div>
 
-      <div className="p-3 bg-muted/50 rounded-lg border border-border">
+      <div className="rounded-2xl border border-border bg-muted/50 p-3">
         <p className="text-xs text-muted-foreground">
           <strong>Note:</strong> The imported key will be encrypted with your
           vault's existing password. Make sure you trust the source of this

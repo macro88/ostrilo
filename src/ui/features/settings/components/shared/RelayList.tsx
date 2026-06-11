@@ -26,7 +26,7 @@ export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
         {relays.map((relay) => (
           <div
             key={relay}
-            className="flex items-center justify-between bg-muted p-2 rounded"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted/50 p-3"
           >
             <span className="text-sm font-mono truncate flex-1">{relay}</span>
             <Button
@@ -53,7 +53,7 @@ export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
             }
           }}
         />
-        <Button onClick={handleAdd} size="sm">
+        <Button onClick={handleAdd} size="icon" aria-label="Add relay">
           <Plus className="h-4 w-4" />
         </Button>
       </div>

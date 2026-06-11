@@ -8,10 +8,10 @@ import {
 } from "@/infrastructure/messaging/client";
 import type { PendingRequest, ApprovalAction, KeyRecord } from "@/domain/types";
 import { AlertTriangle } from "lucide-react";
-import mascotLogo from "@/assets/ostrilo_front.svg";
 import { QueueListView } from "./QueueListView";
 import { EventDetailView } from "./EventDetailView";
 import { browser } from "wxt/browser";
+import { Logo } from "@/ui/components/logo/Logo";
 
 /**
  * ApprovalPrompt component displays pending approval requests
@@ -180,11 +180,9 @@ export function ApprovalPrompt() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
-        <img
-          src={mascotLogo}
-          alt="Ostrilo"
-          className="w-16 h-16 mb-4 animate-pulse"
-        />
+        <div className="mb-4 h-16 w-16 animate-pulse rounded-full bg-accent p-2">
+          <Logo size="max" />
+        </div>
         <p className="text-muted-foreground">Loading requests...</p>
       </div>
     );
@@ -194,7 +192,9 @@ export function ApprovalPrompt() {
   if (requests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
-        <img src={mascotLogo} alt="Ostrilo" className="w-16 h-16 mb-4" />
+        <div className="mb-4 h-16 w-16 rounded-full bg-accent p-2 shadow-sm">
+          <Logo size="max" />
+        </div>
         <h2 className="text-lg font-semibold mb-2">No Pending Requests</h2>
         <p className="text-muted-foreground text-center text-sm">
           There are no signing requests waiting for approval.

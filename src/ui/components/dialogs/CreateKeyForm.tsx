@@ -88,7 +88,7 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
       </div>
 
       {error && (
-        <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+        <div className="plush-card status-danger">
           <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
@@ -104,7 +104,7 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <Button type="submit" disabled={isGenerating} className="flex-1">
+        <Button type="submit" disabled={isGenerating} className="btn-plush flex-1">
           {isGenerating ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
