@@ -12,6 +12,7 @@ import {
   Check,
   X,
 } from "lucide-react";
+import { SealMark } from "@/components/common/SealMark";
 
 export interface QueueListViewProps {
   /** All pending requests in the queue */
@@ -107,9 +108,7 @@ export function QueueListView({
   if (requests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
-        <div className="icon-bubble mb-4 h-12 w-12">
-          <FileText className="h-5 w-5" />
-        </div>
+        <SealMark icon={FileText} size="lg" className="mb-4" />
         <h2 className="text-lg font-semibold mb-2">No Pending Requests</h2>
         <p className="text-muted-foreground text-center text-sm">
           All approval requests have been processed.
@@ -120,10 +119,10 @@ export function QueueListView({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="shrink-0 border-b border-border bg-card p-3 shadow-sm">
+      <div className="shrink-0 border-b border-border bg-card p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-sm font-semibold">Pending Approvals</h1>
+            <h1 className="text-lg font-bold">Pending Approvals</h1>
             <p className="text-xs text-muted-foreground">
               {requests.length} request{requests.length !== 1 ? "s" : ""} from{" "}
               {groups.length} site{groups.length !== 1 ? "s" : ""}
@@ -134,7 +133,7 @@ export function QueueListView({
               variant="outline"
               size="sm"
               onClick={handleDenyAll}
-              className="gap-1"
+              className="gap-1 text-[var(--ink-red)]"
             >
               <X className="w-3 h-3" />
               Deny All
@@ -144,11 +143,11 @@ export function QueueListView({
       </div>
 
       {/* Scrollable List */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 space-y-3 overflow-auto p-3">
         {groups.map((group) => {
           const isExpanded = expandedOrigins.has(group.origin);
           return (
-            <div key={group.origin} className="border-b border-border last:border-b-0">
+            <div key={group.origin} className="ink-card overflow-hidden">
               <button
                 onClick={() => toggleOrigin(group.origin)}
                 className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/50"
@@ -164,14 +163,14 @@ export function QueueListView({
                     {group.domain}
                   </span>
                 </div>
-                <Badge variant="secondary" className="shrink-0 ml-2">
+                <Badge variant="secondary" className="ml-2 shrink-0">
                   {group.requests.length}
                 </Badge>
               </button>
 
               {/* Origin Batch Actions */}
               {isExpanded && onBatchAction && group.requests.length > 1 && (
-                <div className="flex gap-2 border-b border-border bg-muted/30 px-3 py-2">
+                <div className="flex gap-2 border-y border-border bg-muted/30 px-3 py-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -239,7 +238,7 @@ function RequestItem({ request, onSelect }: RequestItemProps) {
           {/* Kind Badge */}
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">
-              Kind {request.event.kind}
+              kind:{request.event.kind}
             </Badge>
             <span className="text-xs font-medium text-muted-foreground">
               {kindName}
@@ -260,7 +259,7 @@ function RequestItem({ request, onSelect }: RequestItemProps) {
         </div>
 
         {/* Countdown */}
-        <div className="stamp-chip shrink-0">
+        <div className="seal-chip seal-chip-warning shrink-0 font-mono">
           <Clock className="w-3 h-3" />
           {timeRemaining}s
         </div>

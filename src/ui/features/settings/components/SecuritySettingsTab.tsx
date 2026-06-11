@@ -34,7 +34,7 @@ export function SecuritySettingsTab() {
   }
 
   return (
-    <div className="plush-card space-y-6">
+    <div className="ink-card p-4 space-y-6">
       <div>
         <h2 className="screen-title">Security Settings</h2>
         <p className="text-sm text-muted-foreground">
@@ -44,14 +44,14 @@ export function SecuritySettingsTab() {
 
       <div className="space-y-4">
         <div className="flex items-center gap-2 mb-3">
-          <div className="icon-bubble h-8 w-8">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
             <Shield className="h-4 w-4" />
           </div>
           <h3 className="font-medium">Security</h3>
         </div>
 
         {biometricAvailable && (
-          <div className="flex items-center space-x-2 rounded-2xl border border-border bg-muted/40 p-3">
+          <div className="flex items-center space-x-2 rounded-[10px] border border-border bg-muted/40 p-3">
             <Fingerprint className="h-5 w-5 text-primary" />
             <div className="flex-1">
               <div className="font-medium">Enable Biometric Unlock</div>

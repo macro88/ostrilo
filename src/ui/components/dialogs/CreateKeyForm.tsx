@@ -73,12 +73,12 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="keyName">Key Name (Optional)</Label>
+        <Label htmlFor="keyName">Key Name</Label>
         <Input
           id="keyName"
           value={keyName}
           onChange={(e) => setKeyName(e.target.value)}
-          placeholder="e.g., Personal, Work, Gaming"
+          placeholder="e.g., Personal or Work"
           disabled={isGenerating}
           maxLength={50}
         />
@@ -88,7 +88,7 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
       </div>
 
       {error && (
-        <div className="plush-card status-danger">
+        <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
           <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
@@ -104,7 +104,7 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <Button type="submit" disabled={isGenerating} className="btn-plush flex-1">
+        <Button type="submit" disabled={isGenerating} className="flex-1">
           {isGenerating ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />

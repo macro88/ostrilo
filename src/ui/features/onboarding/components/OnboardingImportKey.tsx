@@ -22,6 +22,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import { SealMark } from "@/components/common/SealMark";
 
 interface OnboardingImportKeyProps {
   onBack: () => void;
@@ -182,16 +183,14 @@ export function OnboardingImportKey({
   const renderImportStep = () => (
     <div className="space-y-6">
       <div className="screen-header text-center">
-        <div className="icon-bubble mx-auto mb-3 h-12 w-12">
-          <FileKey className="h-5 w-5" />
-        </div>
+        <SealMark icon={FileKey} size="lg" className="mx-auto mb-3" />
         <h2 className="screen-title">Import Your Key</h2>
         <p className="screen-description">
           Import an existing Nostr private key (nsec format)
         </p>
       </div>
 
-      <div className="plush-card space-y-4">
+      <div className="ink-card space-y-4 p-4">
         <div>
           <Label htmlFor="keyName">Key Name</Label>
           <Input
@@ -232,7 +231,7 @@ export function OnboardingImportKey({
         </div>
 
         {/* File upload option */}
-        <div className="rounded-2xl border-2 border-dashed border-border bg-muted/40 p-4">
+        <div className="rounded-[10px] border border-dashed border-border bg-muted/40 p-4">
           <div className="text-center space-y-2">
             <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
             <div className="text-sm text-muted-foreground">
@@ -240,7 +239,7 @@ export function OnboardingImportKey({
             </div>
             <Label
               htmlFor="file-upload"
-              className="inline-flex cursor-pointer items-center rounded-full border border-input bg-card px-3 py-2 text-sm font-semibold hover:bg-accent hover:text-accent-foreground"
+              className="inline-flex cursor-pointer items-center rounded-lg border border-input bg-card px-3 py-2 text-sm font-semibold hover:bg-accent hover:text-accent-foreground"
             >
               Choose File
             </Label>
@@ -255,7 +254,7 @@ export function OnboardingImportKey({
         </div>
 
         {/* Key format help */}
-        <div className="rounded-2xl bg-muted/60 p-3">
+        <div className="rounded-[10px] bg-muted/60 p-3">
           <div className="text-sm">
             <div className="font-medium mb-1">Supported formats:</div>
             <ul className="text-xs text-muted-foreground space-y-1">
@@ -267,7 +266,7 @@ export function OnboardingImportKey({
         </div>
 
         {/* Security warning */}
-        <div className="plush-card status-warning">
+        <div className="rounded-[10px] bg-[var(--ink-amber-soft)] p-3 text-[var(--ink-amber)]">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle className="h-4 w-4" />
             <div className="font-medium text-sm">
@@ -282,7 +281,7 @@ export function OnboardingImportKey({
       </div>
 
       {importError && (
-        <div className="stamp-chip status-danger flex">
+        <div className="seal-chip seal-chip-danger flex">
           <AlertTriangle className="h-4 w-4" />
           {importError}
         </div>
@@ -296,7 +295,7 @@ export function OnboardingImportKey({
         <Button
           onClick={handleImportKey}
           disabled={isLoading}
-          className="btn-plush flex-1"
+          className="flex-1"
         >
           Continue
           <ArrowRight className="ml-2 h-4 w-4" />
@@ -308,18 +307,16 @@ export function OnboardingImportKey({
   const renderPasswordStep = () => (
     <div className="space-y-6">
       <div className="screen-header text-center">
-        <div className="icon-bubble mx-auto mb-3 h-12 w-12">
-          <Key className="h-5 w-5" />
-        </div>
+        <SealMark icon={Key} size="lg" className="mx-auto mb-3" />
         <h2 className="screen-title">Secure Your Key</h2>
         <p className="screen-description">
           Create a strong password to encrypt your imported key
         </p>
       </div>
 
-      <div className="plush-card space-y-4">
+      <div className="ink-card space-y-4 p-4">
         {parsedKey && (
-          <div className="stamp-chip status-success flex w-full items-start rounded-xl p-3">
+          <div className="seal-chip seal-chip-success flex w-full items-start rounded-lg p-3">
             <div className="flex items-center gap-2 mb-1">
               <CheckCircle className="h-4 w-4" />
               <div className="font-medium text-sm">
@@ -358,7 +355,7 @@ export function OnboardingImportKey({
         <Button
           onClick={handleSetPassword}
           disabled={isLoading}
-          className="btn-plush flex-1"
+          className="flex-1"
         >
           {isLoading ? "Importing..." : "Import Key"}
           <ArrowRight className="ml-2 h-4 w-4" />
@@ -370,16 +367,19 @@ export function OnboardingImportKey({
   const renderSuccessStep = () => (
     <div className="space-y-6">
       <div className="screen-header text-center">
-        <div className="icon-bubble status-success mx-auto mb-3 h-12 w-12">
-          <CheckCircle className="h-5 w-5" />
-        </div>
+        <SealMark
+          icon={CheckCircle}
+          tone="success"
+          size="lg"
+          className="mx-auto mb-3"
+        />
         <h2 className="screen-title">Import Successful</h2>
         <p className="screen-description">
           Your Nostr key has been securely imported and encrypted
         </p>
       </div>
 
-      <div className="plush-card status-success">
+      <div className="rounded-[10px] bg-[var(--ink-mint-soft)] p-4 text-[var(--ink-mint)]">
         <div className="space-y-2">
           <div className="font-semibold">
             "{keyName}" is ready to use
@@ -395,7 +395,7 @@ export function OnboardingImportKey({
           await markOnboardingComplete();
           onComplete();
         }}
-        className="btn-plush w-full"
+        className="w-full"
         size="lg"
       >
         Get Started
@@ -412,13 +412,13 @@ export function OnboardingImportKey({
             {["import", "password", "success"].map((step, index) => (
               <div
                 key={step}
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
+                className={`flex h-8 w-8 items-center justify-center text-sm font-semibold ${
                   currentStep === step
-                    ? "bg-primary text-primary-foreground"
+                    ? "seal bg-primary text-primary-foreground"
                     : ["import", "password", "success"].indexOf(currentStep) >
                       index
-                    ? "status-success border"
-                    : "bg-muted text-muted-foreground"
+                    ? "seal bg-[var(--ink-mint-soft)] text-[var(--ink-mint)]"
+                    : "seal bg-muted text-muted-foreground"
                 }`}
               >
                 {index + 1}

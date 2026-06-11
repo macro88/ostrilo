@@ -31,7 +31,7 @@ export function OriginPolicyTable({
   return (
     <div className="space-y-3">
       {origins.map((o) => (
-        <div key={o.origin} className="rounded-2xl border border-border bg-muted/35 p-4">
+        <div key={o.origin} className="rounded-[10px] border border-border bg-muted/35 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="font-medium text-sm">{o.name || o.origin}</div>

@@ -1,7 +1,19 @@
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import { Button } from "@/components/ui/button";
-import { Key, Settings, Shield, Globe, Sparkles } from "lucide-react";
+import { Pubkey } from "@/components/common/pubkey";
+import { SealMark } from "@/components/common/SealMark";
+import { useActivityLog } from "@/ui/features/activity/hooks/useActivityLog";
+import { getKindName } from "@/domain/types";
+import {
+  Activity,
+  Check,
+  ChevronRight,
+  Globe,
+  Key,
+  Shield,
+  X,
+} from "lucide-react";
 
 export function HomeView() {
   const { settings, isLoading: settingsLoading } = useAppSettings();
@@ -9,148 +21,155 @@ export function HomeView() {
     hasKeys,
     selectedUnlockedKey,
     isLoading: keysLoading,
-    generateKey,
   } = useKeyManager();
+  const { entries, loading: activityLoading } = useActivityLog();
 
   const isLoading = settingsLoading || keysLoading;
 
   if (isLoading) {
     return (
       <div className="screen-shell">
-        <div className="plush-card text-center">
-          <p className="text-sm text-muted-foreground">Loading home...</p>
+        <div className="ink-card p-4 text-center">
+          <p className="text-sm text-muted-foreground">Loading home…</p>
         </div>
       </div>
     );
   }
 
+  const activeKeyLabel = selectedUnlockedKey?.label || "No active key";
+  const activeNpub = selectedUnlockedKey?.publicKeyBech32;
+  const recentEntries = entries.slice(0, 3);
+
   return (
     <div className="screen-shell">
-      <div className="screen-header">
-        <div className="flex items-start gap-3">
-          <div className="icon-bubble">
-            <Sparkles className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="screen-title">Local signing, zero snooping</h2>
-            <p className="screen-description">
-              Review identities, relays, and trusted origins before a site gets a stamp.
+      <section className="flex items-center gap-4 py-3">
+        <SealMark label={activeKeyLabel} size="lg" className="h-16 w-16 text-2xl" />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-xl font-bold leading-tight">
+            {activeKeyLabel}
+          </h2>
+          {activeNpub ? (
+            <Pubkey pubkey={activeNpub} className="mt-1" />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Create or import a key to start signing locally.
             </p>
-          </div>
+          )}
         </div>
-      </div>
+      </section>
 
-      <div className="grid w-full max-w-full grid-cols-2 gap-3">
-        <div className="metric-card">
-          <div className="mb-2 flex items-center gap-2">
-            <div className="icon-bubble h-7 w-7">
-              <Key className="h-3.5 w-3.5" />
-            </div>
-            <span className="text-sm font-medium truncate">Keys</span>
-          </div>
-          <p className="text-lg font-semibold truncate">
-            {hasKeys ? "1+" : "0"}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">
-            {selectedUnlockedKey ? "1 active" : "None selected"}
-          </p>
-        </div>
+      <section className="ink-card overflow-hidden">
+        <HomeRow
+          icon={Key}
+          label="Keys"
+          value={hasKeys ? "1 active" : "None yet"}
+        />
+        <HomeRow
+          icon={Globe}
+          label="Relays"
+          value={`${settings.relays.length} configured`}
+        />
+        <HomeRow
+          icon={Shield}
+          label="Site permissions"
+          value={
+            settings.origins.length > 0
+              ? `${settings.origins.length} trusted`
+              : "None granted"
+          }
+        />
+      </section>
 
-        <div className="metric-card">
-          <div className="mb-2 flex items-center gap-2">
-            <div className="icon-bubble h-7 w-7">
-              <Shield className="h-3.5 w-3.5" />
-            </div>
-            <span className="text-sm font-medium truncate">Security</span>
-          </div>
-          <p className="text-lg font-semibold truncate">
-            {settings.autoLockMinutes === 0
-              ? "∞"
-              : `${settings.autoLockMinutes}m`}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">Auto-lock</p>
-        </div>
-
-        <div className="metric-card">
-          <div className="mb-2 flex items-center gap-2">
-            <div className="icon-bubble h-7 w-7">
-              <Globe className="h-3.5 w-3.5" />
-            </div>
-            <span className="text-sm font-medium truncate">Relays</span>
-          </div>
-          <p className="text-lg font-semibold truncate">
-            {settings.relays.length}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">Configured</p>
-        </div>
-
-        <div className="metric-card">
-          <div className="mb-2 flex items-center gap-2">
-            <div className="icon-bubble h-7 w-7">
-              <Settings className="h-3.5 w-3.5" />
-            </div>
-            <span className="text-sm font-medium truncate">Origins</span>
-          </div>
-          <p className="text-lg font-semibold truncate">
-            {settings.origins.length}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">Trusted</p>
-        </div>
-      </div>
-
-      <div className="plush-card w-full max-w-full">
-        <h3 className="mb-3 text-sm font-semibold">Current Settings</h3>
-        <div className="space-y-2 text-xs">
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground truncate">Theme:</span>
-            <span className="capitalize truncate">{settings.theme}</span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground truncate">Side Panel:</span>
-            <span className="truncate">
-              {settings.sidePanel ? "Enabled" : "Disabled"}
-            </span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground truncate">Session TTL:</span>
-            <span className="truncate">
-              {settings.sessionTTLMinutes === 0
-                ? "Until lock"
-                : `${settings.sessionTTLMinutes}m`}
-            </span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground truncate">
-              Medium trust kinds:
-            </span>
-            <span className="truncate">
-              {settings.mediumAllowKinds.length} allowed
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="plush-card w-full max-w-full">
-        <h3 className="mb-3 text-sm font-semibold">Quick Actions</h3>
-        <div className="space-y-2">
-          <Button
-            className="btn-plush w-full"
-            onClick={() => generateKey("", "New Key")}
-          >
-            Generate New Key
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full"
-            disabled
-          >
-            Import Key
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Recent activity
+          </h3>
+          <Button variant="ghost" size="sm" className="h-8 px-2">
+            See all
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-2 text-center">
-          Key management features coming soon
-        </p>
-      </div>
+        <div className="ink-card overflow-hidden">
+          {activityLoading && recentEntries.length === 0 ? (
+            <div className="ink-row text-sm text-muted-foreground">
+              Loading activity…
+            </div>
+          ) : recentEntries.length === 0 ? (
+            <div className="ink-row">
+              <SealMark icon={Activity} tone="muted" />
+              <div>
+                <p className="text-sm font-semibold">No activity yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Signing history will appear here.
+                </p>
+              </div>
+            </div>
+          ) : (
+            recentEntries.map((entry) => (
+              <div key={entry.id} className="ink-row">
+                <SealMark
+                  icon={entry.decision === "allow" ? Check : X}
+                  tone={entry.decision === "allow" ? "success" : "danger"}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {entry.decision === "allow" ? "Signed" : "Denied"}{" "}
+                    {getKindName(entry.kind).toLowerCase()}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {formatDomain(entry.origin)}
+                  </p>
+                </div>
+                <time className="font-mono text-xs text-muted-foreground">
+                  {formatRelativeTime(entry.timestamp)}
+                </time>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
     </div>
   );
+}
+
+function HomeRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Key;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="ink-row">
+      <Icon className="h-5 w-5 shrink-0 text-[var(--ink-violet)]" />
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+        {label}
+      </span>
+      <span className="truncate text-sm font-semibold text-muted-foreground">
+        {value}
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+    </div>
+  );
+}
+
+function formatDomain(origin: string): string {
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return origin;
+  }
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - timestamp;
+
+  if (diff < 60) return "now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return `${Math.floor(diff / 604800)}w ago`;
 }

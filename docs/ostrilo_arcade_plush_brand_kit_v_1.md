@@ -1,5 +1,7 @@
 # Ostrilo — Arcade Plush Brand Kit (v1)
 
+> Superseded: Arcade Plush is retired as of the Inkline redesign. Use `docs/design/DESIGN_RULES.md` as the canonical UI design system and do not reintroduce the candy palette, gradients, accent rails, or retired Plush component classes.
+
 Theme: **Arcade Plush** — chibi, candy colors, soft edges, playful bounce; still trustworthy for a Nostr signer.
 
 ---
@@ -275,4 +277,3 @@ export default {
 - 3 mascot poses.  
 - Lottie JSON for success confetti.  
 - Figma component library with tokens.
-

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ostrilo — Inkline Buildout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  html, body { margin: 0; height: 100%; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="directions/inkline.jsx"></script>
+<script type="text/babel" src="directions/inkline-onboarding.jsx"></script>
+<script type="text/babel" src="directions/inkline-popup2.jsx"></script>
+<script type="text/babel" src="directions/inkline-options.jsx"></script>
+<script type="text/babel">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+
+function App() {
+  return (
+    <DesignCanvas title="Ostrilo — Inkline Buildout">
+      <DCSection
+        id="onboarding"
+        title="Onboarding & Lock"
+        subtitle="First run in three steps, plus the returning-user lock screen. The mascot earns its hero moments here; faceted step dots replace progress bars."
+      >
+        <DCArtboard id="ob-welcome" label="01 · Welcome" width={400} height={600}><InklineWelcome /></DCArtboard>
+        <DCArtboard id="ob-create" label="02 · Create key" width={400} height={600}><InklineCreateKey /></DCArtboard>
+        <DCArtboard id="ob-backup" label="03 · Back up" width={400} height={600}><InklineBackup /></DCArtboard>
+        <DCArtboard id="ob-lock" label="Lock screen" width={400} height={600}><InklineLock /></DCArtboard>
+      </DCSection>
+
+      <DCSection
+        id="popup"
+        title="Popup surfaces"
+        subtitle="Home and approval carried over from the exploration, plus profile, quick settings, the approval queue grouped by site, and the add-key dialog."
+      >
+        <DCArtboard id="pp-home" label="Home" width={400} height={600}><InklineHome /></DCArtboard>
+        <DCArtboard id="pp-approval" label="Approval · Event detail" width={400} height={600}><InklineApproval /></DCArtboard>
+        <DCArtboard id="pp-queue" label="Approval · Queue" width={400} height={600}><InklineQueue /></DCArtboard>
+        <DCArtboard id="pp-profile" label="Profile" width={400} height={600}><InklineProfile /></DCArtboard>
+        <DCArtboard id="pp-settings" label="Quick settings" width={400} height={600}><InklineQuickSettings /></DCArtboard>
+        <DCArtboard id="pp-addkey" label="Add key · Dialog" width={400} height={600}><InklineAddKey /></DCArtboard>
+      </DCSection>
+
+      <DCSection
+        id="options"
+        title="Options page"
+        subtitle="The full-page settings surface moves to a sidebar layout — calmer than seven top tabs, and it scales as sections grow. Keys & identities tab shown."
+      >
+        <DCArtboard id="op-keys" label="Settings · Keys & identities" width={1100} height={720}><InklineOptions /></DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

@@ -89,7 +89,7 @@ export function ProfileView() {
     return (
       <div className="screen-shell">
         <div className="screen-header text-center">
-          <div className="icon-bubble mx-auto mb-3 h-14 w-14">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-3 h-14 w-14">
             <User className="h-6 w-6" />
           </div>
           <h2 className="screen-title">Profile Settings</h2>
@@ -110,12 +110,12 @@ export function ProfileView() {
         </div>
 
         {saveError && (
-          <div className="plush-card status-danger">
+          <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
             <p className="text-sm text-destructive">{saveError}</p>
           </div>
         )}
 
-        <div className="plush-card space-y-4">
+        <div className="ink-card p-4 space-y-4">
           <div>
             <Label htmlFor="name">Display Name</Label>
             <Input
@@ -216,7 +216,7 @@ export function ProfileView() {
           <Button
             onClick={handleSave}
             disabled={isSaving}
-            className="btn-plush flex-1"
+            className="flex-1"
           >
             {isSaving ? "Saving..." : "Save Changes"}
           </Button>
@@ -240,19 +240,19 @@ export function ProfileView() {
           <img
             src={profile.picture}
             alt="Profile"
-            className="mx-auto mb-3 h-16 w-16 rounded-full border-2 border-border object-cover shadow-sm"
+            className="seal mx-auto mb-3 h-16 w-16 border-2 border-border object-cover"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
             }}
           />
         ) : (
-          <div className="icon-bubble mx-auto mb-3 h-16 w-16 text-2xl">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-3 h-16 w-16 text-2xl">
             {profile?.name?.[0]?.toUpperCase() || "?"}
           </div>
         )}
         <h2 className="screen-title">Profile Settings</h2>
         {truncatedNpub && (
-          <p className="mx-auto my-2 w-fit rounded-full bg-muted px-2.5 py-1 font-mono text-xs text-muted-foreground">
+          <p className="mx-auto my-2 w-fit rounded-lg bg-muted px-2.5 py-1 font-mono text-xs text-muted-foreground">
             {truncatedNpub}
           </p>
         )}
@@ -262,7 +262,7 @@ export function ProfileView() {
       </div>
 
       {error && (
-        <div className="plush-card status-danger">
+        <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
           <p className="text-sm text-destructive">{error}</p>
           <Button
             variant="link"
@@ -275,7 +275,7 @@ export function ProfileView() {
       )}
 
       <div className="space-y-2">
-        <div className="plush-card-compact">
+        <div className="ink-card p-3">
           <h3 className="font-medium mb-1 text-sm">Display Name</h3>
           {loading && !profile ? (
             <p className="text-xs text-muted-foreground animate-pulse">
@@ -288,7 +288,7 @@ export function ProfileView() {
           )}
         </div>
 
-        <div className="plush-card-compact">
+        <div className="ink-card p-3">
           <h3 className="font-medium mb-1 text-sm">About</h3>
           {loading && !profile ? (
             <p className="text-xs text-muted-foreground animate-pulse">
@@ -301,7 +301,7 @@ export function ProfileView() {
           )}
         </div>
 
-        <div className="plush-card-compact">
+        <div className="ink-card p-3">
           <h3 className="font-medium mb-1 text-sm">Website</h3>
           {loading && !profile ? (
             <p className="text-xs text-muted-foreground animate-pulse">
@@ -315,14 +315,14 @@ export function ProfileView() {
         </div>
 
         {profile?.nip05 && (
-          <div className="plush-card-compact">
+          <div className="ink-card p-3">
             <h3 className="font-medium mb-1 text-sm">NIP-05</h3>
             <p className="text-xs text-muted-foreground">{profile.nip05}</p>
           </div>
         )}
 
         {profile?.lud16 && (
-          <div className="plush-card-compact">
+          <div className="ink-card p-3">
             <h3 className="font-medium mb-1 text-sm">Lightning Address</h3>
             <p className="text-xs text-muted-foreground">{profile.lud16}</p>
           </div>
@@ -332,7 +332,7 @@ export function ProfileView() {
           <Button
             onClick={handleEditClick}
             disabled={loading}
-            className="btn-plush flex-1"
+            className="flex-1"
           >
             Edit Profile
           </Button>

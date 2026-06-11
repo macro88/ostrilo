@@ -1,30 +1,17 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  ButtonGroup,
-  ButtonGroupSeparator,
-} from "@/components/ui/button-group";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import type { PendingRequest, ApprovalAction, KeyRecord } from "@/domain/types";
 import { getKindName } from "@/domain/types";
 import {
-  Shield,
-  Globe,
-  Clock,
-  FileText,
-  Check,
-  X,
-  Ban,
-  Key,
-  ChevronDown,
   ArrowLeft,
+  Check,
+  Clock,
   Copy,
+  FileJson,
+  Shield,
+  X,
 } from "lucide-react";
-import { Pubkey } from "@/components/common/pubkey";
+import { SealMark } from "@/components/common/SealMark";
 
 export interface EventDetailViewProps {
   /** The pending request to display */
@@ -42,8 +29,7 @@ export interface EventDetailViewProps {
 }
 
 /**
- * EventDetailView displays complete event information for a pending approval request.
- * Shows full content, complete tags, metadata, and signing options.
+ * EventDetailView displays the exact payload a site is asking Ostrilo to sign.
  */
 export function EventDetailView({
   request,
@@ -53,6 +39,8 @@ export function EventDetailView({
   onBack,
   isResolving = false,
 }: EventDetailViewProps) {
+  const [rememberChoice, setRememberChoice] = useState(false);
+  const [showRawJson, setShowRawJson] = useState(false);
   const kindName = getKindName(request.event.kind);
   const domain = formatDomain(request.origin);
 
@@ -60,262 +48,172 @@ export function EventDetailView({
     navigator.clipboard.writeText(text);
   };
 
+  const handleApprove = () => {
+    onResolve(rememberChoice ? "allow" : "allow_once");
+  };
+
+  const handleDeny = () => {
+    onResolve(rememberChoice ? "deny_remember" : "deny");
+  };
+
   return (
     <div className="flex h-full flex-col">
-      <div className="shrink-0 border-b border-border bg-card p-3 shadow-sm">
-        <div className="flex items-center gap-2">
+      <div className="shrink-0 border-b border-border bg-card px-4 py-3">
+        <div className="flex items-center gap-3">
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={onBack}
-            className="gap-1 -ml-2"
+            aria-label="Back to approval queue"
           >
-            <ArrowLeft className="w-4 h-4" />
-            Back
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-          <Shield className="w-5 h-5 text-primary" />
-          <div className="flex-1 min-w-0">
-            <h1 className="font-semibold text-sm">Event Details</h1>
-          </div>
-          <span className="stamp-chip shrink-0">
-            <Clock className="w-3 h-3" />
-            {countdown}s
+          <h1 className="min-w-0 flex-1 text-lg font-bold">
+            Signing request
+          </h1>
+          <span className="seal-chip seal-chip-warning font-mono text-sm">
+            {formatCountdown(countdown)}
           </span>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3">
-        {/* Origin */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Globe className="w-3.5 h-3.5" />
-            <span>Origin</span>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium truncate" title={request.origin}>
-              {domain}
-            </p>
+      <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4">
+        <section className="text-center">
+          <SealMark
+            label={domain}
+            size="lg"
+            className="mx-auto mb-3 h-14 w-14 text-xl"
+          />
+          <h2 className="text-xl font-bold">{domain}</h2>
+          <p className="text-sm font-semibold text-muted-foreground">
+            wants you to sign {kindName.toLowerCase()}
+          </p>
+          <span className="seal-chip seal-chip-accent mt-3">
+            Review required
+          </span>
+        </section>
+
+        <section className="ink-card overflow-hidden">
+          <FactRow
+            label="Signing as"
+            value={signingKey?.label || "Selected key"}
+          />
+          <FactRow
+            label="Kind"
+            value={`${request.event.kind} · ${kindName}`}
+            mono={false}
+          />
+          <FactRow
+            label="Created"
+            value={formatTimestamp(request.event.created_at)}
+          />
+        </section>
+
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Content
+            </h3>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => copyToClipboard(request.origin)}
-              className="h-6 px-2"
+              className="h-7 px-2"
+              onClick={() => copyToClipboard(request.event.content)}
+              disabled={!request.event.content}
             >
-              <Copy className="w-3 h-3" />
+              <Copy className="h-3.5 w-3.5" />
+              Copy
             </Button>
           </div>
-        </div>
-
-        <hr className="soft-divider" />
-
-        {/* Event Kind */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <FileText className="w-3.5 h-3.5" />
-            <span>Event Type</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="stamp-chip">
-              Kind {request.event.kind}
-            </span>
-            <span className="text-sm font-medium">{kindName}</span>
-          </div>
-        </div>
-
-        <hr className="soft-divider" />
-
-        {/* Timestamp */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="w-3.5 h-3.5" />
-            <span>Created At</span>
-          </div>
-          <p className="text-sm font-medium">
-            {formatTimestamp(request.event.created_at)}
-          </p>
-        </div>
-
-        <hr className="soft-divider" />
-
-        {/* Full Content */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <FileText className="w-3.5 h-3.5" />
-            <span>Content</span>
-          </div>
-          <div className="code-panel">
+          <div className="code-panel min-h-20">
             {request.event.content ? (
-              <pre className="text-xs font-mono whitespace-pre-wrap break-all">
+              <pre className="whitespace-pre-wrap break-all text-xs">
                 {request.event.content}
               </pre>
             ) : (
-              <span className="text-xs text-muted-foreground italic">
-                (empty)
-              </span>
+              <span className="text-xs text-muted-foreground">(empty)</span>
             )}
           </div>
-        </div>
+        </section>
 
-        <hr className="soft-divider" />
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 text-sm font-bold text-[var(--ink-violet)]"
+          onClick={() => setShowRawJson((value) => !value)}
+        >
+          <FileJson className="h-4 w-4" />
+          {showRawJson ? "Hide raw JSON" : "View raw JSON"}
+        </button>
 
-        {/* Tags (JSON formatted) */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <FileText className="w-3.5 h-3.5" />
-            <span>Tags</span>
-          </div>
+        {showRawJson && (
           <div className="code-panel">
-            {request.event.tags.length > 0 ? (
-              <pre className="text-xs font-mono whitespace-pre-wrap">
-                {JSON.stringify(request.event.tags, null, 2)}
-              </pre>
-            ) : (
-              <span className="text-xs text-muted-foreground italic">
-                (no tags)
-              </span>
-            )}
+            <pre className="whitespace-pre-wrap break-all text-xs">
+              {JSON.stringify(request.event, null, 2)}
+            </pre>
           </div>
-        </div>
+        )}
 
-        <hr className="soft-divider" />
-
-        {/* Signing Key */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Key className="w-3.5 h-3.5" />
-            <span>Signing Key</span>
-          </div>
-          {signingKey ? (
-            <div className="flex items-center gap-2">
-              {signingKey.label && (
-                <span className="text-sm font-medium truncate max-w-[150px]">
-                  {signingKey.label}
-                </span>
-              )}
-              <Pubkey pubkey={signingKey.pubkey} />
-            </div>
-          ) : (
-            <span className="text-sm text-muted-foreground italic">
-              No key selected
-            </span>
-          )}
-        </div>
-
-        <hr className="soft-divider" />
-
-        {/* Request Metadata */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="w-3.5 h-3.5" />
-            <span>Request Info</span>
-          </div>
-          <div className="text-xs space-y-1">
-            <p>
-              <span className="text-muted-foreground">Request ID:</span>{" "}
-              <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                {request.id}
-              </code>
-            </p>
-            <p>
-              <span className="text-muted-foreground">Created:</span>{" "}
-              {formatTimestamp(request.createdAt)}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Timeout:</span>{" "}
-              {formatTimestamp(request.timeoutAt)}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Help text */}
-      <div className="px-3 pb-2 shrink-0">
-        <p className="text-xs text-muted-foreground text-center">
-          <strong>Allow</strong> signs this event.{" "}
-          <strong>Deny + Remember</strong> blocks future requests from this site
-          for this event type.
+        <p className="flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground">
+          <Shield className="h-4 w-4" />
+          Keys never leave your browser.
         </p>
       </div>
 
-      {/* Action Buttons */}
-      <div className="shrink-0 space-y-2 border-t border-border bg-card p-3">
-        {/* Allow Button Group */}
-        <ButtonGroup className="w-full">
+      <div className="shrink-0 space-y-3 border-t border-border bg-card p-4">
+        <div className="grid grid-cols-[1fr_2fr] gap-3">
           <Button
-            onClick={() => onResolve("allow_once")}
+            variant="outline"
+            onClick={handleDeny}
             disabled={isResolving}
-            className="btn-plush flex-1 items-center justify-center gap-2"
+            className="h-12"
           >
-            <Check className="w-4 h-4" />
-            Allow Once
+            <X className="h-4 w-4" />
+            Deny
           </Button>
-          <ButtonGroupSeparator />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                disabled={isResolving}
-                className="px-2"
-                aria-label="More allow options"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onResolve("allow")}>
-                <Check className="w-4 h-4 mr-2" />
-                Allow for this Site
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => alert("Trust this site - Coming soon")}
-              >
-                <Shield className="w-4 h-4 mr-2" />
-                Trust this Site
-                <span className="ml-auto text-xs text-muted-foreground">
-                  Soon
-                </span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </ButtonGroup>
+          <Button
+            onClick={handleApprove}
+            disabled={isResolving}
+            className="h-12"
+          >
+            <Check className="h-4 w-4" />
+            Approve & sign
+          </Button>
+        </div>
 
-        {/* Deny Button Group */}
-        <ButtonGroup className="w-full">
-          <Button
-            variant="secondary"
-            onClick={() => onResolve("deny")}
-            disabled={isResolving}
-            className="flex-1 flex items-center justify-center gap-2"
-          >
-            <X className="w-4 h-4" />
-            Deny Once
-          </Button>
-          <ButtonGroupSeparator />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="secondary"
-                disabled={isResolving}
-                className="px-2"
-                aria-label="More deny options"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onResolve("deny_remember")}>
-                <Ban className="w-4 h-4 mr-2" />
-                Deny + Remember
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </ButtonGroup>
+        <label className="flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground">
+          <input
+            type="checkbox"
+            className="h-5 w-5 rounded border-input accent-[var(--ink-violet)]"
+            checked={rememberChoice}
+            onChange={(event) => setRememberChoice(event.target.checked)}
+          />
+          Do not ask again for this kind from this site
+        </label>
       </div>
     </div>
   );
 }
 
-// Helper functions
+function FactRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="ink-row">
+      <span className="w-24 shrink-0 text-sm font-semibold text-muted-foreground">
+        {label}
+      </span>
+      <span className={mono ? "font-mono text-xs" : "text-sm font-semibold"}>
+        {value}
+      </span>
+    </div>
+  );
+}
 
 function formatDomain(origin: string): string {
   try {
@@ -334,6 +232,11 @@ function formatTimestamp(timestamp: number): string {
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    second: "2-digit",
   });
+}
+
+function formatCountdown(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }

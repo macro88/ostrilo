@@ -31,7 +31,7 @@ export function PermissionsTab() {
   const hasOrigins = settings.origins && settings.origins.length > 0;
 
   return (
-    <div className="plush-card space-y-6">
+    <div className="ink-card p-4 space-y-6">
       <div>
         <h2 className="screen-title">Permissions</h2>
         <p className="text-sm text-muted-foreground">
@@ -40,7 +40,7 @@ export function PermissionsTab() {
       </div>
 
       <div className="flex items-center gap-2 mb-4">
-        <div className="icon-bubble h-8 w-8">
+        <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
           <Shield className="h-4 w-4" />
         </div>
         <h3 className="font-medium">Per-Origin Policies</h3>

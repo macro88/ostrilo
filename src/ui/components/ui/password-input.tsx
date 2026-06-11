@@ -76,11 +76,11 @@ export function PasswordInput({
       case 1:
         return "bg-destructive";
       case 2:
-        return "bg-[var(--plush-peach)]";
+        return "bg-[var(--ink-amber)]";
       case 3:
         return "bg-primary";
       case 4:
-        return "bg-[var(--plush-mint)]";
+        return "bg-[var(--ink-mint)]";
       default:
         return "bg-muted";
     }
@@ -145,9 +145,9 @@ export function PasswordInput({
             <span
               className={`text-sm font-medium ${
                 strength.score >= 3
-                  ? "text-[var(--plush-mint)]"
+                  ? "text-[var(--ink-mint)]"
                   : strength.score >= 2
-                  ? "text-[var(--plush-peach)]"
+                  ? "text-[var(--ink-amber)]"
                   : "text-destructive"
               }`}
             >
@@ -176,7 +176,7 @@ export function PasswordInput({
               {strength.requirements.map((req, index) => (
                 <div key={index} className="flex items-center gap-2 text-xs">
                   {req.passes ? (
-                    <Check className="h-3 w-3 text-[var(--plush-mint)]" />
+                    <Check className="h-3 w-3 text-[var(--ink-mint)]" />
                   ) : (
                     <X className="h-3 w-3 text-destructive" />
                   )}
@@ -226,14 +226,14 @@ export function PasswordInput({
 
       {/* Error messages */}
       {error && (
-        <div className="stamp-chip status-danger flex">
+        <div className="seal-chip seal-chip-danger flex">
           <X className="h-4 w-4" />
           {error}
         </div>
       )}
 
       {confirmError && (
-        <div className="stamp-chip status-danger flex">
+        <div className="seal-chip seal-chip-danger flex">
           <X className="h-4 w-4" />
           {confirmError}
         </div>

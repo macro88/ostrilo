@@ -1,56 +1,42 @@
-# Ostrilo Design Review
+# Ostrilo Inkline Completion Report
 
 Date: 2026-06-11
 
 ## Scope
 
-Reviewed and aligned the rendered extension UI surfaces:
+Implemented the Inkline redesign from `docs/design-handoff/` across the extension UI:
 
 - Onboarding: welcome, create choice, create key, backup
 - Popup and side panel: home, profile, profile edit, activity, quick settings
-- Dialogs: add key
+- Dialogs: add key, create key, import key, QR modal
 - Options page: general, keys, security, permissions, activity log, relays, advanced
-- Approval window: empty, queue, event detail
+- Approval window: empty state, grouped queue, event detail
 - Lock screen
 
-`src/ui/features/settings/components/SettingsView.tsx` is a legacy, unmounted settings implementation. The active settings surfaces are `BasicSettings` in the popup/side panel and the tabs rendered by `src/extension/options/OptionsApp.tsx`.
+`src/ui/features/settings/components/SettingsView.tsx` remains an unmounted legacy component. The active popup settings surface is `BasicSettings`; the active full settings surface is `src/extension/options/OptionsApp.tsx`.
 
-## Design Direction
+## What Changed
 
-Ostrilo already had an "Arcade Plush" brand kit. The review kept that identity but tightened it for a security tool: soft mascot energy, restrained candy accents, stronger ink contrast, and clear signing/status hierarchy.
-
-Token direction:
-
-- Cotton base: `#FDF0FF`
-- Plush surface: `#FFF9FF`
-- Deep ink: `#2B1E4B`
-- Candy pink: `#FF7AA2`
-- Lavender pop: `#9A77FF`
-- Mint success: `#7DE3CC`
-- Peach warning: `#FFD6A5`
-
-Signature element: a "stamp" language for local signing: left accent rails, rounded status chips, code panels, and approval actions that feel distinct from a generic dashboard while still reading as safe and inspectable.
-
-## Changes Made
-
-- Unified popup, side panel, options, onboarding, lock, dialogs, and approval screens around shared CSS tokens in `src/assets/tailwind.css`.
-- Added shared screen/card/status classes: `app-canvas`, `screen-shell`, `screen-header`, `plush-card`, `metric-card`, `stamp-chip`, `code-panel`, and status variants.
-- Updated shared controls: buttons, inputs, selects, tabs, dialogs, dropdowns, badges, sliders, switches, button groups, QR modal, and public key chips.
-- Replaced one-off blue/green/amber/red UI styling in rendered screens with semantic token/status styles.
-- Fixed popup/options/sidepanel entry points so they all import the shared Tailwind/token CSS.
-- Removed the options page hard `min-width: 640px` constraint and made the tabs/layout responsive.
-- Fixed the 3D logo loading overlay so it no longer leaks "Loading..." text over headers.
-- Fixed the keys options tab so the currently selected key displays as `Active` instead of offering `Set Active`.
-- Added a reproducible screenshot runner: `docs/design-review/capture-screenshots.mjs`.
+- Replaced the Arcade Plush token layer with Inkline tokens in `src/assets/tailwind.css`.
+- Added `docs/design/DESIGN_RULES.md` as the canonical design-system source.
+- Added repo guidance in `AGENTS.md` and `.github/copilot-instructions.md` to prevent old gradients, accent rails, dot grids, Plush classes, and candy palette choices from returning.
+- Marked `docs/ostrilo_arcade_plush_brand_kit_v_1.md` as superseded.
+- Updated shared primitives: button, badge, input, select, slider, tabs, dialog, dropdown, avatar, public-key display, QR modal, empty state, and a new `SealMark`.
+- Split logo behavior so popup/header chrome uses the static mascot image, while the 3D model is opt-in for hero moments with a static poster fallback.
+- Migrated rendered surfaces from Plush cards/chips/bubbles to Inkline cards, hairline rows, seal chips, notched primary actions, and terse security copy.
+- Reworked approval detail around the handoff structure: origin summary, signing facts, content payload, raw JSON toggle, trust line, pinned Deny and Approve & sign actions.
+- Updated the screenshot runner selectors for the new home and approval headings.
 
 ## Verification
 
-- `pnpm compile` passed.
-- `pnpm build` passed.
-- Screenshot runner completed against the built Chrome MV3 extension.
-- The runner created a real key through onboarding and generated a real pending approval from a local test dapp, so approval queue/detail screenshots are not static mocks.
+- `pnpm run compile` passed.
+- `pnpm run build` passed.
+- `node docs/design-review/capture-screenshots.mjs` passed with Chromium launch escalation, capturing all 22 screenshots.
+- The screenshot runner created a real key through onboarding and generated a real pending approval from a local test dapp, so approval queue/detail screenshots are runtime captures rather than static mock screenshots.
 
-Build notes: WXT/Vite still emit existing deprecation/chunk-size warnings; none are introduced as build errors by this design pass.
+Build notes: WXT/Vite still emit existing deprecation, dynamic-import, and chunk-size warnings. They did not fail the build.
+
+Font note: `@fontsource-variable/archivo` and `@fontsource/jetbrains-mono` were not installed locally, and network/package fetches were not available in the sandbox. The CSS now prefers Archivo and JetBrains Mono with system fallbacks; the dependency install remains the only deferred handoff item.
 
 ## Screenshots
 

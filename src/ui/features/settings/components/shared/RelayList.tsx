@@ -26,7 +26,7 @@ export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
         {relays.map((relay) => (
           <div
             key={relay}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted/50 p-3"
+            className="flex items-center justify-between gap-3 rounded-[10px] border border-border bg-muted/50 p-3"
           >
             <span className="text-sm font-mono truncate flex-1">{relay}</span>
             <Button

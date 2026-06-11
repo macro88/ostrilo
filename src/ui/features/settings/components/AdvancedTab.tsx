@@ -23,7 +23,7 @@ export function AdvancedTab() {
   };
 
   return (
-    <div className="plush-card space-y-6">
+    <div className="ink-card p-4 space-y-6">
       <div>
         <h2 className="screen-title">Advanced Settings</h2>
         <p className="text-sm text-muted-foreground">
@@ -34,7 +34,7 @@ export function AdvancedTab() {
       {/* Medium Trust Defaults */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 mb-3">
-          <div className="icon-bubble h-8 w-8">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
             <Clock className="h-4 w-4" />
           </div>
           <h3 className="font-medium">Medium Trust Auto-Allow</h3>
@@ -61,7 +61,7 @@ export function AdvancedTab() {
 
       {/* Development Debug Section */}
       {process.env.NODE_ENV === "development" && (
-        <div className="plush-card status-warning mt-6">
+        <div className="ink-card p-4 bg-[var(--ink-amber-soft)] text-[var(--ink-amber)] mt-6">
           <h3 className="font-medium mb-2">
             Debug (Dev Mode)
           </h3>

@@ -104,7 +104,7 @@ export function KeySelectorCard({
           <div
             key={key.id}
             className={cn(
-              "flex items-center gap-3 rounded-2xl border bg-muted/35 p-3",
+              "flex items-center gap-3 rounded-[10px] border bg-muted/35 p-3",
               isActive ? "border-primary bg-accent" : "border-border"
             )}
           >
@@ -141,7 +141,7 @@ export function KeySelectorCard({
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm">{displayName}</span>
                     {isActive && (
-                      <span className="stamp-chip bg-primary text-primary-foreground">
+                      <span className="seal-chip seal-chip-accent bg-primary text-primary-foreground">
                         Active
                       </span>
                     )}

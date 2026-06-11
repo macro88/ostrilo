@@ -161,7 +161,7 @@ export function ActivityView() {
 
       <div className="screen-header">
         <div className="flex items-start gap-3">
-          <div className="icon-bubble">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground">
             <Activity className="h-4 w-4" />
           </div>
           <div className="min-w-0">
@@ -174,13 +174,13 @@ export function ActivityView() {
       </div>
 
       {pendingCount > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-[10px] border border-border bg-card shadow-sm">
           <button
             onClick={() => setShowPendingSection(!showPendingSection)}
             className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/60"
           >
             <div className="flex items-center gap-2">
-              <span className="icon-bubble status-warning h-7 w-7">
+              <span className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground bg-[var(--ink-amber-soft)] text-[var(--ink-amber)] h-7 w-7">
                 <Bell className="h-3.5 w-3.5" />
               </span>
               <span className="text-sm font-semibold">
@@ -188,7 +188,7 @@ export function ActivityView() {
               </span>
               <Badge
                 variant="secondary"
-                className="status-warning border"
+                className="bg-[var(--ink-amber-soft)] text-[var(--ink-amber)] border"
               >
                 {pendingCount}
               </Badge>
@@ -232,7 +232,7 @@ export function ActivityView() {
 
                 <Button
                   onClick={handleOpenApprovalWindow}
-                  className="btn-plush mt-2 w-full gap-2"
+                  className="mt-2 w-full gap-2"
                   size="sm"
                 >
                   {settings?.sidePanel ? (
@@ -312,7 +312,7 @@ export function ActivityView() {
           {[...Array(3)].map((_, i) => (
             <div
               key={i}
-              className="plush-card animate-pulse"
+              className="ink-card p-4 animate-pulse"
             >
               <div className="h-4 bg-muted rounded w-1/3 mb-2" />
               <div className="h-3 bg-muted rounded w-1/2" />
@@ -323,8 +323,8 @@ export function ActivityView() {
 
       {/* Empty State */}
       {!loading && entries.length === 0 && (
-        <div className="plush-card py-12 text-center">
-          <div className="icon-bubble mx-auto mb-4 h-12 w-12 opacity-80">
+        <div className="ink-card p-4 py-12 text-center">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-4 h-12 w-12 opacity-80">
             <Activity className="h-5 w-5" />
           </div>
           <p className="text-muted-foreground font-medium mb-2">
@@ -350,7 +350,7 @@ export function ActivityView() {
         {entries.map((entry) => (
           <div
             key={entry.id}
-            className="plush-card transition-colors hover:bg-accent/50"
+            className="ink-card p-4 transition-colors hover:bg-accent/50"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
@@ -380,12 +380,12 @@ export function ActivityView() {
               {/* Decision Badge */}
               <div className="flex-shrink-0">
                 {entry.decision === "allow" ? (
-                  <div className="stamp-chip status-success">
+                  <div className="seal-chip seal-chip-accent bg-[var(--ink-mint-soft)] text-[var(--ink-mint)]">
                     <CheckCircle className="h-3 w-3" />
                     Approved
                   </div>
                 ) : (
-                  <div className="stamp-chip status-danger">
+                  <div className="seal-chip seal-chip-accent bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
                     <XCircle className="h-3 w-3" />
                     Denied
                   </div>

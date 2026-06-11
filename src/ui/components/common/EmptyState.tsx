@@ -22,8 +22,8 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div className={cn("empty-state", className)}>
-      <div className="empty-state-icon">
-        <Icon className="h-12 w-12 text-muted-foreground mx-auto" />
+      <div className="seal mx-auto mb-3 flex h-11 w-11 items-center justify-center bg-secondary text-secondary-foreground">
+        <Icon className="h-5 w-5" />
       </div>
       <h3 className="empty-state-title">{title}</h3>
       <p className="empty-state-description max-w-md mx-auto">{description}</p>

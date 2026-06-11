@@ -135,7 +135,7 @@ export function ImageUploadField({
         <div className="flex gap-2">
           <label
             htmlFor={`${id}-upload`}
-            className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-sm font-semibold shadow-sm transition-colors ${
+            className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold transition-colors ${
               disabled || isUploading
                 ? "opacity-50 cursor-not-allowed pointer-events-none"
                 : "cursor-pointer hover:bg-accent"

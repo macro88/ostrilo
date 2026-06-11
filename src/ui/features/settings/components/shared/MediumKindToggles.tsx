@@ -18,7 +18,7 @@ export function MediumKindToggles({
         const isEnabled = mediumAllowKinds.includes(kindNum);
 
         return (
-          <div key={kind} className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted/35 p-3">
+          <div key={kind} className="flex items-center justify-between gap-3 rounded-[10px] border border-border bg-muted/35 p-3">
             <div className="min-w-0">
               <div className="text-sm font-medium">Kind {kind}</div>
               <div className="text-xs text-muted-foreground">

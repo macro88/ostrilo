@@ -14,6 +14,7 @@ import {
   Key,
 } from "lucide-react";
 import { Logo } from "@/ui/components/logo/Logo";
+import { SealMark } from "@/components/common/SealMark";
 
 interface LockScreenProps {
   onUnlock?: () => void;
@@ -71,9 +72,14 @@ export function LockScreen({
 
   return (
     <div className="app-canvas flex h-full flex-col items-center justify-center space-y-4 bg-background p-4 text-center">
-      <div className="screen-header w-full max-w-sm text-center">
-        <div className="mx-auto mb-3 flex h-24 w-24 items-center justify-center rounded-full bg-accent p-2 shadow-sm">
-          <Logo size="max" />
+      <div className="w-full max-w-sm text-center">
+        <div className="relative mx-auto mb-3 h-24 w-24">
+          <Logo size="max" mode="model" />
+          <SealMark
+            icon={Lock}
+            size="sm"
+            className="absolute bottom-1 right-2 h-7 w-7"
+          />
         </div>
         <h1 className="screen-title">{title}</h1>
         <p className="screen-description">
@@ -82,15 +88,13 @@ export function LockScreen({
       </div>
 
       {hasKeys && (
-        <div className="stamp-chip">
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Key className="h-4 w-4" />
-            <span>Your keys are secured</span>
-          </div>
+        <div className="seal-chip seal-chip-accent">
+          <Key className="h-3 w-3" />
+          Your keys are secured
         </div>
       )}
 
-      <div className="plush-card w-full max-w-sm space-y-4">
+      <div className="ink-card w-full max-w-sm space-y-4 p-4">
         <div className="space-y-2 text-left">
           <Label htmlFor="password" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
@@ -111,7 +115,7 @@ export function LockScreen({
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
               disabled={isLoading}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
@@ -126,7 +130,7 @@ export function LockScreen({
 
         {/* Error message */}
         {error && (
-          <div className="stamp-chip status-danger flex text-left">
+          <div className="seal-chip seal-chip-danger flex text-left">
             <AlertTriangle className="h-4 w-4" />
             {error}
             {attemptCount > 2 && (
@@ -139,7 +143,7 @@ export function LockScreen({
         <Button
           onClick={handleUnlock}
           disabled={isLoading || !password.trim()}
-          className="btn-plush h-11 w-full"
+          className="h-11 w-full"
         >
           {isLoading ? (
             "Unlocking..."
@@ -181,12 +185,12 @@ export function LockScreen({
       {/* Security notice */}
       <div className="text-xs text-muted-foreground">
         <Shield className="h-3 w-3 inline mr-1" />
-        Your keys are encrypted and secure
+        Your keys stay encrypted in this browser
       </div>
 
       {/* Attempt warning */}
       {attemptCount > 3 && (
-        <div className="plush-card status-warning max-w-sm">
+        <div className="max-w-sm rounded-[10px] bg-[var(--ink-amber-soft)] p-4 text-[var(--ink-amber)]">
           <div className="flex items-center gap-2 text-sm">
             <AlertTriangle className="h-4 w-4" />
             Multiple failed attempts detected. Ensure you're using the correct

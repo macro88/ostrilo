@@ -27,7 +27,7 @@ export function BasicSettings() {
   if (isLoading) {
     return (
       <div className="screen-shell">
-        <div className="plush-card text-center">
+        <div className="ink-card p-4 text-center">
           <p className="text-sm text-muted-foreground">Loading settings...</p>
         </div>
       </div>
@@ -41,9 +41,9 @@ export function BasicSettings() {
         <p className="screen-description">Quick controls for this signer window.</p>
       </div>
 
-      <div className="plush-card">
+      <div className="ink-card p-4">
         <div className="mb-3 flex items-center gap-2">
-          <div className="icon-bubble h-8 w-8">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
             <Key className="h-4 w-4" />
           </div>
           <h3 className="font-medium">Active Key</h3>
@@ -61,11 +61,11 @@ export function BasicSettings() {
         )}
       </div>
 
-      <div className="plush-card">
+      <div className="ink-card p-4">
         <ThemeSelector value={settings.theme} onChange={updateTheme} />
       </div>
 
-      <div className="plush-card">
+      <div className="ink-card p-4">
         <AutoLockSlider
           value={settings.autoLockMinutes}
           onChange={updateAutoLockMinutes}

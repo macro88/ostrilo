@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Key, Shield, ArrowRight, FileKey } from "lucide-react";
 import { Logo } from "@/ui/components/logo/Logo";
+import { SealMark } from "@/components/common/SealMark";
 
 interface OnboardingWelcomeProps {
   onCreateKey: () => void;
@@ -18,9 +19,9 @@ export function OnboardingWelcome({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center space-y-5 px-4 py-6">
-      <div className="screen-header w-full max-w-md text-center">
-        <div className="mx-auto mb-4 flex h-32 w-32 items-center justify-center rounded-full bg-accent p-3 shadow-sm">
-          <Logo size="max" />
+      <div className="w-full max-w-md text-center">
+        <div className="mx-auto mb-4 h-28 w-28">
+          <Logo size="max" mode="model" />
         </div>
 
         <h1 className="text-2xl font-bold text-foreground">
@@ -28,28 +29,26 @@ export function OnboardingWelcome({
         </h1>
 
         <p className="screen-description">
-          Your local signing buddy. Keys stay with you.
+          Your keys stay in this browser. Sites ask before anything is signed.
         </p>
       </div>
       <div className="w-full max-w-md space-y-3">
-        <h2 className="text-center text-lg font-semibold">
-          How would you like to get started?
+        <h2 className="text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          Choose how to start
         </h2>
 
         <button
           type="button"
           className={`w-full p-4 text-left transition-all ${
             selectedOption === "create"
-              ? "plush-card border-primary bg-accent"
-              : "plush-card hover:border-primary/50"
+              ? "ink-card border-primary bg-secondary"
+              : "ink-card hover:border-primary/50"
           }`}
           onClick={() => setSelectedOption("create")}
           aria-pressed={selectedOption === "create"}
         >
           <div className="flex items-center space-x-3">
-            <div className="icon-bubble">
-              <Key className="h-4 w-4" />
-            </div>
+            <SealMark icon={Key} />
             <div className="flex-1">
               <h3 className="font-semibold text-sm">Create New Key</h3>
               <p className="text-xs text-muted-foreground">
@@ -57,7 +56,7 @@ export function OnboardingWelcome({
               </p>
             </div>
             <div
-              className={`h-4 w-4 rounded-full border-2 ${
+              className={`seal h-4 w-4 border-2 ${
                 selectedOption === "create"
                   ? "border-primary bg-primary"
                   : "border-muted-foreground"
@@ -70,16 +69,14 @@ export function OnboardingWelcome({
           type="button"
           className={`w-full p-4 text-left transition-all ${
             selectedOption === "import"
-              ? "plush-card border-primary bg-accent"
-              : "plush-card hover:border-primary/50"
+              ? "ink-card border-primary bg-secondary"
+              : "ink-card hover:border-primary/50"
           }`}
           onClick={() => setSelectedOption("import")}
           aria-pressed={selectedOption === "import"}
         >
           <div className="flex items-center space-x-3">
-            <div className="icon-bubble">
-              <FileKey className="h-4 w-4" />
-            </div>
+            <SealMark icon={FileKey} />
             <div className="flex-1">
               <h3 className="font-semibold text-sm">Import Existing Key</h3>
               <p className="text-xs text-muted-foreground">
@@ -87,7 +84,7 @@ export function OnboardingWelcome({
               </p>
             </div>
             <div
-              className={`h-4 w-4 rounded-full border-2 ${
+              className={`seal h-4 w-4 border-2 ${
                 selectedOption === "import"
                   ? "border-primary bg-primary"
                   : "border-muted-foreground"
@@ -106,7 +103,7 @@ export function OnboardingWelcome({
               }
             }}
             disabled={!selectedOption}
-            className="btn-plush w-full"
+            className="w-full"
             size="lg"
           >
             Continue
@@ -117,8 +114,7 @@ export function OnboardingWelcome({
 
       <div className="max-w-md text-center text-xs text-muted-foreground">
         <Shield className="h-4 w-4 inline mr-1" />
-        Your private keys are encrypted and stored locally on your device.
-        Ostrilo never has access to your keys or personal data.
+        Private keys are encrypted locally. Ostrilo never sees them.
       </div>
     </div>
   );

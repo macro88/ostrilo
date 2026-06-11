@@ -105,7 +105,7 @@ try {
   await screenshot(popup, "04-onboarding-backup");
   await popup.locator("#backupConfirm").check();
   await safeClick(popup.getByRole("button", { name: /Finish/i }), 10000);
-  await popup.getByText("Local signing, zero snooping").waitFor({
+  await popup.getByRole("heading", { name: "Design Review Key" }).waitFor({
     timeout: 20000,
   });
   await screenshot(popup, "05-popup-home");
@@ -113,7 +113,7 @@ try {
   const sidepanel = await context.newPage();
   await sidepanel.setViewportSize({ width: 520, height: 700 });
   await sidepanel.goto(sidepanelUrl);
-  await sidepanel.getByText("Local signing, zero snooping").waitFor({
+  await sidepanel.getByRole("heading", { name: "Design Review Key" }).waitFor({
     timeout: 15000,
   });
   await screenshot(sidepanel, "06-sidepanel-home");
@@ -229,7 +229,7 @@ try {
     } else {
       await approvalQueue.getByText(/Short Text Note|Kind 1/).click();
     }
-    await approvalQueue.getByText("Event Details").waitFor({ timeout: 10000 });
+    await approvalQueue.getByText("Signing request").waitFor({ timeout: 10000 });
     await screenshot(approvalQueue, "21-approval-detail");
   }
 

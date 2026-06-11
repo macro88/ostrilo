@@ -24,6 +24,7 @@ interface SceneSetupProps {
   fileUrl: string | null;
   textureUrl?: string | null;
   config: ViewerConfig;
+  posterUrl?: string;
 }
 
 class OstrichViewer {
@@ -50,6 +51,7 @@ class OstrichViewer {
   modelBounds: { center: THREE.Vector3; scale: number };
   animationFrameId: number;
   config: ViewerConfig;
+  reduceMotion: boolean;
   
   // Cleanup
   resizeObserver: ResizeObserver;
@@ -62,6 +64,7 @@ class OstrichViewer {
     this.currentRotation = new THREE.Vector2(0, 0);
     this.modelBounds = { center: new THREE.Vector3(), scale: 1 };
     this.animationFrameId = 0;
+    this.reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     // 1. Setup Renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -112,10 +115,16 @@ class OstrichViewer {
     // 5. Events
     this.resizeObserver = new ResizeObserver(() => this.onResize());
     this.resizeObserver.observe(container);
-    window.addEventListener('pointermove', this.onPointerMove);
+    if (!this.reduceMotion) {
+      window.addEventListener('pointermove', this.onPointerMove);
+    }
     
     // 6. Start Loop
-    this.animate();
+    if (this.reduceMotion) {
+      this.renderer.render(this.scene, this.camera);
+    } else {
+      this.animate();
+    }
 
     // Apply initial config
     this.updateConfig(config);
@@ -316,7 +325,12 @@ class OstrichViewer {
   }
 }
 
-const SceneSetup: React.FC<SceneSetupProps> = ({ fileUrl, textureUrl, config }) => {
+const SceneSetup: React.FC<SceneSetupProps> = ({
+    fileUrl,
+    textureUrl,
+    config,
+    posterUrl,
+}) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewerRef = useRef<OstrichViewer | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -343,21 +357,26 @@ const SceneSetup: React.FC<SceneSetupProps> = ({ fileUrl, textureUrl, config }) 
         if (viewerRef.current && fileUrl) {
             setIsLoading(true);
             viewerRef.current.loadModel(fileUrl, textureUrl);
-            setTimeout(() => setIsLoading(false), 500); 
+        setTimeout(() => setIsLoading(false), 500);
         }
     }, [fileUrl, textureUrl]);
 
     return (
-        <div className="w-full h-full relative group">
-            <div ref={containerRef} className="w-full h-full" />
-            
-            {isLoading && (
-                <div
-                    className="absolute inset-0 rounded-full bg-accent/40 animate-pulse pointer-events-none"
+        <div className="group relative h-full w-full">
+            {posterUrl && (
+                <img
+                    src={posterUrl}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-contain"
                     aria-hidden="true"
-                >
-                </div>
+                />
             )}
+            <div
+                ref={containerRef}
+                className={`relative h-full w-full transition-opacity duration-150 ${
+                    isLoading ? "opacity-0" : "opacity-100"
+                }`}
+            />
         </div>
     )
 }

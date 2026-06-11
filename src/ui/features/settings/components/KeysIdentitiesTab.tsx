@@ -48,7 +48,7 @@ export function KeysIdentitiesTab() {
   };
 
   return (
-    <div className="plush-card space-y-6">
+    <div className="ink-card p-4 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="screen-title">Keys & Identities</h2>
@@ -63,7 +63,7 @@ export function KeysIdentitiesTab() {
       </div>
 
       <div className="flex items-center gap-2 mb-4">
-        <div className="icon-bubble h-8 w-8">
+        <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
           <Key className="h-4 w-4" />
         </div>
         <h3 className="font-medium">Your Keys</h3>

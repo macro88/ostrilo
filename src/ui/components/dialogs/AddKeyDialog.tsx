@@ -103,7 +103,7 @@ export function AddKeyDialog({
           <div className="space-y-4 py-4">
             <Button
               variant="outline"
-              className="h-24 w-full flex-col items-center justify-center gap-2 rounded-2xl"
+              className="h-24 w-full flex-col items-center justify-center gap-2 rounded-lg"
               onClick={() => setStep("create")}
             >
               <KeyRound className="h-6 w-6" />
@@ -117,7 +117,7 @@ export function AddKeyDialog({
 
             <Button
               variant="outline"
-              className="h-24 w-full flex-col items-center justify-center gap-2 rounded-2xl"
+              className="h-24 w-full flex-col items-center justify-center gap-2 rounded-lg"
               onClick={() => setStep("import")}
             >
               <Upload className="h-6 w-6" />

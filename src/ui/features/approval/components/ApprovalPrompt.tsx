@@ -180,7 +180,7 @@ export function ApprovalPrompt() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
-        <div className="mb-4 h-16 w-16 animate-pulse rounded-full bg-accent p-2">
+        <div className="mb-4 h-16 w-16 animate-pulse">
           <Logo size="max" />
         </div>
         <p className="text-muted-foreground">Loading requests...</p>
@@ -192,7 +192,7 @@ export function ApprovalPrompt() {
   if (requests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
-        <div className="mb-4 h-16 w-16 rounded-full bg-accent p-2 shadow-sm">
+        <div className="mb-4 h-16 w-16">
           <Logo size="max" />
         </div>
         <h2 className="text-lg font-semibold mb-2">No Pending Requests</h2>

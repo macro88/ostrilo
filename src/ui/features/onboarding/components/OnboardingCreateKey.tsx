@@ -21,6 +21,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import { SealMark } from "@/components/common/SealMark";
 
 interface OnboardingCreateKeyProps {
   onBack: () => void;
@@ -163,16 +164,14 @@ export function OnboardingCreateKey({
         {step === "input" && (
           <>
             <div className="screen-header text-center">
-              <div className="icon-bubble mx-auto mb-3 h-12 w-12">
-                <Key className="h-5 w-5" />
-              </div>
+              <SealMark icon={Key} size="lg" className="mx-auto mb-3" />
               <h2 className="screen-title">Create Your Nostr Key</h2>
               <p className="screen-description">
                 Set up a secure password to protect your new identity
               </p>
             </div>
 
-            <div className="plush-card space-y-4">
+            <div className="ink-card space-y-4 p-4">
               <div>
                 <Label htmlFor="keyName">Key Name</Label>
                 <Input
@@ -203,7 +202,7 @@ export function OnboardingCreateKey({
               <Button
                 onClick={handleGenerateKey}
                 disabled={isGenerating}
-                className="btn-plush flex-1"
+                className="flex-1"
               >
                 {isGenerating ? "Creating..." : "Create Key"}
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -215,9 +214,12 @@ export function OnboardingCreateKey({
         {step === "backup" && (
           <div className="space-y-6">
             <div className="screen-header text-center">
-              <div className="icon-bubble status-success mx-auto mb-3 h-12 w-12">
-                <CheckCircle className="h-5 w-5" />
-              </div>
+              <SealMark
+                icon={CheckCircle}
+                tone="success"
+                size="lg"
+                className="mx-auto mb-3"
+              />
               <h2 className="screen-title">Backup Your Key</h2>
               <p className="screen-description">
                 Save your private key somewhere safe. You'll need it to restore
@@ -227,14 +229,14 @@ export function OnboardingCreateKey({
 
             {/* Reveal key button if not yet revealed */}
             {!hasRevealedPrivateKey && (
-              <Button onClick={handleRevealKey} className="btn-plush w-full">
+              <Button onClick={handleRevealKey} className="w-full">
                 Reveal Private Key
               </Button>
             )}
 
             {/* Private key display */}
             {hasRevealedPrivateKey && privateKeyRef.current && (
-              <div className="plush-card space-y-3">
+              <div className="ink-card space-y-3 p-4">
                 <div>
                   <Label htmlFor="privateKey">Private Key (nsec format)</Label>
                   <div className="relative">
@@ -291,12 +293,12 @@ export function OnboardingCreateKey({
             )}
 
             {/* Security warning */}
-            <div className="plush-card status-warning">
+            <div className="rounded-[10px] bg-[var(--ink-amber-soft)] p-4 text-[var(--ink-amber)]">
               <div className="flex items-start gap-3">
-                <Key className="mt-0.5 h-5 w-5" />
+                <SealMark icon={Key} tone="warning" />
                 <div className="text-sm">
                   <div className="mb-1 font-medium">
-                    Keep This Safe
+                    Keep it offline
                   </div>
                   <div>
                     Anyone with access to your private key can control your
@@ -340,7 +342,7 @@ export function OnboardingCreateKey({
                   onComplete();
                 }}
                 disabled={!backupChecked}
-                className="btn-plush flex-1"
+                className="flex-1"
               >
                 Finish
                 <ArrowRight className="ml-2 h-4 w-4" />
