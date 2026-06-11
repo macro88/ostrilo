@@ -22,10 +22,11 @@
     "test:coverage:ui": "vitest --coverage --ui",
     "test:ci": "vitest run --coverage --reporter=junit --outputFile=test-results.xml",
     "postinstall": "wxt prepare",
-    "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed",
+    "test:e2e": "playwright test --project=chromium-extension",
+    "test:e2e:headed": "OSTRILO_E2E_HEADED=1 playwright test --project=chromium-extension --headed",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "OSTRILO_E2E_HEADED=1 playwright test --project=chromium-extension --debug",
+    "test:e2e:smoke": "playwright test tests/e2e/agent-smoke.spec.ts --project=chromium-extension"
   },
   "dependencies": {
     "@noble/curves": "^2.2.0",

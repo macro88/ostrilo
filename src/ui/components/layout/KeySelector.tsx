@@ -22,6 +22,7 @@ interface KeySelectorProps {
    * If not provided, the "Add Key" button will not be shown.
    */
   onAddKey?: () => void;
+  compact?: boolean;
 }
 
 /**
@@ -54,6 +55,7 @@ interface KeySelectorProps {
  */
 export const KeySelector = memo(function KeySelector({
   onAddKey,
+  compact = false,
 }: KeySelectorProps) {
   const { keys, selectedUnlockedKey, selectKey } = useKeyManager();
   const [isOpen, setIsOpen] = useState(false);
@@ -102,9 +104,9 @@ export const KeySelector = memo(function KeySelector({
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger
         className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-lg",
-          "border border-border bg-card",
-          "hover:bg-accent hover:border-primary/50 transition-all duration-200",
+          "flex items-center gap-2 rounded-lg px-2.5 py-2",
+          "border border-input bg-card",
+          "hover:bg-muted transition-all duration-150",
           "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
           isSwitching && "opacity-50 cursor-wait"
         )}
@@ -114,7 +116,7 @@ export const KeySelector = memo(function KeySelector({
         aria-expanded={isOpen}
         aria-controls="key-selector-listbox"
       >
-        <Avatar className="h-6 w-6">
+        <Avatar shape="seal" className="h-6 w-6">
           {currentKeyDisplay.avatarUrl && (
             <AvatarImage
               src={currentKeyDisplay.avatarUrl}
@@ -125,14 +127,16 @@ export const KeySelector = memo(function KeySelector({
             {currentKeyDisplay.displayName.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
-        <div className="flex flex-col items-start min-w-0">
-          <span className="text-sm font-medium truncate max-w-[120px]">
-            {currentKeyDisplay.displayName}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {currentKeyDisplay.truncatedNpub}
-          </span>
-        </div>
+        {!compact && (
+          <div className="flex flex-col items-start min-w-0">
+            <span className="text-sm font-medium truncate max-w-[120px]">
+              {currentKeyDisplay.displayName}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {currentKeyDisplay.truncatedNpub}
+            </span>
+          </div>
+        )}
         <ChevronDown
           className={cn(
             "h-4 w-4 text-muted-foreground transition-transform duration-200",
@@ -144,7 +148,7 @@ export const KeySelector = memo(function KeySelector({
 
       <DropdownMenuContent
         align="start"
-        className="w-[280px]"
+        className="w-[280px] max-w-[calc(100vw-1rem)]"
         role="listbox"
         id="key-selector-listbox"
         aria-label="Available keys"
@@ -173,7 +177,7 @@ export const KeySelector = memo(function KeySelector({
                   <Check className="h-4 w-4 text-primary" aria-hidden="true" />
                 )}
               </div>
-              <Avatar className="h-8 w-8">
+        <Avatar shape="seal" className="h-8 w-8">
                 {keyDisplay.avatarUrl && (
                   <AvatarImage
                     src={keyDisplay.avatarUrl}

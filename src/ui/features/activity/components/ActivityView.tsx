@@ -98,15 +98,17 @@ export function ActivityView() {
       // Show approval dialog inline
       setShowApprovalDialog(true);
     } else {
-      // Open popup window (original behavior)
+      // Ask the background to open or focus the single managed approval window.
       try {
-        await browser.windows.create({
-          url: browser.runtime.getURL("/approval.html"),
-          type: "popup",
-          width: 640,
-          height: 640,
-          focused: true,
+        const response = await browser.runtime.sendMessage({
+          __command: "ostrilo.openApprovalWindow",
         });
+
+        if (!response?.ok) {
+          throw new Error(
+            response?.error ?? "Failed to open approval window"
+          );
+        }
       } catch (err) {
         console.error("[ActivityView] Failed to open approval window:", err);
       }
@@ -140,11 +142,10 @@ export function ActivityView() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-3 space-y-3">
-      {/* Approval Dialog Overlay (Sidepanel Mode) */}
+    <div className="screen-shell">
       {showApprovalDialog && settings?.sidePanel && (
-        <div className="fixed inset-0 bg-background z-50 flex flex-col">
-          <div className="flex items-center justify-between p-3 border-b">
+        <div className="app-canvas fixed inset-0 z-50 flex flex-col bg-background">
+          <div className="flex items-center justify-between border-b border-border bg-card p-3">
             <h2 className="text-lg font-semibold">Pending Approvals</h2>
             <Button
               variant="ghost"
@@ -160,52 +161,54 @@ export function ActivityView() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="text-center mb-4">
-        <div className="flex items-center justify-center gap-2 mb-1">
-          <Activity className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold">Recent Activity</h2>
+      <div className="screen-header">
+        <div className="flex items-start gap-3">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground">
+            <Activity className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="screen-title">Recent Activity</h2>
+            <p className="screen-description">
+              Signing history, site requests, and approval decisions.
+            </p>
+          </div>
         </div>
-        <p className="text-muted-foreground text-xs">
-          Your signing history and interactions
-        </p>
       </div>
 
-      {/* Pending Approvals Section */}
       {pendingCount > 0 && (
-        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg overflow-hidden">
-          {/* Section Header */}
+        <div className="overflow-hidden rounded-[10px] border border-border bg-card shadow-sm">
           <button
             onClick={() => setShowPendingSection(!showPendingSection)}
-            className="w-full flex items-center justify-between p-3 hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors"
+            className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/60"
           >
             <div className="flex items-center gap-2">
-              <Bell className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <span className="font-medium text-sm text-amber-900 dark:text-amber-100">
+              <span className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground bg-[var(--ink-amber-soft)] text-[var(--ink-amber)] h-7 w-7">
+                <Bell className="h-3.5 w-3.5" />
+              </span>
+              <span className="text-sm font-semibold">
                 Pending Approvals
               </span>
               <Badge
                 variant="secondary"
-                className="bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100"
+                className="bg-[var(--ink-amber-soft)] text-[var(--ink-amber)] border"
               >
                 {pendingCount}
               </Badge>
             </div>
             {showPendingSection ? (
-              <ChevronDown className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
             ) : (
-              <ChevronRight className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
             )}
           </button>
 
-          {/* Pending Requests List */}
           {showPendingSection && (
-            <div className="border-t border-amber-200 dark:border-amber-800">
+            <div className="border-t border-border">
               <div className="p-3 space-y-2">
                 {pendingRequests.slice(0, 3).map((request) => (
                   <div
                     key={request.id}
-                    className="bg-white dark:bg-background rounded-md p-2 text-xs"
+                    className="rounded-xl border border-border bg-muted/40 p-2 text-xs"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -224,15 +227,14 @@ export function ActivityView() {
                 ))}
 
                 {pendingCount > 3 && (
-                  <p className="text-xs text-amber-700 dark:text-amber-300 text-center pt-1">
+                  <p className="pt-1 text-center text-xs text-muted-foreground">
                     +{pendingCount - 3} more pending
                   </p>
                 )}
 
-                {/* Open Approval Window Button */}
                 <Button
                   onClick={handleOpenApprovalWindow}
-                  className="w-full mt-2 gap-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800"
+                  className="mt-2 w-full gap-2"
                   size="sm"
                 >
                   {settings?.sidePanel ? (
@@ -312,7 +314,7 @@ export function ActivityView() {
           {[...Array(3)].map((_, i) => (
             <div
               key={i}
-              className="bg-card border border-border rounded-lg p-4 animate-pulse"
+              className="ink-card p-4 animate-pulse"
             >
               <div className="h-4 bg-muted rounded w-1/3 mb-2" />
               <div className="h-3 bg-muted rounded w-1/2" />
@@ -323,8 +325,10 @@ export function ActivityView() {
 
       {/* Empty State */}
       {!loading && entries.length === 0 && (
-        <div className="text-center py-12">
-          <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-50" />
+        <div className="ink-card p-4 py-12 text-center">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-4 h-12 w-12 opacity-80">
+            <Activity className="h-5 w-5" />
+          </div>
           <p className="text-muted-foreground font-medium mb-2">
             No activity yet
           </p>
@@ -348,7 +352,7 @@ export function ActivityView() {
         {entries.map((entry) => (
           <div
             key={entry.id}
-            className="bg-card border border-border rounded-lg p-4 hover:bg-accent/50 transition-colors"
+            className="ink-card p-4 transition-colors hover:bg-accent/50"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
@@ -378,12 +382,12 @@ export function ActivityView() {
               {/* Decision Badge */}
               <div className="flex-shrink-0">
                 {entry.decision === "allow" ? (
-                  <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 rounded-md text-xs font-medium">
+                  <div className="seal-chip seal-chip-accent bg-[var(--ink-mint-soft)] text-[var(--ink-mint)]">
                     <CheckCircle className="h-3 w-3" />
                     Approved
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400 rounded-md text-xs font-medium">
+                  <div className="seal-chip seal-chip-accent bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
                     <XCircle className="h-3 w-3" />
                     Denied
                   </div>

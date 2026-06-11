@@ -2,6 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalSetup: "./tests/e2e/global-setup.ts",
+  outputDir: "test-results/e2e",
   /* Run tests in files in parallel */
   fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -22,27 +24,17 @@ export default defineConfig({
 
   /* Configure web server for E2E tests */
   webServer: {
-    command: 'npx http-server tests/e2e/fixtures -p 8765',
+    command: "pnpm exec http-server tests/e2e/fixtures -a 127.0.0.1 -p 8765",
     port: 8765,
     reuseExistingServer: !process.env.CI,
   },
 
-  /* Configure projects for major browsers */
+  /* Extension E2E tests require Chromium with a persistent extension context. */
   projects: [
-    // Generic desktop browsers for non-extension tests
-    {
-      name: "firefox",
-      use: { ...devices["Desktop Firefox"] },
-    },
-    {
-      name: "webkit",
-      use: { ...devices["Desktop Safari"] },
-    },
-    // Chromium project configured for extension tests (requires headed)
     {
       name: "chromium-extension",
       testMatch: /.*\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"], headless: false },
+      use: { ...devices["Desktop Chrome"], browserName: "chromium" },
     },
   ],
 });

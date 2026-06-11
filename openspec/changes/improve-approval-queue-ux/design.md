@@ -65,7 +65,7 @@ Constraints:
 
 ### Decision 2: Single window with focus management
 
-**What:** Track approval window ID in background script module scope. Check if window exists before creating new one; focus existing window instead. Close window automatically when queue empties.
+**What:** Track approval window ID in background script module scope. Check if window exists before creating new one; focus existing window instead. Close window automatically when queue empties. The managed approval window uses a 960×640 target size so the inbox list and detail pane can be visible together on desktop.
 
 **Why:**
 - Prevents window spam and overlapping popups
@@ -83,6 +83,7 @@ Constraints:
 - ✅ Easy to test (deterministic window state)
 - ⚠️ Requires tracking window lifecycle (onRemoved event listener)
 - ⚠️ Must handle user closing window gracefully (queue remains accessible via Activity page)
+- ⚠️ Must guard concurrent `focusOrCreateApprovalWindow()` calls so simultaneous signing requests cannot race before `approvalWindowId` is assigned
 
 ### Decision 3: Queue list with detail view (two-panel UX)
 
@@ -173,6 +174,7 @@ enqueue(event: UnsignedEvent, origin: string, eventIdHash?: string): PendingRequ
 **New state:**
 ```typescript
 let approvalWindowId: number | null = null;
+let approvalWindowOperation: Promise<number | undefined> | null = null;
 
 // In src/extension/background.ts
 browser.windows.onRemoved.addListener((windowId) => {
@@ -185,7 +187,11 @@ browser.windows.onRemoved.addListener((windowId) => {
 **Window creation flow:**
 ```typescript
 // In src/extension/background.ts
-async function focusOrCreateApprovalWindow(): Promise<number> {
+async function focusOrCreateApprovalWindow(): Promise<number | undefined> {
+  if (approvalWindowOperation) {
+    return approvalWindowOperation;
+  }
+
   if (approvalWindowId !== null) {
     try {
       await browser.windows.update(approvalWindowId, { focused: true });
@@ -194,7 +200,7 @@ async function focusOrCreateApprovalWindow(): Promise<number> {
       approvalWindowId = null; // Window was closed
     }
   }
-  
+
   const window = await browser.windows.create({ url: "/approval.html", ... });
   approvalWindowId = window.id!;
   return approvalWindowId;
@@ -230,7 +236,7 @@ browser.runtime.sendMessage({ type: "queue.updated", count: approvalQueue.getPen
 ### Risk: Window tracking state desync
 **Scenario:** Extension updated while approval window open, `approvalWindowId` resets to null but window still exists.
 
-**Mitigation:** On background script startup, query all extension windows and close any stray approval windows. Add window type metadata if needed.
+**Mitigation:** On background script startup, query all extension windows and close any stray approval windows. Add window type metadata if needed. Current implementation also serializes concurrent focus/create attempts with an in-flight operation promise so simultaneous requests reuse one window.
 
 ### Risk: Event ID collision (SHA-256 birthday paradox)
 **Scenario:** Two genuinely different events hash to same ID (astronomically unlikely but theoretically possible).

@@ -16,10 +16,10 @@ export function AppLayout({
   onAddKey,
 }: AppLayoutProps) {
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden bg-background">
+    <div className="app-canvas flex h-screen w-full flex-col overflow-hidden bg-background">
       <Header onAddKey={onAddKey} />
 
-      <main className="flex-1 overflow-y-auto overflow-x-hidden w-full">
+      <main className="w-full flex-1 overflow-y-auto overflow-x-hidden">
         {children}
       </main>
 

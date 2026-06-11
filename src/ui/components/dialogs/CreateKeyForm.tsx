@@ -73,12 +73,12 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="keyName">Key Name (Optional)</Label>
+        <Label htmlFor="keyName">Key Name</Label>
         <Input
           id="keyName"
           value={keyName}
           onChange={(e) => setKeyName(e.target.value)}
-          placeholder="e.g., Personal, Work, Gaming"
+          placeholder="e.g., Personal or Work"
           disabled={isGenerating}
           maxLength={50}
         />
@@ -88,7 +88,7 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
       </div>
 
       {error && (
-        <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+        <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
           <p className="text-sm text-destructive">{error}</p>
         </div>
       )}

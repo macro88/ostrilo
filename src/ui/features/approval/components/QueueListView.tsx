@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import type { PendingRequest } from "@/domain/types";
 import { getKindName } from "@/domain/types";
 import {
@@ -12,14 +11,24 @@ import {
   Check,
   X,
 } from "lucide-react";
+import { SealMark } from "@/components/common/SealMark";
+import { cn } from "@/lib/utils";
 
 export interface QueueListViewProps {
   /** All pending requests in the queue */
   requests: PendingRequest[];
+  /** Currently selected request ID */
+  selectedRequestId?: string | null;
+  /** Current Unix time in seconds, used for live countdown display */
+  nowSeconds: number;
   /** Callback when user selects a request to view details */
   onSelectRequest: (id: string) => void;
   /** Callback for batch actions (approve all from origin, deny all) */
   onBatchAction?: (action: "approve" | "deny", requestIds: string[]) => void;
+  /** Disable actions while a resolution is in flight */
+  disabled?: boolean;
+  /** Optional layout class */
+  className?: string;
 }
 
 interface OriginGroup {
@@ -34,8 +43,12 @@ interface OriginGroup {
  */
 export function QueueListView({
   requests,
+  selectedRequestId,
+  nowSeconds,
   onSelectRequest,
   onBatchAction,
+  disabled = false,
+  className,
 }: QueueListViewProps) {
   const [expandedOrigins, setExpandedOrigins] = useState<Set<string>>(
     new Set(requests.map((r) => r.origin))
@@ -107,7 +120,7 @@ export function QueueListView({
   if (requests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
-        <FileText className="w-12 h-12 text-muted-foreground mb-4" />
+        <SealMark icon={FileText} size="lg" className="mb-4" />
         <h2 className="text-lg font-semibold mb-2">No Pending Requests</h2>
         <p className="text-muted-foreground text-center text-sm">
           All approval requests have been processed.
@@ -117,12 +130,14 @@ export function QueueListView({
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="bg-muted/50 p-3 border-b shrink-0">
+    <div
+      className={cn("flex h-full min-h-0 flex-col bg-background", className)}
+      data-testid="approval-inbox"
+    >
+      <div className="shrink-0 border-b border-border bg-card p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-semibold text-sm">Pending Approvals</h1>
+            <h1 className="text-lg font-bold">Approval Inbox</h1>
             <p className="text-xs text-muted-foreground">
               {requests.length} request{requests.length !== 1 ? "s" : ""} from{" "}
               {groups.length} site{groups.length !== 1 ? "s" : ""}
@@ -130,28 +145,33 @@ export function QueueListView({
           </div>
           {onBatchAction && (
             <Button
-              variant="outline"
+              variant="destructive"
               size="sm"
               onClick={handleDenyAll}
+              disabled={disabled}
               className="gap-1"
             >
               <X className="w-3 h-3" />
-              Deny All
+              Deny all
             </Button>
           )}
         </div>
       </div>
 
       {/* Scrollable List */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 space-y-3 overflow-auto p-3">
         {groups.map((group) => {
           const isExpanded = expandedOrigins.has(group.origin);
           return (
-            <div key={group.origin} className="border-b last:border-b-0">
-              {/* Origin Header */}
+            <div
+              key={group.origin}
+              className="ink-card overflow-hidden"
+              data-testid="approval-origin-group"
+              data-origin={group.origin}
+            >
               <button
                 onClick={() => toggleOrigin(group.origin)}
-                className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
+                className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/50"
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   {isExpanded ? (
@@ -164,31 +184,33 @@ export function QueueListView({
                     {group.domain}
                   </span>
                 </div>
-                <Badge variant="secondary" className="shrink-0 ml-2">
+                <span className="seal-chip seal-chip-accent ml-2 shrink-0">
                   {group.requests.length}
-                </Badge>
+                </span>
               </button>
 
               {/* Origin Batch Actions */}
               {isExpanded && onBatchAction && group.requests.length > 1 && (
-                <div className="px-3 py-2 bg-muted/30 flex gap-2 border-b">
+                <div className="flex gap-2 border-y border-border bg-muted/30 px-3 py-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleBatchApprove(group.origin)}
+                    disabled={disabled}
                     className="flex-1 gap-1"
                   >
                     <Check className="w-3 h-3" />
-                    Approve All from Site
+                    Approve all from site
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="destructive"
                     size="sm"
                     onClick={() => handleBatchDeny(group.origin)}
+                    disabled={disabled}
                     className="flex-1 gap-1"
                   >
                     <X className="w-3 h-3" />
-                    Deny All from Site
+                    Deny all from site
                   </Button>
                 </div>
               )}
@@ -200,6 +222,8 @@ export function QueueListView({
                     <RequestItem
                       key={request.id}
                       request={request}
+                      isSelected={request.id === selectedRequestId}
+                      nowSeconds={nowSeconds}
                       onSelect={() => onSelectRequest(request.id)}
                     />
                   ))}
@@ -215,13 +239,19 @@ export function QueueListView({
 
 interface RequestItemProps {
   request: PendingRequest;
+  isSelected: boolean;
+  nowSeconds: number;
   onSelect: () => void;
 }
 
-function RequestItem({ request, onSelect }: RequestItemProps) {
+function RequestItem({
+  request,
+  isSelected,
+  nowSeconds,
+  onSelect,
+}: RequestItemProps) {
   const kindName = getKindName(request.event.kind);
-  const now = Math.floor(Date.now() / 1000);
-  const timeRemaining = Math.max(0, request.timeoutAt - now);
+  const timeRemaining = Math.max(0, request.timeoutAt - nowSeconds);
 
   // Truncate content to 50 chars
   const contentPreview =
@@ -232,15 +262,21 @@ function RequestItem({ request, onSelect }: RequestItemProps) {
   return (
     <button
       onClick={onSelect}
-      className="w-full p-3 hover:bg-muted/50 transition-colors border-t first:border-t-0 text-left"
+      aria-current={isSelected ? "true" : undefined}
+      data-testid="approval-request-item"
+      data-request-id={request.id}
+      className={cn(
+        "w-full border-t p-3 text-left transition-colors first:border-t-0 hover:bg-muted/50",
+        isSelected && "bg-secondary text-secondary-foreground hover:bg-secondary"
+      )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0 space-y-1">
           {/* Kind Badge */}
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              Kind {request.event.kind}
-            </Badge>
+            <span className="seal-chip seal-chip-accent font-mono">
+              kind:{request.event.kind}
+            </span>
             <span className="text-xs font-medium text-muted-foreground">
               {kindName}
             </span>
@@ -260,9 +296,9 @@ function RequestItem({ request, onSelect }: RequestItemProps) {
         </div>
 
         {/* Countdown */}
-        <div className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border bg-background shrink-0">
+        <div className="seal-chip seal-chip-warning shrink-0 font-mono">
           <Clock className="w-3 h-3" />
-          {timeRemaining}s
+          {formatCountdown(timeRemaining)}
         </div>
       </div>
     </button>
@@ -301,4 +337,10 @@ function formatTimestamp(timestamp: number): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatCountdown(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }

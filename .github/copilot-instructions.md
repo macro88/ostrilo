@@ -4,6 +4,10 @@ Ostrilo is a Nostr protocol signer browser extension built with WXT (Web Extensi
 
 **Always reference these instructions first and fallback to search or bash commands only when you encounter unexpected information that does not match the info here.**
 
+## UI Design System
+
+All UI work must follow `docs/design/DESIGN_RULES.md`. Do not reintroduce gradients, accent rails, dot-grid backgrounds, the retired Arcade Plush class names, or pink/candy palette choices.
+
 ## Working Effectively
 
 ### Bootstrap and Build

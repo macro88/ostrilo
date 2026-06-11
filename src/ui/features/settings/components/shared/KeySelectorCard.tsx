@@ -104,8 +104,8 @@ export function KeySelectorCard({
           <div
             key={key.id}
             className={cn(
-              "flex items-center gap-3 p-3 rounded-lg border",
-              isActive ? "border-primary bg-primary/5" : "border-border"
+              "flex items-center gap-3 rounded-[10px] border bg-muted/35 p-3",
+              isActive ? "border-primary bg-accent" : "border-border"
             )}
           >
             <Avatar className="h-10 w-10">
@@ -141,7 +141,7 @@ export function KeySelectorCard({
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm">{displayName}</span>
                     {isActive && (
-                      <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded">
+                      <span className="seal-chip seal-chip-accent bg-primary text-primary-foreground">
                         Active
                       </span>
                     )}

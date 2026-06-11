@@ -11,8 +11,9 @@ The current implementation creates a new popup window for each signing request, 
 ## What Changes
 
 - **Event de-duplication by event ID hash** - Queue service tracks pending events by computed event ID; duplicate requests from same or different origins reuse the same pending Promise
-- **Single managed approval window** - Background script tracks approval window lifecycle; focuses existing window instead of creating duplicates; closes window when queue empties
+- **Single managed approval window** - Background script tracks approval window lifecycle; focuses existing window instead of creating duplicates; serializes concurrent open attempts; closes window when queue empties
 - **Queue list view UI** - Approval interface shows all pending requests in scrollable list grouped by origin; users can see full queue and perform batch actions
+- **Desktop approval inbox sizing** - Approval window uses a wider inbox/detail layout so the queue list and selected event content are visible together instead of forcing a cramped single-column prompt
 - **Batch approval actions** - UI provides "Approve All from Origin" and "Deny All" buttons to process multiple requests efficiently
 - **Improved queue visibility** - Queue accessible from Activity page in main popup for users who close approval window
 
@@ -31,6 +32,7 @@ The current implementation creates a new popup window for each signing request, 
 
 ### User Experience Improvements
 - Single approval window remains focused when new requests arrive
+- Simultaneous signing requests cannot race into multiple approval windows
 - Duplicate events (retries) don't create additional approval burden
 - Queue visibility helps users understand pending workload (list view like email inbox)
 - Full event details displayed when signing (detailed view like opening an email)

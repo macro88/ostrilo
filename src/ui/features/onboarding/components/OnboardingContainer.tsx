@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { useAppSettings } from "@/hooks/useAppSettings";
 import { useOnboarding } from "../hooks/useOnboarding";
 import { OnboardingWelcome } from "./OnboardingWelcome";
 import { OnboardingCreateKey } from "./OnboardingCreateKey";
@@ -34,7 +32,7 @@ export function OnboardingContainer({ onComplete }: OnboardingContainerProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-canvas min-h-screen bg-background">
       {currentFlow === "welcome" && (
         <OnboardingWelcome
           onCreateKey={handleCreateKey}

@@ -8,6 +8,8 @@
 <body>
     <h1>NIP-07 Test Page</h1>
     <div id="status">Waiting for window.nostr...</div>
+    <button id="get-pubkey" type="button">Get Public Key</button>
+    <button id="sign-event" type="button">Sign Event</button>
     <div id="pubkey"></div>
     <div id="signed-event"></div>
     <div id="error"></div>
@@ -46,6 +48,19 @@
                 throw error;
             }
         };
+
+        document.getElementById('get-pubkey').addEventListener('click', () => {
+            window.testGetPublicKey().catch(() => {});
+        });
+
+        document.getElementById('sign-event').addEventListener('click', () => {
+            window.testSignEvent({
+                kind: 1,
+                content: 'Signed from test page button',
+                tags: [],
+                created_at: Math.floor(Date.now() / 1000),
+            }).catch(() => {});
+        });
     </script>
 </body>
 </html>

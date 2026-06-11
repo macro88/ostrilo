@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Input } from "@/ui/components/ui/input";
 import { Label } from "@/ui/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Upload } from "lucide-react";
 
 interface ImageUploadFieldProps {
   id: string;
@@ -133,10 +135,10 @@ export function ImageUploadField({
         <div className="flex gap-2">
           <label
             htmlFor={`${id}-upload`}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm border border-border rounded-lg transition-colors ${
+            className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold transition-colors ${
               disabled || isUploading
                 ? "opacity-50 cursor-not-allowed pointer-events-none"
-                : "cursor-pointer hover:bg-muted"
+                : "cursor-pointer hover:bg-accent"
             }`}
             aria-disabled={disabled || isUploading}
             onKeyDown={(e) => {
@@ -152,21 +154,7 @@ export function ImageUploadField({
             tabIndex={disabled || isUploading ? -1 : 0}
             role="button"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
+            <Upload className="h-4 w-4" />
             {isUploading ? "Uploading..." : "Upload Image"}
           </label>
           <input
@@ -178,15 +166,16 @@ export function ImageUploadField({
             className="hidden"
           />
           {value && (
-            <button
+            <Button
+              variant="outline"
               type="button"
               onClick={handleRemove}
               disabled={disabled || isUploading}
-              className="px-3 py-2 text-sm border border-border rounded-lg hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-colors disabled:opacity-50"
+              className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20"
               title="Remove image"
             >
               Remove
-            </button>
+            </Button>
           )}
         </div>
 

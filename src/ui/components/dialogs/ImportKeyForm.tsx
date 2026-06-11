@@ -103,8 +103,9 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
           <button
             type="button"
             onClick={() => setShowPrivateKey(!showPrivateKey)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
             tabIndex={-1}
+            aria-label={showPrivateKey ? "Hide private key" : "Show private key"}
           >
             {showPrivateKey ? (
               <EyeOff className="h-4 w-4" />
@@ -119,12 +120,12 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="keyName">Key Name (Optional)</Label>
+        <Label htmlFor="keyName">Key Name</Label>
         <Input
           id="keyName"
           value={keyName}
           onChange={(e) => setKeyName(e.target.value)}
-          placeholder="e.g., Personal, Work, Gaming"
+          placeholder="e.g., Personal or Work"
           disabled={isImporting}
           maxLength={50}
         />
@@ -134,7 +135,7 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
       </div>
 
       {error && (
-        <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+        <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
           <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
@@ -162,7 +163,7 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
         </Button>
       </div>
 
-      <div className="p-3 bg-muted/50 rounded-lg border border-border">
+      <div className="rounded-[10px] border border-border bg-muted/50 p-3">
         <p className="text-xs text-muted-foreground">
           <strong>Note:</strong> The imported key will be encrypted with your
           vault's existing password. Make sure you trust the source of this

@@ -18,7 +18,7 @@ export function ThemeSelector({ value, onChange }: ThemeSelectorProps) {
     <div className="space-y-3">
       <Label htmlFor="theme">Theme</Label>
       <Select value={value} onValueChange={(v) => onChange(v as Theme)}>
-        <SelectTrigger id="theme">
+        <SelectTrigger id="theme" className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

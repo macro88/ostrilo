@@ -28,16 +28,32 @@ import {
 } from "@/infrastructure/messaging/handlers";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 
+const APPROVAL_WINDOW_WIDTH = 960;
+const APPROVAL_WINDOW_HEIGHT = 640;
+const APPROVAL_BADGE_COLOR = "#5f50a0";
+
 // Window tracking state for approval popup
 let approvalWindowId: number | null = null;
+let approvalWindowOperation: Promise<number | undefined> | null = null;
 
 /**
- * Focus existing approval window or create new one
- * If in sidepanel mode, sends message to switch to Activity tab instead
- * Ensures only one approval window exists at a time
- * @param settings - Current app settings to check sidepanel mode
- * @returns Window ID of the approval window (or undefined if using sidepanel)
+ * Update the browser action badge to mirror the current approval queue depth.
  */
+async function updateApprovalBadge(count: number): Promise<void> {
+  if (count > 0) {
+    await browser.action.setBadgeText({ text: count.toString() });
+    await browser.action.setBadgeBackgroundColor({
+      color: APPROVAL_BADGE_COLOR,
+    });
+    await browser.action.setTitle({
+      title: `Ostrilo - ${count} approval${count > 1 ? "s" : ""} pending`,
+    });
+    return;
+  }
+
+  await browser.action.setBadgeText({ text: "" });
+  await browser.action.setTitle({ title: "Ostrilo Signer" });
+}
 
 /**
  * Focus or create the approval window based on mode settings.
@@ -56,7 +72,26 @@ let approvalWindowId: number | null = null;
  * - Window close events automatically clear the tracked window ID
  */
 async function focusOrCreateApprovalWindow(
-  settings: SettingsService
+  settings: SettingsService,
+  approvalQueue: ApprovalQueueService
+): Promise<number | undefined> {
+  if (approvalWindowOperation) {
+    return approvalWindowOperation;
+  }
+
+  approvalWindowOperation = focusOrCreateApprovalWindowInner(
+    settings,
+    approvalQueue
+  ).finally(() => {
+    approvalWindowOperation = null;
+  });
+
+  return approvalWindowOperation;
+}
+
+async function focusOrCreateApprovalWindowInner(
+  settings: SettingsService,
+  approvalQueue: ApprovalQueueService
 ): Promise<number | undefined> {
   // Check if in sidepanel mode
   const appSettings = await settings.get();
@@ -82,6 +117,7 @@ async function focusOrCreateApprovalWindow(
   if (approvalWindowId !== null) {
     try {
       await browser.windows.update(approvalWindowId, { focused: true });
+      await updateApprovalBadge(approvalQueue.count());
       console.log(
         `[Background] Focused existing approval window ${approvalWindowId}`
       );
@@ -99,8 +135,8 @@ async function focusOrCreateApprovalWindow(
   const approvalWindow = await browser.windows.create({
     url: browser.runtime.getURL("/approval.html"),
     type: "popup",
-    width: 640,
-    height: 640,
+    width: APPROVAL_WINDOW_WIDTH,
+    height: APPROVAL_WINDOW_HEIGHT,
     focused: true,
   });
 
@@ -109,8 +145,30 @@ async function focusOrCreateApprovalWindow(
   }
 
   approvalWindowId = approvalWindow.id;
+  await updateApprovalBadge(approvalQueue.count());
   console.log(`[Background] Created new approval window ${approvalWindowId}`);
   return approvalWindowId;
+}
+
+/**
+ * Close the tracked approval window when the queue has been fully handled.
+ */
+async function closeApprovalWindow(): Promise<void> {
+  if (approvalWindowId === null) {
+    return;
+  }
+
+  const windowId = approvalWindowId;
+  approvalWindowId = null;
+
+  try {
+    await browser.windows.remove(windowId);
+  } catch (error) {
+    console.warn(
+      `[Background] Approval window ${windowId} could not be closed`,
+      error
+    );
+  }
 }
 
 export default defineBackground(() => {
@@ -161,6 +219,10 @@ export default defineBackground(() => {
 
   // Set up callback to broadcast queue changes to UI
   approvalQueue.setChangeCallback(() => {
+    updateApprovalBadge(approvalQueue.count()).catch((err) => {
+      console.error("[Background] Failed to update approval badge:", err);
+    });
+
     // Broadcast queue.updated message to all listeners (approval window, activity page, etc.)
     browser.runtime
       .sendMessage({ __event: "ostrilo.queue.updated" })
@@ -188,10 +250,16 @@ export default defineBackground(() => {
   router.registerModule(
     "nostr",
     new NostrRpcHandler(approvalQueue, () =>
-      focusOrCreateApprovalWindow(settings)
+      focusOrCreateApprovalWindow(settings, approvalQueue)
     )
   ); // NIP-07 operations with approval
-  router.registerModule("approval", new ApprovalRpcHandler(approvalQueue)); // Approval queue operations
+  router.registerModule(
+    "approval",
+    new ApprovalRpcHandler(approvalQueue, {
+      closeApprovalWindow,
+      updateBadgeCount: () => updateApprovalBadge(approvalQueue.count()),
+    })
+  ); // Approval queue operations
   router.registerModule("activity", new ActivityRpcHandler()); // Activity log operations
   router.registerModule("profile", new ProfileRpcHandler()); // Profile metadata operations
 
@@ -225,6 +293,20 @@ export default defineBackground(() => {
           );
       });
       return true; // Keep message channel open
+    }
+  });
+
+  browser.runtime.onMessage.addListener((message) => {
+    if (message?.__command === "ostrilo.openApprovalWindow") {
+      return focusOrCreateApprovalWindow(settings, approvalQueue)
+        .then((windowId) => ({ ok: true, windowId }))
+        .catch((err) => ({
+          ok: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : "Failed to open approval window",
+        }));
     }
   });
 

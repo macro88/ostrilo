@@ -16,12 +16,12 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle,
-  Fingerprint,
   Copy,
   Download,
   Eye,
   EyeOff,
 } from "lucide-react";
+import { SealMark } from "@/components/common/SealMark";
 
 interface OnboardingCreateKeyProps {
   onBack: () => void;
@@ -42,6 +42,7 @@ export function OnboardingCreateKey({
   const [backupChecked, setBackupChecked] = useState(false);
   const [step, setStep] = useState<"input" | "backup">("input");
   const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [hasRevealedPrivateKey, setHasRevealedPrivateKey] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
 
   // Use refs for ephemeral sensitive data (not useState)
@@ -111,7 +112,7 @@ export function OnboardingCreateKey({
       // Reveal key with password verification - stored ephemerally in ref
       const revealed = await revealKey(passwordBackupRef.current);
       privateKeyRef.current = revealed;
-      // Trigger re-render
+      setHasRevealedPrivateKey(true);
       setShowPrivateKey(false);
     } catch (error) {
       setPasswordError(
@@ -158,19 +159,19 @@ export function OnboardingCreateKey({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-4">
         {step === "input" && (
           <>
-            <div className="text-center space-y-2">
-              <Key className="h-10 w-10 mx-auto text-blue-500" />
-              <h2 className="text-xl font-bold">Create Your Nostr Key</h2>
-              <p className="text-muted-foreground text-sm">
+            <div className="screen-header text-center">
+              <SealMark icon={Key} size="lg" className="mx-auto mb-3" />
+              <h2 className="screen-title">Create Your Nostr Key</h2>
+              <p className="screen-description">
                 Set up a secure password to protect your new identity
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="ink-card space-y-4 p-4">
               <div>
                 <Label htmlFor="keyName">Key Name</Label>
                 <Input
@@ -212,25 +213,30 @@ export function OnboardingCreateKey({
 
         {step === "backup" && (
           <div className="space-y-6">
-            <div className="text-center space-y-2">
-              <CheckCircle className="h-12 w-12 mx-auto text-green-500" />
-              <h2 className="text-2xl font-bold">Backup Your Key</h2>
-              <p className="text-muted-foreground">
+            <div className="screen-header text-center">
+              <SealMark
+                icon={CheckCircle}
+                tone="success"
+                size="lg"
+                className="mx-auto mb-3"
+              />
+              <h2 className="screen-title">Backup Your Key</h2>
+              <p className="screen-description">
                 Save your private key somewhere safe. You'll need it to restore
                 your account if you lose access.
               </p>
             </div>
 
             {/* Reveal key button if not yet revealed */}
-            {!privateKeyRef.current && (
+            {!hasRevealedPrivateKey && (
               <Button onClick={handleRevealKey} className="w-full">
                 Reveal Private Key
               </Button>
             )}
 
             {/* Private key display */}
-            {privateKeyRef.current && (
-              <div className="space-y-3">
+            {hasRevealedPrivateKey && privateKeyRef.current && (
+              <div className="ink-card space-y-3 p-4">
                 <div>
                   <Label htmlFor="privateKey">Private Key (nsec format)</Label>
                   <div className="relative">
@@ -287,14 +293,14 @@ export function OnboardingCreateKey({
             )}
 
             {/* Security warning */}
-            <div className="p-4 bg-amber-50 dark:bg-amber-950 border-2 border-amber-200 dark:border-amber-800 rounded-lg">
+            <div className="rounded-[10px] bg-[var(--ink-amber-soft)] p-4 text-[var(--ink-amber)]">
               <div className="flex items-start gap-3">
-                <Key className="h-5 w-5 text-amber-600 mt-0.5" />
+                <SealMark icon={Key} tone="warning" />
                 <div className="text-sm">
-                  <div className="font-medium text-amber-600 mb-1">
-                    Keep This Safe
+                  <div className="mb-1 font-medium">
+                    Keep it offline
                   </div>
-                  <div className="text-amber-600">
+                  <div>
                     Anyone with access to your private key can control your
                     Nostr identity. Never share it with anyone and store it
                     securely.
@@ -303,7 +309,7 @@ export function OnboardingCreateKey({
               </div>
             </div>
 
-            <div className="flex items-start space-x-2 p-3 border rounded">
+            <div className="flex items-start space-x-2 rounded-xl border border-border bg-card p-3">
               <input
                 id="backupConfirm"
                 type="checkbox"
@@ -331,6 +337,7 @@ export function OnboardingCreateKey({
                   // Clear sensitive data from refs
                   privateKeyRef.current = null;
                   passwordBackupRef.current = "";
+                  setHasRevealedPrivateKey(false);
                   await markOnboardingComplete();
                   onComplete();
                 }}

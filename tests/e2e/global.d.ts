@@ -41,6 +41,8 @@ interface WindowNostr {
 declare global {
   interface Window {
     nostr?: WindowNostr;
+    testGetPublicKey(): Promise<string>;
+    testSignEvent(event: UnsignedNostrEvent): Promise<SignedNostrEvent>;
   }
 }
 

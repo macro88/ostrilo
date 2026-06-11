@@ -402,6 +402,8 @@ export interface PendingRequest {
   origin: string;
   /** The unsigned event to be signed */
   event: UnsignedEvent;
+  /** Optional computed NIP-01 event ID hash used for de-duplication */
+  eventIdHash?: string;
   /** Unix timestamp when the request was created (seconds) */
   createdAt: number;
   /** Unix timestamp when the request will auto-deny (seconds) */

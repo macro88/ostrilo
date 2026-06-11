@@ -1,6 +1,19 @@
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
-import { Key, Settings, Shield, Globe } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Pubkey } from "@/components/common/pubkey";
+import { SealMark } from "@/components/common/SealMark";
+import { useActivityLog } from "@/ui/features/activity/hooks/useActivityLog";
+import { getKindName } from "@/domain/types";
+import {
+  Activity,
+  Check,
+  ChevronRight,
+  Globe,
+  Key,
+  Shield,
+  X,
+} from "lucide-react";
 
 export function HomeView() {
   const { settings, isLoading: settingsLoading } = useAppSettings();
@@ -8,133 +21,155 @@ export function HomeView() {
     hasKeys,
     selectedUnlockedKey,
     isLoading: keysLoading,
-    generateKey,
   } = useKeyManager();
+  const { entries, loading: activityLoading } = useActivityLog();
 
   const isLoading = settingsLoading || keysLoading;
 
   if (isLoading) {
     return (
-      <div className="p-4 text-center">
-        <p className="text-muted-foreground">Loading...</p>
+      <div className="screen-shell">
+        <div className="ink-card p-4 text-center">
+          <p className="text-sm text-muted-foreground">Loading home…</p>
+        </div>
       </div>
     );
   }
 
+  const activeKeyLabel = selectedUnlockedKey?.label || "No active key";
+  const activeNpub = selectedUnlockedKey?.publicKeyBech32;
+  const recentEntries = entries.slice(0, 3);
+
   return (
-    <div className="h-full overflow-y-auto p-3 space-y-3 max-w-full">
-      <div className="text-center">
-        <h2 className="text-xl font-semibold mb-1">Ostrilo Signer</h2>
-        <p className="text-muted-foreground text-sm">
-          Your Nostr identity manager
-        </p>
-      </div>
-
-      {/* Status Cards */}
-      <div className="grid grid-cols-2 gap-2 w-full max-w-full">
-        <div className="bg-card border border-border rounded-lg p-3 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Key className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-sm font-medium truncate">Keys</span>
-          </div>
-          <p className="text-lg font-semibold truncate">
-            {hasKeys ? "1+" : "0"}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">
-            {selectedUnlockedKey ? "1 active" : "None selected"}
-          </p>
+    <div className="screen-shell">
+      <section className="flex items-center gap-4 py-3">
+        <SealMark label={activeKeyLabel} size="lg" className="h-16 w-16 text-2xl" />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-xl font-bold leading-tight">
+            {activeKeyLabel}
+          </h2>
+          {activeNpub ? (
+            <Pubkey pubkey={activeNpub} className="mt-1" />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Create or import a key to start signing locally.
+            </p>
+          )}
         </div>
+      </section>
 
-        <div className="bg-card border border-border rounded-lg p-3 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Shield className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-sm font-medium truncate">Security</span>
-          </div>
-          <p className="text-lg font-semibold truncate">
-            {settings.autoLockMinutes === 0
-              ? "∞"
-              : `${settings.autoLockMinutes}m`}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">Auto-lock</p>
-        </div>
+      <section className="ink-card overflow-hidden">
+        <HomeRow
+          icon={Key}
+          label="Keys"
+          value={hasKeys ? "1 active" : "None yet"}
+        />
+        <HomeRow
+          icon={Globe}
+          label="Relays"
+          value={`${settings.relays.length} configured`}
+        />
+        <HomeRow
+          icon={Shield}
+          label="Site permissions"
+          value={
+            settings.origins.length > 0
+              ? `${settings.origins.length} trusted`
+              : "None granted"
+          }
+        />
+      </section>
 
-        <div className="bg-card border border-border rounded-lg p-3 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-sm font-medium truncate">Relays</span>
-          </div>
-          <p className="text-lg font-semibold truncate">
-            {settings.relays.length}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">Configured</p>
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Recent activity
+          </h3>
+          <Button variant="ghost" size="sm" className="h-8 px-2">
+            See all
+          </Button>
         </div>
-
-        <div className="bg-card border border-border rounded-lg p-3 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-sm font-medium truncate">Origins</span>
-          </div>
-          <p className="text-lg font-semibold truncate">
-            {settings.origins.length}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">Trusted</p>
+        <div className="ink-card overflow-hidden">
+          {activityLoading && recentEntries.length === 0 ? (
+            <div className="ink-row text-sm text-muted-foreground">
+              Loading activity…
+            </div>
+          ) : recentEntries.length === 0 ? (
+            <div className="ink-row">
+              <SealMark icon={Activity} tone="muted" />
+              <div>
+                <p className="text-sm font-semibold">No activity yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Signing history will appear here.
+                </p>
+              </div>
+            </div>
+          ) : (
+            recentEntries.map((entry) => (
+              <div key={entry.id} className="ink-row">
+                <SealMark
+                  icon={entry.decision === "allow" ? Check : X}
+                  tone={entry.decision === "allow" ? "success" : "danger"}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {entry.decision === "allow" ? "Signed" : "Denied"}{" "}
+                    {getKindName(entry.kind).toLowerCase()}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {formatDomain(entry.origin)}
+                  </p>
+                </div>
+                <time className="font-mono text-xs text-muted-foreground">
+                  {formatRelativeTime(entry.timestamp)}
+                </time>
+              </div>
+            ))
+          )}
         </div>
-      </div>
-
-      {/* Current Settings Summary */}
-      <div className="bg-card border border-border rounded-lg p-3 w-full max-w-full">
-        <h3 className="font-medium mb-2 text-sm">Current Settings</h3>
-        <div className="space-y-2 text-xs">
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground truncate">Theme:</span>
-            <span className="capitalize truncate">{settings.theme}</span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground truncate">Side Panel:</span>
-            <span className="truncate">
-              {settings.sidePanel ? "Enabled" : "Disabled"}
-            </span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground truncate">Session TTL:</span>
-            <span className="truncate">
-              {settings.sessionTTLMinutes === 0
-                ? "Until lock"
-                : `${settings.sessionTTLMinutes}m`}
-            </span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground truncate">
-              Medium trust kinds:
-            </span>
-            <span className="truncate">
-              {settings.mediumAllowKinds.length} allowed
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-card border border-border rounded-lg p-3 w-full max-w-full">
-        <h3 className="font-medium mb-3">Quick Actions</h3>
-        <div className="space-y-2">
-          <button
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-3 rounded-lg font-medium"
-            onClick={() => generateKey("", "New Key")}
-          >
-            Generate New Key
-          </button>
-          <button
-            className="w-full bg-muted hover:bg-muted/80 text-foreground py-2 px-3 rounded-lg font-medium"
-            disabled
-          >
-            Import Key
-          </button>
-        </div>
-        <p className="text-xs text-muted-foreground mt-2 text-center">
-          Key management features coming soon
-        </p>
-      </div>
+      </section>
     </div>
   );
+}
+
+function HomeRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Key;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="ink-row">
+      <Icon className="h-5 w-5 shrink-0 text-[var(--ink-violet)]" />
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+        {label}
+      </span>
+      <span className="truncate text-sm font-semibold text-muted-foreground">
+        {value}
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+    </div>
+  );
+}
+
+function formatDomain(origin: string): string {
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return origin;
+  }
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - timestamp;
+
+  if (diff < 60) return "now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return `${Math.floor(diff / 604800)}w ago`;
 }

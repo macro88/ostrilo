@@ -8,10 +8,10 @@ import {
 } from "@/infrastructure/messaging/client";
 import type { PendingRequest, ApprovalAction, KeyRecord } from "@/domain/types";
 import { AlertTriangle } from "lucide-react";
-import mascotLogo from "@/assets/ostrilo_front.svg";
 import { QueueListView } from "./QueueListView";
 import { EventDetailView } from "./EventDetailView";
 import { browser } from "wxt/browser";
+import { Logo } from "@/ui/components/logo/Logo";
 
 /**
  * ApprovalPrompt component displays pending approval requests
@@ -22,12 +22,14 @@ export function ApprovalPrompt() {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
     null
   );
-  const [pendingCount, setPendingCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isResolving, setIsResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState<number>(0);
+  const [nowSeconds, setNowSeconds] = useState(() =>
+    Math.floor(Date.now() / 1000)
+  );
   const [selectedKey, setSelectedKey] = useState<KeyRecord | null>(null);
+  const [showCompactDetail, setShowCompactDetail] = useState(false);
 
   // Fetch all pending requests
   const fetchRequests = useCallback(async () => {
@@ -35,41 +37,27 @@ export function ApprovalPrompt() {
       setIsLoading(true);
       setError(null);
 
-      const [{ requests: allRequests }, { count }, keys] = await Promise.all([
+      const [{ requests: allRequests }, keys] = await Promise.all([
         getAllApprovalRequests(),
-        getApprovalCount(),
         listKeys(),
       ]);
 
       setRequests(allRequests);
-      setPendingCount(count);
 
       // Find selected key
       const selected = keys?.find((k) => k.isSelected) ?? null;
       setSelectedKey(selected);
 
-      // If current selection is no longer in queue, return to list view
-      if (
+      const selectedStillPending =
         selectedRequestId &&
-        !allRequests.find((r) => r.id === selectedRequestId)
-      ) {
+        allRequests.some((request) => request.id === selectedRequestId);
+
+      if (!selectedStillPending) {
         console.log(
-          "[ApprovalPrompt] Selected request no longer in queue, returning to list view"
+          "[ApprovalPrompt] Selecting next pending request for detail pane"
         );
-        setSelectedRequestId(null);
-      }
-
-      // Don't auto-select - let user choose from queue list
-      // (They can click on a request to view details)
-
-      // Calculate countdown for selected request
-      if (selectedRequestId) {
-        const selectedReq = allRequests.find((r) => r.id === selectedRequestId);
-        if (selectedReq) {
-          const now = Math.floor(Date.now() / 1000);
-          const remaining = Math.max(0, selectedReq.timeoutAt - now);
-          setCountdown(remaining);
-        }
+        setSelectedRequestId(allRequests[0]?.id ?? null);
+        setShowCompactDetail(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load requests");
@@ -83,6 +71,16 @@ export function ApprovalPrompt() {
     fetchRequests();
   }, [fetchRequests]);
 
+  useEffect(() => {
+    if (requests.length === 0) return;
+
+    const timer = setInterval(() => {
+      setNowSeconds(Math.floor(Date.now() / 1000));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [requests.length]);
+
   // Listen for real-time queue updates
   useEffect(() => {
     const handleMessage = (message: any) => {
@@ -95,24 +93,6 @@ export function ApprovalPrompt() {
     browser.runtime.onMessage.addListener(handleMessage);
     return () => browser.runtime.onMessage.removeListener(handleMessage);
   }, [fetchRequests]);
-
-  // Countdown timer for selected request
-  useEffect(() => {
-    if (!selectedRequestId || countdown <= 0) return;
-
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          // Timeout reached - close window
-          window.close();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [selectedRequestId, countdown]);
 
   // Handle user action on selected request
   const handleAction = async (action: ApprovalAction) => {
@@ -132,7 +112,7 @@ export function ApprovalPrompt() {
         window.close();
       } else {
         // Return to list view
-        setSelectedRequestId(null);
+        setShowCompactDetail(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process action");
@@ -167,7 +147,7 @@ export function ApprovalPrompt() {
         window.close();
       } else {
         // Return to list view
-        setSelectedRequestId(null);
+        setShowCompactDetail(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process batch");
@@ -180,11 +160,9 @@ export function ApprovalPrompt() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
-        <img
-          src={mascotLogo}
-          alt="Ostrilo"
-          className="w-16 h-16 mb-4 animate-pulse"
-        />
+        <div className="mb-4 h-16 w-16 animate-pulse">
+          <Logo size="max" />
+        </div>
         <p className="text-muted-foreground">Loading requests...</p>
       </div>
     );
@@ -194,7 +172,9 @@ export function ApprovalPrompt() {
   if (requests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
-        <img src={mascotLogo} alt="Ostrilo" className="w-16 h-16 mb-4" />
+        <div className="mb-4 h-16 w-16">
+          <Logo size="max" />
+        </div>
         <h2 className="text-lg font-semibold mb-2">No Pending Requests</h2>
         <p className="text-muted-foreground text-center text-sm">
           There are no signing requests waiting for approval.
@@ -224,33 +204,47 @@ export function ApprovalPrompt() {
     );
   }
 
-  // If a request is selected, show detail view
-  if (selectedRequestId) {
-    const selectedRequest = requests.find((r) => r.id === selectedRequestId);
-    if (!selectedRequest) {
-      // Request not found - return to list
-      setSelectedRequestId(null);
-      return null;
-    }
+  const selectedRequest =
+    requests.find((r) => r.id === selectedRequestId) ?? requests[0];
+  const countdown = selectedRequest
+    ? Math.max(0, selectedRequest.timeoutAt - nowSeconds)
+    : 0;
 
-    return (
-      <EventDetailView
-        request={selectedRequest}
-        signingKey={selectedKey}
-        countdown={countdown}
-        onResolve={handleAction}
-        onBack={() => setSelectedRequestId(null)}
-        isResolving={isResolving}
-      />
-    );
-  }
+  const handleSelectRequest = (id: string) => {
+    setSelectedRequestId(id);
+    setShowCompactDetail(true);
+  };
 
-  // Show queue list view
   return (
-    <QueueListView
-      requests={requests}
-      onSelectRequest={setSelectedRequestId}
-      onBatchAction={handleBatchAction}
-    />
+    <div className="grid h-full min-h-0 grid-cols-1 overflow-hidden bg-background md:grid-cols-[330px_minmax(0,1fr)]">
+      <QueueListView
+        requests={requests}
+        selectedRequestId={selectedRequest?.id ?? null}
+        nowSeconds={nowSeconds}
+        onSelectRequest={handleSelectRequest}
+        onBatchAction={handleBatchAction}
+        disabled={isResolving}
+        className={showCompactDetail ? "hidden md:flex" : "flex"}
+      />
+
+      {selectedRequest ? (
+        <EventDetailView
+          request={selectedRequest}
+          signingKey={selectedKey}
+          countdown={countdown}
+          onResolve={handleAction}
+          onBack={() => setShowCompactDetail(false)}
+          showBackButton={showCompactDetail}
+          isResolving={isResolving}
+          className={showCompactDetail ? "flex" : "hidden md:flex"}
+        />
+      ) : (
+        <div className="hidden items-center justify-center border-l border-border bg-background p-6 text-center md:flex">
+          <p className="text-sm font-semibold text-muted-foreground">
+            Select a request to review the exact payload.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,30 +1,18 @@
+import { useState } from "react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  ButtonGroup,
-  ButtonGroupSeparator,
-} from "@/components/ui/button-group";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import type { PendingRequest, ApprovalAction, KeyRecord } from "@/domain/types";
 import { getKindName } from "@/domain/types";
 import {
-  Shield,
-  Globe,
-  Clock,
-  FileText,
-  Check,
-  X,
-  Ban,
-  Key,
-  ChevronDown,
   ArrowLeft,
+  Check,
+  Clock,
   Copy,
+  FileJson,
+  Shield,
+  X,
 } from "lucide-react";
-import { Pubkey } from "@/components/common/pubkey";
+import { SealMark } from "@/components/common/SealMark";
 
 export interface EventDetailViewProps {
   /** The pending request to display */
@@ -37,13 +25,16 @@ export interface EventDetailViewProps {
   onResolve: (action: ApprovalAction) => void;
   /** Callback to return to queue list */
   onBack: () => void;
+  /** Whether to show the back button in compact layouts */
+  showBackButton?: boolean;
   /** Whether the resolve action is in progress */
   isResolving?: boolean;
+  /** Optional layout class */
+  className?: string;
 }
 
 /**
- * EventDetailView displays complete event information for a pending approval request.
- * Shows full content, complete tags, metadata, and signing options.
+ * EventDetailView displays the exact payload a site is asking Ostrilo to sign.
  */
 export function EventDetailView({
   request,
@@ -51,272 +42,319 @@ export function EventDetailView({
   countdown,
   onResolve,
   onBack,
+  showBackButton = true,
   isResolving = false,
+  className,
 }: EventDetailViewProps) {
+  const [rememberChoice, setRememberChoice] = useState(false);
+  const [showRawJson, setShowRawJson] = useState(false);
   const kindName = getKindName(request.event.kind);
   const domain = formatDomain(request.origin);
+  const signingPubkey = signingKey?.pubkey ?? "";
+  const rawEnvelope = {
+    ...request.event,
+    pubkey: signingPubkey || undefined,
+    id: request.eventIdHash,
+  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
 
+  const handleApprove = () => {
+    onResolve(rememberChoice ? "allow" : "allow_once");
+  };
+
+  const handleDeny = () => {
+    onResolve(rememberChoice ? "deny_remember" : "deny");
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="bg-muted/50 p-3 border-b shrink-0">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-            className="gap-1 -ml-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </Button>
-          <Shield className="w-5 h-5 text-primary" />
-          <div className="flex-1 min-w-0">
-            <h1 className="font-semibold text-sm">Event Details</h1>
-          </div>
-          <span className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border bg-background shrink-0">
-            <Clock className="w-3 h-3" />
-            {countdown}s
+    <div
+      className={["flex h-full min-h-0 flex-col bg-background", className]
+        .filter(Boolean)
+        .join(" ")}
+      data-testid="approval-detail"
+    >
+      <div className="shrink-0 border-b border-border bg-card px-4 py-3">
+        <div className="flex items-center gap-3">
+          {showBackButton && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onBack}
+              aria-label="Back to approval queue"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
+          <h1 className="min-w-0 flex-1 text-lg font-bold">
+            {kindName} request
+          </h1>
+          <span className="seal-chip seal-chip-warning font-mono text-sm">
+            {formatCountdown(countdown)}
           </span>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto p-3 space-y-3 min-h-0">
-        {/* Origin */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Globe className="w-3.5 h-3.5" />
-            <span>Origin</span>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium truncate" title={request.origin}>
-              {domain}
+      <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4">
+        <section className="flex items-start gap-3">
+          <SealMark
+            label={domain}
+            size="lg"
+            className="h-12 w-12 text-xl"
+          />
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-bold">{domain}</h2>
+            <p className="text-sm font-semibold text-muted-foreground">
+              Wants you to sign {kindName.toLowerCase()}.
             </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="seal-chip seal-chip-accent">Review required</span>
+              <span className="seal-chip seal-chip-warning font-mono">
+                Expires {formatCountdown(countdown)}
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section className="ink-card overflow-hidden">
+          <FactRow
+            label="Signing as"
+            value={
+              signingPubkey
+                ? truncateMiddle(signingPubkey)
+                : signingKey?.label || "Selected key"
+            }
+            mono
+            copyValue={signingPubkey}
+            onCopy={copyToClipboard}
+          />
+          <FactRow
+            label="Kind"
+            value={`${request.event.kind} · ${kindName}`}
+            mono={false}
+          />
+          <FactRow
+            label="Created"
+            value={formatTimestamp(request.event.created_at)}
+          />
+          {request.eventIdHash && (
+            <FactRow
+              label="Event ID"
+              value={truncateMiddle(request.eventIdHash)}
+              mono
+              copyValue={request.eventIdHash}
+              onCopy={copyToClipboard}
+            />
+          )}
+        </section>
+
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Content
+            </h3>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => copyToClipboard(request.origin)}
-              className="h-6 px-2"
+              className="h-7 px-2"
+              onClick={() => copyToClipboard(request.event.content)}
+              disabled={!request.event.content}
             >
-              <Copy className="w-3 h-3" />
+              <Copy className="h-3.5 w-3.5" />
+              Copy
             </Button>
           </div>
-        </div>
-
-        <hr className="border-border" />
-
-        {/* Event Kind */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <FileText className="w-3.5 h-3.5" />
-            <span>Event Type</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 text-xs rounded-md bg-muted">
-              Kind {request.event.kind}
-            </span>
-            <span className="text-sm font-medium">{kindName}</span>
-          </div>
-        </div>
-
-        <hr className="border-border" />
-
-        {/* Timestamp */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="w-3.5 h-3.5" />
-            <span>Created At</span>
-          </div>
-          <p className="text-sm font-medium">
-            {formatTimestamp(request.event.created_at)}
-          </p>
-        </div>
-
-        <hr className="border-border" />
-
-        {/* Full Content */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <FileText className="w-3.5 h-3.5" />
-            <span>Content</span>
-          </div>
-          <div className="bg-muted/50 rounded-md p-3 max-h-40 overflow-y-auto">
+          <div className="code-panel min-h-20">
             {request.event.content ? (
-              <pre className="text-xs font-mono whitespace-pre-wrap break-all">
+              <pre className="whitespace-pre-wrap break-all text-xs">
                 {request.event.content}
               </pre>
             ) : (
-              <span className="text-xs text-muted-foreground italic">
-                (empty)
-              </span>
+              <span className="text-xs text-muted-foreground">(empty)</span>
             )}
           </div>
-        </div>
+        </section>
 
-        <hr className="border-border" />
-
-        {/* Tags (JSON formatted) */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <FileText className="w-3.5 h-3.5" />
-            <span>Tags</span>
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Tags · {request.event.tags.length}
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2"
+              onClick={() =>
+                copyToClipboard(JSON.stringify(request.event.tags, null, 2))
+              }
+              disabled={request.event.tags.length === 0}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy
+            </Button>
           </div>
-          <div className="bg-muted/50 rounded-md p-3 max-h-40 overflow-y-auto">
-            {request.event.tags.length > 0 ? (
-              <pre className="text-xs font-mono whitespace-pre-wrap">
-                {JSON.stringify(request.event.tags, null, 2)}
-              </pre>
-            ) : (
-              <span className="text-xs text-muted-foreground italic">
-                (no tags)
-              </span>
-            )}
-          </div>
-        </div>
+          <JsonPanel
+            value={request.event.tags}
+            emptyLabel="[]"
+            testId="approval-tags-json"
+          />
+        </section>
 
-        <hr className="border-border" />
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 text-sm font-bold text-[var(--ink-violet)]"
+          onClick={() => setShowRawJson((value) => !value)}
+        >
+          <FileJson className="h-4 w-4" />
+          {showRawJson ? "Hide raw JSON" : "View raw JSON"}
+        </button>
 
-        {/* Signing Key */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Key className="w-3.5 h-3.5" />
-            <span>Signing Key</span>
-          </div>
-          {signingKey ? (
-            <div className="flex items-center gap-2">
-              {signingKey.label && (
-                <span className="text-sm font-medium truncate max-w-[150px]">
-                  {signingKey.label}
-                </span>
-              )}
-              <Pubkey pubkey={signingKey.pubkey} />
-            </div>
-          ) : (
-            <span className="text-sm text-muted-foreground italic">
-              No key selected
-            </span>
-          )}
-        </div>
+        {showRawJson && (
+          <JsonPanel value={rawEnvelope} testId="approval-raw-json" />
+        )}
 
-        <hr className="border-border" />
-
-        {/* Request Metadata */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="w-3.5 h-3.5" />
-            <span>Request Info</span>
-          </div>
-          <div className="text-xs space-y-1">
-            <p>
-              <span className="text-muted-foreground">Request ID:</span>{" "}
-              <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                {request.id}
-              </code>
-            </p>
-            <p>
-              <span className="text-muted-foreground">Created:</span>{" "}
-              {formatTimestamp(request.createdAt)}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Timeout:</span>{" "}
-              {formatTimestamp(request.timeoutAt)}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Help text */}
-      <div className="px-3 pb-2 shrink-0">
-        <p className="text-xs text-muted-foreground text-center">
-          <strong>Allow</strong> signs this event.{" "}
-          <strong>Deny + Remember</strong> blocks future requests from this site
-          for this event type.
+        <p className="flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground">
+          <Shield className="h-4 w-4" />
+          Keys never leave your browser.
         </p>
       </div>
 
-      {/* Action Buttons */}
-      <div className="p-3 border-t bg-muted/30 space-y-2 shrink-0">
-        {/* Allow Button Group */}
-        <ButtonGroup className="w-full">
+      <div className="shrink-0 space-y-3 border-t border-border bg-card p-4">
+        <div className="grid grid-cols-[1fr_2fr] gap-3">
           <Button
-            onClick={() => onResolve("allow_once")}
+            variant="outline"
+            onClick={handleDeny}
             disabled={isResolving}
-            className="flex-1 flex items-center justify-center gap-2"
+            className="h-12"
           >
-            <Check className="w-4 h-4" />
-            Allow Once
+            <X className="h-4 w-4" />
+            Deny
           </Button>
-          <ButtonGroupSeparator />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                disabled={isResolving}
-                className="px-2"
-                aria-label="More allow options"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onResolve("allow")}>
-                <Check className="w-4 h-4 mr-2" />
-                Allow for this Site
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => alert("Trust this site - Coming soon")}
-              >
-                <Shield className="w-4 h-4 mr-2" />
-                Trust this Site
-                <span className="ml-auto text-xs text-muted-foreground">
-                  Soon
-                </span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </ButtonGroup>
+          <Button
+            onClick={handleApprove}
+            disabled={isResolving}
+            className="h-12"
+          >
+            <Check className="h-4 w-4" />
+            Approve & sign
+          </Button>
+        </div>
 
-        {/* Deny Button Group */}
-        <ButtonGroup className="w-full">
-          <Button
-            variant="secondary"
-            onClick={() => onResolve("deny")}
-            disabled={isResolving}
-            className="flex-1 flex items-center justify-center gap-2"
-          >
-            <X className="w-4 h-4" />
-            Deny Once
-          </Button>
-          <ButtonGroupSeparator />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="secondary"
-                disabled={isResolving}
-                className="px-2"
-                aria-label="More deny options"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onResolve("deny_remember")}>
-                <Ban className="w-4 h-4 mr-2" />
-                Deny + Remember
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </ButtonGroup>
+        <label className="flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground">
+          <input
+            type="checkbox"
+            className="h-5 w-5 rounded border-input accent-[var(--ink-violet)]"
+            checked={rememberChoice}
+            onChange={(event) => setRememberChoice(event.target.checked)}
+          />
+          Do not ask again for this kind from this site
+        </label>
       </div>
     </div>
   );
 }
 
-// Helper functions
+function FactRow({
+  label,
+  value,
+  mono,
+  copyValue,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  copyValue?: string;
+  onCopy?: (value: string) => void;
+}) {
+  return (
+    <div className="ink-row">
+      <span className="w-24 shrink-0 text-sm font-semibold text-muted-foreground">
+        {label}
+      </span>
+      <span
+        className={
+          mono
+            ? "min-w-0 flex-1 truncate font-mono text-xs"
+            : "min-w-0 flex-1 text-sm font-semibold"
+        }
+      >
+        {value}
+      </span>
+      {copyValue && onCopy && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => onCopy(copyValue)}
+          aria-label={`Copy ${label}`}
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function JsonPanel({
+  value,
+  emptyLabel,
+  testId,
+}: {
+  value: unknown;
+  emptyLabel?: string;
+  testId?: string;
+}) {
+  const json = JSON.stringify(value, null, 2);
+
+  return (
+    <div className="code-panel" data-testid={testId}>
+      <pre className="whitespace-pre-wrap break-all text-xs">
+        {json ? syntaxHighlightJson(json) : emptyLabel}
+      </pre>
+    </div>
+  );
+}
+
+function syntaxHighlightJson(json: string): ReactNode[] {
+  const tokenPattern =
+    /("(?:\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(?=\s*:))|("(?:\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenPattern.exec(json)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(json.slice(lastIndex, match.index));
+    }
+
+    const [token, key, stringValue, literalValue, numberValue] = match;
+    const className = key
+      ? "text-[var(--ink-violet)]"
+      : stringValue
+        ? "text-foreground"
+        : literalValue
+          ? "text-[var(--ink-red)]"
+          : numberValue
+            ? "text-[var(--ink-amber)]"
+            : undefined;
+
+    nodes.push(
+      <span key={`${match.index}-${token}`} className={className}>
+        {token}
+      </span>
+    );
+    lastIndex = match.index + token.length;
+  }
+
+  if (lastIndex < json.length) {
+    nodes.push(json.slice(lastIndex));
+  }
+
+  return nodes;
+}
 
 function formatDomain(origin: string): string {
   try {
@@ -335,6 +373,19 @@ function formatTimestamp(timestamp: number): string {
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    second: "2-digit",
   });
+}
+
+function formatCountdown(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function truncateMiddle(value: string, head = 10, tail = 8): string {
+  if (value.length <= head + tail + 1) {
+    return value;
+  }
+
+  return `${value.slice(0, head)}...${value.slice(-tail)}`;
 }

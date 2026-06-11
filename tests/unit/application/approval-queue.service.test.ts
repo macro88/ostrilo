@@ -259,7 +259,33 @@ describe("ApprovalQueueService", () => {
 
       // Should return the same request instance
       expect(request2.id).toBe(request1.id);
+      expect(request1.eventIdHash).toBe(eventIdHash);
       expect(queue.count()).toBe(1);
+    });
+
+    it("resolves every caller attached to a duplicate event ID hash", () => {
+      const resolver1 = vi.fn();
+      const resolver2 = vi.fn();
+      const eventIdHash = "abc123hash";
+
+      const request1 = queue.enqueue(
+        "https://example.com",
+        mockEvent,
+        resolver1,
+        eventIdHash
+      );
+      const request2 = queue.enqueue(
+        "https://example.com",
+        mockEvent,
+        resolver2,
+        eventIdHash
+      );
+
+      queue.resolve(request1.id, "allow_once");
+
+      expect(request2.id).toBe(request1.id);
+      expect(resolver1).toHaveBeenCalledWith("allow", "allow_once");
+      expect(resolver2).toHaveBeenCalledWith("allow", "allow_once");
     });
 
     it("creates separate entries for different event ID hashes", () => {
@@ -304,6 +330,26 @@ describe("ApprovalQueueService", () => {
       // Should reuse same request even from different origin
       expect(request2.id).toBe(request1.id);
       expect(queue.count()).toBe(1);
+    });
+
+    it("times out every caller attached to a duplicate event ID hash", () => {
+      const resolver1 = vi.fn();
+      const resolver2 = vi.fn();
+      const eventIdHash = "same-event-hash";
+
+      const request = queue.enqueue(
+        "https://origin1.com",
+        mockEvent,
+        resolver1,
+        eventIdHash
+      );
+      queue.enqueue("https://origin2.com", mockEvent, resolver2, eventIdHash);
+
+      vi.advanceTimersByTime(1000);
+
+      expect(queue.wasTimeout(request.id)).toBe(true);
+      expect(resolver1).toHaveBeenCalledWith("deny", "deny");
+      expect(resolver2).toHaveBeenCalledWith("deny", "deny");
     });
 
     it("clears event ID mapping after resolution", () => {

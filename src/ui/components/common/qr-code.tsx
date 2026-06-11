@@ -29,7 +29,7 @@ export function QRCode({
         size={size}
         level={level}
         includeMargin={includeMargin}
-        className="border-4 border-background rounded-lg shadow-lg"
+        className="rounded-lg border-4 border-background"
       />
     </div>
   );
@@ -56,11 +56,11 @@ export function QRCodeModal({
 }: QRCodeModalProps) {
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(42_34_56_/_0.35)] p-4"
       onClick={onClose}
     >
       <div
-        className="bg-background border border-border rounded-lg p-6 max-w-sm w-full mx-4"
+        className="ink-card p-4 w-full max-w-sm"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">

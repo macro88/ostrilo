@@ -3,9 +3,11 @@ import { useProfile } from "@/ui/hooks/useProfile";
 import type { ProfileMetadata } from "@/domain/profile/types";
 import { Input } from "@/ui/components/ui/input";
 import { Label } from "@/ui/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { ImageUploadField } from "./ImageUploadField";
 import { hexToNpub } from "@/domain/utils/crypto";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
+import { RefreshCw, User } from "lucide-react";
 
 export function ProfileView() {
   const { selectedUnlockedKey } = useKeyManager();
@@ -85,11 +87,13 @@ export function ProfileView() {
 
   if (!selectedPubkey) {
     return (
-      <div className="h-full overflow-y-auto p-3 space-y-3">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-muted rounded-full mx-auto mb-2"></div>
-          <h2 className="text-xl font-semibold">Profile Settings</h2>
-          <p className="text-muted-foreground text-sm">No key selected</p>
+      <div className="screen-shell">
+        <div className="screen-header text-center">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-3 h-14 w-14">
+            <User className="h-6 w-6" />
+          </div>
+          <h2 className="screen-title">Profile Settings</h2>
+          <p className="screen-description">Select a key to manage its Nostr profile.</p>
         </div>
       </div>
     );
@@ -97,21 +101,21 @@ export function ProfileView() {
 
   if (isEditing) {
     return (
-      <div className="h-full overflow-y-auto p-3 space-y-3">
-        <div className="text-center mb-4">
-          <h2 className="text-xl font-semibold">Edit Profile</h2>
-          <p className="text-muted-foreground text-sm">
+      <div className="screen-shell">
+        <div className="screen-header text-center">
+          <h2 className="screen-title">Edit Profile</h2>
+          <p className="screen-description">
             Update your Nostr identity
           </p>
         </div>
 
         {saveError && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+          <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
             <p className="text-sm text-destructive">{saveError}</p>
           </div>
         )}
 
-        <div className="space-y-3">
+        <div className="ink-card p-4 space-y-4">
           <div>
             <Label htmlFor="name">Display Name</Label>
             <Input
@@ -137,7 +141,7 @@ export function ProfileView() {
               maxLength={500}
               rows={4}
               disabled={isSaving}
-              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+              className="min-h-28 w-full resize-y rounded-xl border border-input bg-card px-3 py-2 text-sm shadow-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
             />
             <p className="text-xs text-muted-foreground mt-1">
               {formData.about?.length || 0}/500 characters
@@ -209,20 +213,20 @@ export function ProfileView() {
         </div>
 
         <div className="flex gap-2 pt-2">
-          <button
+          <Button
             onClick={handleSave}
             disabled={isSaving}
-            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-4 rounded-lg font-medium text-sm disabled:opacity-50"
+            className="flex-1"
           >
             {isSaving ? "Saving..." : "Save Changes"}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
             onClick={handleCancelEdit}
             disabled={isSaving}
-            className="px-4 py-2 border border-border rounded-lg font-medium text-sm hover:bg-muted disabled:opacity-50"
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -230,47 +234,48 @@ export function ProfileView() {
 
   // Display mode
   return (
-    <div className="h-full overflow-y-auto p-3 space-y-3">
-      <div className="text-center">
+    <div className="screen-shell">
+      <div className="screen-header text-center">
         {profile?.picture ? (
           <img
             src={profile.picture}
             alt="Profile"
-            className="w-16 h-16 rounded-full mx-auto mb-2 object-cover"
+            className="seal mx-auto mb-3 h-16 w-16 border-2 border-border object-cover"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
             }}
           />
         ) : (
-          <div className="w-16 h-16 bg-muted rounded-full mx-auto mb-2 flex items-center justify-center text-2xl">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-3 h-16 w-16 text-2xl">
             {profile?.name?.[0]?.toUpperCase() || "?"}
           </div>
         )}
-        <h2 className="text-xl font-semibold">Profile Settings</h2>
+        <h2 className="screen-title">Profile Settings</h2>
         {truncatedNpub && (
-          <p className="text-xs text-muted-foreground font-mono mb-1">
+          <p className="mx-auto my-2 w-fit rounded-lg bg-muted px-2.5 py-1 font-mono text-xs text-muted-foreground">
             {truncatedNpub}
           </p>
         )}
-        <p className="text-muted-foreground text-sm">
+        <p className="screen-description">
           Manage your Nostr identity
         </p>
       </div>
 
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+        <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
           <p className="text-sm text-destructive">{error}</p>
-          <button
+          <Button
+            variant="link"
             onClick={handleRefresh}
-            className="mt-2 text-xs text-destructive underline"
+            className="mt-2 h-auto p-0 text-xs text-destructive"
           >
             Try again
-          </button>
+          </Button>
         </div>
       )}
 
       <div className="space-y-2">
-        <div className="bg-card border border-border rounded-lg p-3">
+        <div className="ink-card p-3">
           <h3 className="font-medium mb-1 text-sm">Display Name</h3>
           {loading && !profile ? (
             <p className="text-xs text-muted-foreground animate-pulse">
@@ -283,7 +288,7 @@ export function ProfileView() {
           )}
         </div>
 
-        <div className="bg-card border border-border rounded-lg p-3">
+        <div className="ink-card p-3">
           <h3 className="font-medium mb-1 text-sm">About</h3>
           {loading && !profile ? (
             <p className="text-xs text-muted-foreground animate-pulse">
@@ -296,7 +301,7 @@ export function ProfileView() {
           )}
         </div>
 
-        <div className="bg-card border border-border rounded-lg p-3">
+        <div className="ink-card p-3">
           <h3 className="font-medium mb-1 text-sm">Website</h3>
           {loading && !profile ? (
             <p className="text-xs text-muted-foreground animate-pulse">
@@ -310,35 +315,37 @@ export function ProfileView() {
         </div>
 
         {profile?.nip05 && (
-          <div className="bg-card border border-border rounded-lg p-3">
+          <div className="ink-card p-3">
             <h3 className="font-medium mb-1 text-sm">NIP-05</h3>
             <p className="text-xs text-muted-foreground">{profile.nip05}</p>
           </div>
         )}
 
         {profile?.lud16 && (
-          <div className="bg-card border border-border rounded-lg p-3">
+          <div className="ink-card p-3">
             <h3 className="font-medium mb-1 text-sm">Lightning Address</h3>
             <p className="text-xs text-muted-foreground">{profile.lud16}</p>
           </div>
         )}
 
         <div className="flex gap-2">
-          <button
+          <Button
             onClick={handleEditClick}
             disabled={loading}
-            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-4 rounded-lg font-medium text-sm disabled:opacity-50"
+            className="flex-1"
           >
             Edit Profile
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
             onClick={handleRefresh}
             disabled={loading}
-            className="px-4 py-2 border border-border rounded-lg font-medium text-sm hover:bg-muted disabled:opacity-50"
             title="Refresh profile from relays"
+            aria-label="Refresh profile from relays"
           >
-            ↻
-          </button>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </div>

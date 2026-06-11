@@ -26,23 +26,26 @@ export function BasicSettings() {
 
   if (isLoading) {
     return (
-      <div className="p-4 text-center">
-        <p className="text-muted-foreground">Loading settings...</p>
+      <div className="screen-shell">
+        <div className="ink-card p-4 text-center">
+          <p className="text-sm text-muted-foreground">Loading settings...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto p-3 space-y-4">
-      <div className="text-center mb-4">
-        <h2 className="text-xl font-semibold">Settings</h2>
-        <p className="text-muted-foreground">Quick settings access</p>
+    <div className="screen-shell">
+      <div className="screen-header text-center">
+        <h2 className="screen-title">Settings</h2>
+        <p className="screen-description">Quick controls for this signer window.</p>
       </div>
 
-      {/* Current Key Section */}
-      <div className="bg-card border border-border rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Key className="h-4 w-4" />
+      <div className="ink-card p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
+            <Key className="h-4 w-4" />
+          </div>
           <h3 className="font-medium">Active Key</h3>
         </div>
         {selectedUnlockedKey ? (
@@ -58,20 +61,17 @@ export function BasicSettings() {
         )}
       </div>
 
-      {/* Theme Section */}
-      <div className="bg-card border border-border rounded-lg p-4">
+      <div className="ink-card p-4">
         <ThemeSelector value={settings.theme} onChange={updateTheme} />
       </div>
 
-      {/* Auto-lock Section */}
-      <div className="bg-card border border-border rounded-lg p-4">
+      <div className="ink-card p-4">
         <AutoLockSlider
           value={settings.autoLockMinutes}
           onChange={updateAutoLockMinutes}
         />
       </div>
 
-      {/* Advanced Settings Button */}
       <Button
         variant="outline"
         className="w-full"
