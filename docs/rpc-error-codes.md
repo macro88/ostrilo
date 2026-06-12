@@ -573,4 +573,4 @@ The content script (`content.ts`) forwards error responses unchanged, preserving
 
 - [RPC Architecture](./rpc-architecture.md) - Overall RPC system design
 - [Testing Guide](./TESTING.md) - How to test RPC error conditions
-- [NIP-07 Provider](../openspec/changes/standardize-rpc-error-codes/specs/nip07-provider/spec.md) - NIP-07 specific error scenarios
+- [NIP-07 Provider](../openspec/specs/nip07-provider/spec.md) - NIP-07 specific error scenarios

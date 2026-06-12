@@ -511,8 +511,8 @@ Render each key with:
 
 **Run:**
 ```bash
-npm run test:unit tests/unit/ui/components/KeySelector.test.ts
-npm run test:unit tests/unit/ui/components/AddKeyDialog.test.ts
+pnpm run test:unit tests/unit/ui/components/KeySelector.test.ts
+pnpm run test:unit tests/unit/ui/components/AddKeyDialog.test.ts
 ```
 
 ### Integration Tests
@@ -528,7 +528,7 @@ npm run test:unit tests/unit/ui/components/AddKeyDialog.test.ts
 
 **Run:**
 ```bash
-npm run test:integration tests/integration/multi-key-management.test.ts
+pnpm run test:integration tests/integration/multi-key-management.test.ts
 ```
 
 ### E2E Tests
@@ -543,7 +543,7 @@ npm run test:integration tests/integration/multi-key-management.test.ts
 
 **Run:**
 ```bash
-npm run test:e2e tests/e2e/multi-key-selector.spec.ts
+pnpm run test:e2e tests/e2e/multi-key-selector.spec.ts
 ```
 
 **Note:** E2E tests require built extension and non-headless browser.
@@ -561,7 +561,7 @@ npm run test:e2e tests/e2e/multi-key-selector.spec.ts
 
 **Run:**
 ```bash
-npm run test:unit tests/unit/ui/accessibility/
+pnpm run test:unit tests/unit/ui/accessibility/
 ```
 
 ## Security Considerations
@@ -700,7 +700,7 @@ const { profiles, isLoading } = useProfileMetadata(pubkeys);
 **Solution:** Check console for RPC errors, verify keyId is valid
 
 **Issue:** Tests failing  
-**Solution:** Ensure extension is built (`npm run build`), check mock setup
+**Solution:** Ensure extension is built (`pnpm run build`), check mock setup
 
 ## Future Enhancements
 

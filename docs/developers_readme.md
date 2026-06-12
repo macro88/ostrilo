@@ -241,16 +241,16 @@ Fallback mechanism: If popup creation fails (e.g., blocked by browser), extensio
 
 Unit tests cover queue operations and timeout behavior:
 ```bash
-npm run test:unit tests/unit/application/approval-queue.service.test.ts
+pnpm run test:unit tests/unit/application/approval-queue.service.test.ts
 ```
 
 E2E tests document expected behavior for approval scenarios:
 ```bash
-npm run test:e2e tests/e2e/approval-flow.spec.ts
+pnpm run test:e2e tests/e2e/approval-flow.spec.ts
 ```
 
 Manual testing with a Nostr web client:
-1. Build extension: `npm run build`
+1. Build extension: `pnpm run build`
 2. Load extension in browser
 3. Complete onboarding to create/import a key
 4. Visit a Nostr web app (e.g., nostrudel.ninja, snort.social)
@@ -412,13 +412,13 @@ We welcome contributions from the community! If you'd like to contribute to Ostr
 To run the tests, use the following command:
 
 ```bash
-npm test
+pnpm test
 ```
 
 This will run all the unit and integration tests. To run the end-to-end tests, use the following command:
 
 ```bash
-npm run test:e2e
+pnpm run test:e2e
 ```
 
 We hope this guide has been helpful. If you have any questions, please don't hesitate to open an issue on GitHub.

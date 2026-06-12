@@ -3,7 +3,7 @@
 > **Audience: any agent or human touching Ostrilo UI.** These rules are binding.
 > Canonical mocks: design project "Ostrilo UI Redesign" → `Ostrilo Inkline.html`.
 > Canonical tokens: `src/assets/tailwind.css` (source: `inkline.css` from the same project).
-> If a rule here conflicts with older docs (`ostrilo_arcade_plush_brand_kit_v_1.md`, `UI_REVIEW.md`), **this file wins**. The Arcade Plush kit is retired.
+> If a rule here conflicts with older notes or archived design artifacts, **this file wins**. The Arcade Plush kit is retired.
 
 ---
 

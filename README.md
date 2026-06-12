@@ -75,9 +75,12 @@ See [Testing Documentation](./docs/TESTING.md) for detailed information.
 
 ## Documentation
 
+- [Architecture Primer](./docs/architecture_primer.md) - Project architecture and RPC patterns
+- [Product Requirements](./docs/v2-prd.md) - v2 roadmap and requirement matrix
+- [Design Rules](./docs/design/DESIGN_RULES.md) - Canonical Inkline UI design system
 - [Testing Infrastructure](./docs/TESTING.md) - Comprehensive testing strategy and guidelines
-- [Code Review Guidelines](./docs/CODE_REVIEW.md) - Development standards and review process
-- [Architecture Decisions](./docs/) - Technical documentation and design decisions
+- [Developer Guide](./docs/developers_readme.md) - Contributor-oriented codebase overview
+- [RPC Error Codes](./docs/rpc-error-codes.md) - Standardized RPC error reference
 
 ## Contributing
 

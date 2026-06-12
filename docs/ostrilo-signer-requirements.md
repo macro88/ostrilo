@@ -59,7 +59,7 @@ Traceable requirements table for the WXT + React + shadcn Nostr signer extension
 
 | ID | Title | Priority | Description | Rationale | Acceptance Criteria | Verification |
 |---|---|---|---|---|---|---|
-| NS-B-001 | Tooling | Must | WXT + TS + React + shadcn; no `nostr-tools` in BG | Reproducible builds | `npm run build` outputs bundles | CI |
+| NS-B-001 | Tooling | Must | WXT + TS + React + shadcn; no `nostr-tools` in BG | Reproducible builds | `pnpm run build` outputs bundles | CI |
 | NS-B-002 | Tests | Must | Vitest unit; Playwright E2E with extension | Quality | CI runs both | CI |
 | NS-B-003 | Lint + type | Must | ESLint, TS strict | Safety | No lint or type errors | CI |
 | NS-B-004 | Secrets scanning | Should | Check repo for key material | Safety | CI fails on matches | CI |

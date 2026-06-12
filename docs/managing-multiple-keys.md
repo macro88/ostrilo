@@ -220,7 +220,7 @@ A:
 
 - [Onboarding Guide](./ostrilo-onboarding-requirements.md) - Initial setup and first key creation
 - [Settings & Permissions](./ostrilo-settings-permissions-v1.md) - Per-origin policies and settings
-- [Security Best Practices](./security-fixes/) - Security guidelines and threat models
+- [Signer Requirements](./ostrilo-signer-requirements.md) - Security requirements and threat model boundaries
 
 ## Support
 

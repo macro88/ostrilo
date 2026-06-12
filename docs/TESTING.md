@@ -121,24 +121,24 @@ tests/
 
 ```bash
 # Run all tests
-npm run test
+pnpm test
 
 # Run tests in watch mode
-npm run test:watch
+pnpm run test:watch
 
 # Run specific test categories
-npm run test:unit          # Unit tests only
-npm run test:integration   # Integration tests only
-npm run test:security      # Security tests only
+pnpm run test:unit          # Unit tests only
+pnpm run test:integration   # Integration tests only
+pnpm run test:security      # Security tests only
 
 # Run with coverage
-npm run test:coverage
+pnpm run test:coverage
 
 # Run coverage with UI
-npm run test:coverage:ui
+pnpm run test:coverage:ui
 
 # CI/CD ready command
-npm run test:ci
+pnpm run test:ci
 ```
 
 ### End-to-End Tests
@@ -366,7 +366,7 @@ function createMemoryStorage(): StorageSuite {
 **Continuous Integration:**
 
 ```bash
-npm run test:ci  # Generates JUnit XML + coverage reports
+pnpm run test:ci  # Generates JUnit XML + coverage reports
 ```
 
 **Coverage Reporting:**
@@ -447,7 +447,7 @@ console.log("Debug info:", variable);
 
 ```bash
 # Generate detailed coverage
-npm run test:coverage
+pnpm run test:coverage
 
 # Open HTML coverage report
 # ./coverage/index.html

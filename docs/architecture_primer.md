@@ -287,7 +287,7 @@ This modular RPC system is another **adapter** in our Hexagonal Architecture. It
 
 ### Testing
 
-Hexagonal Architecture makes testing a breeze, and Ostrilo's test suite is structured to mirror the architecture, as detailed in `tests/TESTING.md`.
+Hexagonal Architecture makes testing a breeze, and Ostrilo's test suite is structured to mirror the architecture, as detailed in `TESTING.md`.
 
 - **`tests/unit/domain`:** Tests the pure business logic in complete isolation.
 - **`tests/unit/application`:** Tests the application services by providing "mock" implementations of the ports (e.g., an in-memory storage adapter).

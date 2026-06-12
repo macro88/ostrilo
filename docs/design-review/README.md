@@ -1,10 +1,10 @@
-# Ostrilo Inkline Completion Report
+# Ostrilo Inkline Design Review
 
 Date: 2026-06-11
 
 ## Scope
 
-Implemented the Inkline redesign from `docs/design-handoff/` across the extension UI:
+Implemented the Inkline redesign across the extension UI:
 
 - Onboarding: welcome, create choice, create key, backup
 - Popup and side panel: home, profile, profile edit, activity, quick settings
@@ -20,7 +20,7 @@ Implemented the Inkline redesign from `docs/design-handoff/` across the extensio
 - Replaced the Arcade Plush token layer with Inkline tokens in `src/assets/tailwind.css`.
 - Added `docs/design/DESIGN_RULES.md` as the canonical design-system source.
 - Added repo guidance in `AGENTS.md` and `.github/copilot-instructions.md` to prevent old gradients, accent rails, dot grids, Plush classes, and candy palette choices from returning.
-- Marked `docs/ostrilo_arcade_plush_brand_kit_v_1.md` as superseded.
+- Removed the superseded Arcade Plush brand kit from the active docs set.
 - Updated shared primitives: button, badge, input, select, slider, tabs, dialog, dropdown, avatar, public-key display, QR modal, empty state, and a new `SealMark`.
 - Split logo behavior so popup/header chrome uses the static mascot image, while the 3D model is opt-in for hero moments with a static poster fallback.
 - Migrated rendered surfaces from Plush cards/chips/bubbles to Inkline cards, hairline rows, seal chips, notched primary actions, and terse security copy.
