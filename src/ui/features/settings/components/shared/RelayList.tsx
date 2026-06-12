@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Globe, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 interface RelayListProps {
   relays: string[];
@@ -11,12 +11,24 @@ interface RelayListProps {
 
 export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
   const [newRelay, setNewRelay] = useState("");
+  const [error, setError] = useState("");
 
   const handleAdd = () => {
-    if (newRelay.trim() && newRelay.startsWith("wss://")) {
-      onAdd(newRelay.trim());
-      setNewRelay("");
+    const relay = newRelay.trim();
+
+    if (!relay) {
+      setError("Enter a relay URL before adding it.");
+      return;
     }
+
+    if (!relay.startsWith("wss://")) {
+      setError("Relay URL must start with wss://");
+      return;
+    }
+
+    onAdd(relay);
+    setNewRelay("");
+    setError("");
   };
 
   return (
@@ -34,6 +46,7 @@ export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
               size="sm"
               onClick={() => onRemove(relay)}
               className="h-8 w-8 p-0"
+              aria-label={`Remove ${relay}`}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -46,17 +59,28 @@ export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
         <Input
           placeholder="wss://relay.example.com"
           value={newRelay}
-          onChange={(e) => setNewRelay(e.target.value)}
+          onChange={(e) => {
+            setNewRelay(e.target.value);
+            if (error) setError("");
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               handleAdd();
             }
           }}
+          aria-describedby="relay-url-help"
         />
         <Button onClick={handleAdd} size="icon" aria-label="Add relay">
           <Plus className="h-4 w-4" />
         </Button>
       </div>
+      <p
+        id="relay-url-help"
+        className={error ? "text-sm text-destructive" : "text-sm text-muted-foreground"}
+        role={error ? "alert" : undefined}
+      >
+        {error || "Relays must use secure WebSocket URLs that start with wss://."}
+      </p>
     </div>
   );
 }

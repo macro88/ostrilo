@@ -7,7 +7,9 @@ interface ActivityLogConfigProps {
   maxEntries: number;
   onChange: (value: number) => void;
   onClear: () => void;
-  onExport?: () => void;
+  onExport?: () => void | Promise<void>;
+  exportDisabled?: boolean;
+  exportLabel?: string;
 }
 
 export function ActivityLogConfig({
@@ -15,6 +17,8 @@ export function ActivityLogConfig({
   onChange,
   onClear,
   onExport,
+  exportDisabled = false,
+  exportLabel = "Export Log",
 }: ActivityLogConfigProps) {
   const handleChange = (values: number[]) => {
     onChange(values[0]);
@@ -57,8 +61,13 @@ export function ActivityLogConfig({
           Clear Log
         </Button>
         {onExport && (
-          <Button variant="outline" className="flex-1" onClick={onExport}>
-            Export Log
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={onExport}
+            disabled={exportDisabled}
+          >
+            {exportLabel}
           </Button>
         )}
       </div>

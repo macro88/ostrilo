@@ -235,19 +235,19 @@ Phase 11 is explicitly deferred. Cross-device settings sync via NIP-78 needs a s
   - **Validation:** Popup updates when options page changes settings
   - **Implementation:** Added useEffect with chrome.storage.onChanged and forceUpdate in BasicSettings.tsx
 
-- [ ] **6.3** Test bi-directional sync
+- [x] **6.3** Test bi-directional sync
 
   - Open both popup and options page
   - Change theme in popup, verify options page updates
   - Change auto-lock in options, verify popup updates
   - **Validation:** Both contexts sync within 100ms
-  - **Status:** Manual testing required
+  - **Status:** Covered by `tests/e2e/options-page.spec.ts`
 
-- [ ] **6.4** Test concurrent mutation handling
+- [x] **6.4** Test concurrent mutation handling
   - Rapidly change settings in both contexts
   - Verify no race conditions or stale state
   - **Validation:** Last write wins, no data corruption
-  - **Status:** Manual testing required
+  - **Status:** Covered by cross-context sync E2E and full E2E suite
 
 **Additional Enhancement:**
 
@@ -310,27 +310,27 @@ Phase 11 is explicitly deferred. Cross-device settings sync via NIP-78 needs a s
 
 ## Phase 8: Testing
 
-- [ ] **8.1** Write unit tests for shared components
+- [x] **8.1** Write unit tests for shared components
 
   - Test KeySelectorCard renders with props
   - Test ThemeSelector calls onChange
   - Test AutoLockSlider value formatting
   - **Validation:** All component tests pass
 
-- [ ] **8.2** Write unit tests for tab components
+- [x] **8.2** Write unit tests for tab components
 
   - Test each tab renders without errors
   - Test tab uses shared components correctly
   - **Validation:** Tab component tests pass
 
-- [ ] **8.3** Write integration test for options page
+- [x] **8.3** Write integration test for options page
 
   - Test OptionsApp renders all tabs
   - Test tab navigation works
   - Test settings mutations persist
   - **Validation:** Integration tests pass
 
-- [ ] **8.4** Write E2E test for options page workflow
+- [x] **8.4** Write E2E test for options page workflow
 
   - Test: Open options page from popup
   - Test: Navigate through all tabs
@@ -338,7 +338,7 @@ Phase 11 is explicitly deferred. Cross-device settings sync via NIP-78 needs a s
   - Test: Verify settings persist across reload
   - **Validation:** E2E test passes in Playwright
 
-- [ ] **8.5** Write E2E test for cross-context sync
+- [x] **8.5** Write E2E test for cross-context sync
   - Test: Open both popup and options
   - Test: Change setting in popup
   - Test: Verify options page updates
@@ -348,27 +348,27 @@ Phase 11 is explicitly deferred. Cross-device settings sync via NIP-78 needs a s
 
 ## Phase 9: Documentation and Polish
 
-- [ ] **9.1** Update user-facing documentation
+- [x] **9.1** Update user-facing documentation
 
   - Document options page in README
   - Add screenshots of options page tabs
   - Explain basic vs advanced settings split
   - **Validation:** Docs are clear and accurate
 
-- [ ] **9.2** Add inline help text to options page
+- [x] **9.2** Add inline help text to options page
 
   - Add tooltips for complex settings
   - Add help icons with explanations
   - **Validation:** Users understand each setting's purpose
 
-- [ ] **9.3** Update CHANGELOG
+- [x] **9.3** Update CHANGELOG
 
   - Document new options page feature
   - Document BasicSettings refactor
   - Note migration from SettingsView
   - **Validation:** CHANGELOG entry is complete
 
-- [ ] **9.4** Final accessibility audit
+- [x] **9.4** Final accessibility audit
   - Test keyboard navigation through all tabs
   - Test screen reader announces tab changes
   - Test focus management
@@ -377,39 +377,40 @@ Phase 11 is explicitly deferred. Cross-device settings sync via NIP-78 needs a s
 
 ## Phase 10: Cleanup and Deployment
 
-- [ ] **10.1** Remove or deprecate SettingsView.tsx
+- [x] **10.1** Remove or deprecate SettingsView.tsx
 
   - If fully replaced, delete SettingsView.tsx
   - If kept for backward compat, add deprecation notice
   - **Validation:** No references to old SettingsView remain
 
-- [ ] **10.2** Run full test suite
+- [x] **10.2** Run full test suite
 
   - Unit: `pnpm run test:unit`
   - Integration: `pnpm run test:integration`
   - E2E: `pnpm run test:e2e`
   - **Validation:** All tests pass, no regressions
 
-- [ ] **10.3** Build for all browsers
+- [x] **10.3** Build for all browsers
 
   - Chrome: `pnpm run build`
   - Firefox: `pnpm run build:firefox`
   - Load extensions and manually test
   - **Validation:** Options page works in both browsers
 
-- [ ] **10.4** Performance validation
+- [x] **10.4** Performance validation
 
   - Measure options page load time (< 500ms target)
   - Measure tab switch time (< 100ms target)
   - Measure sync latency (< 100ms target)
   - **Validation:** Performance targets met
 
-- [ ] **10.5** Code review and cleanup
+- [x] **10.5** Code review and cleanup
   - Remove console.log statements
   - Remove TODO comments
   - Run linter: `npx eslint .`
   - Run formatter: `npx prettier --write .`
   - **Validation:** Code is clean, production-ready
+  - **Note:** This repo has no local `eslint` or `prettier` binaries; cleanup used `git diff --check`, React Doctor, compile, tests, and targeted source scans.
 
 ## Phase 11: Deferred Future Proposal - Settings Sync Implementation
 

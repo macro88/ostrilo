@@ -236,7 +236,7 @@ try {
     const approvalQueue = await context.newPage();
     await approvalQueue.setViewportSize({ width: 400, height: 600 });
     await approvalQueue.goto(approvalUrl);
-    await approvalQueue.getByText("Pending Approvals").waitFor({
+    await approvalQueue.getByText(/Approval Inbox|Pending Approvals/).waitFor({
       timeout: 15000,
     });
     await screenshot(approvalQueue, "20-approval-queue");
@@ -249,7 +249,9 @@ try {
     } else {
       await approvalQueue.getByText(/Short Text Note|Kind 1/).click();
     }
-    await approvalQueue.getByText("Signing request").waitFor({ timeout: 10000 });
+    await approvalQueue
+      .getByRole("heading", { name: /request/i })
+      .waitFor({ timeout: 10000 });
     await screenshot(approvalQueue, "21-approval-detail");
   }
 

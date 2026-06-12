@@ -12,6 +12,7 @@ type ExtensionFixtures = {
   extensionId: string;
   openPopup: () => Promise<Page>;
   openSidepanel: () => Promise<Page>;
+  openOptions: () => Promise<Page>;
 };
 
 // Helper to resolve the built extension path (WXT output)
@@ -101,6 +102,20 @@ export const test = base.extend<ExtensionFixtures>({
     const open = async () => {
       const page = await extensionContext.newPage();
       await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+      return page;
+    };
+    await use(open);
+  },
+
+  openOptions: async ({ extensionContext, extensionId, browserName }, use) => {
+    if (browserName !== "chromium") {
+      // @ts-expect-error non-chromium skip
+      await use(undefined);
+      return;
+    }
+    const open = async () => {
+      const page = await extensionContext.newPage();
+      await page.goto(`chrome-extension://${extensionId}/options.html`);
       return page;
     };
     await use(open);

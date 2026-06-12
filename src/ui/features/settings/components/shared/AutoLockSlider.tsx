@@ -35,6 +35,7 @@ export function AutoLockSlider({
         min={min}
         step={step}
         className="w-full"
+        aria-label="Auto-lock timeout"
       />
     </div>
   );

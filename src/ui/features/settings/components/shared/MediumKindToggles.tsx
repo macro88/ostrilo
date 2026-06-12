@@ -28,6 +28,7 @@ export function MediumKindToggles({
             <Switch
               checked={isEnabled}
               onCheckedChange={(checked) => onToggle(kindNum, checked)}
+              aria-label={`Allow kind ${kind} for medium trust origins`}
             />
           </div>
         );

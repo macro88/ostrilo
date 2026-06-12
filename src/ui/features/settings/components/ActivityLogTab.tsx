@@ -2,19 +2,58 @@ import { Clock } from "lucide-react";
 import { ActivityLogConfig } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
+import { activityGetRecent } from "@/infrastructure/messaging/client";
+import { useState } from "react";
 
-function handleExport() {
-  // TODO: Implement log export functionality
-  console.log("Export log");
+type ExportStatus = "idle" | "busy" | "success" | "error";
+
+function downloadJson(filename: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportActivityLog(maxEntries: number) {
+  const { entries, total } = await activityGetRecent({
+    limit: maxEntries,
+    offset: 0,
+  });
+  const exportedAt = new Date().toISOString();
+
+  downloadJson(`ostrilo-activity-log-${exportedAt.slice(0, 10)}.json`, {
+    exportedAt,
+    total,
+    entries,
+  });
 }
 
 export function ActivityLogTab() {
+  const [exportStatus, setExportStatus] = useState<ExportStatus>("idle");
   const {
     settings,
     isLoading,
     updateMaxActivityEntries,
     clearActivityLog,
   } = useAppSettings();
+
+  const handleExport = async () => {
+    setExportStatus("busy");
+
+    try {
+      await exportActivityLog(settings.maxActivityEntries ?? 50);
+      setExportStatus("success");
+    } catch {
+      setExportStatus("error");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -45,7 +84,17 @@ export function ActivityLogTab() {
         onChange={updateMaxActivityEntries}
         onClear={clearActivityLog}
         onExport={handleExport}
+        exportDisabled={exportStatus === "busy"}
+        exportLabel={exportStatus === "busy" ? "Exporting..." : "Export Log"}
       />
+      <p className="text-sm text-muted-foreground" role="status">
+        {exportStatus === "success" &&
+          "Activity log exported as a local JSON file."}
+        {exportStatus === "error" &&
+          "Could not export the activity log. Try again from this page."}
+        {exportStatus === "idle" &&
+          "Exports stay local to this browser and include activity entries only."}
+      </p>
     </div>
   );
 }
