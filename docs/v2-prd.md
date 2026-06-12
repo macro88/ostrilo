@@ -353,6 +353,10 @@ Understanding extension health, usage patterns, and error rates enables data-dri
 
 ## Implementation Roadmap
 
+For multi-session execution workflow and build order, use `docs/session-workflow.md`.
+
+Treat this PRD as the progress ledger: every completed OpenSpec slice must update affected requirement statuses, the Current Implementation Snapshot, and roadmap gap lists before archival. Mark a requirement `✅` only when the full row wording is satisfied and verified; use `🔄` for narrower shipped slices.
+
 ### Status Legend
 
 - ✅ Implemented in the current repository
@@ -444,7 +448,7 @@ All requirements include specific OpenSpec prompts in their respective tables ab
 2. Follow the OpenSpec workflow:
    - Stage 1: Create proposal with `proposal.md`, `tasks.md`, and spec deltas
    - Stage 2: Implement tasks sequentially after approval
-   - Stage 3: Archive after deployment
+   - Stage 3: Update this PRD, then archive after deployment
 3. Ensure all proposals include:
    - Comprehensive requirements with scenarios
    - Security considerations
@@ -522,7 +526,7 @@ All requirements include specific OpenSpec prompts in their respective tables ab
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 2.0 | 2025-12-09 | Copilot Agent | Initial v2 PRD with comprehensive requirements, RTM, MoSCoW, Epics, and roadmap |
-| 2.1 | 2026-06-12 | Codex | Reconciled roadmap and requirement statuses against the current implementation |
+| 2.1 | 2026-06-12 | Codex | Reconciled roadmap and requirement statuses against the current implementation; added multi-session progress workflow |
 
 ---
 
