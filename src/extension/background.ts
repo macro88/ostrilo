@@ -15,6 +15,7 @@ import {
   RpcRouter,
   createRpcMessageListener,
 } from "@/infrastructure/messaging/rpc-router";
+import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 import {
   RPC_ERROR_CODES,
   createRpcErrorResponse,
@@ -74,7 +75,7 @@ async function updateApprovalBadge(count: number): Promise<void> {
  * @returns Promise resolving to the window ID (popup mode) or undefined (sidepanel mode)
  *
  * @remarks
- * - Sidepanel mode: Broadcasts "ostrilo.switchToActivity" message, returns undefined
+ * - Sidepanel mode: Broadcasts switch-to-activity event, returns undefined
  * - Popup mode: Focuses existing window if available, or creates new 640x640 popup
  * - Window ID tracking ensures single approval window across multiple requests
  * - Window close events automatically clear the tracked window ID
@@ -114,7 +115,7 @@ async function focusOrCreateApprovalWindowInner(
     );
     // Send message to sidepanel/popup to switch to Activity tab
     browser.runtime
-      .sendMessage({ __event: "ostrilo.switchToActivity" })
+      .sendMessage({ __event: BROADCAST_EVENTS.SWITCH_TO_ACTIVITY })
       .catch(() => {
         // Ignore if no listeners
       });
@@ -233,7 +234,7 @@ export default defineBackground(() => {
 
     // Broadcast queue.updated message to all listeners (approval window, activity page, etc.)
     browser.runtime
-      .sendMessage({ __event: "ostrilo.queue.updated" })
+      .sendMessage({ __event: BROADCAST_EVENTS.QUEUE_UPDATED })
       .catch(() => {
         // Ignore errors if no listeners are active
       });

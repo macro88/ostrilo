@@ -4,6 +4,7 @@ import type {
   AppSettingsPatch,
   OriginPolicyPatch,
 } from "@/infrastructure/validation/schemas";
+import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 // webextension-polyfill already imported above
 
 export class RpcClientError extends Error {
@@ -233,8 +234,14 @@ export async function updateSettings(patch: AppSettingsPatch) {
 }
 
 export function subscribeSettingsChanged(cb: () => void) {
-  const handler = (msg: any) => {
-    if (msg && msg.__event === "ostrilo.settings.changed") {
+  const handler = (msg: unknown) => {
+    if (
+      typeof msg === "object" &&
+      msg !== null &&
+      "__event" in msg &&
+      (msg as { __event?: unknown }).__event ===
+        BROADCAST_EVENTS.SETTINGS_CHANGED
+    ) {
       // Invalidate cache when settings change externally
       settingsCache = null;
       cb();
