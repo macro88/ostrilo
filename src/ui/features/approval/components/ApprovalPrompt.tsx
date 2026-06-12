@@ -12,6 +12,7 @@ import { QueueListView } from "./QueueListView";
 import { EventDetailView } from "./EventDetailView";
 import { browser } from "wxt/browser";
 import { Logo } from "@/ui/components/logo/Logo";
+import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 
 interface ApprovalPromptState {
   requests: PendingRequest[];
@@ -143,8 +144,14 @@ export function ApprovalPrompt() {
 
   // Listen for real-time queue updates
   useEffect(() => {
-    const handleMessage = (message: any) => {
-      if (message && message.__event === "ostrilo.queue.updated") {
+    const handleMessage = (message: unknown) => {
+      if (
+        typeof message === "object" &&
+        message !== null &&
+        "__event" in message &&
+        (message as { __event?: unknown }).__event ===
+          BROADCAST_EVENTS.QUEUE_UPDATED
+      ) {
         console.log("[ApprovalPrompt] Queue updated, refreshing...");
         fetchRequests();
       }

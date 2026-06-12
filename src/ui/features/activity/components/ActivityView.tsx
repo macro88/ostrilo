@@ -11,6 +11,7 @@ import { useAppSettings } from "@/ui/hooks/useAppSettings";
 import { ActivityEntryList } from "./ActivityEntryList";
 import { ActivityFilters } from "./ActivityFilters";
 import { ActivityPendingApprovals } from "./ActivityPendingApprovals";
+import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 
 interface ActivityViewState {
   originFilter?: string;
@@ -92,8 +93,14 @@ export function ActivityView() {
   useEffect(() => {
     fetchPendingApprovals();
 
-    const handleMessage = (message: any) => {
-      if (message && message.__event === "ostrilo.queue.updated") {
+    const handleMessage = (message: unknown) => {
+      if (
+        typeof message === "object" &&
+        message !== null &&
+        "__event" in message &&
+        (message as { __event?: unknown }).__event ===
+          BROADCAST_EVENTS.QUEUE_UPDATED
+      ) {
         fetchPendingApprovals();
         // In sidepanel mode, auto-show the approval dialog when new request arrives
         if (settings?.sidePanel && !state.showApprovalDialog) {

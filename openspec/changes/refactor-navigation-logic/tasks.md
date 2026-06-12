@@ -1,21 +1,22 @@
 # Tasks
 
-- [ ] Create `src/infrastructure/messaging/events.ts`
+- [x] Create `src/infrastructure/messaging/events.ts`
   - Define `BROADCAST_EVENTS` constant with `SWITCH_TO_ACTIVITY` and `QUEUE_UPDATED`.
-- [ ] Create `src/ui/hooks/useAppNavigation.ts`
+- [x] Create `src/ui/hooks/useAppNavigation.ts`
   - Implement `useAppNavigation` hook managing `activeTab` and listening for `SWITCH_TO_ACTIVITY`.
-- [ ] Refactor `src/ui/components/layout/MainApp.tsx`
+- [x] Refactor `src/ui/components/layout/MainApp.tsx`
   - Replace local state and `useEffect` with `useAppNavigation`.
-- [ ] Update `src/extension/background.ts`
+- [x] Update `src/extension/background.ts`
   - Import and use `BROADCAST_EVENTS.SWITCH_TO_ACTIVITY` instead of hardcoded string.
   - Import and use `BROADCAST_EVENTS.QUEUE_UPDATED` instead of hardcoded string (if applicable).
-- [ ] Update `src/application/services/approval-queue.service.ts`
+- [x] Update `src/application/services/approval-queue.service.ts`
   - Update to use `BROADCAST_EVENTS.QUEUE_UPDATED` (if applicable/accessible).
-- [ ] Update `src/ui/features/approval/components/ApprovalPrompt.tsx`
+  - No direct queue broadcast is emitted from this service; the background callback now uses `BROADCAST_EVENTS.QUEUE_UPDATED`.
+- [x] Update `src/ui/features/approval/components/ApprovalPrompt.tsx`
   - Update to use `BROADCAST_EVENTS.QUEUE_UPDATED`.
-- [ ] Update `src/ui/features/activity/components/ActivityView.tsx`
+- [x] Update `src/ui/features/activity/components/ActivityView.tsx`
   - Update to use `BROADCAST_EVENTS.QUEUE_UPDATED`.
-- [ ] Add validation coverage
+- [x] Add validation coverage
   - Add or update a focused test for `useAppNavigation` message handling if local test utilities support it.
   - Run `pnpm run compile`.
   - Run the relevant Vitest target for navigation and messaging code.

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { AppLayout } from "@/ui/components/layout/AppLayout";
 import { LockScreen } from "@/ui/features/authentication/components/LockScreen";
 import { OnboardingContainer } from "@/ui/features/onboarding/components/OnboardingContainer";
@@ -6,15 +6,14 @@ import { HomeView } from "@/ui/features/home/components/HomeView";
 import { ProfileView } from "@/ui/features/profile/components/ProfileView";
 import { ActivityView } from "@/ui/features/activity/components/ActivityView";
 import { BasicSettings } from "@/ui/features/settings/components/BasicSettings";
-import { TabKey } from "@/ui/components/navigation/BottomTabs";
 import { useOnboarding } from "@/ui/features/onboarding/hooks/useOnboarding";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { AddKeyDialog } from "@/ui/components/dialogs/AddKeyDialog";
 import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
-import { browser } from "wxt/browser";
+import { useAppNavigation } from "@/ui/hooks/useAppNavigation";
 
 export function MainApp() {
-  const [activeTab, setActiveTab] = useState<TabKey>("home");
+  const { activeTab, setActiveTab } = useAppNavigation("home");
   const [isAddKeyDialogOpen, setIsAddKeyDialogOpen] = useState(false);
   const { needsOnboarding } = useOnboarding();
   const { selectedUnlockedKey, isLoading, isLocked, refreshKeys } =
@@ -23,21 +22,6 @@ export function MainApp() {
   const handleAddKey = () => {
     setIsAddKeyDialogOpen(true);
   };
-
-  // Listen for message to switch to Activity tab (for sidepanel mode)
-  useEffect(() => {
-    const handleMessage = (message: any) => {
-      if (message && message.__event === "ostrilo.switchToActivity") {
-        console.log(
-          "[MainApp] Switching to Activity tab for pending approvals"
-        );
-        setActiveTab("activity");
-      }
-    };
-
-    browser.runtime.onMessage.addListener(handleMessage);
-    return () => browser.runtime.onMessage.removeListener(handleMessage);
-  }, []);
 
   // Show onboarding for first-time users
   if (needsOnboarding) {

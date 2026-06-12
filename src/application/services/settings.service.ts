@@ -1,8 +1,9 @@
 import type { StorageSuite } from "@/application/ports/storage";
 import type { AppSettingsV1, Theme } from "@/domain/types";
+import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 
 const SETTINGS_KEY = "appSettings";
-export const SETTINGS_CHANGED_EVENT = "ostrilo.settings.changed";
+export const SETTINGS_CHANGED_EVENT = BROADCAST_EVENTS.SETTINGS_CHANGED;
 
 export class SettingsService {
   constructor(private storage: StorageSuite) {}
