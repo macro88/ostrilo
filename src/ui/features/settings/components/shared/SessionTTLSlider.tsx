@@ -26,6 +26,7 @@ export function SessionTTLSlider({ value, onChange }: SessionTTLSliderProps) {
         min={0}
         step={15}
         className="w-full"
+        aria-label="Session grant timeout"
       />
     </div>
   );

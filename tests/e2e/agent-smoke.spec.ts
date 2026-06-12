@@ -92,7 +92,7 @@ async function completeCreateKeyOnboarding(
   await captureStepScreenshot(page, testInfo, "04-backup-key-revealed-masked");
 
   await page
-    .getByLabel(/I have safely backed up my private key/)
+    .getByRole("checkbox", { name: "Confirm private key backup" })
     .check();
   await page.getByRole("button", { name: "Finish" }).click();
 

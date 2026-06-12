@@ -11,6 +11,7 @@ Ostrilo is a browser extension that provides secure key management for the Nostr
 - **Secure Key Management**: Generate and import Nostr private keys with AES-GCM encryption
 - **Profile Metadata Management**: Fetch, cache, and publish Nostr profiles (NIP-01 kind:0 events) with multi-identity support
 - **Policy-Based Security**: Configure per-origin trust levels and signing policies
+- **Dedicated Options Page**: Manage advanced settings in a full browser tab while keeping quick controls in the popup
 - **Cross-Browser Support**: Compatible with Chrome, Firefox, and Safari
 - **Session Management**: Automatic locking with configurable timeouts
 - **Multi-Relay Integration**: Query multiple Nostr relays in parallel for profile data
@@ -66,6 +67,12 @@ Ostrilo has comprehensive testing infrastructure with 73+ tests covering:
 - **E2E Tests**: Browser extension functionality
 
 See [Testing Documentation](./docs/TESTING.md) for detailed information.
+
+### Settings
+
+The popup Settings view is intentionally small: active key, theme, auto-lock, and an **Advanced Settings** action. Advanced configuration opens the browser extension options page in a full tab.
+
+The options page groups settings into General, Keys & Identities, Security, Permissions, Activity Log, Relays, and Advanced tabs. Changes save automatically and use the same local storage-backed settings model as the popup, so local updates propagate between extension contexts without a manual save step.
 
 ### Browser Support
 
