@@ -1,145 +1,126 @@
-# Proposal: Add Trust Level Policy System
+# Proposal: Harden Trust Level Policy System
 
 ## Status
 
 - **Created:** 2025-12-18
-- **Status:** Needs product/security decisions before full development
+- **Status:** Ready for local hardening implementation
 - **Author:** AI Assistant
 - **Approver:** TBD
 
-## 2026-06-11 Review Status
+## 2026-06-12 Spec Finalization
 
-Current code already has a local `TrustLevel` type, per-origin `trustLevel`, `mediumAllowKinds`, and trust-based evaluation in `src/domain/policy/evaluate.ts`. The missing pieces are protected-kind enforcement, source tracking, global override, official NIP-78 directory fetch/cache, and UI surfacing.
+This change is now scoped to a buildable local hardening slice. Ostrilo already has local trust levels, per-origin rules, session grants, and configurable Medium Trust auto-allow kinds. The active work is to make that existing policy system safer and more explicit before adding network-backed trust sources.
 
-Development readiness: not ready as a full proposal. The local hardening slice is ready to develop, but the official directory and sync-backed trust assignment work is blocked until product/security decisions are made.
-
-Ready local hardening slice:
-
-- Extract/centralize trust definitions and protected kinds.
-- Enforce protected kinds before explicit rules and session grants.
-- Add tests proving kind 1 and kind 9734 never auto-sign.
-- Align default medium/high kind lists with the final product policy.
-
-Blocked decisions before official-directory development:
-
-- Official Ostrilo policy pubkey and key custody/rotation plan.
-- Relay list and fetch failure behavior.
-- Whether global High trust is allowed at all.
-- Whether official trust assignments may preselect first-connection trust.
-- Whether NIP-78 user override sync belongs here or in a separate sync proposal.
+The official directory, global override, source badges, connection-popup trust preselection, and NIP-78 sync ideas are intentionally deferred. They require product and security decisions about official signing keys, relay privacy, source precedence, and user consent. They should return as separate proposals when those decisions are ready.
 
 ## Problem Statement
 
-The current permission system requires users to manage per-kind permissions for every dApp individually. This creates "popup fatigue" - users are bombarded with approval prompts for every signing request, even for trusted applications. While this approach provides maximum security, it creates friction that degrades the user experience, particularly for power users who regularly interact with trusted Nostr clients.
+Ostrilo currently lets each origin carry a `TrustLevel` of `low`, `medium`, or `high`, plus explicit per-kind rules and optional session grants. That gives users useful control, but the policy boundary is too loose:
 
-**Current Pain Points:**
+1. High Trust currently auto-allows every event kind.
+2. Session grants can bypass prompts for sensitive kinds.
+3. Medium Trust kind toggles can drift into unsafe values if settings are polluted or changed later.
+4. The code does not centralize protected-kind policy, so security behavior is hard to audit.
 
-1. **Manual Configuration:** Users must configure permissions for each event kind on each dApp
-2. **Repetitive Prompts:** Even trusted apps require constant approval popups
-3. **No Trust Hierarchy:** The system doesn't distinguish between "new unknown app" vs "established trusted client"
-4. **No Remote Defaults:** There's no mechanism for the Ostrilo team to publish recommended trust levels for well-known dApps
-5. **No Sync Across Devices:** User trust preferences are local-only
+The immediate risk is unexpected auto-signing of high-impact Nostr events, especially text notes and zap requests.
 
 ## Proposed Solution
 
-Implement a **Hybrid Trust Level Policy System** that reduces popup fatigue while maintaining security guardrails. The system operates on three levels of trust (Low, Medium, High) with hardcoded auto-sign rules and remote/user-defined assignments.
+Harden the existing local policy system with immutable protected kinds and centralized trust definitions.
 
-This proposal should be split during implementation:
+```
+Request to sign event
+        |
+        v
+  vault unlocked?
+        |
+        v
+ explicit deny?
+        |
+        v
+ protected kind?  -> ask user
+        |
+        v
+ session grant?
+        |
+        v
+ explicit allow/ask?
+        |
+        v
+ trust default?
+        |
+        v
+ ask fallback
+```
 
-1. Local policy hardening and protected-kind enforcement.
-2. Official directory fetch/cache and source badges after the decisions above are resolved.
-3. Optional user sync via NIP-78 only if a separate privacy review approves it.
+### V1 Decisions
 
-### Key Components
-
-1. **Trust Level Definitions (Hardcoded)**
-
-   - **Low Trust:** Prompt for everything (current behavior)
-   - **Medium Trust:** Auto-sign utility kinds (7, 3, 10000, 10002, 22242), prompt for content
-   - **High Trust:** Auto-sign social interactions (0, 6, 30023, 1984), but NEVER kind 1 (notes) or 9734 (zaps)
-
-2. **Trust Assignment Sources (Priority Order)**
-
-   - Global Override (User setting: "Treat all apps as X")
-   - User-Specific Override (Stored locally or synced via NIP-78)
-   - Official Ostrilo Directory (NIP-78 events signed by official pubkey)
-   - Fallback to Low Trust
-
-3. **Security Guarantees**
-   - Kind 1 (Text Notes) NEVER auto-signed
-   - Kind 9734 (Zap Requests) NEVER auto-signed
-   - Official assignments verified by signature
-   - 24-hour cache TTL for remote policies
-
-### User Experience Improvements
-
-- **First Connection:** Show "Official Trust Level: HIGH" badge if Ostrilo has vetted the dApp
-- **Settings UI:** Simple dropdown per dApp: "Trust Level: Low | Medium | High"
-- **Global Override:** One-click "Trust all apps at Medium" for power users
-- **Sync via Nostr:** Users can publish their trust assignments as NIP-78 events to sync across devices
+- Protected kinds are kind `1` (Short Text Note) and kind `9734` (Zap Request).
+- Protected kinds must never auto-sign through Trust Level, Medium Trust settings, explicit `allow`, or session grant.
+- Explicit `deny` still wins before the protected-kind prompt and denies without asking.
+- Low Trust asks for all event kinds.
+- Medium Trust uses the existing `mediumAllowKinds` setting, but protected kinds are ignored even if present in stored settings.
+- High Trust keeps the current product meaning of "maximum convenience" by auto-signing unprotected event kinds.
+- No official trust directory, relay fetch, global trust override, or NIP-78 sync ships in this change.
+- No migration is required; existing origin policies continue to work and gain the protected-kind guard.
 
 ## Goals
 
-1. **Reduce Popup Fatigue:** Auto-sign low-risk operations for trusted apps
-2. **Maintain Security:** Never auto-sign notes (kind 1) or zaps (kind 9734)
-3. **Enable Curation:** Ostrilo team can publish vetted dApp trust levels
-4. **Support Power Users:** Global override for experienced users
-5. **Cross-Device Sync:** Users can optionally sync policies via Nostr
+1. Prevent auto-signing of protected event kinds in every local policy path.
+2. Keep existing local trust-level behavior where it is intentional.
+3. Centralize trust constants and helper functions so future policy changes are auditable.
+4. Preserve existing per-origin rules, session grant behavior, and settings persistence.
+5. Add focused tests proving protected kinds cannot be auto-signed.
 
 ## Non-Goals
 
-1. **Not** replacing the existing per-kind rules system (still available for granular control)
-2. **Not** fetching policies from untrusted sources
-3. **Not** auto-approving connections (first connection still prompts)
-4. **Not** implementing relay selection UI for policy fetch
+1. Not implementing an official Ostrilo trust directory.
+2. Not fetching, caching, or verifying NIP-78 policy events.
+3. Not adding global trust override settings.
+4. Not adding official/user source badges.
+5. Not adding connection-popup trust preselection.
+6. Not implementing cross-device policy sync.
+7. Not changing the broader approval prompt UX except for protected-kind copy where needed.
 
 ## Success Metrics
 
-1. Reduced number of approval prompts for users with ≥3 connected dApps
-2. Zero reports of unexpected auto-signed notes or zaps
-3. Successful fetch and cache of official policies within 2 seconds
-4. User trust assignments persist across browser restarts
-5. Existing per-kind rules continue to work and override trust levels
+1. Kind `1` and kind `9734` always return `ask` unless explicitly denied or the vault is locked.
+2. High Trust, Medium Trust, explicit `allow`, and session grants cannot auto-sign protected kinds.
+3. Existing Medium Trust settings continue to work for unprotected kinds.
+4. Unit and integration tests cover the evaluation order and protected-kind edge cases.
+5. `openspec validate add-trust-level-policy-system --strict` passes.
 
 ## Dependencies
 
-- **NIP-78 Support:** Must implement arbitrary custom app data format
-- **Signature Verification:** Must verify official Ostrilo pubkey on fetched events
-- **Relay Access:** Must configure relay list for policy fetch
-- **Cache Layer:** Must implement TTL-based caching in chrome.storage.local
+- Existing `PolicyService` and `evaluatePolicy` flow.
+- Existing `AppSettingsV1.mediumAllowKinds` setting.
+- Existing approval queue behavior for policy results with mode `ask`.
+- Existing activity log for final allow/deny signing outcomes.
 
 ## Risks and Mitigations
 
-| Risk                                            | Impact   | Mitigation                                                               |
-| ----------------------------------------------- | -------- | ------------------------------------------------------------------------ |
-| Users accidentally enable "High Trust" globally | High     | Prominent warning text + confirmation dialog                             |
-| Official pubkey compromise                      | Critical | Use well-protected nsec; rotate if compromised; publish revocation event |
-| Relay fetch timeout causes UX lag               | Medium   | Use 2-second timeout; serve stale cache while refetching in background   |
-| NIP-78 event format conflicts                   | Low      | Version content JSON; ignore unknown fields                              |
+| Risk | Impact | Mitigation |
+| --- | --- | --- |
+| Existing users rely on explicit allow for kind 1 | Medium | Protected kinds are security-critical; keep explicit deny but force manual approval for allow/ask paths. |
+| Stored `mediumAllowKinds` contains kind 1 | High | Filter protected kinds during evaluation and prevent UI from enabling them. |
+| RPC path accidentally bypasses domain evaluation | High | Add a secondary sign-event guard that converts protected-kind auto-allow results back to `ask`. |
+| Users do not understand why High Trust still prompts | Low | Add concise UI copy that notes Text Notes and Zap Requests always require approval. |
 
-## Open Questions
+## Future Proposals
 
-1. Should we implement NIP-78 sync for user overrides in v1, or defer to a separate sync proposal?
-2. What should the official Ostrilo pubkey be, and who controls/rotates the signing key?
-3. Which relays should be hardcoded for policy fetch, and what privacy assumptions do they create?
-4. Should we show a "Last Updated" timestamp for official policies in UI?
-5. Should users be able to disable official policy fetching entirely?
-6. Is global High trust allowed, or should the highest global override be Medium?
-7. Which exact event kinds belong in Medium and High trust after the protected-kind rule is applied?
+The following concepts are valuable but intentionally out of this buildable change:
 
-## Alternatives Considered
-
-1. **Per-Kind Only:** Status quo - rejected due to popup fatigue
-2. **All-or-Nothing Trust:** Rejected due to security concerns (too broad)
-3. **Time-Based Grants:** Rejected - doesn't solve repetitive prompts across sessions
-4. **Machine Learning:** Rejected - too complex, privacy concerns
-
-## Related Changes
-
-- None (standalone feature)
+- Official Ostrilo trust directory signed by a dedicated policy key.
+- Relay fetch/cache strategy for official policy events.
+- Source tracking such as `user`, `official`, and `global`.
+- Global Trust Override with a decision about whether global High is allowed.
+- Connection-popup official trust badges.
+- NIP-78 sync of user trust assignments.
+- Policy-specific activity log entry types beyond existing signing allow/deny entries.
 
 ## References
 
-- NIP-78: Arbitrary Custom App Data - https://github.com/nostr-protocol/nips/blob/master/78.md
-- Existing PolicyService: `src/application/services/policy.service.ts`
-- Existing evaluate logic: `src/domain/policy/evaluate.ts`
+- Existing policy evaluation: `src/domain/policy/evaluate.ts`
+- Existing policy service: `src/application/services/policy.service.ts`
+- Existing settings defaults: `src/application/services/settings.service.ts`
+- Existing Medium Trust UI: `src/ui/features/settings/components/shared/MediumKindToggles.tsx`
