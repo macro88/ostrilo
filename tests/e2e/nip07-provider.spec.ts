@@ -157,7 +157,7 @@ test.describe("NIP-07 Provider", () => {
     expect(error).toBeTruthy();
     
     // The error should indicate the vault is locked or no key is selected
-    // Common error messages: "vault_locked", "no_key_selected", "locked"
+    // Common error messages: "locked" or "no_key_selected"
     expect(typeof error).toBe('string');
   });
 

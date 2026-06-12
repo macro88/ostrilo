@@ -8,7 +8,16 @@ const ALT_DAPP_URL = `${ALT_DAPP_ORIGIN}/test-page.html`;
 
 type RpcResponse<T = unknown> =
   | { ok: true; data: T }
-  | { ok: false; error: string; details?: string };
+  | { ok: false; error: RpcErrorObject };
+
+type RpcErrorObject = {
+  code: number;
+  message: string;
+  data?: {
+    errorCode?: string;
+    details?: string;
+  };
+};
 
 type SignResult =
   | {
@@ -16,6 +25,12 @@ type SignResult =
       value: { id: string; pubkey: string; sig: string; content: string };
     }
   | { ok: false; error: string };
+
+function formatRpcError(error: RpcErrorObject): string {
+  const code = error.data?.errorCode ?? error.message;
+  const details = error.data?.details ? `: ${error.data.details}` : "";
+  return `${code}${details}`;
+}
 
 async function sendExtensionRpc<T>(
   page: Page,
@@ -46,9 +61,7 @@ async function sendExtensionRpc<T>(
 
   if (!response.ok) {
     throw new Error(
-      `RPC ${String(message.type)} failed: ${response.error}${
-        response.details ? ` (${response.details})` : ""
-      }`
+      `RPC ${String(message.type)} failed: ${formatRpcError(response.error)}`
     );
   }
 

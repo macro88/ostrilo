@@ -1,5 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
-import { RPC_ERROR_CODES } from "../error-codes";
+import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import { ProfileMetadataSchema } from "@/domain/profile/types";
 
@@ -26,11 +26,10 @@ export class ProfileRpcHandler implements RpcModule {
         return this.handleClearCache(message, context);
 
       default:
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: (message as any).type,
-        };
+          method: (message as any).type,
+        });
     }
   }
 
@@ -42,21 +41,19 @@ export class ProfileRpcHandler implements RpcModule {
       const { pubkey, forceFetch } = (message as any).params || {};
 
       if (!pubkey || typeof pubkey !== "string") {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_REQUEST,
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
           details: "pubkey parameter is required and must be a string",
-        };
+          method: message.type,
+        });
       }
 
       const data = await context.profile.getProfile(pubkey, forceFetch);
       return { ok: true, data };
     } catch (error) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+      return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
         details: error instanceof Error ? error.message : "Unknown error",
-      };
+        method: message.type,
+      });
     }
   }
 
@@ -69,11 +66,10 @@ export class ProfileRpcHandler implements RpcModule {
 
       return { ok: true, data };
     } catch (error) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+      return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
         details: error instanceof Error ? error.message : "Unknown error",
-      };
+        method: "profile.getAll",
+      });
     }
   }
 
@@ -85,23 +81,21 @@ export class ProfileRpcHandler implements RpcModule {
       const { metadata } = (message as any).params || {};
 
       if (!metadata || typeof metadata !== "object") {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_REQUEST,
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
           details: "metadata parameter is required and must be an object",
-        };
+          method: message.type,
+        });
       }
 
       // Validate metadata with Zod
       const validationResult = ProfileMetadataSchema.safeParse(metadata);
       if (!validationResult.success) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_REQUEST,
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
           details: `Invalid metadata: ${validationResult.error.issues
             .map((e) => `${e.path.join(".")}: ${e.message}`)
             .join(", ")}`,
-        };
+          method: message.type,
+        });
       }
 
       // Update profile (signs and publishes to relays)
@@ -122,11 +116,10 @@ export class ProfileRpcHandler implements RpcModule {
 
       return { ok: true, data: null };
     } catch (error) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+      return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
         details: error instanceof Error ? error.message : "Unknown error",
-      };
+        method: message.type,
+      });
     }
   }
 
@@ -140,11 +133,10 @@ export class ProfileRpcHandler implements RpcModule {
       await context.profile.clearCache(pubkey);
       return { ok: true, data: null };
     } catch (error) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+      return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
         details: error instanceof Error ? error.message : "Unknown error",
-      };
+        method: message.type,
+      });
     }
   }
 }

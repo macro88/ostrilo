@@ -1,5 +1,5 @@
 import type { RpcRequest, RpcResponse } from "./rpc";
-import { RPC_ERROR_CODES } from "./error-codes";
+import { RPC_ERROR_CODES, createRpcErrorResponse } from "./error-codes";
 import type { KeyVaultService } from "@/application/services/key-vault.service";
 import type { PolicyService } from "@/application/services/policy.service";
 import type { SettingsService } from "@/application/services/settings.service";
@@ -63,26 +63,24 @@ export class RpcRouter {
       const [namespace] = message.type.split(".");
 
       if (!namespace) {
-        return { ok: false, error: RPC_ERROR_CODES.INVALID_REQUEST };
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_REQUEST);
       }
 
       const module = this.modules[namespace];
       if (!module) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_NAMESPACE,
+        return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_NAMESPACE, {
           details: namespace,
-        };
+          method: message.type,
+        });
       }
 
       return await module.handleRequest(message, context);
     } catch (error: any) {
       console.error("[RPC Router] Error handling request:", error);
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+      return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
         details: error?.message ?? String(error),
-      };
+        method: message.type,
+      });
     }
   }
 
@@ -114,7 +112,7 @@ export function createRpcMessageListener(
     // Validate message format
     if (!message || typeof message !== "object" || !("type" in message)) {
       console.log("[RPC] Invalid request format");
-      sendResponse({ ok: false, error: RPC_ERROR_CODES.INVALID_REQUEST });
+      sendResponse(createRpcErrorResponse(RPC_ERROR_CODES.INVALID_REQUEST));
       return false;
     }
 
@@ -125,24 +123,29 @@ export function createRpcMessageListener(
           message as RpcRequest,
           context
         );
+        const status = result.ok
+          ? "success"
+          : result.error.data.errorCode;
         console.log(
           "[RPC] Sending response for",
           message.type,
           ":",
-          result.ok ? "success" : result.error
+          status
         );
         sendResponse(result);
       } catch (error: any) {
-        const errorResult: RpcResponse = {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
-          details: error?.message ?? String(error),
-        };
+        const errorResult: RpcResponse = createRpcErrorResponse(
+          RPC_ERROR_CODES.UNKNOWN_METHOD,
+          {
+            details: error?.message ?? String(error),
+            method: message.type,
+          }
+        );
         console.log(
           "[RPC] Error handling",
           message.type,
           ":",
-          errorResult.error
+          errorResult.error.data.errorCode
         );
         sendResponse(errorResult);
       }

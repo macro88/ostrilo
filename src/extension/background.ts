@@ -16,6 +16,10 @@ import {
   createRpcMessageListener,
 } from "@/infrastructure/messaging/rpc-router";
 import {
+  RPC_ERROR_CODES,
+  createRpcErrorResponse,
+} from "@/infrastructure/messaging/error-codes";
+import {
   VaultRpcHandler,
   PolicyRpcHandler,
   SettingsRpcHandler,
@@ -304,13 +308,15 @@ export default defineBackground(() => {
     if (message?.__command === "ostrilo.openApprovalWindow") {
       return focusOrCreateApprovalWindow(settings, approvalQueue)
         .then((windowId) => ({ ok: true, windowId }))
-        .catch((err) => ({
-          ok: false,
-          error:
-            err instanceof Error
-              ? err.message
-              : "Failed to open approval window",
-        }));
+        .catch((err) =>
+          createRpcErrorResponse(RPC_ERROR_CODES.APPROVAL_FAILED, {
+            details:
+              err instanceof Error
+                ? err.message
+                : "Failed to open approval window",
+            method: "ostrilo.openApprovalWindow",
+          })
+        );
     }
   });
 

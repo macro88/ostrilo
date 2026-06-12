@@ -120,8 +120,15 @@ export function ActivityView() {
         });
 
         if (!response?.ok) {
+          const errorMessage =
+            typeof response?.error === "object" &&
+            response.error !== null &&
+            "message" in response.error
+              ? String(response.error.message)
+              : response?.error;
+
           throw new Error(
-            response?.error ?? "Failed to open approval window"
+            errorMessage ?? "Failed to open approval window"
           );
         }
       } catch (err) {

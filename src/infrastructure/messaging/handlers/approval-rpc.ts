@@ -1,5 +1,8 @@
 import type { RpcRequest, RpcResponse } from "@/infrastructure/messaging/rpc";
-import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
+import {
+  RPC_ERROR_CODES,
+  createRpcErrorResponse,
+} from "@/infrastructure/messaging/error-codes";
 import type {
   RpcModule,
   ServiceContext,
@@ -45,11 +48,10 @@ export class ApprovalRpcHandler implements RpcModule {
         return this.handleCount();
 
       default:
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: (message as any).type,
-        };
+          method: (message as any).type,
+        });
     }
   }
 
@@ -62,12 +64,11 @@ export class ApprovalRpcHandler implements RpcModule {
       const request = this.queue.getNextPending() ?? null;
       return { ok: true, data: { request } };
     } catch (err) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.APPROVAL_FAILED,
+      return createRpcErrorResponse(RPC_ERROR_CODES.APPROVAL_FAILED, {
         details:
           err instanceof Error ? err.message : "Failed to get next request",
-      };
+        method: "approval.getNext",
+      });
     }
   }
 
@@ -80,12 +81,11 @@ export class ApprovalRpcHandler implements RpcModule {
       const requests = this.queue.getAllPending();
       return { ok: true, data: { requests } };
     } catch (err) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.APPROVAL_FAILED,
+      return createRpcErrorResponse(RPC_ERROR_CODES.APPROVAL_FAILED, {
         details:
           err instanceof Error ? err.message : "Failed to get all requests",
-      };
+        method: "approval.getAll",
+      });
     }
   }
 
@@ -109,11 +109,10 @@ export class ApprovalRpcHandler implements RpcModule {
     });
 
     if (!validation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: validation.error.issues[0]?.message,
-      };
+        method: "approval.resolve",
+      });
     }
 
     try {
@@ -121,11 +120,10 @@ export class ApprovalRpcHandler implements RpcModule {
       const request = this.queue.getById(validation.data.requestId);
 
       if (!request) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_REQUEST,
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
           details: "Request not found",
-        };
+          method: "approval.resolve",
+        });
       }
 
       // If deny_remember, update policy before resolving
@@ -152,12 +150,11 @@ export class ApprovalRpcHandler implements RpcModule {
 
       return { ok: true, data: { resolved } };
     } catch (err) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.APPROVAL_FAILED,
+      return createRpcErrorResponse(RPC_ERROR_CODES.APPROVAL_FAILED, {
         details:
           err instanceof Error ? err.message : "Failed to resolve request",
-      };
+        method: "approval.resolve",
+      });
     }
   }
 
@@ -170,11 +167,10 @@ export class ApprovalRpcHandler implements RpcModule {
       const count = this.queue.count();
       return { ok: true, data: { count } };
     } catch (err) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.APPROVAL_FAILED,
+      return createRpcErrorResponse(RPC_ERROR_CODES.APPROVAL_FAILED, {
         details: err instanceof Error ? err.message : "Failed to get count",
-      };
+        method: "approval.count",
+      });
     }
   }
 

@@ -6,7 +6,10 @@ import { SettingsRpcHandler } from "@/infrastructure/messaging/handlers/settings
 import { CryptoRpcHandler } from "@/infrastructure/messaging/handlers/crypto-rpc";
 import { StateRpcHandler } from "@/infrastructure/messaging/handlers/state-rpc";
 import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
-import { RPC_ERROR_CODES } from "@/infrastructure/messaging/rpc";
+import {
+  RPC_ERROR_CODES,
+  createRpcErrorResponse,
+} from "@/infrastructure/messaging/rpc";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
 
 describe("RPC Router and Handlers", () => {
@@ -78,21 +81,21 @@ describe("RPC Router and Handlers", () => {
       const message = { type: "unknown.method" as any };
       const result = await router.handleRequest(message, mockContext);
 
-      expect(result).toEqual({
-        ok: false,
-        error: RPC_ERROR_CODES.UNKNOWN_NAMESPACE,
-        details: "unknown",
-      });
+      expect(result).toEqual(
+        createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_NAMESPACE, {
+          details: "unknown",
+          method: "unknown.method",
+        })
+      );
     });
 
     it("should handle invalid message type", async () => {
       const message = { type: "" as any };
       const result = await router.handleRequest(message, mockContext);
 
-      expect(result).toEqual({
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
-      });
+      expect(result).toEqual(
+        createRpcErrorResponse(RPC_ERROR_CODES.INVALID_REQUEST)
+      );
     });
 
     it("should handle module errors", async () => {
@@ -105,11 +108,12 @@ describe("RPC Router and Handlers", () => {
       const message = { type: "test.method" as any };
       const result = await router.handleRequest(message, mockContext);
 
-      expect(result).toEqual({
-        ok: false,
-        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
-        details: "Test error",
-      });
+      expect(result).toEqual(
+        createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
+          details: "Test error",
+          method: "test.method",
+        })
+      );
     });
   });
 
@@ -154,11 +158,12 @@ describe("RPC Router and Handlers", () => {
       const message = { type: "vault.unsupported" } as any;
       const result = await handler.handleRequest(message, mockContext);
 
-      expect(result).toEqual({
-        ok: false,
-        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
-        details: "vault.unsupported",
-      });
+      expect(result).toEqual(
+        createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
+          details: "vault.unsupported",
+          method: "vault.unsupported",
+        })
+      );
     });
   });
 
@@ -356,7 +361,7 @@ describe("RPC Router and Handlers", () => {
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
-          expect(result.error).toBe(RPC_ERROR_CODES.LOCKED);
+          expect(result.error.data.errorCode).toBe(RPC_ERROR_CODES.LOCKED);
         }
       });
 
@@ -372,7 +377,9 @@ describe("RPC Router and Handlers", () => {
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
-          expect(result.error).toBe("no_key_selected");
+          expect(result.error.data.errorCode).toBe(
+            RPC_ERROR_CODES.NO_KEY_SELECTED
+          );
         }
       });
     });
@@ -423,7 +430,7 @@ describe("RPC Router and Handlers", () => {
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
-          expect(result.error).toBe(RPC_ERROR_CODES.LOCKED);
+          expect(result.error.data.errorCode).toBe(RPC_ERROR_CODES.LOCKED);
         }
       });
 
@@ -442,7 +449,7 @@ describe("RPC Router and Handlers", () => {
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
-          expect(result.error).toBe(RPC_ERROR_CODES.DENIED);
+          expect(result.error.data.errorCode).toBe(RPC_ERROR_CODES.DENIED);
         }
       });
 
@@ -461,7 +468,7 @@ describe("RPC Router and Handlers", () => {
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
-          expect(result.error).toBe(RPC_ERROR_CODES.NEEDS_APPROVAL);
+          expect(result.error.data.errorCode).toBe(RPC_ERROR_CODES.NEEDS_APPROVAL);
         }
       });
 
@@ -476,7 +483,7 @@ describe("RPC Router and Handlers", () => {
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
-          expect(result.error).toBe(RPC_ERROR_CODES.INVALID_EVENT);
+          expect(result.error.data.errorCode).toBe(RPC_ERROR_CODES.INVALID_EVENT);
         }
       });
 
@@ -491,7 +498,7 @@ describe("RPC Router and Handlers", () => {
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
-          expect(result.error).toBe(RPC_ERROR_CODES.INVALID_ORIGIN);
+          expect(result.error.data.errorCode).toBe(RPC_ERROR_CODES.INVALID_ORIGIN);
         }
       });
 
@@ -530,11 +537,12 @@ describe("RPC Router and Handlers", () => {
       const message = { type: "nostr.unsupported" } as any;
       const result = await handler.handleRequest(message, nostrMockContext);
 
-      expect(result).toEqual({
-        ok: false,
-        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
-        details: "nostr.unsupported",
-      });
+      expect(result).toEqual(
+        createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
+          details: "nostr.unsupported",
+          method: "nostr.unsupported",
+        })
+      );
     });
   });
 
@@ -636,7 +644,9 @@ describe("RPC Router and Handlers", () => {
         const result = await handler.handleRequest(message, mockContext);
 
         expect(result.ok).toBe(false);
-        expect((result as any).error).toBe(RPC_ERROR_CODES.INVALID_REQUEST);
+        expect((result as any).error.data.errorCode).toBe(
+          RPC_ERROR_CODES.INVALID_PARAMS
+        );
       });
 
       it("should update policy on deny_remember action", async () => {
@@ -693,11 +703,12 @@ describe("RPC Router and Handlers", () => {
       const message = { type: "approval.unsupported" } as any;
       const result = await handler.handleRequest(message, mockContext);
 
-      expect(result).toEqual({
-        ok: false,
-        error: RPC_ERROR_CODES.UNKNOWN_METHOD,
-        details: "approval.unsupported",
-      });
+      expect(result).toEqual(
+        createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
+          details: "approval.unsupported",
+          method: "approval.unsupported",
+        })
+      );
     });
   });
 });

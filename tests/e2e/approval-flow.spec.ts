@@ -75,13 +75,11 @@ test.describe("Approval Flow", () => {
     expect(result.error).toBeDefined();
     expect(typeof result.error).toBe('string');
     
-    // The error should be one of the expected types when approval is needed
-    // (vault_locked, policy_denied, user_denied, or approval_required)
+    // The error should be one of the expected canonical types when approval is needed.
     const validErrors = [
-      'vault_locked', 
-      'policy_denied', 
-      'user_denied', 
-      'approval_required',
+      'locked',
+      'denied',
+      'needs_approval',
       'approval_failed',
       'no_key_selected'
     ];
@@ -169,14 +167,13 @@ test.describe("Approval Flow", () => {
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
     
-    // When user clicks Deny, error should be "user_denied"
+    // When user clicks Deny, error should be "denied".
     // In current locked state, error will be different but still valid
     const expectedErrors = [
-      'user_denied',
-      'policy_denied',
-      'vault_locked',
+      'denied',
+      'locked',
       'no_key_selected',
-      'approval_required'
+      'needs_approval'
     ];
     
     const hasExpectedError = expectedErrors.some(expected => 
@@ -217,7 +214,7 @@ test.describe("Approval Flow", () => {
     expect(firstResult.error).toBeDefined();
 
     // After "Deny + Remember", subsequent requests should be automatically denied
-    // with policy_denied error (tested in unit tests for policy service)
+    // with denied error (tested in unit tests for policy service)
   });
 
   test("Task 9.7: Approval flow - Timeout results in auto-deny with timeout error", async ({
@@ -250,7 +247,7 @@ test.describe("Approval Flow", () => {
     }, unsignedEvent);
 
     // In current state, will fail immediately (vault locked)
-    // With proper setup and timeout, should fail with user_denied after timeout
+    // With proper setup and timeout, should fail with denied after timeout
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
     

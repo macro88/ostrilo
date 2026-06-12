@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ActivityRpcHandler } from "@/infrastructure/messaging/handlers/activity-rpc";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
 import type { ActivityLogService } from "@/application/services/activity-log.service";
-import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
+import {
+  RPC_ERROR_CODES,
+  createRpcErrorResponse,
+} from "@/infrastructure/messaging/error-codes";
 
 describe("ActivityRpcHandler", () => {
   let handler: ActivityRpcHandler;
@@ -87,10 +90,11 @@ describe("ActivityRpcHandler", () => {
 
     const response = await handler.handleRequest(request as any, context);
 
-    expect(response).toEqual({
-      ok: false,
-      error: RPC_ERROR_CODES.UNKNOWN_METHOD,
-      details: "activity.unknown",
-    });
+    expect(response).toEqual(
+      createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
+        details: "activity.unknown",
+        method: "activity.unknown",
+      })
+    );
   });
 });

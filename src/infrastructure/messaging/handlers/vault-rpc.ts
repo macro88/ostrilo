@@ -1,5 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
-import { RPC_ERROR_CODES } from "../error-codes";
+import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
   PasswordSchema,
@@ -53,11 +53,10 @@ export class VaultRpcHandler implements RpcModule {
         return this.handleDeleteKey(message, context);
 
       default:
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: (message as any).type,
-        };
+          method: (message as any).type,
+        });
     }
   }
 
@@ -68,11 +67,10 @@ export class VaultRpcHandler implements RpcModule {
     // Validate password
     const passwordValidation = PasswordSchema.safeParse(message.password);
     if (!passwordValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
         details: passwordValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     const data = await context.vault.unlock(message.password);
@@ -91,22 +89,20 @@ export class VaultRpcHandler implements RpcModule {
     // Validate password (required)
     const passwordValidation = PasswordSchema.safeParse(message.password);
     if (!passwordValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
         details: passwordValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate label if provided
     if (message.label !== undefined) {
       const labelValidation = LabelSchema.safeParse(message.label);
       if (!labelValidation.success) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_REQUEST,
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
           details: labelValidation.error.issues[0]?.message,
-        };
+          method: message.type,
+        });
       }
     }
 
@@ -120,19 +116,17 @@ export class VaultRpcHandler implements RpcModule {
       // Translate service errors to RPC codes
       if (error instanceof Error) {
         if (error.message === "password_required") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
             details: "Password is required",
-          };
+            method: message.type,
+          });
         }
         if (error.message === "incorrect_password") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
             details:
               "Incorrect password. Please use the same password as your existing keys.",
-          };
+            method: message.type,
+          });
         }
       }
       throw error; // Re-throw unexpected errors
@@ -146,32 +140,29 @@ export class VaultRpcHandler implements RpcModule {
     // Validate key input
     const keyInputValidation = KeyInputSchema.safeParse(message.keyInput);
     if (!keyInputValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_KEY_INPUT,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_KEY_INPUT, {
         details: keyInputValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate password (required)
     const passwordValidation = PasswordSchema.safeParse(message.password);
     if (!passwordValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
         details: passwordValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate label if provided
     if (message.label !== undefined) {
       const labelValidation = LabelSchema.safeParse(message.label);
       if (!labelValidation.success) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_REQUEST,
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
           details: labelValidation.error.issues[0]?.message,
-        };
+          method: message.type,
+        });
       }
     }
 
@@ -186,26 +177,23 @@ export class VaultRpcHandler implements RpcModule {
       // Translate service errors to RPC codes
       if (error instanceof Error) {
         if (error.message === "key_already_exists") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.KEY_ALREADY_EXISTS,
+          return createRpcErrorResponse(RPC_ERROR_CODES.KEY_ALREADY_EXISTS, {
             details: "A key with this public key already exists",
-          };
+            method: message.type,
+          });
         }
         if (error.message === "incorrect_password") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
             details:
               "Incorrect password. Please use the same password as your existing keys.",
-          };
+            method: message.type,
+          });
         }
         if (error.message === "vault_locked") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.LOCKED,
+          return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
             details: "Vault is locked. Please unlock first.",
-          };
+            method: message.type,
+          });
         }
       }
       throw error; // Re-throw unexpected errors
@@ -219,11 +207,10 @@ export class VaultRpcHandler implements RpcModule {
     // Validate key ID
     const keyIdValidation = KeyIdSchema.safeParse(message.id);
     if (!keyIdValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: keyIdValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     await context.vault.selectKey(message.id);
@@ -237,22 +224,20 @@ export class VaultRpcHandler implements RpcModule {
     // Validate hash hex
     const hashValidation = HashHexSchema.safeParse(message.hashHex);
     if (!hashValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_HASH,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_HASH, {
         details: hashValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate key ID if provided
     if (message.keyId !== undefined) {
       const keyIdValidation = KeyIdSchema.safeParse(message.keyId);
       if (!keyIdValidation.success) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_REQUEST,
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
           details: keyIdValidation.error.issues[0]?.message,
-        };
+          method: message.type,
+        });
       }
     }
 
@@ -268,11 +253,10 @@ export class VaultRpcHandler implements RpcModule {
     if (message.keyId !== undefined) {
       const keyIdValidation = KeyIdSchema.safeParse(message.keyId);
       if (!keyIdValidation.success) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_REQUEST,
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
           details: keyIdValidation.error.issues[0]?.message,
-        };
+          method: message.type,
+        });
       }
     }
 
@@ -287,22 +271,20 @@ export class VaultRpcHandler implements RpcModule {
     // Validate password (required)
     const passwordValidation = PasswordSchema.safeParse(message.password);
     if (!passwordValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
         details: passwordValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate key ID if provided
     if (message.keyId !== undefined) {
       const keyIdValidation = KeyIdSchema.safeParse(message.keyId);
       if (!keyIdValidation.success) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.INVALID_REQUEST,
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
           details: keyIdValidation.error.issues[0]?.message,
-        };
+          method: message.type,
+        });
       }
     }
 
@@ -316,32 +298,28 @@ export class VaultRpcHandler implements RpcModule {
       // Translate service errors to RPC codes
       if (error instanceof Error) {
         if (error.message === "password_required") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
             details: "Password is required",
-          };
+            method: message.type,
+          });
         }
         if (error.message === "incorrect_password") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.INVALID_PASSWORD,
+          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
             details: "Incorrect password",
-          };
+            method: message.type,
+          });
         }
         if (error.message === "key_not_found") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.KEY_NOT_FOUND,
+          return createRpcErrorResponse(RPC_ERROR_CODES.KEY_NOT_FOUND, {
             details: "Key not found",
-          };
+            method: message.type,
+          });
         }
         if (error.message === "vault_locked") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.LOCKED,
+          return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
             details: "Vault is locked",
-          };
+            method: message.type,
+          });
         }
       }
       throw error; // Re-throw unexpected errors
@@ -360,21 +338,19 @@ export class VaultRpcHandler implements RpcModule {
     // Validate key ID
     const keyIdValidation = KeyIdSchema.safeParse(message.id);
     if (!keyIdValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: keyIdValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate label
     const labelValidation = LabelSchema.safeParse(message.label);
     if (!labelValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: labelValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     try {
@@ -382,11 +358,10 @@ export class VaultRpcHandler implements RpcModule {
       return { ok: true, data: null };
     } catch (error) {
       if (error instanceof Error && error.message === "key_not_found") {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.KEY_NOT_FOUND,
+        return createRpcErrorResponse(RPC_ERROR_CODES.KEY_NOT_FOUND, {
           details: "The specified key does not exist",
-        };
+          method: message.type,
+        });
       }
       throw error;
     }
@@ -399,11 +374,10 @@ export class VaultRpcHandler implements RpcModule {
     // Validate key ID
     const keyIdValidation = KeyIdSchema.safeParse(message.id);
     if (!keyIdValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: keyIdValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     try {
@@ -412,18 +386,16 @@ export class VaultRpcHandler implements RpcModule {
     } catch (error) {
       if (error instanceof Error) {
         if (error.message === "key_not_found") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.KEY_NOT_FOUND,
+          return createRpcErrorResponse(RPC_ERROR_CODES.KEY_NOT_FOUND, {
             details: "The specified key does not exist",
-          };
+            method: message.type,
+          });
         }
         if (error.message === "cannot_delete_last_key") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.INVALID_REQUEST,
+          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
             details: "Cannot delete the last remaining key",
-          };
+            method: message.type,
+          });
         }
       }
       throw error;

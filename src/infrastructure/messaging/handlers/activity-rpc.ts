@@ -1,5 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
-import { RPC_ERROR_CODES } from "../error-codes";
+import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
   ActivityGetRecentRequestSchema,
@@ -26,11 +26,10 @@ export class ActivityRpcHandler implements RpcModule {
         return this.handleClear(context);
 
       default:
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: (message as any).type,
-        };
+          method: (message as any).type,
+        });
     }
   }
 
@@ -45,11 +44,10 @@ export class ActivityRpcHandler implements RpcModule {
     });
 
     if (!validation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: validation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     const limit = validation.data.limit ?? 10;
@@ -79,11 +77,10 @@ export class ActivityRpcHandler implements RpcModule {
     });
 
     if (!validation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: validation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     const filters = {
