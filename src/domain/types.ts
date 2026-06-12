@@ -51,6 +51,8 @@ export interface AppSettingsV1 {
   onboardingCompletedAt?: number; // epoch seconds when onboarding was completed
 }
 
+export const DEFAULT_RELAY_URLS = ["wss://relay.primal.net"] as const;
+
 // Default settings shipped with the extension
 export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {
   __version: "settings.v1",
@@ -58,7 +60,7 @@ export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {
   sidePanel: false,
   autoLockMinutes: 5,
   maxActivityEntries: 50,
-  relays: ["wss://relay.damus.io", "wss://nostr.wine"],
+  relays: [...DEFAULT_RELAY_URLS],
   origins: [],
   mediumAllowKinds: [6, 16, 7, 10002], // Repost, Generic Repost, Reaction, Relay list
   sessionTTLMinutes: 0,

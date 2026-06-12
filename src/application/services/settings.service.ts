@@ -1,9 +1,27 @@
 import type { StorageSuite } from "@/application/ports/storage";
-import type { AppSettingsV1, Theme } from "@/domain/types";
+import { DEFAULT_RELAY_URLS, type AppSettingsV1, type Theme } from "@/domain/types";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 
 const SETTINGS_KEY = "appSettings";
 export const SETTINGS_CHANGED_EVENT = BROADCAST_EVENTS.SETTINGS_CHANGED;
+
+const LEGACY_DEFAULT_RELAY_SETS = [
+  ["wss://relay.damus.io", "wss://relay.nostr.band", "wss://nos.lol"],
+  ["wss://relay.damus.io", "wss://relay.primal.net"],
+  ["wss://relay.damus.io", "wss://nostr.wine"],
+];
+
+function isLegacyDefaultRelaySet(relays: unknown): relays is string[] {
+  if (!Array.isArray(relays)) {
+    return false;
+  }
+
+  return LEGACY_DEFAULT_RELAY_SETS.some(
+    (legacyRelays) =>
+      relays.length === legacyRelays.length &&
+      relays.every((relay, index) => relay === legacyRelays[index])
+  );
+}
 
 export class SettingsService {
   constructor(private storage: StorageSuite) {}
@@ -12,8 +30,16 @@ export class SettingsService {
     const existing = await this.storage.sync.get<
       Partial<AppSettingsV1> & Record<string, any>
     >(SETTINGS_KEY);
-    if (existing && existing.__version === "settings.v1")
-      return existing as AppSettingsV1;
+    if (existing && existing.__version === "settings.v1") {
+      const current = existing as AppSettingsV1;
+      if (isLegacyDefaultRelaySet(current.relays)) {
+        const next = { ...current, relays: [...DEFAULT_RELAY_URLS] };
+        await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
+        return next;
+      }
+
+      return current;
+    }
     // Initialize or migrate to defaults when missing or invalid
     const d = defaultSettings();
     const next: AppSettingsV1 = {
@@ -69,7 +95,7 @@ export function defaultSettings(): AppSettingsV1 {
     theme: "system" as Theme,
     sidePanel: false,
     autoLockMinutes: 15,
-    relays: ["wss://relay.damus.io", "wss://relay.primal.net"],
+    relays: [...DEFAULT_RELAY_URLS],
     origins: [],
     mediumAllowKinds: [6, 16, 7, 10002],
     sessionTTLMinutes: 0,

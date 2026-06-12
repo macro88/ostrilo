@@ -336,7 +336,7 @@ interface ProfileMetadata {
 
 ProfileService uses a multi-relay strategy for reliability:
 
-- **Default Relays:** `wss://relay.damus.io`, `wss://relay.nostr.band`, `wss://nos.lol`
+- **Default Relays:** `wss://relay.primal.net`
 - **Query Strategy:** Parallel queries to all configured relays
 - **Deduplication:** Events deduplicated by ID across relays
 - **Event Selection:** Highest `created_at` timestamp wins

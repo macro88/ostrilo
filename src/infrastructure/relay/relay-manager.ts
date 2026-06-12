@@ -21,6 +21,15 @@ export class RelayManager implements INostrRelay {
   private relays: NostrRelayAdapter[] = [];
 
   constructor(relayUrls: string[]) {
+    this.setRelayAdapters(relayUrls);
+  }
+
+  async setRelayUrls(relayUrls: string[]): Promise<void> {
+    await this.disconnect();
+    this.setRelayAdapters(relayUrls);
+  }
+
+  private setRelayAdapters(relayUrls: string[]): void {
     this.relays = relayUrls.map((url) => new NostrRelayAdapter(url));
   }
 
@@ -33,6 +42,11 @@ export class RelayManager implements INostrRelay {
     onEvent: NostrEventCallback,
     onEOSE?: NostrEOSECallback
   ): Promise<string> {
+    if (this.relays.length === 0) {
+      onEOSE?.();
+      return "";
+    }
+
     // Track seen event IDs to deduplicate
     const seenEventIds = new Set<string>();
 
@@ -46,24 +60,57 @@ export class RelayManager implements INostrRelay {
 
     // Track EOSE from all relays
     let eoseCount = 0;
+    let expectedEoseCount = this.relays.length;
+    let didCallEOSE = false;
+    const maybeCallEOSE = () => {
+      if (!didCallEOSE && onEOSE && eoseCount >= expectedEoseCount) {
+        didCallEOSE = true;
+        onEOSE();
+      }
+    };
     const wrappedEOSE: NostrEOSECallback | undefined = onEOSE
       ? () => {
           eoseCount++;
-          if (eoseCount === this.relays.length) {
-            onEOSE();
-          }
+          maybeCallEOSE();
         }
       : undefined;
 
     // Subscribe to all relays in parallel
-    const subIds = await Promise.all(
+    const results = await Promise.allSettled(
       this.relays.map((relay) =>
         relay.subscribe(filter, deduplicatedCallback, wrappedEOSE)
       )
     );
 
+    const successfulSubscriptions = results.filter(
+      (result) => result.status === "fulfilled"
+    ).length;
+
+    if (successfulSubscriptions === 0) {
+      const errors = results
+        .filter((result) => result.status === "rejected")
+        .map((result) => result.reason?.message ?? String(result.reason))
+        .join(", ");
+
+      console.warn(`Relay subscription failed on all relays: ${errors}`);
+      onEOSE?.();
+      return results.map(() => "").join(",");
+    }
+
+    expectedEoseCount = successfulSubscriptions;
+    maybeCallEOSE();
+
+    const failures = results.filter((result) => result.status === "rejected");
+    if (failures.length > 0) {
+      console.warn(
+        `Relay subscription succeeded on ${successfulSubscriptions}/${results.length} relays`
+      );
+    }
+
     // Return composite subscription ID (all relay subIds joined)
-    return subIds.join(",");
+    return results
+      .map((result) => (result.status === "fulfilled" ? result.value : ""))
+      .join(",");
   }
 
   /**
@@ -140,6 +187,6 @@ export class RelayManager implements INostrRelay {
    * Get relay URLs.
    */
   getRelayUrls(): string[] {
-    return this.relays.map((relay) => (relay as any).relayUrl);
+    return this.relays.map((relay) => relay.getRelayUrl());
   }
 }

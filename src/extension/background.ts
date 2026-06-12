@@ -32,6 +32,9 @@ import {
   ProfileRpcHandler,
 } from "@/infrastructure/messaging/handlers";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
+import { isValidRelayUrl } from "@/domain/utils/validation";
+
+type RelaySettings = { relays?: unknown };
 
 const APPROVAL_WINDOW_WIDTH = 960;
 const APPROVAL_WINDOW_HEIGHT = 640;
@@ -40,6 +43,21 @@ const APPROVAL_BADGE_COLOR = "#5f50a0";
 // Window tracking state for approval popup
 let approvalWindowId: number | null = null;
 let approvalWindowOperation: Promise<number | undefined> | null = null;
+
+function normalizeRelayUrls(relays: unknown): string[] {
+  if (!Array.isArray(relays)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      relays
+        .filter((relay): relay is string => typeof relay === "string")
+        .map((relay) => relay.trim())
+        .filter(isValidRelayUrl)
+    )
+  );
+}
 
 /**
  * Update the browser action badge to mirror the current approval queue depth.
@@ -203,13 +221,19 @@ export default defineBackground(() => {
     })
     .catch((err) => console.warn("Failed to sync activity log settings", err));
 
-  // Initialize relay manager with default relays
-  const defaultRelays = [
-    "wss://relay.damus.io",
-    "wss://relay.nostr.band",
-    "wss://nos.lol",
-  ];
-  const relayManager = new RelayManager(defaultRelays);
+  const relayManager = new RelayManager([]);
+
+  const syncRelayManager = (relaySettings?: RelaySettings) => {
+    const relayUrls = normalizeRelayUrls(relaySettings?.relays);
+    relayManager.setRelayUrls(relayUrls).catch((err) => {
+      console.warn("Failed to sync relay settings", err);
+    });
+  };
+
+  settings
+    .get()
+    .then(syncRelayManager)
+    .catch((err) => console.warn("Failed to load relay settings", err));
 
   // Initialize profile service
   const profile = new ProfileService(storage, relayManager, vault);
@@ -341,6 +365,10 @@ export default defineBackground(() => {
   }
   apply();
   browser.storage.onChanged.addListener((changes) => {
+    if (changes.appSettings?.newValue) {
+      syncRelayManager(changes.appSettings.newValue as RelaySettings);
+    }
+
     if ("isDocked" in changes) {
       apply();
     }

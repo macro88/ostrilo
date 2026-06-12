@@ -179,6 +179,10 @@ export class NostrRelayAdapter implements INostrRelay {
    * Handle WebSocket disconnection.
    */
   private handleDisconnect(): void {
+    if (this.subscriptions.size === 0 && this.pendingPublishes.size === 0) {
+      return;
+    }
+
     if (this.reconnectTimeout) {
       return; // Already attempting reconnect
     }
@@ -270,9 +274,17 @@ export class NostrRelayAdapter implements INostrRelay {
    */
   async close(subId: string): Promise<void> {
     if (this.subscriptions.has(subId)) {
-      this.send(["CLOSE", subId]);
+      try {
+        this.send(["CLOSE", subId]);
+      } catch {
+        // The relay may already be disconnected; removing the local subscription is enough.
+      }
       this.subscriptions.delete(subId);
     }
+  }
+
+  getRelayUrl(): string {
+    return this.relayUrl;
   }
 
   /**

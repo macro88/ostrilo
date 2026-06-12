@@ -163,7 +163,7 @@ export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {
   theme: "system",
   sidePanel: false,
   autoLockMinutes: 5,
-  relays: ["wss://relay.damus.io","wss://nostr.wine"],
+  relays: ["wss://relay.primal.net"],
   keys: [],
   origins: [],
   mediumAllowKinds: [6, 16, 7, 10002],
