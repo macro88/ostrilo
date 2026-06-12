@@ -37,18 +37,17 @@ export const OpenInSelector: React.FC = () => {
   const handleModeChange = async (mode: DisplayMode) => {
     setDisplayMode(mode);
     const shouldDock = mode === "sidepanel";
-    setIsDocked(shouldDock);
 
-    // Also update the main app settings
-    await updateSidePanel(shouldDock);
+    const updates: Promise<unknown>[] = [
+      setIsDocked(shouldDock),
+      updateSidePanel(shouldDock),
+    ];
 
-    if (!supported) return;
-
-    if (shouldDock) {
-      await enableDocking(true);
-    } else {
-      await disableDocking();
+    if (supported) {
+      updates.push(shouldDock ? enableDocking(true) : disableDocking());
     }
+
+    await Promise.all(updates);
   };
 
   return (

@@ -86,7 +86,7 @@ export function KeySelectorCard({
   };
 
   return (
-    <div className="space-y-3" role="list" aria-label="Manage your Nostr keys">
+    <ul className="space-y-3" aria-label="Manage your Nostr keys">
       {keys.map((key) => {
         const profile = profiles.get(key.publicKeyHex);
         const displayName =
@@ -101,7 +101,7 @@ export function KeySelectorCard({
           : "";
 
         return (
-          <div
+          <li
             key={key.id}
             className={cn(
               "flex items-center gap-3 rounded-[10px] border bg-muted/35 p-3",
@@ -129,10 +129,16 @@ export function KeySelectorCard({
                     size="sm"
                     variant="ghost"
                     onClick={() => handleSaveEdit(key.id)}
+                    aria-label={`Save label for ${displayName}`}
                   >
                     <Check className="h-4 w-4" />
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleCancelEdit}
+                    aria-label={`Cancel editing ${displayName}`}
+                  >
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -170,6 +176,7 @@ export function KeySelectorCard({
                     size="sm"
                     variant="ghost"
                     onClick={() => handleStartEdit(key.id, key.label)}
+                    aria-label={`Rename ${displayName}`}
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
@@ -181,15 +188,16 @@ export function KeySelectorCard({
                     onClick={() => handleDelete(key.id)}
                     disabled={keys.length === 1}
                     className="text-destructive hover:text-destructive"
+                    aria-label={`Delete ${displayName}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
               </div>
             )}
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }

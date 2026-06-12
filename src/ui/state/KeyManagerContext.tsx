@@ -6,7 +6,7 @@
 
 import React, {
   createContext,
-  useContext,
+  use,
   useState,
   useCallback,
   useEffect,
@@ -67,7 +67,7 @@ const KeyManagerContext = createContext<KeyManagerContextType | undefined>(
 );
 
 export function useKeyManagerContext() {
-  const context = useContext(KeyManagerContext);
+  const context = use(KeyManagerContext);
   if (!context) {
     throw new Error(
       "useKeyManagerContext must be used within KeyManagerProvider"

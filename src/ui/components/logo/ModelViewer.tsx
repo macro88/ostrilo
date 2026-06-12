@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -325,20 +325,23 @@ class OstrichViewer {
   }
 }
 
-const SceneSetup: React.FC<SceneSetupProps> = ({
+function SceneSetup({
     fileUrl,
     textureUrl,
     config,
     posterUrl,
-}) => {
+}: SceneSetupProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewerRef = useRef<OstrichViewer | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const initialConfigRef = useRef(config);
 
     useEffect(() => {
         if (!containerRef.current) return;
         
-        const viewer = new OstrichViewer(containerRef.current, config);
+        const viewer = new OstrichViewer(
+            containerRef.current,
+            initialConfigRef.current
+        );
         viewerRef.current = viewer;
 
         return () => {
@@ -355,9 +358,7 @@ const SceneSetup: React.FC<SceneSetupProps> = ({
 
     useEffect(() => {
         if (viewerRef.current && fileUrl) {
-            setIsLoading(true);
             viewerRef.current.loadModel(fileUrl, textureUrl);
-        setTimeout(() => setIsLoading(false), 500);
         }
     }, [fileUrl, textureUrl]);
 
@@ -373,9 +374,7 @@ const SceneSetup: React.FC<SceneSetupProps> = ({
             )}
             <div
                 ref={containerRef}
-                className={`relative h-full w-full transition-opacity duration-150 ${
-                    isLoading ? "opacity-0" : "opacity-100"
-                }`}
+                className="relative h-full w-full transition-opacity duration-150"
             />
         </div>
     )

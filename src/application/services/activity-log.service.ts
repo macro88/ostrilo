@@ -121,11 +121,12 @@ export class ActivityLogService {
   async count(
     filters?: Pick<ActivityFilters, "origin" | "kind">
   ): Promise<number> {
-    await this.ensureInitialized();
-
     if (!filters) {
+      await this.ensureInitialized();
       return this.entries.length;
     }
+
+    await this.ensureInitialized();
 
     let filtered = this.entries;
 

@@ -50,22 +50,30 @@ export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
       m
     );
 
-  let lastErr: any;
-  for (const delay of [0, 80, 160, 320]) {
+  const retryDelays = [0, 80, 160, 320];
+  const runAttempt = async (index: number): Promise<T> => {
+    const delay = retryDelays[index];
+
+    if (delay) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
     try {
-      if (delay) await new Promise((r) => setTimeout(r, delay));
       return await attempt();
     } catch (e: any) {
-      lastErr = e;
       const msg = e?.message || String(e);
       // Only retry on connection/warmup issues, not on RPC-level errors
-      if (!isWarmup(msg)) break;
-      // continue and retry with next delay
+      if (!isWarmup(msg) || index === retryDelays.length - 1) {
+        throw e instanceof Error
+          ? e
+          : new Error(String(e) || `rpc:${method}:transport_failed`);
+      }
+
+      return runAttempt(index + 1);
     }
-  }
-  throw lastErr instanceof Error
-    ? lastErr
-    : new Error(String(lastErr) || `rpc:${method}:transport_failed`);
+  };
+
+  return runAttempt(0);
 }
 
 export async function evaluatePolicy(origin: string, kind: number) {

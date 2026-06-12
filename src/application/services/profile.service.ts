@@ -76,10 +76,16 @@ export class ProfileService {
     const keys = await this.keyVault.listKeys();
     const profiles = new Map<string, ProfileMetadata>();
 
-    for (const key of keys) {
-      const profile = await this.getProfile(key.pubkey);
+    const results = await Promise.all(
+      keys.map(async (key) => ({
+        pubkey: key.pubkey,
+        profile: await this.getProfile(key.pubkey),
+      }))
+    );
+
+    for (const { pubkey, profile } of results) {
       if (profile) {
-        profiles.set(key.pubkey, profile);
+        profiles.set(pubkey, profile);
       }
     }
 
@@ -100,12 +106,14 @@ export class ProfileService {
     }
 
     // Get selected key
-    const settings = await this.keyVault.getSettings();
+    const [settings, keys] = await Promise.all([
+      this.keyVault.getSettings(),
+      this.keyVault.listKeys(),
+    ]);
     if (!settings?.selectedKeyId) {
       throw new Error("No key selected");
     }
 
-    const keys = await this.keyVault.listKeys();
     const selectedKey = keys.find((k) => k.id === settings.selectedKeyId);
     if (!selectedKey) {
       throw new Error("Selected key not found");
@@ -123,11 +131,11 @@ export class ProfileService {
     // Sign event via KeyVaultService
     const signedEvent = await this.keyVault.signEvent(unsignedEvent);
 
-    // Publish to relay
-    await this.relay.publish(signedEvent);
-
-    // Update cache optimistically
-    await this.cacheProfile(selectedKey.pubkey, validated, signedEvent.id);
+    // Publish to relay and update cache optimistically
+    await Promise.all([
+      this.relay.publish(signedEvent),
+      this.cacheProfile(selectedKey.pubkey, validated, signedEvent.id),
+    ]);
   }
 
   /**

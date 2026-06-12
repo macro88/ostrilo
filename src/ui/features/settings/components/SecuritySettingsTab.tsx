@@ -15,15 +15,9 @@ export function SecuritySettingsTab() {
     updateSessionTTLMinutes,
     resetSettings,
   } = useAppSettings();
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
-
-  // Check biometric availability
-  useState(() => {
-    if ("credentials" in navigator && "create" in navigator.credentials) {
-      setBiometricAvailable(true);
-    }
-  });
+  const biometricAvailable =
+    "credentials" in navigator && "create" in navigator.credentials;
 
   if (isLoading) {
     return (
@@ -64,6 +58,7 @@ export function SecuritySettingsTab() {
               checked={biometricEnabled}
               onChange={(e) => setBiometricEnabled(e.target.checked)}
               className="rounded"
+              aria-label="Enable biometric unlock"
             />
           </div>
         )}

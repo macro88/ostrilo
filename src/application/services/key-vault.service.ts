@@ -309,7 +309,7 @@ export class KeyVaultService {
     try {
       // Derive and decrypt each key into memory
       this.unlocked.clear();
-      for (const rec of records) {
+      await Promise.all(records.map(async (rec) => {
         const salt = new Uint8Array(rec.salt);
         const iv = new Uint8Array(rec.iv);
         const ct = new Uint8Array(rec.ct);
@@ -329,7 +329,7 @@ export class KeyVaultService {
             zeroize(pt);
           }
         }
-      }
+      }));
     } finally {
       // Always zeroize password buffer
       zeroize(passwordBuffer);

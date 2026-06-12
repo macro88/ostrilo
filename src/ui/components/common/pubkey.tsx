@@ -52,7 +52,6 @@ export function Pubkey({
     <>
       <div
         className={`flex items-center justify-between gap-3 w-full ${className}`}
-        role="group"
         aria-label="Public key display"
       >
         <div className="flex items-center gap-3 min-w-0">

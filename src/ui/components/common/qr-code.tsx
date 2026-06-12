@@ -15,7 +15,7 @@ interface QRCodeProps {
  * Reusable QR code component that displays a QR code in an SVG format.
  * Optimized for displaying public keys and other text data.
  */
-export function QRCode({
+function QRCode({
   value,
   size = 256,
   level = "M",
@@ -55,16 +55,17 @@ export function QRCodeModal({
   showValue = true,
 }: QRCodeModalProps) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(42_34_56_/_0.35)] p-4"
-      onClick={onClose}
+    <dialog
+      open
+      className="fixed inset-0 z-50 flex h-full w-full max-w-none items-center justify-center bg-[rgb(42_34_56_/_0.35)] p-4 backdrop:bg-transparent"
+      aria-modal="true"
+      aria-labelledby="qr-code-title"
     >
-      <div
-        className="ink-card p-4 w-full max-w-sm"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="ink-card p-4 w-full max-w-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">{title}</h3>
+          <h3 id="qr-code-title" className="text-lg font-semibold">
+            {title}
+          </h3>
           <Button
             size="icon"
             variant="ghost"
@@ -82,6 +83,6 @@ export function QRCodeModal({
           </p>
         )}
       </div>
-    </div>
+    </dialog>
   );
 }

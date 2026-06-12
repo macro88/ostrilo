@@ -8,18 +8,18 @@ import {
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 
+function openOptionsPage() {
+  // Type assertions for browser extension APIs
+  const browserAPI = (globalThis as any).browser || (globalThis as any).chrome;
+  if (browserAPI?.runtime?.openOptionsPage) {
+    browserAPI.runtime.openOptionsPage();
+  }
+}
+
 export function BasicSettings() {
   const { settings, isLoading, updateTheme, updateAutoLockMinutes } =
     useAppSettings();
   const { selectedUnlockedKey } = useKeyManager();
-
-  const handleOpenOptions = () => {
-    // Type assertions for browser extension APIs
-    const browserAPI = (globalThis as any).browser || (globalThis as any).chrome;
-    if (browserAPI?.runtime?.openOptionsPage) {
-      browserAPI.runtime.openOptionsPage();
-    }
-  };
 
   // Note: useAppSettings hook already handles storage changes internally via useWxtStorage
   // Settings components will re-render automatically when values change
@@ -75,7 +75,7 @@ export function BasicSettings() {
       <Button
         variant="outline"
         className="w-full"
-        onClick={handleOpenOptions}
+        onClick={openOptionsPage}
       >
         <SettingsIcon className="h-4 w-4 mr-2" />
         Advanced Settings

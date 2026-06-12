@@ -64,15 +64,8 @@ export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {
   sessionTTLMinutes: 0,
 };
 
-// Trust level descriptions for UI
-export const TRUST_LEVEL_DESCRIPTIONS: Record<TrustLevel, string> = {
-  low: "Ask for all events - Maximum security",
-  medium: "Allow common interactions, ask for posts and sensitive actions",
-  high: "Allow all events - Maximum convenience",
-};
-
 // Comprehensive Nostr event kinds mapping
-export const ALL_EVENT_KINDS = {
+const ALL_EVENT_KINDS = {
   0: "User Metadata",
   1: "Short Text Note",
   2: "Recommend Relay",
@@ -256,29 +249,6 @@ export const COMMON_EVENT_KINDS = {
   9735: "Zap",
   10002: "Relay List Metadata",
 } as const;
-
-// Helper function to get medium trust default behavior for a kind
-export function isMediumTrustAllowed(
-  kind: number,
-  settings: AppSettingsV1
-): boolean {
-  return settings.mediumAllowKinds.includes(kind);
-}
-
-// Helper function to generate a new key record (without crypto implementation for now)
-export function createKeyRecord(
-  pubkey: string,
-  label?: string
-): Omit<KeyRecord, "ct" | "iv" | "salt"> {
-  return {
-    id: crypto.randomUUID(),
-    label,
-    pubkey,
-    createdAt: Math.floor(Date.now() / 1000),
-    lastUsedAt: undefined,
-    isSelected: false,
-  };
-}
 
 // Additional types needed for various domain operations
 export interface PolicyContext {

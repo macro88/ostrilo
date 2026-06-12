@@ -65,20 +65,16 @@ export function MainApp() {
     );
   }
 
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case "home":
-        return <HomeView />;
-      case "profile":
-        return <ProfileView />;
-      case "activity":
-        return <ActivityView />;
-      case "settings":
-        return <BasicSettings />;
-      default:
-        return <HomeView />;
-    }
-  };
+  const tabContent =
+    activeTab === "profile" ? (
+      <ProfileView />
+    ) : activeTab === "activity" ? (
+      <ActivityView />
+    ) : activeTab === "settings" ? (
+      <BasicSettings />
+    ) : (
+      <HomeView />
+    );
 
   return (
     <>
@@ -87,7 +83,7 @@ export function MainApp() {
         onTabChange={setActiveTab}
         onAddKey={handleAddKey}
       >
-        {renderTabContent()}
+        {tabContent}
       </AppLayout>
 
       <AddKeyDialog

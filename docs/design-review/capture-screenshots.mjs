@@ -36,7 +36,7 @@ async function launchContext() {
 
 function startServer() {
   const html =
-    '<!doctype html><html><head><meta charset="utf-8"><title>Ostrilo test dapp</title></head><body><h1>Ostrilo test dapp</h1><button id="sign">Sign</button></body></html>';
+    '<!doctype html><html><head><meta charset="utf-8"><title>Ostrilo test dapp</title></head><body><h1>Ostrilo test dapp</h1><button id="sign" type="button">Sign</button></body></html>';
   const server = http.createServer((req, res) => {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(html);
@@ -73,6 +73,38 @@ async function screenshot(page, name, options = {}) {
 async function safeClick(locator, timeout = 5000) {
   await locator.waitFor({ state: "visible", timeout });
   await locator.click();
+}
+
+async function captureTabs(page, tabs) {
+  async function captureNext(index) {
+    if (index >= tabs.length) {
+      return;
+    }
+
+    const [name, label] = tabs[index];
+    await safeClick(page.getByRole("tab", { name: label }));
+    await screenshot(page, name);
+    await captureNext(index + 1);
+  }
+
+  await captureNext(0);
+}
+
+async function getPendingCount(page) {
+  const countResult = await page.evaluate(() =>
+    chrome.runtime.sendMessage({ type: "approval.count" })
+  );
+  return countResult?.data?.count ?? 0;
+}
+
+async function waitForPendingCount(page, deadline) {
+  const count = await getPendingCount(page);
+  if (count > 0 || Date.now() >= deadline) {
+    return count;
+  }
+
+  await page.waitForTimeout(250);
+  return waitForPendingCount(page, deadline);
 }
 
 const context = await launchContext();
@@ -161,10 +193,7 @@ try {
     ["17-options-relays", "Relays"],
     ["18-options-advanced", "Advanced"],
   ];
-  for (const [name, label] of tabs) {
-    await safeClick(options.getByRole("tab", { name: label }));
-    await screenshot(options, name);
-  }
+  await captureTabs(options, tabs);
 
   const approvalEmpty = await context.newPage();
   await approvalEmpty.setViewportSize({ width: 400, height: 600 });
@@ -175,8 +204,8 @@ try {
   await screenshot(approvalEmpty, "19-approval-empty");
 
   const origin = serverInfo.origin;
-  const policyResult = await popup.evaluate(async (originValue) => {
-    return await chrome.runtime.sendMessage({
+  const policyResult = await popup.evaluate((originValue) => {
+    return chrome.runtime.sendMessage({
       type: "policy.setOrigin",
       origin: originValue,
       patch: { trustLevel: "low", rules: { 1: "ask" } },
@@ -200,16 +229,7 @@ try {
     created_at: Math.floor(Date.now() / 1000),
   });
 
-  let pendingCount = 0;
-  const deadline = Date.now() + 10000;
-  while (Date.now() < deadline) {
-    const countResult = await popup.evaluate(async () => {
-      return await chrome.runtime.sendMessage({ type: "approval.count" });
-    });
-    pendingCount = countResult?.data?.count ?? 0;
-    if (pendingCount > 0) break;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
+  const pendingCount = await waitForPendingCount(popup, Date.now() + 10000);
   console.log("pending approval count", pendingCount);
 
   if (pendingCount > 0) {

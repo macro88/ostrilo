@@ -55,7 +55,7 @@ const isEmailLike = (value: string): boolean => {
  * - nip05 and lud16: email-like format
  */
 export const ProfileMetadataSchema = z
-  .object({
+  .looseObject({
     name: z.string().max(50).optional(),
     display_name: z.string().max(50).optional(),
     about: z.string().max(500).optional(),
@@ -90,8 +90,7 @@ export const ProfileMetadataSchema = z
       })
       .optional(),
     lud06: z.string().optional(),
-  })
-  .passthrough(); // Allow additional fields from relays
+  }); // Allow additional fields from relays
 
 /**
  * Validate profile metadata and return sanitized result.
@@ -151,14 +150,3 @@ export function validateProfileMetadata(data: unknown): ProfileMetadata | null {
   }
 }
 
-/**
- * Zod schema for ProfileCacheEntry.
- */
-export const ProfileCacheEntrySchema = z.object({
-  pubkey: z.string(),
-  metadata: ProfileMetadataSchema,
-  fetchedAt: z.number(),
-  ttl: z.number(),
-  eventId: z.string().optional(),
-  createdAt: z.number().optional(),
-});

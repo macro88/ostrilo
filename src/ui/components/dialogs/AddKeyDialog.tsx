@@ -96,81 +96,68 @@ export function AddKeyDialog({
     }
   };
 
-  const renderContent = () => {
-    switch (step) {
-      case "choose":
-        return (
-          <div className="space-y-4 py-4">
-            <Button
-              variant="outline"
-              className="h-24 w-full flex-col items-center justify-center gap-2 rounded-lg"
-              onClick={() => setStep("create")}
-            >
-              <KeyRound className="h-6 w-6" />
-              <div className="text-center">
-                <div className="font-semibold">Create New Key</div>
-                <div className="text-xs text-muted-foreground">
-                  Generate a new Nostr identity
-                </div>
-              </div>
-            </Button>
-
-            <Button
-              variant="outline"
-              className="h-24 w-full flex-col items-center justify-center gap-2 rounded-lg"
-              onClick={() => setStep("import")}
-            >
-              <Upload className="h-6 w-6" />
-              <div className="text-center">
-                <div className="font-semibold">Import Existing Key</div>
-                <div className="text-xs text-muted-foreground">
-                  Use an existing nsec or hex key
-                </div>
-              </div>
-            </Button>
+  let title = "Add New Key";
+  let content = (
+    <div className="space-y-4 py-4">
+      <Button
+        variant="outline"
+        className="h-24 w-full flex-col items-center justify-center gap-2 rounded-lg"
+        onClick={() => setStep("create")}
+      >
+        <KeyRound className="h-6 w-6" />
+        <div className="text-center">
+          <div className="font-semibold">Create New Key</div>
+          <div className="text-xs text-muted-foreground">
+            Generate a new Nostr identity
           </div>
-        );
+        </div>
+      </Button>
 
-      case "create":
-        return (
-          <div className="space-y-4">
-            <CreateKeyForm
-              onSuccess={handleSuccess}
-              onBack={() => setStep("choose")}
-            />
+      <Button
+        variant="outline"
+        className="h-24 w-full flex-col items-center justify-center gap-2 rounded-lg"
+        onClick={() => setStep("import")}
+      >
+        <Upload className="h-6 w-6" />
+        <div className="text-center">
+          <div className="font-semibold">Import Existing Key</div>
+          <div className="text-xs text-muted-foreground">
+            Use an existing nsec or hex key
           </div>
-        );
+        </div>
+      </Button>
+    </div>
+  );
 
-      case "import":
-        return (
-          <div className="space-y-4">
-            <ImportKeyForm
-              onSuccess={handleSuccess}
-              onBack={() => setStep("choose")}
-            />
-          </div>
-        );
-    }
-  };
-
-  const getTitle = () => {
-    switch (step) {
-      case "choose":
-        return "Add New Key";
-      case "create":
-        return "Create New Key";
-      case "import":
-        return "Import Existing Key";
-    }
-  };
+  if (step === "create") {
+    title = "Create New Key";
+    content = (
+      <div className="space-y-4">
+        <CreateKeyForm
+          onSuccess={handleSuccess}
+          onBack={() => setStep("choose")}
+        />
+      </div>
+    );
+  } else if (step === "import") {
+    title = "Import Existing Key";
+    content = (
+      <div className="space-y-4">
+        <ImportKeyForm
+          onSuccess={handleSuccess}
+          onBack={() => setStep("choose")}
+        />
+      </div>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{getTitle()}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        {renderContent()}
+        {content}
       </DialogContent>
     </Dialog>
   );

@@ -500,22 +500,21 @@ export class NostrRpcHandler implements RpcModule {
       const count = this.approvalQueue?.count() ?? 0;
 
       if (count > 0) {
-        // Show count on badge
-        await browser.action.setBadgeText({ text: count.toString() });
-
-        // Set badge background color to primary/accent color
-        await browser.action.setBadgeBackgroundColor({
-          color: APPROVAL_BADGE_COLOR,
-        });
-
-        // Update title to inform user
-        await browser.action.setTitle({
-          title: `Ostrilo - ${count} approval${count > 1 ? "s" : ""} pending`,
-        });
+        await Promise.all([
+          browser.action.setBadgeText({ text: count.toString() }),
+          browser.action.setBadgeBackgroundColor({
+            color: APPROVAL_BADGE_COLOR,
+          }),
+          browser.action.setTitle({
+            title: `Ostrilo - ${count} approval${count > 1 ? "s" : ""} pending`,
+          }),
+        ]);
       } else {
         // Clear badge when no pending requests
-        await browser.action.setBadgeText({ text: "" });
-        await browser.action.setTitle({ title: "Ostrilo Signer" });
+        await Promise.all([
+          browser.action.setBadgeText({ text: "" }),
+          browser.action.setTitle({ title: "Ostrilo Signer" }),
+        ]);
       }
     } catch (err) {
       console.error("[NostrRpcHandler] Failed to update badge:", err);

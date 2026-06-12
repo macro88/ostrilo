@@ -41,18 +41,22 @@ let approvalWindowOperation: Promise<number | undefined> | null = null;
  */
 async function updateApprovalBadge(count: number): Promise<void> {
   if (count > 0) {
-    await browser.action.setBadgeText({ text: count.toString() });
-    await browser.action.setBadgeBackgroundColor({
-      color: APPROVAL_BADGE_COLOR,
-    });
-    await browser.action.setTitle({
-      title: `Ostrilo - ${count} approval${count > 1 ? "s" : ""} pending`,
-    });
+    await Promise.all([
+      browser.action.setBadgeText({ text: count.toString() }),
+      browser.action.setBadgeBackgroundColor({
+        color: APPROVAL_BADGE_COLOR,
+      }),
+      browser.action.setTitle({
+        title: `Ostrilo - ${count} approval${count > 1 ? "s" : ""} pending`,
+      }),
+    ]);
     return;
   }
 
-  await browser.action.setBadgeText({ text: "" });
-  await browser.action.setTitle({ title: "Ostrilo Signer" });
+  await Promise.all([
+    browser.action.setBadgeText({ text: "" }),
+    browser.action.setTitle({ title: "Ostrilo Signer" }),
+  ]);
 }
 
 /**

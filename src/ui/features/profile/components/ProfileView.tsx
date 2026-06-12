@@ -1,13 +1,26 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useProfile } from "@/ui/hooks/useProfile";
 import type { ProfileMetadata } from "@/domain/profile/types";
-import { Input } from "@/ui/components/ui/input";
-import { Label } from "@/ui/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { ImageUploadField } from "./ImageUploadField";
 import { hexToNpub } from "@/domain/utils/crypto";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
-import { RefreshCw, User } from "lucide-react";
+import { User } from "lucide-react";
+import { ProfileEditForm } from "./ProfileEditForm";
+import { ProfileSummary } from "./ProfileSummary";
+
+function createProfileFormData(
+  profile: ProfileMetadata | null
+): ProfileMetadata {
+  return {
+    name: profile?.name || "",
+    display_name: profile?.display_name || "",
+    about: profile?.about || "",
+    picture: profile?.picture || "",
+    banner: profile?.banner || "",
+    website: profile?.website || "",
+    nip05: profile?.nip05 || "",
+    lud16: profile?.lud16 || "",
+  };
+}
 
 export function ProfileView() {
   const { selectedUnlockedKey } = useKeyManager();
@@ -17,35 +30,18 @@ export function ProfileView() {
   const { profile, loading, error, updateProfile, refresh } =
     useProfile(selectedPubkey);
 
-  // Edit form state
   const [formData, setFormData] = useState<ProfileMetadata>({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const npub = selectedPubkey ? hexToNpub(selectedPubkey) : "";
-  const truncatedNpub = npub ? `${npub.slice(0, 10)}...${npub.slice(-6)}` : "";
-
-  // Initialize form data when entering edit mode
-  useEffect(() => {
-    if (isEditing && profile) {
-      setFormData({
-        name: profile.name || "",
-        display_name: profile.display_name || "",
-        about: profile.about || "",
-        picture: profile.picture || "",
-        banner: profile.banner || "",
-        website: profile.website || "",
-        nip05: profile.nip05 || "",
-        lud16: profile.lud16 || "",
-      });
-    }
-  }, [isEditing, profile]);
 
   const handleRefresh = async () => {
     await refresh();
   };
 
   const handleEditClick = () => {
+    setFormData(createProfileFormData(profile));
     setIsEditing(true);
     setSaveError(null);
   };
@@ -101,253 +97,25 @@ export function ProfileView() {
 
   if (isEditing) {
     return (
-      <div className="screen-shell">
-        <div className="screen-header text-center">
-          <h2 className="screen-title">Edit Profile</h2>
-          <p className="screen-description">
-            Update your Nostr identity
-          </p>
-        </div>
-
-        {saveError && (
-          <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
-            <p className="text-sm text-destructive">{saveError}</p>
-          </div>
-        )}
-
-        <div className="ink-card p-4 space-y-4">
-          <div>
-            <Label htmlFor="name">Display Name</Label>
-            <Input
-              id="name"
-              value={formData.name || ""}
-              onChange={(e) => handleInputChange("name", e.target.value)}
-              placeholder="Your display name"
-              maxLength={50}
-              disabled={isSaving}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              {formData.name?.length || 0}/50 characters
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="about">About</Label>
-            <textarea
-              id="about"
-              value={formData.about || ""}
-              onChange={(e) => handleInputChange("about", e.target.value)}
-              placeholder="Tell us about yourself"
-              maxLength={500}
-              rows={4}
-              disabled={isSaving}
-              className="min-h-28 w-full resize-y rounded-xl border border-input bg-card px-3 py-2 text-sm shadow-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              {formData.about?.length || 0}/500 characters
-            </p>
-          </div>
-
-          <ImageUploadField
-            id="picture"
-            label="Profile Picture URL"
-            value={formData.picture || ""}
-            onChange={(value) => handleInputChange("picture", value)}
-            disabled={isSaving}
-            placeholder="https://example.com/avatar.jpg"
-          />
-
-          <div>
-            <Label htmlFor="banner">Banner Image URL</Label>
-            <Input
-              id="banner"
-              value={formData.banner || ""}
-              onChange={(e) => handleInputChange("banner", e.target.value)}
-              placeholder="https://example.com/banner.jpg"
-              type="url"
-              disabled={isSaving}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="website">Website</Label>
-            <Input
-              id="website"
-              value={formData.website || ""}
-              onChange={(e) => handleInputChange("website", e.target.value)}
-              placeholder="https://yourwebsite.com"
-              type="url"
-              disabled={isSaving}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="nip05">NIP-05 Identifier</Label>
-            <Input
-              id="nip05"
-              value={formData.nip05 || ""}
-              onChange={(e) => handleInputChange("nip05", e.target.value)}
-              placeholder="you@example.com"
-              type="email"
-              disabled={isSaving}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Verified Nostr address
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="lud16">Lightning Address</Label>
-            <Input
-              id="lud16"
-              value={formData.lud16 || ""}
-              onChange={(e) => handleInputChange("lud16", e.target.value)}
-              placeholder="you@getalby.com"
-              type="email"
-              disabled={isSaving}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Receive Bitcoin tips
-            </p>
-          </div>
-        </div>
-
-        <div className="flex gap-2 pt-2">
-          <Button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex-1"
-          >
-            {isSaving ? "Saving..." : "Save Changes"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleCancelEdit}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-        </div>
-      </div>
+      <ProfileEditForm
+        formData={formData}
+        isSaving={isSaving}
+        saveError={saveError}
+        onChange={handleInputChange}
+        onCancel={handleCancelEdit}
+        onSave={handleSave}
+      />
     );
   }
 
-  // Display mode
   return (
-    <div className="screen-shell">
-      <div className="screen-header text-center">
-        {profile?.picture ? (
-          <img
-            src={profile.picture}
-            alt="Profile"
-            className="seal mx-auto mb-3 h-16 w-16 border-2 border-border object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-            }}
-          />
-        ) : (
-          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-3 h-16 w-16 text-2xl">
-            {profile?.name?.[0]?.toUpperCase() || "?"}
-          </div>
-        )}
-        <h2 className="screen-title">Profile Settings</h2>
-        {truncatedNpub && (
-          <p className="mx-auto my-2 w-fit rounded-lg bg-muted px-2.5 py-1 font-mono text-xs text-muted-foreground">
-            {truncatedNpub}
-          </p>
-        )}
-        <p className="screen-description">
-          Manage your Nostr identity
-        </p>
-      </div>
-
-      {error && (
-        <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
-          <p className="text-sm text-destructive">{error}</p>
-          <Button
-            variant="link"
-            onClick={handleRefresh}
-            className="mt-2 h-auto p-0 text-xs text-destructive"
-          >
-            Try again
-          </Button>
-        </div>
-      )}
-
-      <div className="space-y-2">
-        <div className="ink-card p-3">
-          <h3 className="font-medium mb-1 text-sm">Display Name</h3>
-          {loading && !profile ? (
-            <p className="text-xs text-muted-foreground animate-pulse">
-              Loading...
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {profile?.name || profile?.display_name || "Not set"}
-            </p>
-          )}
-        </div>
-
-        <div className="ink-card p-3">
-          <h3 className="font-medium mb-1 text-sm">About</h3>
-          {loading && !profile ? (
-            <p className="text-xs text-muted-foreground animate-pulse">
-              Loading...
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {profile?.about || "Add a bio"}
-            </p>
-          )}
-        </div>
-
-        <div className="ink-card p-3">
-          <h3 className="font-medium mb-1 text-sm">Website</h3>
-          {loading && !profile ? (
-            <p className="text-xs text-muted-foreground animate-pulse">
-              Loading...
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {profile?.website || "Add your website"}
-            </p>
-          )}
-        </div>
-
-        {profile?.nip05 && (
-          <div className="ink-card p-3">
-            <h3 className="font-medium mb-1 text-sm">NIP-05</h3>
-            <p className="text-xs text-muted-foreground">{profile.nip05}</p>
-          </div>
-        )}
-
-        {profile?.lud16 && (
-          <div className="ink-card p-3">
-            <h3 className="font-medium mb-1 text-sm">Lightning Address</h3>
-            <p className="text-xs text-muted-foreground">{profile.lud16}</p>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <Button
-            onClick={handleEditClick}
-            disabled={loading}
-            className="flex-1"
-          >
-            Edit Profile
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleRefresh}
-            disabled={loading}
-            title="Refresh profile from relays"
-            aria-label="Refresh profile from relays"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    </div>
+    <ProfileSummary
+      profile={profile}
+      loading={loading}
+      error={error}
+      npub={npub}
+      onEdit={handleEditClick}
+      onRefresh={handleRefresh}
+    />
   );
 }

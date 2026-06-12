@@ -1,9 +1,11 @@
 import { defineConfig } from "wxt";
+import "@wxt-dev/module-react";
+import "@wxt-dev/auto-icons";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  modules: ["@wxt-dev/module-react", '@wxt-dev/auto-icons'],
+  modules: ["@wxt-dev/module-react", "@wxt-dev/auto-icons"],
   srcDir: "src",
   entrypointsDir: "extension",
   manifest: {

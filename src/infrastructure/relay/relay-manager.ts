@@ -79,10 +79,13 @@ export class RelayManager implements INostrRelay {
     const anySuccess = results.some((r) => r.status === "fulfilled");
 
     if (!anySuccess) {
-      const errors = results
-        .filter((r) => r.status === "rejected")
-        .map((r) => (r as PromiseRejectedResult).reason.message)
-        .join(", ");
+      const errors = results.reduce<string[]>((messages, result) => {
+        if (result.status === "rejected") {
+          messages.push(result.reason.message);
+        }
+
+        return messages;
+      }, []).join(", ");
 
       throw new Error(`Publish failed on all relays: ${errors}`);
     }

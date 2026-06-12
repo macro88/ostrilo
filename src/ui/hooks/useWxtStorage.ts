@@ -115,6 +115,40 @@ function subscribeKey(key: string, callback: Subscriber) {
   };
 }
 
+async function flushWrite(k: string) {
+  const t = writeTimers.get(k);
+  if (t !== undefined) {
+    clearTimeout(t);
+    writeTimers.delete(k);
+  }
+  const valueToStore = pendingValues.get(k);
+  const resolver = pendingResolvers.get(k);
+  try {
+    await browser.storage.sync.set({ [k]: valueToStore });
+    pendingValues.delete(k);
+    resolver?.resolve();
+  } catch (error) {
+    // Roll back by reloading from storage to ensure consistency
+    try {
+      const result = await browser.storage.sync.get([k]);
+      if (Object.prototype.hasOwnProperty.call(result, k)) {
+        cache.set(k, result[k] as unknown);
+        hasValue.add(k);
+      } else {
+        cache.delete(k);
+        hasValue.delete(k);
+      }
+      ready.add(k);
+      notify(k);
+    } finally {
+      resolver?.reject(error);
+    }
+  } finally {
+    pendingPromises.delete(k);
+    pendingResolvers.delete(k);
+  }
+}
+
 export function useWxtStorage<T>(key: string, defaultValue: T) {
   // Value snapshot with stable identity (returns cached reference or the same defaultValue reference)
   const value = useSyncExternalStore(
@@ -162,41 +196,6 @@ export function useWxtStorage<T>(key: string, defaultValue: T) {
     return p;
   }, [key]);
 
-  // Flush function executes the actual write and resolves/rejects the pending promise
-  async function flushWrite(k: string) {
-    const t = writeTimers.get(k);
-    if (t !== undefined) {
-      clearTimeout(t);
-      writeTimers.delete(k);
-    }
-    const valueToStore = pendingValues.get(k);
-    const resolver = pendingResolvers.get(k);
-    try {
-      await browser.storage.sync.set({ [k]: valueToStore });
-      pendingValues.delete(k);
-      resolver?.resolve();
-    } catch (error) {
-      // Roll back by reloading from storage to ensure consistency
-      try {
-        const result = await browser.storage.sync.get([k]);
-        if (Object.prototype.hasOwnProperty.call(result, k)) {
-          cache.set(k, result[k] as unknown);
-          hasValue.add(k);
-        } else {
-          cache.delete(k);
-          hasValue.delete(k);
-        }
-        ready.add(k);
-        notify(k);
-      } finally {
-        resolver?.reject(error);
-      }
-    } finally {
-      pendingPromises.delete(k);
-      pendingResolvers.delete(k);
-    }
-  }
-
   // Setter writes to storage and updates cache optimistically
   const setStoredValue = useCallback(
     async (newValue: T | ((prevValue: T) => T)) => {
@@ -220,18 +219,4 @@ export function useWxtStorage<T>(key: string, defaultValue: T) {
   );
 
   return [value, setStoredValue, isReady] as const;
-}
-
-// Helper to remove a key from storage and local cache
-export async function removeWxtKey(key: string): Promise<void> {
-  try {
-    await browser.storage.sync.remove([key]);
-  } finally {
-    cache.delete(key);
-    hasValue.delete(key);
-    defaultCache.delete(key);
-    // Mark ready so subscribers don't wait on init
-    ready.add(key);
-    notify(key);
-  }
 }

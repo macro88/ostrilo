@@ -32,24 +32,21 @@ const TABS = [
 
 const TAB_KEYS = TABS.map((tab) => tab.key);
 
+function getHashTab() {
+  const hash = window.location.hash.slice(1);
+  return TAB_KEYS.includes(hash as any) ? hash : "general";
+}
+
 export function OptionsApp() {
   // Apply theme based on settings and system preference
   useTheme();
 
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab, setActiveTab] = useState(getHashTab);
 
   // Handle URL hash navigation
   useEffect(() => {
-    const hash = window.location.hash.slice(1);
-    if (hash && TAB_KEYS.includes(hash as any)) {
-      setActiveTab(hash);
-    }
-
     const handleHashChange = () => {
-      const newHash = window.location.hash.slice(1);
-      if (newHash && TAB_KEYS.includes(newHash as any)) {
-        setActiveTab(newHash);
-      }
+      setActiveTab(getHashTab());
     };
 
     window.addEventListener("hashchange", handleHashChange);

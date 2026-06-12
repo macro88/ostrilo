@@ -1,8 +1,4 @@
-import { useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
+import { useReducer, useRef } from "react";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import {
   generateKey as rpcGenerateKey,
@@ -11,21 +7,90 @@ import {
   revealKey,
 } from "@/infrastructure/messaging/client";
 import { useOnboarding } from "../hooks/useOnboarding";
-import {
-  Key,
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle,
-  Copy,
-  Download,
-  Eye,
-  EyeOff,
-} from "lucide-react";
-import { SealMark } from "@/components/common/SealMark";
+import { OnboardingCreateKeyBackupStep } from "./OnboardingCreateKeyBackupStep";
+import { OnboardingCreateKeyInputStep } from "./OnboardingCreateKeyInputStep";
 
 interface OnboardingCreateKeyProps {
   onBack: () => void;
   onComplete: () => void;
+}
+
+interface CreateKeyState {
+  password: string;
+  confirmPassword: string;
+  keyName: string;
+  passwordError: string;
+  isGenerating: boolean;
+  backupChecked: boolean;
+  step: "input" | "backup";
+  showPrivateKey: boolean;
+  hasRevealedPrivateKey: boolean;
+  copySuccess: boolean;
+}
+
+type CreateKeyAction =
+  | { type: "setPassword"; value: string }
+  | { type: "setConfirmPassword"; value: string }
+  | { type: "setKeyName"; value: string }
+  | { type: "setPasswordError"; value: string }
+  | { type: "setGenerating"; value: boolean }
+  | { type: "setBackupChecked"; value: boolean }
+  | { type: "setStep"; value: CreateKeyState["step"] }
+  | { type: "togglePrivateKey" }
+  | { type: "privateKeyRevealed" }
+  | { type: "setCopySuccess"; value: boolean }
+  | { type: "clearSensitiveState" };
+
+const initialCreateKeyState: CreateKeyState = {
+  password: "",
+  confirmPassword: "",
+  keyName: "",
+  passwordError: "",
+  isGenerating: false,
+  backupChecked: false,
+  step: "input",
+  showPrivateKey: false,
+  hasRevealedPrivateKey: false,
+  copySuccess: false,
+};
+
+function createKeyReducer(
+  state: CreateKeyState,
+  action: CreateKeyAction
+): CreateKeyState {
+  switch (action.type) {
+    case "setPassword":
+      return { ...state, password: action.value };
+    case "setConfirmPassword":
+      return { ...state, confirmPassword: action.value };
+    case "setKeyName":
+      return { ...state, keyName: action.value };
+    case "setPasswordError":
+      return { ...state, passwordError: action.value };
+    case "setGenerating":
+      return { ...state, isGenerating: action.value };
+    case "setBackupChecked":
+      return { ...state, backupChecked: action.value };
+    case "setStep":
+      return { ...state, step: action.value };
+    case "togglePrivateKey":
+      return { ...state, showPrivateKey: !state.showPrivateKey };
+    case "privateKeyRevealed":
+      return {
+        ...state,
+        hasRevealedPrivateKey: true,
+        showPrivateKey: false,
+      };
+    case "setCopySuccess":
+      return { ...state, copySuccess: action.value };
+    case "clearSensitiveState":
+      return {
+        ...state,
+        hasRevealedPrivateKey: false,
+        showPrivateKey: false,
+        copySuccess: false,
+      };
+  }
 }
 
 export function OnboardingCreateKey({
@@ -33,78 +98,76 @@ export function OnboardingCreateKey({
   onComplete,
 }: OnboardingCreateKeyProps) {
   const { isLoading } = useKeyManager();
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [keyName, setKeyName] = useState("");
-  const [passwordError, setPasswordError] = useState("");
+  const [state, dispatch] = useReducer(createKeyReducer, initialCreateKeyState);
   const { markOnboardingComplete } = useOnboarding();
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [backupChecked, setBackupChecked] = useState(false);
-  const [step, setStep] = useState<"input" | "backup">("input");
-  const [showPrivateKey, setShowPrivateKey] = useState(false);
-  const [hasRevealedPrivateKey, setHasRevealedPrivateKey] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
 
   // Use refs for ephemeral sensitive data (not useState)
   const privateKeyRef = useRef<{ nsec: string; hex: string } | null>(null);
   const passwordBackupRef = useRef<string>("");
 
   const validatePassword = async () => {
-    if (!password) {
-      setPasswordError("Password is required");
+    if (!state.password) {
+      dispatch({ type: "setPasswordError", value: "Password is required" });
       return false;
     }
 
-    if (password !== confirmPassword) {
-      setPasswordError("Passwords do not match");
+    if (state.password !== state.confirmPassword) {
+      dispatch({ type: "setPasswordError", value: "Passwords do not match" });
       return false;
     }
 
     try {
-      const strength = await evaluatePasswordStrength(password);
+      const strength = await evaluatePasswordStrength(state.password);
       // Use score instead of meetsMinimum property - score of 3+ is recommended for strong passwords
       if (strength.score < 3) {
-        setPasswordError("Password does not meet minimum requirements");
+        dispatch({
+          type: "setPasswordError",
+          value: "Password does not meet minimum requirements",
+        });
         return false;
       }
     } catch (error) {
-      setPasswordError("Could not validate password strength");
+      dispatch({
+        type: "setPasswordError",
+        value: "Could not validate password strength",
+      });
       return false;
     }
 
-    if (!keyName.trim()) {
-      setPasswordError("Key name is required");
+    if (!state.keyName.trim()) {
+      dispatch({ type: "setPasswordError", value: "Key name is required" });
       return false;
     }
 
-    setPasswordError("");
+    dispatch({ type: "setPasswordError", value: "" });
     return true;
   };
 
   const handleGenerateKey = async () => {
     if (!(await validatePassword())) return;
 
-    setIsGenerating(true);
+    dispatch({ type: "setGenerating", value: true });
     try {
       // Generate key in background and set as selected if first
-      await rpcGenerateKey(password, keyName.trim());
+      await rpcGenerateKey(state.password, state.keyName.trim());
       // Immediately unlock session so user can proceed
-      await unlockVault(password);
+      await unlockVault(state.password);
       // Store password in ref for backup step (not in state)
-      passwordBackupRef.current = password;
-      setStep("backup");
+      passwordBackupRef.current = state.password;
+      dispatch({ type: "setStep", value: "backup" });
     } catch (error) {
-      setPasswordError(
-        error instanceof Error ? error.message : "Failed to generate key"
-      );
+      dispatch({
+        type: "setPasswordError",
+        value: error instanceof Error ? error.message : "Failed to generate key",
+      });
     } finally {
-      setIsGenerating(false);
+      dispatch({ type: "setGenerating", value: false });
     }
   };
 
   const handleRevealKey = async () => {
     if (!passwordBackupRef.current) {
-      setPasswordError("Password not available");
+      dispatch({ type: "setPasswordError", value: "Password not available" });
       return;
     }
 
@@ -112,12 +175,12 @@ export function OnboardingCreateKey({
       // Reveal key with password verification - stored ephemerally in ref
       const revealed = await revealKey(passwordBackupRef.current);
       privateKeyRef.current = revealed;
-      setHasRevealedPrivateKey(true);
-      setShowPrivateKey(false);
+      dispatch({ type: "privateKeyRevealed" });
     } catch (error) {
-      setPasswordError(
-        error instanceof Error ? error.message : "Failed to reveal key"
-      );
+      dispatch({
+        type: "setPasswordError",
+        value: error instanceof Error ? error.message : "Failed to reveal key",
+      });
     }
   };
 
@@ -126,8 +189,11 @@ export function OnboardingCreateKey({
     if (!privateKey) return;
     try {
       await navigator.clipboard.writeText(privateKey.nsec);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
+      dispatch({ type: "setCopySuccess", value: true });
+      window.setTimeout(
+        () => dispatch({ type: "setCopySuccess", value: false }),
+        2000
+      );
     } catch (error) {
       console.error("Failed to copy key:", error);
     }
@@ -137,7 +203,7 @@ export function OnboardingCreateKey({
     const privateKey = privateKeyRef.current;
     if (!privateKey) return;
     const keyData = {
-      name: keyName,
+      name: state.keyName,
       privateKey: privateKey.nsec,
       privateKeyHex: privateKey.hex,
       createdAt: new Date().toISOString(),
@@ -148,7 +214,7 @@ export function OnboardingCreateKey({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ostrilo-key-${keyName.replace(
+    a.download = `ostrilo-key-${state.keyName.replace(
       /\s+/g,
       "-"
     )}-${Date.now()}.json`;
@@ -158,197 +224,58 @@ export function OnboardingCreateKey({
     URL.revokeObjectURL(url);
   };
 
+  const handleFinish = async () => {
+    if (!state.backupChecked) return;
+    // Clear sensitive data from refs
+    privateKeyRef.current = null;
+    passwordBackupRef.current = "";
+    dispatch({ type: "clearSensitiveState" });
+    await markOnboardingComplete();
+    onComplete();
+  };
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-4">
-        {step === "input" && (
-          <>
-            <div className="screen-header text-center">
-              <SealMark icon={Key} size="lg" className="mx-auto mb-3" />
-              <h2 className="screen-title">Create Your Nostr Key</h2>
-              <p className="screen-description">
-                Set up a secure password to protect your new identity
-              </p>
-            </div>
-
-            <div className="ink-card space-y-4 p-4">
-              <div>
-                <Label htmlFor="keyName">Key Name</Label>
-                <Input
-                  id="keyName"
-                  placeholder="My Nostr Key"
-                  value={keyName}
-                  onChange={(e) => setKeyName(e.target.value)}
-                />
-              </div>
-
-              <PasswordInput
-                label="Master Password"
-                placeholder="Enter a strong password"
-                value={password}
-                onChange={setPassword}
-                confirmValue={confirmPassword}
-                onConfirmChange={setConfirmPassword}
-                showStrengthMeter={true}
-                error={passwordError}
-              />
-            </div>
-
-            <div className="flex space-x-3">
-              <Button variant="outline" onClick={onBack} className="flex-1">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
-              </Button>
-              <Button
-                onClick={handleGenerateKey}
-                disabled={isGenerating}
-                className="flex-1"
-              >
-                {isGenerating ? "Creating..." : "Create Key"}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          </>
+        {state.step === "input" && (
+          <OnboardingCreateKeyInputStep
+            keyName={state.keyName}
+            password={state.password}
+            confirmPassword={state.confirmPassword}
+            passwordError={state.passwordError}
+            isGenerating={state.isGenerating || isLoading}
+            onBack={onBack}
+            onKeyNameChange={(value) =>
+              dispatch({ type: "setKeyName", value })
+            }
+            onPasswordChange={(value) =>
+              dispatch({ type: "setPassword", value })
+            }
+            onConfirmPasswordChange={(value) =>
+              dispatch({ type: "setConfirmPassword", value })
+            }
+            onGenerate={handleGenerateKey}
+          />
         )}
 
-        {step === "backup" && (
-          <div className="space-y-6">
-            <div className="screen-header text-center">
-              <SealMark
-                icon={CheckCircle}
-                tone="success"
-                size="lg"
-                className="mx-auto mb-3"
-              />
-              <h2 className="screen-title">Backup Your Key</h2>
-              <p className="screen-description">
-                Save your private key somewhere safe. You'll need it to restore
-                your account if you lose access.
-              </p>
-            </div>
-
-            {/* Reveal key button if not yet revealed */}
-            {!hasRevealedPrivateKey && (
-              <Button onClick={handleRevealKey} className="w-full">
-                Reveal Private Key
-              </Button>
-            )}
-
-            {/* Private key display */}
-            {hasRevealedPrivateKey && privateKeyRef.current && (
-              <div className="ink-card space-y-3 p-4">
-                <div>
-                  <Label htmlFor="privateKey">Private Key (nsec format)</Label>
-                  <div className="relative">
-                    <Input
-                      id="privateKey"
-                      type={showPrivateKey ? "text" : "password"}
-                      value={privateKeyRef.current.nsec}
-                      readOnly
-                      className="pr-10 font-mono text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPrivateKey(!showPrivateKey)}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPrivateKey ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleCopyKey}
-                    className="flex-1"
-                  >
-                    {copySuccess ? (
-                      <>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="mr-2 h-4 w-4" />
-                        Copy Key
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleDownloadKey}
-                    className="flex-1"
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    Download Backup
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Security warning */}
-            <div className="rounded-[10px] bg-[var(--ink-amber-soft)] p-4 text-[var(--ink-amber)]">
-              <div className="flex items-start gap-3">
-                <SealMark icon={Key} tone="warning" />
-                <div className="text-sm">
-                  <div className="mb-1 font-medium">
-                    Keep it offline
-                  </div>
-                  <div>
-                    Anyone with access to your private key can control your
-                    Nostr identity. Never share it with anyone and store it
-                    securely.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-start space-x-2 rounded-xl border border-border bg-card p-3">
-              <input
-                id="backupConfirm"
-                type="checkbox"
-                className="mt-1"
-                checked={backupChecked}
-                onChange={(e) => setBackupChecked(e.target.checked)}
-              />
-              <Label htmlFor="backupConfirm" className="text-sm">
-                I have safely backed up my private key and understand that I
-                cannot recover it if I lose it.
-              </Label>
-            </div>
-            <div className="flex space-x-3">
-              <Button
-                variant="outline"
-                onClick={() => setStep("input")}
-                className="flex-1"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
-              </Button>
-              <Button
-                onClick={async () => {
-                  if (!backupChecked) return;
-                  // Clear sensitive data from refs
-                  privateKeyRef.current = null;
-                  passwordBackupRef.current = "";
-                  setHasRevealedPrivateKey(false);
-                  await markOnboardingComplete();
-                  onComplete();
-                }}
-                disabled={!backupChecked}
-                className="flex-1"
-              >
-                Finish
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+        {state.step === "backup" && (
+          <OnboardingCreateKeyBackupStep
+            keyName={state.keyName}
+            privateKey={privateKeyRef.current}
+            showPrivateKey={state.showPrivateKey}
+            hasRevealedPrivateKey={state.hasRevealedPrivateKey}
+            copySuccess={state.copySuccess}
+            backupChecked={state.backupChecked}
+            onReveal={handleRevealKey}
+            onToggleShowPrivateKey={() => dispatch({ type: "togglePrivateKey" })}
+            onCopy={handleCopyKey}
+            onDownload={handleDownloadKey}
+            onBack={() => dispatch({ type: "setStep", value: "input" })}
+            onBackupCheckedChange={(value) =>
+              dispatch({ type: "setBackupChecked", value })
+            }
+            onFinish={handleFinish}
+          />
         )}
       </div>
     </div>

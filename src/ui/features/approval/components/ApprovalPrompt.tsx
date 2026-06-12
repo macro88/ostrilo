@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useReducer, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   getAllApprovalRequests,
@@ -13,58 +13,115 @@ import { EventDetailView } from "./EventDetailView";
 import { browser } from "wxt/browser";
 import { Logo } from "@/ui/components/logo/Logo";
 
+interface ApprovalPromptState {
+  requests: PendingRequest[];
+  selectedRequestId: string | null;
+  isLoading: boolean;
+  isResolving: boolean;
+  error: string | null;
+  nowSeconds: number;
+  selectedKey: KeyRecord | null;
+  showCompactDetail: boolean;
+}
+
+type ApprovalPromptAction =
+  | { type: "loadStart" }
+  | { type: "loadSuccess"; requests: PendingRequest[]; selectedKey: KeyRecord | null }
+  | { type: "loadError"; error: string }
+  | { type: "tick"; nowSeconds: number }
+  | { type: "resolveStart" }
+  | { type: "resolveEnd" }
+  | { type: "selectRequest"; id: string }
+  | { type: "showList" };
+
+const initialApprovalPromptState: ApprovalPromptState = {
+  requests: [],
+  selectedRequestId: null,
+  isLoading: true,
+  isResolving: false,
+  error: null,
+  nowSeconds: Math.floor(Date.now() / 1000),
+  selectedKey: null,
+  showCompactDetail: false,
+};
+
+function approvalPromptReducer(
+  state: ApprovalPromptState,
+  action: ApprovalPromptAction
+): ApprovalPromptState {
+  switch (action.type) {
+    case "loadStart":
+      return { ...state, isLoading: true, error: null };
+    case "loadSuccess": {
+      const selectedStillPending =
+        state.selectedRequestId &&
+        action.requests.some((request) => request.id === state.selectedRequestId);
+
+      return {
+        ...state,
+        requests: action.requests,
+        selectedKey: action.selectedKey,
+        selectedRequestId: selectedStillPending
+          ? state.selectedRequestId
+          : action.requests[0]?.id ?? null,
+        showCompactDetail: selectedStillPending ? state.showCompactDetail : false,
+        isLoading: false,
+        error: null,
+      };
+    }
+    case "loadError":
+      return { ...state, error: action.error, isLoading: false };
+    case "tick":
+      return { ...state, nowSeconds: action.nowSeconds };
+    case "resolveStart":
+      return { ...state, isResolving: true };
+    case "resolveEnd":
+      return { ...state, isResolving: false };
+    case "selectRequest":
+      return {
+        ...state,
+        selectedRequestId: action.id,
+        showCompactDetail: true,
+      };
+    case "showList":
+      return { ...state, showCompactDetail: false };
+  }
+}
+
 /**
  * ApprovalPrompt component displays pending approval requests
  * in a queue list view, with detailed event information when selected
  */
 export function ApprovalPrompt() {
-  const [requests, setRequests] = useState<PendingRequest[]>([]);
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
-    null
+  const [state, dispatch] = useReducer(
+    approvalPromptReducer,
+    initialApprovalPromptState
   );
-  const [isLoading, setIsLoading] = useState(true);
-  const [isResolving, setIsResolving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [nowSeconds, setNowSeconds] = useState(() =>
-    Math.floor(Date.now() / 1000)
-  );
-  const [selectedKey, setSelectedKey] = useState<KeyRecord | null>(null);
-  const [showCompactDetail, setShowCompactDetail] = useState(false);
 
   // Fetch all pending requests
   const fetchRequests = useCallback(async () => {
     try {
-      setIsLoading(true);
-      setError(null);
+      dispatch({ type: "loadStart" });
 
       const [{ requests: allRequests }, keys] = await Promise.all([
         getAllApprovalRequests(),
         listKeys(),
       ]);
 
-      setRequests(allRequests);
-
       // Find selected key
       const selected = keys?.find((k) => k.isSelected) ?? null;
-      setSelectedKey(selected);
-
-      const selectedStillPending =
-        selectedRequestId &&
-        allRequests.some((request) => request.id === selectedRequestId);
-
-      if (!selectedStillPending) {
-        console.log(
-          "[ApprovalPrompt] Selecting next pending request for detail pane"
-        );
-        setSelectedRequestId(allRequests[0]?.id ?? null);
-        setShowCompactDetail(false);
-      }
+      dispatch({
+        type: "loadSuccess",
+        requests: allRequests,
+        selectedKey: selected,
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load requests");
-    } finally {
-      setIsLoading(false);
+      dispatch({
+        type: "loadError",
+        error: err instanceof Error ? err.message : "Failed to load requests",
+      });
     }
-  }, [selectedRequestId]);
+  }, []);
 
   // Initial fetch
   useEffect(() => {
@@ -72,14 +129,17 @@ export function ApprovalPrompt() {
   }, [fetchRequests]);
 
   useEffect(() => {
-    if (requests.length === 0) return;
+    if (state.requests.length === 0) return;
 
     const timer = setInterval(() => {
-      setNowSeconds(Math.floor(Date.now() / 1000));
+      dispatch({
+        type: "tick",
+        nowSeconds: Math.floor(Date.now() / 1000),
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [requests.length]);
+  }, [state.requests.length]);
 
   // Listen for real-time queue updates
   useEffect(() => {
@@ -96,28 +156,30 @@ export function ApprovalPrompt() {
 
   // Handle user action on selected request
   const handleAction = async (action: ApprovalAction) => {
-    if (!selectedRequestId || isResolving) return;
+    if (!state.selectedRequestId || state.isResolving) return;
 
     try {
-      setIsResolving(true);
-      await resolveApprovalRequest(selectedRequestId, action);
+      dispatch({ type: "resolveStart" });
+      await resolveApprovalRequest(state.selectedRequestId, action);
 
-      // Refresh queue
-      await fetchRequests();
-
-      // Check if there are more requests
-      const { count } = await getApprovalCount();
+      const [, { count }] = await Promise.all([
+        fetchRequests(),
+        getApprovalCount(),
+      ]);
       if (count === 0) {
         // No more requests - close window
         window.close();
       } else {
         // Return to list view
-        setShowCompactDetail(false);
+        dispatch({ type: "showList" });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to process action");
+      dispatch({
+        type: "loadError",
+        error: err instanceof Error ? err.message : "Failed to process action",
+      });
     } finally {
-      setIsResolving(false);
+      dispatch({ type: "resolveEnd" });
     }
   };
 
@@ -126,10 +188,10 @@ export function ApprovalPrompt() {
     action: "approve" | "deny",
     requestIds: string[]
   ) => {
-    if (isResolving || requestIds.length === 0) return;
+    if (state.isResolving || requestIds.length === 0) return;
 
     try {
-      setIsResolving(true);
+      dispatch({ type: "resolveStart" });
       const approvalAction = action === "approve" ? "allow_once" : "deny";
 
       // Resolve all requests in batch
@@ -137,27 +199,29 @@ export function ApprovalPrompt() {
         requestIds.map((id) => resolveApprovalRequest(id, approvalAction))
       );
 
-      // Refresh queue
-      await fetchRequests();
-
-      // Check if there are more requests
-      const { count } = await getApprovalCount();
+      const [, { count }] = await Promise.all([
+        fetchRequests(),
+        getApprovalCount(),
+      ]);
       if (count === 0) {
         // No more requests - close window
         window.close();
       } else {
         // Return to list view
-        setShowCompactDetail(false);
+        dispatch({ type: "showList" });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to process batch");
+      dispatch({
+        type: "loadError",
+        error: err instanceof Error ? err.message : "Failed to process batch",
+      });
     } finally {
-      setIsResolving(false);
+      dispatch({ type: "resolveEnd" });
     }
   };
 
   // Loading state
-  if (isLoading) {
+  if (state.isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
         <div className="mb-4 h-16 w-16 animate-pulse">
@@ -169,7 +233,7 @@ export function ApprovalPrompt() {
   }
 
   // No requests state
-  if (requests.length === 0) {
+  if (state.requests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
         <div className="mb-4 h-16 w-16">
@@ -191,12 +255,14 @@ export function ApprovalPrompt() {
   }
 
   // Error state
-  if (error) {
+  if (state.error) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
         <AlertTriangle className="w-12 h-12 text-destructive mb-4" />
         <h2 className="text-lg font-semibold mb-2">Error</h2>
-        <p className="text-muted-foreground text-center text-sm">{error}</p>
+        <p className="text-muted-foreground text-center text-sm">
+          {state.error}
+        </p>
         <Button variant="outline" className="mt-4" onClick={fetchRequests}>
           Try Again
         </Button>
@@ -205,38 +271,38 @@ export function ApprovalPrompt() {
   }
 
   const selectedRequest =
-    requests.find((r) => r.id === selectedRequestId) ?? requests[0];
+    state.requests.find((r) => r.id === state.selectedRequestId) ??
+    state.requests[0];
   const countdown = selectedRequest
-    ? Math.max(0, selectedRequest.timeoutAt - nowSeconds)
+    ? Math.max(0, selectedRequest.timeoutAt - state.nowSeconds)
     : 0;
 
   const handleSelectRequest = (id: string) => {
-    setSelectedRequestId(id);
-    setShowCompactDetail(true);
+    dispatch({ type: "selectRequest", id });
   };
 
   return (
     <div className="grid h-full min-h-0 grid-cols-1 overflow-hidden bg-background md:grid-cols-[330px_minmax(0,1fr)]">
       <QueueListView
-        requests={requests}
+        requests={state.requests}
         selectedRequestId={selectedRequest?.id ?? null}
-        nowSeconds={nowSeconds}
+        nowSeconds={state.nowSeconds}
         onSelectRequest={handleSelectRequest}
         onBatchAction={handleBatchAction}
-        disabled={isResolving}
-        className={showCompactDetail ? "hidden md:flex" : "flex"}
+        disabled={state.isResolving}
+        className={state.showCompactDetail ? "hidden md:flex" : "flex"}
       />
 
       {selectedRequest ? (
         <EventDetailView
           request={selectedRequest}
-          signingKey={selectedKey}
+          signingKey={state.selectedKey}
           countdown={countdown}
           onResolve={handleAction}
-          onBack={() => setShowCompactDetail(false)}
-          showBackButton={showCompactDetail}
-          isResolving={isResolving}
-          className={showCompactDetail ? "flex" : "hidden md:flex"}
+          onBack={() => dispatch({ type: "showList" })}
+          showBackButton={state.showCompactDetail}
+          isResolving={state.isResolving}
+          className={state.showCompactDetail ? "flex" : "hidden md:flex"}
         />
       ) : (
         <div className="hidden items-center justify-center border-l border-border bg-background p-6 text-center md:flex">

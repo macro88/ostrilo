@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useReducer, useEffect, useCallback } from "react";
 import type { ActivityLogEntry, ActivityFilters } from "@/domain/types";
 import {
   activityGetRecent,
@@ -23,6 +23,87 @@ interface UseActivityLogReturn {
 
 const PAGE_SIZE = 10;
 
+interface ActivityLogPageParams {
+  origin?: string;
+  kind?: number;
+  offset: number;
+}
+
+interface ActivityLogState {
+  entries: ActivityLogEntry[];
+  loading: boolean;
+  error: Error | null;
+  offset: number;
+  total: number;
+}
+
+type ActivityLogAction =
+  | { type: "request" }
+  | {
+      type: "success";
+      entries: ActivityLogEntry[];
+      total: number;
+      offset: number;
+      append: boolean;
+    }
+  | { type: "failure"; error: Error };
+
+function createInitialState(autoLoad: boolean): ActivityLogState {
+  return {
+    entries: [],
+    loading: autoLoad,
+    error: null,
+    offset: 0,
+    total: 0,
+  };
+}
+
+function activityLogReducer(
+  state: ActivityLogState,
+  action: ActivityLogAction
+): ActivityLogState {
+  switch (action.type) {
+    case "request":
+      return { ...state, loading: true, error: null };
+    case "success":
+      return {
+        entries: action.append
+          ? [...state.entries, ...action.entries]
+          : action.entries,
+        loading: false,
+        error: null,
+        offset: action.offset,
+        total: action.total,
+      };
+    case "failure":
+      return { ...state, loading: false, error: action.error };
+  }
+}
+
+function toActivityLogError(err: unknown): Error {
+  return err instanceof Error ? err : new Error("Failed to fetch activity log");
+}
+
+async function loadActivityLogPage({
+  origin,
+  kind,
+  offset,
+}: ActivityLogPageParams) {
+  if (origin !== undefined || kind !== undefined) {
+    return activityFilterBy({
+      origin,
+      kind,
+      limit: PAGE_SIZE,
+      offset,
+    });
+  }
+
+  return activityGetRecent({
+    limit: PAGE_SIZE,
+    offset,
+  });
+}
+
 /**
  * Hook for fetching and managing activity log entries with filtering and pagination
  *
@@ -34,95 +115,115 @@ export function useActivityLog(
 ): UseActivityLogReturn {
   const { origin, kind, autoLoad = true } = options;
 
-  const [entries, setEntries] = useState<ActivityLogEntry[]>([]);
-  const [loading, setLoading] = useState(autoLoad);
-  const [error, setError] = useState<Error | null>(null);
-  const [offset, setOffset] = useState(0);
-  const [total, setTotal] = useState(0);
-
-  /**
-   * Fetch entries from RPC (initial load or filter change)
-   */
-  const fetchEntries = useCallback(
-    async (currentOffset: number = 0, append: boolean = false) => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        let result;
-
-        // Use filterBy if origin or kind specified, otherwise getRecent
-        if (origin !== undefined || kind !== undefined) {
-          result = await activityFilterBy({
-            origin,
-            kind,
-            limit: PAGE_SIZE,
-            offset: currentOffset,
-          });
-        } else {
-          result = await activityGetRecent({
-            limit: PAGE_SIZE,
-            offset: currentOffset,
-          });
-        }
-
-        if (append) {
-          setEntries((prev) => [...prev, ...result.entries]);
-        } else {
-          setEntries(result.entries);
-        }
-
-        setTotal(result.total);
-        setOffset(currentOffset);
-      } catch (err) {
-        console.error("[useActivityLog] Fetch error:", err);
-        setError(
-          err instanceof Error ? err : new Error("Failed to fetch activity log")
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [origin, kind]
+  const [state, dispatch] = useReducer(
+    activityLogReducer,
+    autoLoad,
+    createInitialState
   );
 
   /**
    * Load more entries (pagination)
    */
   const loadMore = useCallback(async () => {
-    const nextOffset = offset + PAGE_SIZE;
-    await fetchEntries(nextOffset, true);
-  }, [offset, fetchEntries]);
+    const nextOffset = state.offset + PAGE_SIZE;
+    dispatch({ type: "request" });
 
+    try {
+      const result = await loadActivityLogPage({
+        origin,
+        kind,
+        offset: nextOffset,
+      });
+
+      dispatch({
+        type: "success",
+        entries: result.entries,
+        total: result.total,
+        offset: nextOffset,
+        append: true,
+      });
+    } catch (err) {
+      console.error("[useActivityLog] Fetch error:", err);
+      dispatch({ type: "failure", error: toActivityLogError(err) });
+    }
+  }, [state.offset, origin, kind]);
+	
   /**
    * Refresh from beginning (clear and reload)
    */
   const refresh = useCallback(async () => {
-    setOffset(0);
-    await fetchEntries(0, false);
-  }, [fetchEntries]);
+    dispatch({ type: "request" });
+
+    try {
+      const result = await loadActivityLogPage({
+        origin,
+        kind,
+        offset: 0,
+      });
+
+      dispatch({
+        type: "success",
+        entries: result.entries,
+        total: result.total,
+        offset: 0,
+        append: false,
+      });
+    } catch (err) {
+      console.error("[useActivityLog] Fetch error:", err);
+      dispatch({ type: "failure", error: toActivityLogError(err) });
+    }
+  }, [origin, kind]);
 
   /**
    * Calculate if more entries are available
    */
-  const hasMore = entries.length < total;
+  const hasMore = state.entries.length < state.total;
 
   /**
    * Auto-load on mount and when filters change
    */
   useEffect(() => {
-    if (autoLoad) {
-      setOffset(0);
-      fetchEntries(0, false);
+    if (!autoLoad) {
+      return;
     }
-  }, [origin, kind, autoLoad, fetchEntries]);
+
+    let cancelled = false;
+    dispatch({ type: "request" });
+
+    loadActivityLogPage({ origin, kind, offset: 0 })
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        dispatch({
+          type: "success",
+          entries: result.entries,
+          total: result.total,
+          offset: 0,
+          append: false,
+        });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        console.error("[useActivityLog] Fetch error:", err);
+        dispatch({ type: "failure", error: toActivityLogError(err) });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [origin, kind, autoLoad]);
 
   return {
-    entries,
-    loading,
-    error,
+    entries: state.entries,
+    loading: state.loading,
+    error: state.error,
     hasMore,
-    total,
+    total: state.total,
     loadMore,
     refresh,
   };

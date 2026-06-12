@@ -14,6 +14,10 @@ import {
 } from "lucide-react";
 import { SealMark } from "@/components/common/SealMark";
 
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text);
+}
+
 export interface EventDetailViewProps {
   /** The pending request to display */
   request: PendingRequest;
@@ -55,10 +59,6 @@ export function EventDetailView({
     ...request.event,
     pubkey: signingPubkey || undefined,
     id: request.eventIdHash,
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
   };
 
   const handleApprove = () => {

@@ -55,8 +55,10 @@ export class ActivityRpcHandler implements RpcModule {
     const limit = validation.data.limit ?? 10;
     const offset = validation.data.offset ?? 0;
 
-    const entries = await context.activityLog.getRecent(limit, offset);
-    const total = await context.activityLog.count();
+    const [entries, total] = await Promise.all([
+      context.activityLog.getRecent(limit, offset),
+      context.activityLog.count(),
+    ]);
 
     return {
       ok: true,
@@ -91,11 +93,13 @@ export class ActivityRpcHandler implements RpcModule {
       offset: validation.data.offset ?? 0,
     };
 
-    const entries = await context.activityLog.filterBy(filters);
-    const total = await context.activityLog.count({
-      origin: message.origin,
-      kind: message.kind,
-    });
+    const [entries, total] = await Promise.all([
+      context.activityLog.filterBy(filters),
+      context.activityLog.count({
+        origin: message.origin,
+        kind: message.kind,
+      }),
+    ]);
 
     return {
       ok: true,

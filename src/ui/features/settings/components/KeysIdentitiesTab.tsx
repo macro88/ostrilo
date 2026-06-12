@@ -17,19 +17,19 @@ import { useState } from "react";
 
 type AddKeyMode = "choice" | "create" | "import" | null;
 
+async function handleRename(keyId: string, newLabel: string) {
+  await renameKey(keyId, newLabel);
+}
+
+async function handleDelete(keyId: string) {
+  await deleteKey(keyId);
+}
+
 export function KeysIdentitiesTab() {
   const { keys, selectedUnlockedKey, selectKey } = useKeyManager();
   const pubkeys = keys.map((key) => key.publicKeyHex);
   const { profiles } = useProfileMetadata(pubkeys);
   const [addKeyMode, setAddKeyMode] = useState<AddKeyMode>(null);
-
-  const handleRename = async (keyId: string, newLabel: string) => {
-    await renameKey(keyId, newLabel);
-  };
-
-  const handleDelete = async (keyId: string) => {
-    await deleteKey(keyId);
-  };
 
   const handleSelectKey = async (keyId: string) => {
     try {

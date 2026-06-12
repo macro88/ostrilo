@@ -3,8 +3,10 @@ allowBuilds:
   msw: true
   sharp: true
   spawn-sync: true
+minimumReleaseAge: 1440
 overrides:
   "@wxt-dev/module-react>@vitejs/plugin-react": "5.0.4"
   shell-quote: "1.8.4"
   tmp: "0.2.7"
   uuid: "11.1.1"
+trustPolicy: no-downgrade

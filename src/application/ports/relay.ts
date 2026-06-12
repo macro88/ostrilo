@@ -93,5 +93,3 @@ export interface INostrRelay {
   disconnect(): Promise<void>;
 }
 
-// Dummy export to prevent "empty module" issues in Vitest
-export const RELAY_PORT_VERSION = "1.0.0";

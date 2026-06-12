@@ -47,10 +47,10 @@ function Slider({
           )}
         />
       </SliderPrimitive.Track>
-      {Array.from({ length: _values.length }, (_, index) => (
+      {_values.map((valueAtThumb, index) => (
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
-          key={index}
+          key={`${index}-${valueAtThumb}`}
           className="seal border-primary bg-primary ring-ring/35 block size-4 shrink-0 border transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
         />
       ))}

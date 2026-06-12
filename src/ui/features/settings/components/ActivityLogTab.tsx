@@ -3,6 +3,11 @@ import { ActivityLogConfig } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
 
+function handleExport() {
+  // TODO: Implement log export functionality
+  console.log("Export log");
+}
+
 export function ActivityLogTab() {
   const {
     settings,
@@ -18,11 +23,6 @@ export function ActivityLogTab() {
       </div>
     );
   }
-
-  const handleExport = () => {
-    // TODO: Implement log export functionality
-    console.log("Export log");
-  };
 
   return (
     <div className="ink-card p-4 space-y-6">

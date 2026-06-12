@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { rpc } from "@/infrastructure/messaging/client";
 import type { ProfileMetadata } from "@/domain/profile/types";
+
+const EMPTY_PROFILES = new Map<string, ProfileMetadata>();
 
 /**
  * Hook for fetching profile metadata for multiple public keys
@@ -14,14 +16,15 @@ export function useProfileMetadata(pubkeys: string[]) {
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pubkeySignature = pubkeys.join("\u0000");
 
   useEffect(() => {
-    if (pubkeys.length === 0) {
-      setProfiles(new Map());
+    if (pubkeySignature.length === 0) {
       return;
     }
 
     let cancelled = false;
+    const requestedPubkeys = pubkeySignature.split("\u0000");
 
     const fetchProfiles = async () => {
       try {
@@ -30,7 +33,7 @@ export function useProfileMetadata(pubkeys: string[]) {
 
         // Fetch all profiles in parallel
         const results = await Promise.allSettled(
-          pubkeys.map(async (pubkey) => {
+          requestedPubkeys.map(async (pubkey) => {
             const data = await rpc<ProfileMetadata | null>({
               type: "profile.get" as any,
               params: { pubkey, forceFetch: false },
@@ -43,7 +46,7 @@ export function useProfileMetadata(pubkeys: string[]) {
 
         // Build map of successful results
         const profileMap = new Map<string, ProfileMetadata>();
-        results.forEach((result, index) => {
+        results.forEach((result) => {
           if (result.status === "fulfilled" && result.value.data) {
             profileMap.set(result.value.pubkey, result.value.data);
           }
@@ -69,7 +72,10 @@ export function useProfileMetadata(pubkeys: string[]) {
     return () => {
       cancelled = true;
     };
-  }, [JSON.stringify(pubkeys)]); // Stringify to avoid infinite loops on array reference changes
+  }, [pubkeySignature]);
 
-  return { profiles, isLoading, error };
+  const visibleProfiles =
+    pubkeySignature.length === 0 ? EMPTY_PROFILES : profiles;
+
+  return { profiles: visibleProfiles, isLoading, error };
 }

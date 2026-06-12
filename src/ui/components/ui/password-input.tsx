@@ -28,6 +28,38 @@ interface PasswordInputProps {
   disabled?: boolean;
 }
 
+function getStrengthColor(score: number) {
+  switch (score) {
+    case 0:
+    case 1:
+      return "bg-destructive";
+    case 2:
+      return "bg-[var(--ink-amber)]";
+    case 3:
+      return "bg-primary";
+    case 4:
+      return "bg-[var(--ink-mint)]";
+    default:
+      return "bg-muted";
+  }
+}
+
+function getStrengthLabel(score: number) {
+  switch (score) {
+    case 0:
+    case 1:
+      return "Very Weak";
+    case 2:
+      return "Weak";
+    case 3:
+      return "Good";
+    case 4:
+      return "Strong";
+    default:
+      return "";
+  }
+}
+
 export function PasswordInput({
   label,
   placeholder = "Enter password",
@@ -41,26 +73,32 @@ export function PasswordInput({
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [strength, setStrength] = useState<PasswordStrength | null>({
-    meetsMinimum: false,
-    score: 0,
-    requirements: [],
-  });
+  const [strength, setStrength] = useState<PasswordStrength | null>(null);
+  const shouldShowStrength = showStrengthMeter && value.length > 0;
 
   useEffect(() => {
-    if (!showStrengthMeter) {
-      setStrength(null);
+    if (!shouldShowStrength) {
       return;
     }
 
+    let cancelled = false;
+
     evaluatePasswordStrength(value)
       .then((result) => {
-        setStrength(result);
+        if (!cancelled) {
+          setStrength(result);
+        }
       })
       .catch(() => {
-        setStrength(null);
+        if (!cancelled) {
+          setStrength(null);
+        }
       });
-  }, [showStrengthMeter, value]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldShowStrength, value]);
 
   const confirmError = useMemo(() => {
     if (confirmValue === undefined) return "";
@@ -70,37 +108,7 @@ export function PasswordInput({
     return "";
   }, [confirmValue, value]);
 
-  const getStrengthColor = (score: number) => {
-    switch (score) {
-      case 0:
-      case 1:
-        return "bg-destructive";
-      case 2:
-        return "bg-[var(--ink-amber)]";
-      case 3:
-        return "bg-primary";
-      case 4:
-        return "bg-[var(--ink-mint)]";
-      default:
-        return "bg-muted";
-    }
-  };
-
-  const getStrengthLabel = (score: number) => {
-    switch (score) {
-      case 0:
-      case 1:
-        return "Very Weak";
-      case 2:
-        return "Weak";
-      case 3:
-        return "Good";
-      case 4:
-        return "Strong";
-      default:
-        return "";
-    }
-  };
+  const displayedStrength = shouldShowStrength ? strength : null;
 
   return (
     <div className="space-y-3">
@@ -125,6 +133,7 @@ export function PasswordInput({
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
             disabled={disabled}
+            aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? (
               <EyeOff className="h-4 w-4" />
@@ -136,7 +145,7 @@ export function PasswordInput({
       </div>
 
       {/* Strength meter */}
-      {showStrengthMeter && strength && (
+      {showStrengthMeter && displayedStrength && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
@@ -144,14 +153,14 @@ export function PasswordInput({
             </span>
             <span
               className={`text-sm font-medium ${
-                strength.score >= 3
+                displayedStrength.score >= 3
                   ? "text-[var(--ink-mint)]"
-                  : strength.score >= 2
+                  : displayedStrength.score >= 2
                   ? "text-[var(--ink-amber)]"
                   : "text-destructive"
               }`}
             >
-              {getStrengthLabel(strength.score)}
+              {getStrengthLabel(displayedStrength.score)}
             </span>
           </div>
 
@@ -161,8 +170,8 @@ export function PasswordInput({
               <div
                 key={level}
                 className={`h-2 flex-1 rounded-sm ${
-                  level < strength.score
-                    ? getStrengthColor(strength.score)
+                  level < displayedStrength.score
+                    ? getStrengthColor(displayedStrength.score)
                     : "bg-muted"
                 }`}
               />
@@ -170,11 +179,14 @@ export function PasswordInput({
           </div>
 
           {/* Requirements checklist */}
-          {strength.requirements.length > 0 && (
+          {displayedStrength.requirements.length > 0 && (
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">Requirements:</div>
-              {strength.requirements.map((req, index) => (
-                <div key={index} className="flex items-center gap-2 text-xs">
+              {displayedStrength.requirements.map((req) => (
+                <div
+                  key={req.requirement}
+                  className="flex items-center gap-2 text-xs"
+                >
                   {req.passes ? (
                     <Check className="h-3 w-3 text-[var(--ink-mint)]" />
                   ) : (
@@ -213,6 +225,11 @@ export function PasswordInput({
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
               disabled={disabled}
+              aria-label={
+                showConfirmPassword
+                  ? "Hide confirmation password"
+                  : "Show confirmation password"
+              }
             >
               {showConfirmPassword ? (
                 <EyeOff className="h-4 w-4" />

@@ -170,6 +170,7 @@ export function QueueListView({
               data-origin={group.origin}
             >
               <button
+                type="button"
                 onClick={() => toggleOrigin(group.origin)}
                 className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/50"
               >
@@ -261,6 +262,7 @@ function RequestItem({
 
   return (
     <button
+      type="button"
       onClick={onSelect}
       aria-current={isSelected ? "true" : undefined}
       data-testid="approval-request-item"

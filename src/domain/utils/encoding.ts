@@ -86,13 +86,6 @@ export function bytesToHex(bytes: Uint8Array): string {
 }
 
 /**
- * Convert public key bytes to hex format
- */
-export function publicKeyToHex(publicKey: Uint8Array): string {
-  return bytesToHex(publicKey);
-}
-
-/**
  * Validate hex string format
  */
 export function isValidHex(hex: string, expectedLength?: number): boolean {
