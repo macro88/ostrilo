@@ -2,6 +2,7 @@ import type {
   AppSettingsPatch,
   OriginPolicyPatch,
 } from "@/infrastructure/validation/schemas";
+import type { RpcErrorObject } from "./error-codes";
 import type {
   UnsignedEvent,
   SignedEvent,
@@ -12,7 +13,16 @@ import type {
 } from "@/domain/types";
 
 // Re-export error codes for convenience
-export { RPC_ERROR_CODES, type RpcErrorCode } from "./error-codes";
+export {
+  RPC_ERROR_CODES,
+  RPC_ERROR_MESSAGES,
+  RPC_NUMERIC_ERROR_CODES,
+  createRpcError,
+  createRpcErrorResponse,
+  getRpcErrorCode,
+  type RpcErrorCode,
+  type RpcErrorObject,
+} from "./error-codes";
 
 export type RpcRequest =
   | { type: "policy.evaluate"; origin: string; kind: number }
@@ -64,32 +74,32 @@ export type RpcRequest =
 // NIP-07 specific response types
 export type NostrGetPublicKeyResponse =
   | { ok: true; data: { pubkey: string } }
-  | { ok: false; error: string; details?: string };
+  | { ok: false; error: RpcErrorObject };
 
 export type NostrSignEventResponse =
   | { ok: true; data: { event: SignedEvent } }
-  | { ok: false; error: string; details?: string };
+  | { ok: false; error: RpcErrorObject };
 
 export type ApprovalCountResponse =
   | { ok: true; data: { count: number } }
-  | { ok: false; error: string; details?: string };
+  | { ok: false; error: RpcErrorObject };
 
 // Activity log response types
 export type ActivityGetRecentResponse =
   | { ok: true; data: { entries: ActivityLogEntry[]; total: number } }
-  | { ok: false; error: string; details?: string };
+  | { ok: false; error: RpcErrorObject };
 
 export type ActivityFilterResponse =
   | { ok: true; data: { entries: ActivityLogEntry[]; total: number } }
-  | { ok: false; error: string; details?: string };
+  | { ok: false; error: RpcErrorObject };
 
 export type ActivityClearResponse =
   | { ok: true; data: null }
-  | { ok: false; error: string; details?: string };
+  | { ok: false; error: RpcErrorObject };
 
 export type RpcResponse =
   | { ok: true; data: unknown }
-  | { ok: false; error: string; details?: string };
+  | { ok: false; error: RpcErrorObject };
 
 export type BgEvent = { __event: string };
 

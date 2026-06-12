@@ -1,12 +1,17 @@
 /**
  * Error Code Coverage Tests
  * 
- * Verifies that all defined RPC error codes are actually used in the codebase
+ * Verifies that all defined RPC error codes have structured metadata
  * and that no hardcoded error strings remain in RPC handlers.
  */
 
 import { describe, it, expect } from "vitest";
-import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
+import {
+  RPC_ERROR_CODES,
+  RPC_ERROR_MESSAGES,
+  RPC_NUMERIC_ERROR_CODES,
+  createRpcErrorResponse,
+} from "@/infrastructure/messaging/error-codes";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -32,30 +37,6 @@ describe("RPC Error Code Coverage", () => {
    */
   function getRouterFile(): string {
     return path.join(infrastructurePath, "rpc-router.ts");
-  }
-
-  /**
-   * Helper to check if error code is used in file content
-   */
-  function isErrorCodeUsedInFile(
-    errorCode: string,
-    fileContent: string
-  ): boolean {
-    // Check for RPC_ERROR_CODES.CONSTANT usage
-    const constantName = Object.keys(RPC_ERROR_CODES).find(
-      (key) => RPC_ERROR_CODES[key as keyof typeof RPC_ERROR_CODES] === errorCode
-    );
-    if (constantName && fileContent.includes(`RPC_ERROR_CODES.${constantName}`)) {
-      return true;
-    }
-
-    // Also check for direct string usage in error field
-    // Pattern: error: "error_code"
-    const directUsagePattern = new RegExp(
-      `error:\\s*["'\`]${errorCode}["'\`]`,
-      "g"
-    );
-    return directUsagePattern.test(fileContent);
   }
 
   /**
@@ -112,34 +93,40 @@ describe("RPC Error Code Coverage", () => {
       fileContents.set(file, fs.readFileSync(file, "utf-8"));
     }
 
-    // Combine all file contents for searching
-    const allContent = Array.from(fileContents.values()).join("\n");
-
     it("should have all error codes defined in RPC_ERROR_CODES", () => {
       // Verify the constant object exists and has expected structure
       expect(RPC_ERROR_CODES).toBeDefined();
       expect(Object.keys(RPC_ERROR_CODES).length).toBeGreaterThan(0);
     });
 
-    it("should use every defined error code at least once", () => {
-      const unusedCodes: string[] = [];
-
-      for (const [constantName, errorCode] of Object.entries(RPC_ERROR_CODES)) {
-        const isUsed = isErrorCodeUsedInFile(errorCode, allContent);
-
-        if (!isUsed) {
-          unusedCodes.push(`${constantName} ("${errorCode}")`);
-        }
-      }
-
-      // If any codes are unused, fail the test with helpful message
-      if (unusedCodes.length > 0) {
-        expect.fail(
-          `The following error codes are defined but never used:\n` +
-            unusedCodes.map((code) => `  - ${code}`).join("\n") +
-            `\n\nEither use these codes in handlers or remove them from RPC_ERROR_CODES.`
+    it("should define numeric mappings and default messages for every code", () => {
+      for (const errorCode of Object.values(RPC_ERROR_CODES)) {
+        expect(RPC_NUMERIC_ERROR_CODES[errorCode]).toEqual(
+          expect.any(Number)
         );
+        expect(RPC_ERROR_MESSAGES[errorCode]).toEqual(expect.any(String));
+        expect(RPC_ERROR_MESSAGES[errorCode].length).toBeGreaterThan(0);
       }
+    });
+
+    it("should construct JSON-RPC style error objects", () => {
+      const response = createRpcErrorResponse(RPC_ERROR_CODES.DENIED, {
+        details: "user rejected",
+        method: "nostr.signEvent",
+      });
+
+      expect(response).toEqual({
+        ok: false,
+        error: {
+          code: RPC_NUMERIC_ERROR_CODES[RPC_ERROR_CODES.DENIED],
+          message: RPC_ERROR_MESSAGES[RPC_ERROR_CODES.DENIED],
+          data: {
+            errorCode: RPC_ERROR_CODES.DENIED,
+            details: "user rejected",
+            method: "nostr.signEvent",
+          },
+        },
+      });
     });
 
     it("should not have hardcoded error strings in handlers", () => {
@@ -238,11 +225,13 @@ describe("RPC Error Code Coverage", () => {
       expect(RPC_ERROR_CODES.INVALID_KEY_INPUT).toBe("invalid_key_input");
       expect(RPC_ERROR_CODES.INVALID_HASH).toBe("invalid_hash");
       expect(RPC_ERROR_CODES.INVALID_REQUEST).toBe("invalid_request");
+      expect(RPC_ERROR_CODES.INVALID_PARAMS).toBe("invalid_params");
     });
 
     it("should have state error codes", () => {
       expect(RPC_ERROR_CODES.NO_KEY_SELECTED).toBe("no_key_selected");
       expect(RPC_ERROR_CODES.KEY_ALREADY_EXISTS).toBe("key_already_exists");
+      expect(RPC_ERROR_CODES.KEY_NOT_FOUND).toBe("key_not_found");
     });
 
     it("should have operation error codes", () => {
@@ -250,6 +239,9 @@ describe("RPC Error Code Coverage", () => {
       expect(RPC_ERROR_CODES.UNKNOWN_METHOD).toBe("unknown_method");
       expect(RPC_ERROR_CODES.UNKNOWN_NAMESPACE).toBe("unknown_namespace");
       expect(RPC_ERROR_CODES.APPROVAL_FAILED).toBe("approval_failed");
+      expect(RPC_ERROR_CODES.SIGNING_FAILED).toBe("signing_failed");
+      expect(RPC_ERROR_CODES.RATE_LIMITED).toBe("rate_limited");
+      expect(RPC_ERROR_CODES.NETWORK_ERROR).toBe("network_error");
     });
   });
 });

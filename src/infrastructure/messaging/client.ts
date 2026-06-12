@@ -1,10 +1,35 @@
 import { browser } from "wxt/browser";
-import type { RpcRequest, RpcResponse } from "./rpc";
+import type { RpcRequest, RpcResponse, RpcErrorObject } from "./rpc";
 import type {
   AppSettingsPatch,
   OriginPolicyPatch,
 } from "@/infrastructure/validation/schemas";
 // webextension-polyfill already imported above
+
+export class RpcClientError extends Error {
+  readonly method: string;
+  readonly rpcError: RpcErrorObject;
+  readonly errorCode: string;
+
+  constructor(method: string, rpcError: RpcErrorObject) {
+    super(`rpc:${method}:${rpcError.data.errorCode}`);
+    this.name = "RpcClientError";
+    this.method = method;
+    this.rpcError = rpcError;
+    this.errorCode = rpcError.data.errorCode;
+  }
+}
+
+function isRpcErrorObject(error: unknown): error is RpcErrorObject {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    typeof (error as { code?: unknown }).code === "number" &&
+    typeof (error as { message?: unknown }).message === "string" &&
+    typeof (error as { data?: { errorCode?: unknown } }).data?.errorCode ===
+      "string"
+  );
+}
 
 export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
   const method = (req as any)?.type ?? "unknown";
@@ -31,8 +56,13 @@ export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
         return (res as any).data as T;
       }
 
-      const err = (res as any)?.error ?? "unknown_error";
-      throw new Error(`rpc:${method}:${err}`);
+      const err = (res as any)?.error;
+      if (isRpcErrorObject(err)) {
+        throw new RpcClientError(method, err);
+      }
+
+      const legacyError = typeof err === "string" ? err : "unknown_error";
+      throw new Error(`rpc:${method}:${legacyError}`);
     } catch (e: any) {
       console.log("[CLIENT] RPC error for", method, ":", e);
       // Preserve original error if it's already formatted

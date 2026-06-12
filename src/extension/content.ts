@@ -1,5 +1,6 @@
 import { browser } from "wxt/browser";
 import type { RpcRequest, RpcResponse } from "@/infrastructure/messaging/rpc";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
 /**
  * Content script for NIP-07 window.nostr provider
@@ -100,8 +101,9 @@ async function handlePageMessage(event: MessageEvent): Promise<void> {
     if (response.ok) {
       sendResponse(data.id, response.data);
     } else {
+      const errorCode = response.error.data.errorCode;
       // Handle locked vault - prompt user to unlock
-      if (response.error === "locked") {
+      if (errorCode === RPC_ERROR_CODES.LOCKED) {
         console.log(
           "[Ostrilo Content] Vault is locked, attempting to open unlock prompt"
         );
@@ -109,20 +111,16 @@ async function handlePageMessage(event: MessageEvent): Promise<void> {
           // Try to open the extension popup to prompt unlock
           await browser.runtime.sendMessage({ type: "openUnlockPrompt" });
           // Send error to page script with helpful message
-          sendResponse(
-            data.id,
-            undefined,
-            "Extension is locked. Please unlock Ostrilo to continue."
-          );
+          sendResponse(data.id, undefined, errorCode);
         } catch (err) {
           console.warn(
             "[Ostrilo Content] Failed to open unlock prompt:",
             err
           );
-          sendResponse(data.id, undefined, response.error);
+          sendResponse(data.id, undefined, errorCode);
         }
       } else {
-        sendResponse(data.id, undefined, response.error);
+        sendResponse(data.id, undefined, errorCode);
       }
     }
   } catch (error) {

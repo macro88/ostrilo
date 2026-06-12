@@ -1,5 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
-import { RPC_ERROR_CODES } from "../error-codes";
+import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
   validateOriginPolicyPatch,
@@ -37,11 +37,10 @@ export class PolicyRpcHandler implements RpcModule {
         return this.handleRemoveOrigin(message, context);
 
       default:
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: (message as any).type,
-        };
+          method: (message as any).type,
+        });
     }
   }
 
@@ -52,21 +51,19 @@ export class PolicyRpcHandler implements RpcModule {
     // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
         details: originValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate event kind
     const kindValidation = EventKindSchema.safeParse(message.kind);
     if (!kindValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: kindValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     const data = await context.policy.evaluate({
@@ -83,23 +80,21 @@ export class PolicyRpcHandler implements RpcModule {
     // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
         details: originValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate patch data
     const validationResult = validateOriginPolicyPatch(message.patch);
     if (!validationResult.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: validationResult.error.issues
           .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
           .join(", "),
-      };
+        method: message.type,
+      });
     }
 
     await context.policy.setOriginPolicy(message.origin, validationResult.data);
@@ -113,31 +108,28 @@ export class PolicyRpcHandler implements RpcModule {
     // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
         details: originValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate event kind
     const kindValidation = EventKindSchema.safeParse(message.kind);
     if (!kindValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: kindValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate mode (should be valid authorisation)
     const modeValidation = AuthorisationSchema.safeParse(message.mode);
     if (!modeValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: modeValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     await context.policy.setPerKindRule(
@@ -155,11 +147,10 @@ export class PolicyRpcHandler implements RpcModule {
     // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
         details: originValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     await context.policy.clearSessionGrant(message.origin);
@@ -173,11 +164,10 @@ export class PolicyRpcHandler implements RpcModule {
     // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
         details: originValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     await context.policy.setSessionGrant(message.origin, message.enabled);
@@ -191,11 +181,10 @@ export class PolicyRpcHandler implements RpcModule {
     // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
         details: originValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     await context.policy.removeOriginPolicy(message.origin);

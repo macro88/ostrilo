@@ -1,5 +1,5 @@
 import { RpcRequest, RpcResponse, RpcHandler } from "../rpc.js";
-import { RPC_ERROR_CODES } from "../error-codes";
+import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import { PasswordSchema, KeyInputSchema } from "../../validation/schemas.js";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 
@@ -20,11 +20,10 @@ export class CryptoRpcHandler implements RpcModule {
         return this.handleParsePrivateKey(message);
 
       default:
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: (message as any).type,
-        };
+          method: (message as any).type,
+        });
     }
   }
 
@@ -33,11 +32,10 @@ export class CryptoRpcHandler implements RpcModule {
   ): Promise<RpcResponse> {
     const passwordValidation = PasswordSchema.safeParse(message.password);
     if (!passwordValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_PASSWORD,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
         details: passwordValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Import the function from domain validation utilities
@@ -54,11 +52,10 @@ export class CryptoRpcHandler implements RpcModule {
     // Validate key input
     const keyInputValidation = KeyInputSchema.safeParse(message.keyInput);
     if (!keyInputValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_KEY_INPUT,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_KEY_INPUT, {
         details: keyInputValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Import the function dynamically to keep it in background only

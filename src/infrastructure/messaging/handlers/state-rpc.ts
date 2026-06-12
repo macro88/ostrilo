@@ -1,5 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
-import { RPC_ERROR_CODES } from "../error-codes";
+import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import { KeyIdSchema } from "../../validation/schemas.js";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 
@@ -17,11 +17,10 @@ export class StateRpcHandler implements RpcModule {
         return this.handleGetLock(context);
 
       default:
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: (message as any).type,
-        };
+          method: (message as any).type,
+        });
     }
   }
 

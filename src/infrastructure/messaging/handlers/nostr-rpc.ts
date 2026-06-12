@@ -1,5 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
-import { RPC_ERROR_CODES } from "../error-codes";
+import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import type {
   SignedEvent,
@@ -46,11 +46,10 @@ export class NostrRpcHandler implements RpcModule {
         return this.handleSignEvent(message, context);
 
       default:
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: (message as any).type,
-        };
+          method: (message as any).type,
+        });
     }
   }
 
@@ -63,10 +62,9 @@ export class NostrRpcHandler implements RpcModule {
     // Check if vault is unlocked
     const lockState = await context.vault.getLockState();
     if (lockState.isLocked) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.LOCKED,
-      };
+      return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+        method: "nostr.getPublicKey",
+      });
     }
 
     // Get the selected key
@@ -74,10 +72,9 @@ export class NostrRpcHandler implements RpcModule {
     const selectedKey = keys.find((k) => k.isSelected);
 
     if (!selectedKey) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.NO_KEY_SELECTED,
-      };
+      return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
+        method: "nostr.getPublicKey",
+      });
     }
 
     return {
@@ -96,21 +93,19 @@ export class NostrRpcHandler implements RpcModule {
     // Validate event
     const eventValidation = UnsignedEventSchema.safeParse(message.event);
     if (!eventValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_EVENT,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_EVENT, {
         details: eventValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_ORIGIN,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
         details: originValidation.error.issues[0]?.message,
-      };
+        method: message.type,
+      });
     }
 
     // Check if vault is unlocked
@@ -123,11 +118,10 @@ export class NostrRpcHandler implements RpcModule {
       console.log(
         "[NostrRpcHandler] Vault is locked, returning LOCKED error to trigger unlock prompt"
       );
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.LOCKED,
+      return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
         details: "Extension is locked. Please unlock to sign events.",
-      };
+        method: message.type,
+      });
     }
 
     // Get the selected key
@@ -135,10 +129,9 @@ export class NostrRpcHandler implements RpcModule {
     const selectedKey = keys.find((k) => k.isSelected);
 
     if (!selectedKey) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.NO_KEY_SELECTED,
-      };
+      return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
+        method: message.type,
+      });
     }
 
     const event = message.event as UnsignedEvent;
@@ -170,11 +163,10 @@ export class NostrRpcHandler implements RpcModule {
         console.warn(
           "[NostrRpcHandler] Policy denied due to lock state - vault check passed but policy check failed!"
         );
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.LOCKED,
+        return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
           details: "Extension is locked. Please unlock to sign events.",
-        };
+          method: message.type,
+        });
       }
 
       // Record denial in activity log
@@ -185,11 +177,10 @@ export class NostrRpcHandler implements RpcModule {
         contentPreview: event.content.substring(0, 100),
       });
 
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.DENIED,
+      return createRpcErrorResponse(RPC_ERROR_CODES.DENIED, {
         details: `Policy denied: ${policyResult.reason}`,
-      };
+        method: message.type,
+      });
     }
 
     if (policyResult.mode === "ask") {
@@ -197,10 +188,9 @@ export class NostrRpcHandler implements RpcModule {
       if (!this.approvalQueue) {
         // No queue configured - fall back to error
         console.log("[NostrRpcHandler] No approval queue configured!");
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.NEEDS_APPROVAL,
-        };
+        return createRpcErrorResponse(RPC_ERROR_CODES.NEEDS_APPROVAL, {
+          method: message.type,
+        });
       }
 
       console.log(
@@ -244,11 +234,10 @@ export class NostrRpcHandler implements RpcModule {
             contentPreview: event.content.substring(0, 100),
           });
 
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.TIMEOUT,
+          return createRpcErrorResponse(RPC_ERROR_CODES.TIMEOUT, {
             details: "Approval request timed out",
-          };
+            method: message.type,
+          });
         }
 
         if (decision !== "allow") {
@@ -260,20 +249,18 @@ export class NostrRpcHandler implements RpcModule {
             contentPreview: event.content.substring(0, 100),
           });
 
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.DENIED,
+          return createRpcErrorResponse(RPC_ERROR_CODES.DENIED, {
             details: "user rejected",
-          };
+            method: message.type,
+          });
         }
         // Fall through to signing if approved
       } catch (error) {
         console.error("[NostrRpcHandler] Approval error:", error);
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.APPROVAL_FAILED,
+        return createRpcErrorResponse(RPC_ERROR_CODES.APPROVAL_FAILED, {
           details: error instanceof Error ? error.message : "approval failed",
-        };
+          method: message.type,
+        });
       }
     }
 
@@ -292,10 +279,9 @@ export class NostrRpcHandler implements RpcModule {
       const signResult = await context.vault.sign(eventId, selectedKey.id);
 
       if (!signResult || !signResult.sigHex) {
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.SIGNING_FAILED,
-        };
+        return createRpcErrorResponse(RPC_ERROR_CODES.SIGNING_FAILED, {
+          method: message.type,
+        });
       }
 
       // Construct the signed event
@@ -326,25 +312,22 @@ export class NostrRpcHandler implements RpcModule {
       // Translate service errors to RPC codes
       if (error instanceof Error) {
         if (error.message === "key_locked_or_missing") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.LOCKED,
-          };
+          return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+            method: message.type,
+          });
         }
         if (error.message === "hash_must_be_32_bytes") {
-          return {
-            ok: false,
-            error: RPC_ERROR_CODES.INVALID_HASH,
+          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_HASH, {
             details: "Event ID must be 32 bytes",
-          };
+            method: message.type,
+          });
         }
       }
       // Generic signing error fallback
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.DENIED,
+      return createRpcErrorResponse(RPC_ERROR_CODES.DENIED, {
         details: error instanceof Error ? error.message : "Signing failed",
-      };
+        method: message.type,
+      });
     }
   }
 

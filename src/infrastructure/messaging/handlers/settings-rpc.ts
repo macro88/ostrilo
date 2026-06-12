@@ -1,5 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
-import { RPC_ERROR_CODES } from "../error-codes";
+import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import { validateAppSettingsPatch } from "@/infrastructure/validation/schemas";
 
@@ -20,11 +20,10 @@ export class SettingsRpcHandler implements RpcModule {
         return this.handleUpdate(message, context);
 
       default:
-        return {
-          ok: false,
-          error: RPC_ERROR_CODES.UNKNOWN_METHOD,
+        return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: (message as any).type,
-        };
+          method: (message as any).type,
+        });
     }
   }
 
@@ -40,13 +39,12 @@ export class SettingsRpcHandler implements RpcModule {
     // Runtime validation of patch data
     const validationResult = validateAppSettingsPatch(message.patch);
     if (!validationResult.success) {
-      return {
-        ok: false,
-        error: RPC_ERROR_CODES.INVALID_REQUEST,
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
         details: validationResult.error.issues
           .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
           .join(", "),
-      };
+        method: message.type,
+      });
     }
 
     const data = await context.settings.update(validationResult.data);
