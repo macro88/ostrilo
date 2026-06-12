@@ -75,6 +75,7 @@ See [Testing Documentation](./docs/TESTING.md) for detailed information.
 
 ## Documentation
 
+- [Development Standards](./docs/development-standards.md) - Required architecture, security, UI, and verification rules
 - [Architecture Primer](./docs/architecture_primer.md) - Project architecture and RPC patterns
 - [Product Requirements](./docs/v2-prd.md) - v2 roadmap and requirement matrix
 - [Design Rules](./docs/design/DESIGN_RULES.md) - Canonical Inkline UI design system
