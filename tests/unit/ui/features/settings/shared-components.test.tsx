@@ -80,17 +80,23 @@ vi.mock("@/components/ui/slider", () => ({
 vi.mock("@/components/ui/switch", () => ({
   Switch: ({
     checked,
+    disabled,
     onCheckedChange,
     "aria-label": ariaLabel,
+    "aria-describedby": ariaDescribedBy,
   }: {
     checked: boolean;
+    disabled?: boolean;
     onCheckedChange: (checked: boolean) => void;
     "aria-label"?: string;
+    "aria-describedby"?: string;
   }) => (
     <input
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
       type="checkbox"
       checked={checked}
+      disabled={disabled}
       onChange={(event) => onCheckedChange(event.currentTarget.checked)}
     />
   ),
@@ -260,15 +266,44 @@ describe("settings shared components", () => {
   it("labels medium trust toggles by event kind", () => {
     const onToggle = vi.fn();
     const container = render(
-      <MediumKindToggles mediumAllowKinds={[1]} onToggle={onToggle} />
+      <MediumKindToggles mediumAllowKinds={[7]} onToggle={onToggle} />
     );
-    const kindOneToggle = container.querySelector(
-      'input[aria-label="Allow kind 1 for medium trust origins"]'
+    const kindSevenToggle = container.querySelector(
+      'input[aria-label="Allow kind 7 for medium trust origins"]'
     ) as HTMLInputElement;
 
-    expect(kindOneToggle.checked).toBe(true);
+    expect(kindSevenToggle.checked).toBe(true);
+    click(kindSevenToggle);
+
+    expect(onToggle).toHaveBeenCalledWith(7, false);
+  });
+
+  it("blocks protected kinds from medium trust auto-allow controls", () => {
+    const onToggle = vi.fn();
+    const container = render(
+      <MediumKindToggles mediumAllowKinds={[1, 9734]} onToggle={onToggle} />
+    );
+    const kindOneToggle = container.querySelector(
+      'input[aria-label="Kind 1 always requires approval"]'
+    ) as HTMLInputElement;
+    const zapRequestToggle = container.querySelector(
+      'input[aria-label="Kind 9734 always requires approval"]'
+    ) as HTMLInputElement;
+
+    expect(kindOneToggle.checked).toBe(false);
+    expect(kindOneToggle.disabled).toBe(true);
+    expect(zapRequestToggle.checked).toBe(false);
+    expect(zapRequestToggle.disabled).toBe(true);
+    expect(container.textContent).toContain(
+      "Short Text Note always requires approval"
+    );
+    expect(container.textContent).toContain(
+      "Zap Request always requires approval"
+    );
+    expect(container.textContent).toContain("Zap Receipt");
+
     click(kindOneToggle);
 
-    expect(onToggle).toHaveBeenCalledWith(1, false);
+    expect(onToggle).not.toHaveBeenCalled();
   });
 });

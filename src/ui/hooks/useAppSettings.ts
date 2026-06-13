@@ -17,6 +17,7 @@ import {
   TrustLevel,
   OriginPolicy,
 } from "@/domain/types";
+import { getEffectiveMediumAllowKinds } from "@/domain/policy/trust-definitions";
 import type { AppSettingsPatch } from "@/infrastructure/validation/schemas";
 import { activityClear } from "@/infrastructure/messaging/client";
 
@@ -170,7 +171,9 @@ export function useAppSettings() {
 
   const updateMediumAllowKinds = useCallback(
     (mediumAllowKinds: number[]) => {
-      return updateSettings({ mediumAllowKinds });
+      return updateSettings({
+        mediumAllowKinds: getEffectiveMediumAllowKinds(mediumAllowKinds),
+      });
     },
     [updateSettings]
   );

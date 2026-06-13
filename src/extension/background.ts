@@ -49,14 +49,19 @@ function normalizeRelayUrls(relays: unknown): string[] {
     return [];
   }
 
-  return Array.from(
-    new Set(
-      relays
-        .filter((relay): relay is string => typeof relay === "string")
-        .map((relay) => relay.trim())
-        .filter(isValidRelayUrl)
-    )
-  );
+  const validRelayUrls = new Set<string>();
+  for (const relay of relays) {
+    if (typeof relay !== "string") {
+      continue;
+    }
+
+    const normalizedRelay = relay.trim();
+    if (isValidRelayUrl(normalizedRelay)) {
+      validRelayUrls.add(normalizedRelay);
+    }
+  }
+
+  return Array.from(validRelayUrls);
 }
 
 /**

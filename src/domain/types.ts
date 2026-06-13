@@ -1,4 +1,5 @@
 // Settings types and defaults based on the requirements document
+import { DEFAULT_MEDIUM_ALLOW_KINDS } from "./policy/trust-definitions";
 
 // Re-export profile types
 export * from "./profile/types";
@@ -62,7 +63,7 @@ export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {
   maxActivityEntries: 50,
   relays: [...DEFAULT_RELAY_URLS],
   origins: [],
-  mediumAllowKinds: [6, 16, 7, 10002], // Repost, Generic Repost, Reaction, Relay list
+  mediumAllowKinds: [...DEFAULT_MEDIUM_ALLOW_KINDS],
   sessionTTLMinutes: 0,
 };
 
@@ -131,7 +132,7 @@ const ALL_EVENT_KINDS = {
   9321: "Nutzap",
   9467: "Tidal login",
   9734: "Zap Request",
-  9735: "Zap",
+  9735: "Zap Receipt",
   9802: "Highlights",
   10000: "Mute list",
   10001: "Pin list",
@@ -248,7 +249,8 @@ export const COMMON_EVENT_KINDS = {
   7: "Reaction",
   14: "Direct Message",
   16: "Generic Repost",
-  9735: "Zap",
+  9734: "Zap Request",
+  9735: "Zap Receipt",
   10002: "Relay List Metadata",
 } as const;
 
@@ -283,6 +285,7 @@ export type EvalReason =
   | "rule"
   | "session"
   | "trust"
+  | "protected"
   | "fallback"
   | "medium_allow"
   | "session_grant"

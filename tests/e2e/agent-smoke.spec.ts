@@ -124,7 +124,7 @@ test.describe("Agent extension smoke", () => {
     await sendExtensionRpc(popup, {
       type: "policy.setKindRule",
       origin: DAPP_ORIGIN,
-      kind: 1,
+      kind: 7,
       mode: "allow",
     });
 
@@ -140,7 +140,7 @@ test.describe("Agent extension smoke", () => {
 
     const signedEvent = await dapp.evaluate(() =>
       window.testSignEvent({
-        kind: 1,
+        kind: 7,
         content: "Signed by Ostrilo Playwright smoke test",
         tags: [],
         created_at: Math.floor(Date.now() / 1000),
@@ -156,7 +156,7 @@ test.describe("Agent extension smoke", () => {
     await captureStepScreenshot(dapp, testInfo, "09-dapp-signed-event");
 
     await popup.getByRole("button", { name: "Activity" }).click();
-    await expect(popup.getByText("Short Text Note")).toBeVisible({
+    await expect(popup.getByText("Reaction")).toBeVisible({
       timeout: 10_000,
     });
     await expect(popup.getByText("127.0.0.1")).toBeVisible();

@@ -1,6 +1,7 @@
 import { Clock } from "lucide-react";
 import { MediumKindToggles } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { getEffectiveMediumAllowKinds } from "@/domain/policy/trust-definitions";
 
 export function AdvancedTab() {
   const { settings, isLoading, updateMediumAllowKinds } = useAppSettings();
@@ -14,7 +15,9 @@ export function AdvancedTab() {
   }
 
   const handleToggleMediumKind = (kind: number, enabled: boolean) => {
-    const currentKinds = settings.mediumAllowKinds;
+    const currentKinds = getEffectiveMediumAllowKinds(
+      settings.mediumAllowKinds
+    );
     if (enabled && !currentKinds.includes(kind)) {
       updateMediumAllowKinds([...currentKinds, kind]);
     } else if (!enabled && currentKinds.includes(kind)) {

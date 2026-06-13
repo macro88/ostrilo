@@ -2,6 +2,7 @@ import type { RpcRequest, RpcResponse } from "../rpc";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import { validateAppSettingsPatch } from "@/infrastructure/validation/schemas";
+import { getEffectiveMediumAllowKinds } from "@/domain/policy/trust-definitions";
 
 /**
  * RPC handler for settings-related operations
@@ -47,12 +48,19 @@ export class SettingsRpcHandler implements RpcModule {
       });
     }
 
-    const data = await context.settings.update(validationResult.data);
+    const patch = { ...validationResult.data };
+    if (Array.isArray(patch.mediumAllowKinds)) {
+      patch.mediumAllowKinds = getEffectiveMediumAllowKinds(
+        patch.mediumAllowKinds
+      );
+    }
 
-    if (validationResult.data.maxActivityEntries !== undefined) {
+    const data = await context.settings.update(patch);
+
+    if (patch.maxActivityEntries !== undefined) {
       try {
         await context.activityLog.setMaxEntries(
-          validationResult.data.maxActivityEntries
+          patch.maxActivityEntries
         );
       } catch (error) {
         console.warn("Failed to update activity log max entries", error);

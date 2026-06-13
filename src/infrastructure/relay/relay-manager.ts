@@ -87,10 +87,13 @@ export class RelayManager implements INostrRelay {
     ).length;
 
     if (successfulSubscriptions === 0) {
-      const errors = results
-        .filter((result) => result.status === "rejected")
-        .map((result) => result.reason?.message ?? String(result.reason))
-        .join(", ");
+      const errors = results.reduce<string[]>((messages, result) => {
+        if (result.status === "rejected") {
+          messages.push(result.reason?.message ?? String(result.reason));
+        }
+
+        return messages;
+      }, []).join(", ");
 
       console.warn(`Relay subscription failed on all relays: ${errors}`);
       onEOSE?.();

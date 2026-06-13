@@ -6,6 +6,7 @@ import { SettingsRpcHandler } from "@/infrastructure/messaging/handlers/settings
 import { CryptoRpcHandler } from "@/infrastructure/messaging/handlers/crypto-rpc";
 import { StateRpcHandler } from "@/infrastructure/messaging/handlers/state-rpc";
 import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
+import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 import {
   RPC_ERROR_CODES,
   createRpcErrorResponse,
@@ -217,6 +218,19 @@ describe("RPC Router and Handlers", () => {
       });
       expect(result).toEqual({ ok: true, data: { theme: "light" } });
     });
+
+    it("should sanitize protected medium trust kinds before settings.update", async () => {
+      const message = {
+        type: "settings.update",
+        patch: { mediumAllowKinds: [1, 6, 9734, 9735] },
+      } satisfies Parameters<SettingsRpcHandler["handleRequest"]>[0];
+
+      await handler.handleRequest(message, mockContext);
+
+      expect(mockContext.settings.update).toHaveBeenCalledWith({
+        mediumAllowKinds: [6, 9735],
+      });
+    });
   });
 
   describe("StateRpcHandler", () => {
@@ -386,7 +400,7 @@ describe("RPC Router and Handlers", () => {
 
     describe("nostr.signEvent", () => {
       const validUnsignedEvent = {
-        kind: 1,
+        kind: 7,
         content: "Hello, Nostr!",
         tags: [],
         created_at: 1234567890,
@@ -410,7 +424,7 @@ describe("RPC Router and Handlers", () => {
             "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
           );
           expect(data.event.sig).toBe("a".repeat(128));
-          expect(data.event.kind).toBe(1);
+          expect(data.event.kind).toBe(7);
           expect(data.event.content).toBe("Hello, Nostr!");
         }
       });
@@ -470,6 +484,61 @@ describe("RPC Router and Handlers", () => {
         if (!result.ok) {
           expect(result.error.data.errorCode).toBe(RPC_ERROR_CODES.NEEDS_APPROVAL);
         }
+      });
+
+      it("should route protected auto-allow results through approval before signing", async () => {
+        const approvalQueue = new ApprovalQueueService();
+        const windowManager = vi.fn().mockResolvedValue(undefined);
+        handler = new NostrRpcHandler(approvalQueue, windowManager);
+        nostrMockContext.policy.evaluate = vi
+          .fn()
+          .mockResolvedValue({ mode: "allow", reason: "trust" });
+        const protectedEvent = {
+          ...validUnsignedEvent,
+          kind: 1,
+        };
+        const message = {
+          type: "nostr.signEvent",
+          event: protectedEvent,
+          origin: "https://example.com",
+        } as const;
+
+        const resultPromise = handler.handleRequest(message, nostrMockContext);
+        await vi.waitFor(() => {
+          expect(approvalQueue.count()).toBe(1);
+        });
+        expect(nostrMockContext.vault.sign).not.toHaveBeenCalled();
+
+        const request = approvalQueue.getNextPending();
+        expect(request?.event.kind).toBe(1);
+        approvalQueue.resolve(request!.id, "allow_once");
+
+        const result = await resultPromise;
+
+        expect(windowManager).toHaveBeenCalled();
+        expect(result.ok).toBe(true);
+        expect(nostrMockContext.vault.sign).toHaveBeenCalledTimes(1);
+      });
+
+      it("should return needs_approval for protected auto-allow results without a queue", async () => {
+        nostrMockContext.policy.evaluate = vi
+          .fn()
+          .mockResolvedValue({ mode: "allow", reason: "trust" });
+        const message = {
+          type: "nostr.signEvent",
+          event: { ...validUnsignedEvent, kind: 1 },
+          origin: "https://example.com",
+        } as const;
+
+        const result = await handler.handleRequest(message, nostrMockContext);
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.error.data.errorCode).toBe(
+            RPC_ERROR_CODES.NEEDS_APPROVAL
+          );
+        }
+        expect(nostrMockContext.vault.sign).not.toHaveBeenCalled();
       });
 
       it("should return error for invalid event", async () => {
