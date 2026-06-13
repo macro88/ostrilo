@@ -9,6 +9,7 @@ import {
   AutoLockSlider,
   KeySelectorCard,
   MediumKindToggles,
+  OriginPolicyTable,
   RelayList,
   ThemeSelector,
 } from "@/ui/features/settings/components/shared";
@@ -305,5 +306,99 @@ describe("settings shared components", () => {
     click(kindOneToggle);
 
     expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it("shows common per-origin policy kinds with reversible rules", () => {
+    const onSetPerKindRule = vi.fn();
+    const container = render(
+      <OriginPolicyTable
+        origins={[
+          {
+            origin: "https://primal.net",
+            trustLevel: "medium",
+            rules: { 10002: "allow" },
+            updatedAt: 1,
+          },
+        ]}
+        onRemove={vi.fn()}
+        onToggleSession={vi.fn()}
+        onSetPerKindRule={onSetPerKindRule}
+      />
+    );
+
+    expect(container.textContent).toContain("Profile Metadata");
+    expect(container.textContent).toContain("Contacts");
+    expect(container.textContent).toContain("Mute List");
+    expect(container.textContent).toContain("Pin List");
+    expect(container.textContent).toContain("Relay List");
+    expect(container.textContent).toContain("Application Data");
+
+    const relayListRow = container.querySelector(
+      '[data-testid="origin-policy-kind-10002"]'
+    )!;
+    const askButton = Array.from(relayListRow.querySelectorAll("button")).find(
+      (button) => button.textContent === "Ask"
+    )!;
+    click(askButton);
+
+    const denyButton = Array.from(relayListRow.querySelectorAll("button")).find(
+      (button) => button.textContent === "Deny"
+    )!;
+    click(denyButton);
+
+    expect(onSetPerKindRule).toHaveBeenNthCalledWith(
+      1,
+      "https://primal.net",
+      10002,
+      "ask"
+    );
+    expect(onSetPerKindRule).toHaveBeenNthCalledWith(
+      2,
+      "https://primal.net",
+      10002,
+      "deny"
+    );
+  });
+
+  it("does not offer protected kinds as auto-allow policy candidates", () => {
+    const container = render(
+      <OriginPolicyTable
+        origins={[
+          {
+            origin: "https://primal.net",
+            trustLevel: "medium",
+            rules: { 1: "allow", 9734: "deny" },
+            updatedAt: 1,
+          },
+        ]}
+        onRemove={vi.fn()}
+        onToggleSession={vi.fn()}
+        onSetPerKindRule={vi.fn()}
+      />
+    );
+
+    const shortTextRow = container.querySelector(
+      '[data-testid="origin-policy-kind-1"]'
+    )!;
+    const zapRequestRow = container.querySelector(
+      '[data-testid="origin-policy-kind-9734"]'
+    )!;
+
+    expect(shortTextRow.textContent).toContain(
+      "Always requires approval before signing"
+    );
+    expect(zapRequestRow.textContent).toContain(
+      "Always requires approval before signing"
+    );
+    expect(
+      Array.from(shortTextRow.querySelectorAll("button")).map(
+        (button) => button.textContent
+      )
+    ).toEqual(["Ask", "Deny"]);
+    expect(
+      Array.from(zapRequestRow.querySelectorAll("button")).map(
+        (button) => button.textContent
+      )
+    ).toEqual(["Ask", "Deny"]);
   });
 });

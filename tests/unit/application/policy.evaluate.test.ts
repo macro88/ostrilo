@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { evaluatePolicy } from "@/domain/policy/evaluate";
-import { OriginPolicy } from "@/domain/types";
+import { COMMON_EVENT_KINDS, getKindName, OriginPolicy } from "@/domain/types";
 import {
   DEFAULT_MEDIUM_ALLOW_KINDS,
   PROTECTED_KINDS,
@@ -38,6 +38,23 @@ describe("evaluatePolicy", () => {
     expect(getEffectiveMediumAllowKinds([1, 6, 9734, 9735])).toEqual([
       6, 9735,
     ]);
+  });
+
+  it("labels common client policy kinds", () => {
+    expect(getKindName(0)).toBe("Profile Metadata");
+    expect(getKindName(3)).toBe("Contacts");
+    expect(getKindName(10000)).toBe("Mute List");
+    expect(getKindName(10001)).toBe("Pin List");
+    expect(getKindName(10002)).toBe("Relay List");
+    expect(getKindName(30078)).toBe("Application Data");
+    expect(COMMON_EVENT_KINDS).toMatchObject({
+      0: "Profile Metadata",
+      3: "Contacts",
+      10000: "Mute List",
+      10001: "Pin List",
+      10002: "Relay List",
+      30078: "Application Data",
+    });
   });
 
   it("denies when locked", () => {

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { PendingRequest, ApprovalAction, KeyRecord } from "@/domain/types";
 import { getKindName } from "@/domain/types";
+import { isProtectedKind } from "@/domain/policy/trust-definitions";
 import {
   ArrowLeft,
   Check,
@@ -53,6 +54,17 @@ export function EventDetailView({
   const [rememberChoice, setRememberChoice] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
   const kindName = getKindName(request.event.kind);
+  const isProtectedEventKind = isProtectedKind(request.event.kind);
+  const rememberInputId = `remember-${request.id}`;
+  const rememberDescriptionId = `${rememberInputId}-description`;
+  const rememberLabel = isProtectedEventKind
+    ? "Remember a denial for this site and event kind"
+    : "Remember this decision for this site and event kind";
+  const rememberDescription = isProtectedEventKind
+    ? "This kind always requires approval before signing. Approving signs only this request."
+    : `Future ${kindName.toLowerCase()} requests from ${formatDomain(
+        request.origin
+      )} will use this choice.`;
   const domain = formatDomain(request.origin);
   const signingPubkey = signingKey?.pubkey ?? "";
   const rawEnvelope = {
@@ -62,7 +74,9 @@ export function EventDetailView({
   };
 
   const handleApprove = () => {
-    onResolve(rememberChoice ? "allow" : "allow_once");
+    onResolve(
+      rememberChoice && !isProtectedEventKind ? "allow" : "allow_once"
+    );
   };
 
   const handleDeny = () => {
@@ -242,15 +256,29 @@ export function EventDetailView({
           </Button>
         </div>
 
-        <label className="flex items-center justify-center gap-2 text-sm font-semibold text-muted-foreground">
-          <input
-            type="checkbox"
-            className="h-5 w-5 rounded border-input accent-[var(--ink-violet)]"
-            checked={rememberChoice}
-            onChange={(event) => setRememberChoice(event.target.checked)}
-          />
-          Do not ask again for this kind from this site
-        </label>
+        <div
+          className="space-y-2 text-sm text-muted-foreground"
+          data-testid="remember-scope-copy"
+        >
+          <div className="flex items-center justify-center gap-2 font-semibold">
+            <input
+              id={rememberInputId}
+              type="checkbox"
+              className="h-5 w-5 rounded border-input accent-[var(--ink-violet)]"
+              checked={rememberChoice}
+              aria-label={rememberLabel}
+              aria-describedby={rememberDescriptionId}
+              onChange={(event) => setRememberChoice(event.target.checked)}
+            />
+            <label htmlFor={rememberInputId}>{rememberLabel}</label>
+          </div>
+          <p className="text-center text-xs font-semibold">
+            Kind {request.event.kind} · {kindName}
+          </p>
+          <p id={rememberDescriptionId} className="text-center text-xs">
+            {rememberDescription}
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -209,7 +209,7 @@ dApp → Content Script → Background Script → Approval Queue → Approval Po
 6. **Display UI**: Shows origin, event kind, content preview, and action buttons
 7. **User decides**: Clicks one of four action buttons
 8. **Resolve request**: Popup calls `approval.resolve` RPC with decision
-9. **Update policy**: If "Deny + Remember" was clicked, adds deny rule for origin+kind
+9. **Update policy**: If "Allow" with remember was clicked for an unprotected kind, adds an allow rule for origin+kind. If "Deny + Remember" was clicked, adds a deny rule for origin+kind.
 10. **Return result**: Promise in background script resolves/rejects, result flows back to dApp
 11. **Next request**: If queue has more requests, popup shows next one; otherwise closes
 
@@ -217,7 +217,7 @@ dApp → Content Script → Background Script → Approval Queue → Approval Po
 
 | Action | Behavior | Policy Change |
 |--------|----------|---------------|
-| **Allow** | Sign event and return to dApp | None |
+| **Allow** | Sign event and return to dApp | Creates allow rule for unprotected origin+kind |
 | **Allow Once** | Same as Allow (alias for clarity) | None |
 | **Deny** | Reject with "user_denied" error | None |
 | **Deny + Remember** | Reject with "user_denied" error | Creates deny rule for origin+kind |

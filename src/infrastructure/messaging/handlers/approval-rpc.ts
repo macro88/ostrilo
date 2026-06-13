@@ -10,6 +10,7 @@ import type {
 import type { ApprovalAction } from "@/domain/types";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 import { ApprovalResolveRequestSchema } from "@/infrastructure/validation/schemas";
+import { isProtectedKind } from "@/domain/policy/trust-definitions";
 
 interface ApprovalRpcHandlerOptions {
   closeApprovalWindow?: () => Promise<void>;
@@ -126,7 +127,19 @@ export class ApprovalRpcHandler implements RpcModule {
         });
       }
 
-      // If deny_remember, update policy before resolving
+      // Persist remembered decisions before resolving so the request only
+      // succeeds when the requested durable policy update succeeds.
+      if (
+        validation.data.action === "allow" &&
+        !isProtectedKind(request.event.kind)
+      ) {
+        await context.policy.setPerKindRule(
+          request.origin,
+          request.event.kind,
+          "allow"
+        );
+      }
+
       if (validation.data.action === "deny_remember") {
         await context.policy.setPerKindRule(
           request.origin,

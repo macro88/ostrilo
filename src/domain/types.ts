@@ -69,10 +69,10 @@ export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {
 
 // Comprehensive Nostr event kinds mapping
 const ALL_EVENT_KINDS = {
-  0: "User Metadata",
+  0: "Profile Metadata",
   1: "Short Text Note",
   2: "Recommend Relay",
-  3: "Follows",
+  3: "Contacts",
   4: "Encrypted Direct Messages",
   5: "Event Deletion Request",
   6: "Repost",
@@ -134,9 +134,9 @@ const ALL_EVENT_KINDS = {
   9734: "Zap Request",
   9735: "Zap Receipt",
   9802: "Highlights",
-  10000: "Mute list",
-  10001: "Pin list",
-  10002: "Relay List Metadata",
+  10000: "Mute List",
+  10001: "Pin List",
+  10002: "Relay List",
   10003: "Bookmark list",
   10004: "Communities list",
   10005: "Public chats list",
@@ -182,7 +182,7 @@ const ALL_EVENT_KINDS = {
   30040: "Curated Publication Index",
   30041: "Curated Publication Content",
   30063: "Release artifact sets",
-  30078: "Application-specific Data",
+  30078: "Application Data",
   30166: "Relay Discovery",
   30267: "App curation sets",
   30311: "Live Event",
@@ -242,8 +242,9 @@ export function getKindName(kind: number): string {
 
 // Common Nostr event kinds for UI (curated subset for settings)
 export const COMMON_EVENT_KINDS = {
+  0: "Profile Metadata",
   1: "Short Text Note",
-  3: "Follows",
+  3: "Contacts",
   4: "Encrypted Direct Messages",
   6: "Repost",
   7: "Reaction",
@@ -251,7 +252,10 @@ export const COMMON_EVENT_KINDS = {
   16: "Generic Repost",
   9734: "Zap Request",
   9735: "Zap Receipt",
-  10002: "Relay List Metadata",
+  10000: "Mute List",
+  10001: "Pin List",
+  10002: "Relay List",
+  30078: "Application Data",
 } as const;
 
 // Additional types needed for various domain operations
