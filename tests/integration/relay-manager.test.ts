@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { RelayManager } from "@/infrastructure/relay/relay-manager";
+import { DEFAULT_RELAY_URLS } from "@/domain/types";
 import type {
   NostrEvent,
   NostrEventCallback,
@@ -51,6 +52,12 @@ function createRelay(options: {
 }
 
 describe("RelayManager", () => {
+  it("falls back to the default relay list when no relays are configured yet", () => {
+    const manager = new RelayManager([]);
+
+    expect(manager.getRelayUrls()).toEqual([...DEFAULT_RELAY_URLS]);
+  });
+
   it("keeps profile subscriptions alive when one relay fails", async () => {
     const manager = new RelayManager([]);
     const event = createEvent("event-1");

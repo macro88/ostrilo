@@ -745,12 +745,12 @@ describe("RPC Router and Handlers", () => {
         );
       });
 
-      it("should not update policy on allow action", async () => {
+      it("should update policy on allow action for unprotected kinds", async () => {
         const requestId = "00000000-0000-4000-8000-000000000003";
         const mockRequest = {
           id: requestId,
           origin: "https://example.com",
-          event: { kind: 1, content: "test", tags: [], created_at: 123 },
+          event: { kind: 10002, content: "test", tags: [], created_at: 123 },
           createdAt: 123,
           timeoutAt: 183,
         };
@@ -764,8 +764,62 @@ describe("RPC Router and Handlers", () => {
         } as const;
         await handler.handleRequest(message, mockContext);
 
-        expect(mockContext.policy.setPerKindRule).not.toHaveBeenCalled();
+        expect(mockContext.policy.setPerKindRule).toHaveBeenCalledWith(
+          "https://example.com",
+          10002,
+          "allow"
+        );
+        expect(mockQueue.resolve).toHaveBeenCalledWith(requestId, "allow");
       });
+
+      it("should not update policy on allow_once action", async () => {
+        const requestId = "00000000-0000-4000-8000-000000000004";
+        const mockRequest = {
+          id: requestId,
+          origin: "https://example.com",
+          event: { kind: 10002, content: "test", tags: [], created_at: 123 },
+          createdAt: 123,
+          timeoutAt: 183,
+        };
+        mockQueue.getById.mockReturnValue(mockRequest);
+        mockQueue.resolve.mockReturnValue(true);
+
+        const message = {
+          type: "approval.resolve",
+          requestId,
+          action: "allow_once",
+        } as const;
+        await handler.handleRequest(message, mockContext);
+
+        expect(mockContext.policy.setPerKindRule).not.toHaveBeenCalled();
+        expect(mockQueue.resolve).toHaveBeenCalledWith(requestId, "allow_once");
+      });
+
+      it.each([1, 9734])(
+        "should not persist remembered allow for protected kind %s",
+        async (kind) => {
+          const requestId = `00000000-0000-4000-8000-${String(kind).padStart(12, "0")}`;
+          const mockRequest = {
+            id: requestId,
+            origin: "https://example.com",
+            event: { kind, content: "test", tags: [], created_at: 123 },
+            createdAt: 123,
+            timeoutAt: 183,
+          };
+          mockQueue.getById.mockReturnValue(mockRequest);
+          mockQueue.resolve.mockReturnValue(true);
+
+          const message = {
+            type: "approval.resolve",
+            requestId,
+            action: "allow",
+          } as const;
+          await handler.handleRequest(message, mockContext);
+
+          expect(mockContext.policy.setPerKindRule).not.toHaveBeenCalled();
+          expect(mockQueue.resolve).toHaveBeenCalledWith(requestId, "allow");
+        }
+      );
     });
 
     it("should handle unsupported methods", async () => {

@@ -153,6 +153,26 @@ describe("PolicyService", () => {
         service.setPerKindRule("example.com", 1, "allow")
       ).resolves.not.toThrow();
     });
+
+    it("stores remembered allow rules and lets users change them", async () => {
+      await service.setPerKindRule("https://primal.net", 10002, "allow");
+
+      const afterAllow = await storage.sync.get<any>("appSettings");
+      expect(afterAllow.origins).toEqual([
+        expect.objectContaining({
+          origin: "https://primal.net",
+          rules: { 10002: "allow" },
+        }),
+      ]);
+
+      await service.setPerKindRule("https://primal.net", 10002, "ask");
+      const afterAsk = await storage.sync.get<any>("appSettings");
+      expect(afterAsk.origins[0].rules[10002]).toBe("ask");
+
+      await service.setPerKindRule("https://primal.net", 10002, "deny");
+      const afterDeny = await storage.sync.get<any>("appSettings");
+      expect(afterDeny.origins[0].rules[10002]).toBe("deny");
+    });
   });
 
   describe("session grants", () => {

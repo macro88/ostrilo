@@ -57,11 +57,11 @@ Ostrilo v2 aims to become the **world's best Nostr signing extension** by delive
 
 | Priority | Total | v1.x | v2.0 | v2.1 | v2.2+ |
 |----------|-------|------|------|------|-------|
-| Must     | 62    | 38   | 18   | 6    | 0     |
+| Must     | 63    | 38   | 19   | 6    | 0     |
 | Should   | 48    | 10   | 22   | 12   | 4     |
 | Could    | 35    | 2    | 8    | 15   | 10    |
 | Won't    | 8     | 0    | 0    | 0    | 8     |
-| **Total**| **153** | **50** | **48** | **33** | **22** |
+| **Total**| **154** | **50** | **49** | **33** | **22** |
 
 ### Current Implementation Snapshot
 
@@ -74,7 +74,7 @@ The original release dates are now historical planning targets. The status marke
 
 - NIP-07 core provider: `window.nostr.getPublicKey()` and `window.nostr.signEvent()` are injected at document start and route through content/background messaging.
 - Background-only key operations, encrypted local key storage, multi-key management, active-key selector, add/import/rename/delete flows, and guarded last-key deletion.
-- Per-origin trust policy evaluation, medium-trust event kind defaults, explicit per-kind rules, session grants, managed approval queue/window, event de-duplication, batch approval actions, and Activity-page pending approval access.
+- Per-origin trust policy evaluation, medium-trust event kind defaults, explicit per-kind rules, session grants, remembered allow/deny decisions from approval prompts, managed approval queue/window, event de-duplication, batch approval actions, and Activity-page pending approval access.
 - Trust policy hardening has centralized protected-kind definitions for Short Text Notes and Zap Requests; domain policy evaluation and the `nostr.signEvent` RPC handler now force protected kinds through approval before session grants, explicit allow rules, Medium Trust, or High Trust can auto-sign them, and Medium Trust settings/UI filter protected kinds out of auto-allow controls.
 - Persistent activity log with real signing decisions, origin/kind filters, pagination, clear action, configurable retention up to 500 entries, and local JSON export.
 - Profile metadata management for NIP-01 kind:0 profile fetch/cache/display/edit/publish, relay settings, multi-relay querying, and relay publish support.
@@ -188,6 +188,7 @@ A world-class signing extension must be both powerful and delightful to use. Red
 | UX-015 | Dark/Light Mode Auto-Switch | S | ✅ | v2.0 | 3 | "Create a proposal to implement automatic theme switching based on system preferences, time of day, or custom schedule" |
 | UX-016 | Compact View Mode | C | ⬜ | v2.1 | 3 | "Create a proposal to add compact view mode for power users with denser layouts, reduced padding, and more information per screen" |
 | UX-017 | Drag-and-Drop Key Import | S | ⬜ | v2.1 | 3 | "Create a proposal to support drag-and-drop import of key files (encrypted JSON, nsec files) with validation and secure handling" |
+| UX-018 | Durable Per-Site Signing Permissions | M | ✅ | v2.0 | 3 | "Create a proposal to fix remembered per-site signing permissions so approving with remember saves an origin+event-kind rule, future matching unprotected requests auto-sign, protected kinds still require approval, and settings clearly shows and revokes saved policies" |
 
 ---
 
