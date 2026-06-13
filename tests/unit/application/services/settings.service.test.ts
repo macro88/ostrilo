@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SettingsService } from "@/application/services/settings.service";
 import type { StoragePort, StorageSuite } from "@/application/ports/storage";
 import { DEFAULT_RELAY_URLS, type AppSettingsV1 } from "@/domain/types";
+import { DEFAULT_MEDIUM_ALLOW_KINDS } from "@/domain/policy/trust-definitions";
 
 class MockStorage implements StoragePort {
   private store = new Map<string, any>();
@@ -39,7 +40,7 @@ function createSettings(relays: string[]): AppSettingsV1 {
     autoLockMinutes: 15,
     relays,
     origins: [],
-    mediumAllowKinds: [6, 16, 7, 10002],
+    mediumAllowKinds: [...DEFAULT_MEDIUM_ALLOW_KINDS],
     sessionTTLMinutes: 0,
     maxActivityEntries: 50,
   };
@@ -81,5 +82,29 @@ describe("SettingsService", () => {
     const settings = await service.get();
 
     expect(settings?.relays).toEqual(customRelays);
+  });
+
+  it("fills medium trust defaults for older settings records", async () => {
+    const { storage, sync } = createStorageSuite();
+    await sync.set("appSettings", {
+      ...createSettings(["wss://relay.example.com"]),
+      mediumAllowKinds: undefined,
+    });
+    const service = new SettingsService(storage);
+
+    const settings = await service.get();
+
+    expect(settings?.mediumAllowKinds).toEqual([...DEFAULT_MEDIUM_ALLOW_KINDS]);
+  });
+
+  it("filters protected kinds out of normal medium trust updates", async () => {
+    const { storage } = createStorageSuite();
+    const service = new SettingsService(storage);
+
+    const settings = await service.update({
+      mediumAllowKinds: [1, 6, 9734, 9735],
+    });
+
+    expect(settings.mediumAllowKinds).toEqual([6, 9735]);
   });
 });

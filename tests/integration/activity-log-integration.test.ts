@@ -65,7 +65,7 @@ describe("Activity Log Integration", () => {
       type: "nostr.signEvent",
       origin: "https://example.com",
       event: {
-        kind: 1,
+        kind: 7,
         content: "test",
         tags: [],
         created_at: 1234567890,
@@ -87,7 +87,7 @@ describe("Activity Log Integration", () => {
       type: "nostr.signEvent",
       origin: "https://example.com",
       event: {
-        kind: 1,
+        kind: 7,
         content: "test",
         tags: [],
         created_at: 1234567890,
@@ -126,7 +126,7 @@ describe("Activity Log Integration", () => {
         type: "nostr.signEvent",
         origin: "https://example.com",
         event: {
-          kind: 1,
+          kind: 7,
           content: "allow1",
           tags: [],
           created_at: 2,

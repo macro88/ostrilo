@@ -16,6 +16,7 @@ import {
   signEventHash,
   publicKeyToHex,
 } from "@/domain/utils/crypto";
+import { isProtectedKind } from "@/domain/policy/trust-definitions";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 import { browser } from "wxt/browser";
 
@@ -183,7 +184,11 @@ export class NostrRpcHandler implements RpcModule {
       });
     }
 
-    if (policyResult.mode === "ask") {
+    const requiresApproval =
+      policyResult.mode === "ask" ||
+      (policyResult.mode === "allow" && isProtectedKind(event.kind));
+
+    if (requiresApproval) {
       // Need approval - queue the request and open popup
       if (!this.approvalQueue) {
         // No queue configured - fall back to error

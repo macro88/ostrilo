@@ -6,6 +6,7 @@ import {
   PolicyOutput,
 } from "@/domain/types";
 import { evaluatePolicy } from "@/domain/policy/evaluate";
+import { DEFAULT_MEDIUM_ALLOW_KINDS } from "@/domain/policy/trust-definitions";
 import { StorageSuite } from "@/application/ports/storage";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
 
@@ -25,9 +26,9 @@ export class PolicyService {
       this.storage.session.get<{ isLocked?: boolean }>("lockState"),
       this.storage.session.get<Record<string, number>>(SESSION_GRANTS_KEY),
     ]);
-    const mediumAllowKinds: number[] = settings?.mediumAllowKinds ?? [
-      6, 16, 7, 10002,
-    ];
+    const mediumAllowKinds: number[] = Array.isArray(settings?.mediumAllowKinds)
+      ? settings.mediumAllowKinds
+      : [...DEFAULT_MEDIUM_ALLOW_KINDS];
     const origins: OriginPolicy[] = settings?.origins ?? [];
     const unlocked: boolean = lock?.isLocked === false;
     return {

@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { OriginPolicy } from "@/domain/types";
+import { getKindName, OriginPolicy } from "@/domain/types";
 import { Trash2 } from "lucide-react";
 
 interface OriginPolicyTableProps {
@@ -67,7 +67,7 @@ export function OriginPolicyTable({
             <div className="mt-3 text-xs text-muted-foreground">
               Quick rules:
               <div className="flex gap-2 mt-2 flex-wrap">
-                {[1, 6, 7, 9735].map((kind) => (
+                {[1, 6, 7, 9734, 9735].map((kind) => (
                   <Button
                     key={kind}
                     size="sm"
@@ -80,7 +80,7 @@ export function OriginPolicyTable({
                       )
                     }
                   >
-                    Kind {kind}: {(o.rules as any)?.[kind] || "—"}
+                    {getKindName(kind)} ({kind}): {(o.rules as any)?.[kind] || "—"}
                   </Button>
                 ))}
               </div>

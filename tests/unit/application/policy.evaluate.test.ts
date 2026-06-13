@@ -1,8 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { evaluatePolicy } from "@/domain/policy/evaluate";
-import { OriginPolicy, PolicyContext } from "@/domain/types";
+import { OriginPolicy } from "@/domain/types";
+import {
+  DEFAULT_MEDIUM_ALLOW_KINDS,
+  PROTECTED_KINDS,
+  getEffectiveMediumAllowKinds,
+  isProtectedKind,
+} from "@/domain/policy/trust-definitions";
 
-const mediumAllowKinds = [6, 16, 7, 10002];
+const mediumAllowKinds = [...DEFAULT_MEDIUM_ALLOW_KINDS];
 
 function makePolicy(partial: Partial<OriginPolicy>): OriginPolicy {
   return {
@@ -17,12 +23,22 @@ function makePolicy(partial: Partial<OriginPolicy>): OriginPolicy {
 describe("evaluatePolicy", () => {
   const baseInput = {
     origin: "https://app",
-    kind: 1,
+    kind: 7,
     unlocked: true,
     mediumAllowKinds,
     policies: [] as OriginPolicy[],
     sessionGrants: {}
   };
+
+  it("centralizes protected kind helpers", () => {
+    expect(PROTECTED_KINDS).toEqual([1, 9734]);
+    expect(isProtectedKind(1)).toBe(true);
+    expect(isProtectedKind(9734)).toBe(true);
+    expect(isProtectedKind(9735)).toBe(false);
+    expect(getEffectiveMediumAllowKinds([1, 6, 9734, 9735])).toEqual([
+      6, 9735,
+    ]);
+  });
 
   it("denies when locked", () => {
     const out = evaluatePolicy({
@@ -37,6 +53,7 @@ describe("evaluatePolicy", () => {
     const pol = makePolicy({ sessionGrantAll: true, rules: { 1: "deny" } });
     const out = evaluatePolicy({
       ...baseInput,
+      kind: 1,
       policies: [pol]
     });
     expect(out.reason).toBe("rule");
@@ -53,40 +70,85 @@ describe("evaluatePolicy", () => {
     expect(out.mode).toBe("allow");
   });
 
-  it("explicit rule ask overrides trust", () => {
-    const pol = makePolicy({ trustLevel: "high", rules: { 1: "ask" } });
+  it("session grant cannot bypass protected kinds", () => {
+    const pol = makePolicy({ sessionGrantAll: true });
     const out = evaluatePolicy({
       ...baseInput,
+      kind: 9734,
+      policies: [pol]
+    });
+    expect(out.reason).toBe("protected");
+    expect(out.mode).toBe("ask");
+  });
+
+  it("explicit rule ask overrides trust", () => {
+    const pol = makePolicy({ trustLevel: "high", rules: { 6: "ask" } });
+    const out = evaluatePolicy({
+      ...baseInput,
+      kind: 6,
       policies: [pol]
     });
     expect(out.reason).toBe("rule");
     expect(out.mode).toBe("ask");
   });
 
-  it("trust=high allows everything", () => {
+  it("explicit allow cannot bypass protected kinds", () => {
+    const pol = makePolicy({ trustLevel: "low", rules: { 1: "allow" } });
+    const out = evaluatePolicy({
+      ...baseInput,
+      kind: 1,
+      policies: [pol]
+    });
+    expect(out.reason).toBe("protected");
+    expect(out.mode).toBe("ask");
+  });
+
+  it("trust=high allows unprotected kinds and asks for protected kinds", () => {
     const pol = makePolicy({ trustLevel: "high" });
+    const allowed = evaluatePolicy({
+      ...baseInput,
+      kind: 10002,
+      policies: [pol]
+    });
+    const protectedOut = evaluatePolicy({
+      ...baseInput,
+      kind: 1,
+      policies: [pol]
+    });
+    expect(allowed.reason).toBe("trust");
+    expect(allowed.mode).toBe("allow");
+    expect(protectedOut.reason).toBe("protected");
+    expect(protectedOut.mode).toBe("ask");
+  });
+
+  it("trust=medium allows configured unprotected kinds and filters protected kinds", () => {
+    const pol = makePolicy({ trustLevel: "medium" });
+    const allowed = evaluatePolicy({
+      ...baseInput,
+      kind: 6,
+      mediumAllowKinds: [1, 6, 9734],
+      policies: [pol]
+    });
+    const protectedOut = evaluatePolicy({
+      ...baseInput,
+      kind: 1,
+      mediumAllowKinds: [1, 6, 9734],
+      policies: [pol]
+    });
+    expect(allowed.mode).toBe("allow");
+    expect(allowed.reason).toBe("trust");
+    expect(protectedOut.mode).toBe("ask");
+    expect(protectedOut.reason).toBe("protected");
+  });
+
+  it("trust=low asks for unprotected kinds", () => {
+    const pol = makePolicy({ trustLevel: "low" });
     const out = evaluatePolicy({
       ...baseInput,
       policies: [pol]
     });
     expect(out.reason).toBe("trust");
-    expect(out.mode).toBe("allow");
-  });
-
-  it("trust=medium allows mediumAllowKinds else ask", () => {
-    const pol = makePolicy({ trustLevel: "medium" });
-    const allowed = evaluatePolicy({
-      ...baseInput,
-      kind: 6,
-      policies: [pol]
-    });
-    const asked = evaluatePolicy({
-      ...baseInput,
-      policies: [pol]
-    });
-    expect(allowed.mode).toBe("allow");
-    expect(allowed.reason).toBe("trust");
-    expect(asked.mode).toBe("ask");
+    expect(out.mode).toBe("ask");
   });
 
   it("fallback asks when no policy", () => {

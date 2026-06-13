@@ -65,7 +65,7 @@ Ostrilo v2 aims to become the **world's best Nostr signing extension** by delive
 
 ### Current Implementation Snapshot
 
-- **Status date:** 2026-06-12
+- **Status date:** 2026-06-13
 - **Source of truth:** current `src/`, `tests/`, `openspec/specs/`, archived OpenSpec changes, and project docs in this repository.
 
 The original release dates are now historical planning targets. The status markers in this document describe the current codebase, not the original plan.
@@ -75,6 +75,7 @@ The original release dates are now historical planning targets. The status marke
 - NIP-07 core provider: `window.nostr.getPublicKey()` and `window.nostr.signEvent()` are injected at document start and route through content/background messaging.
 - Background-only key operations, encrypted local key storage, multi-key management, active-key selector, add/import/rename/delete flows, and guarded last-key deletion.
 - Per-origin trust policy evaluation, medium-trust event kind defaults, explicit per-kind rules, session grants, managed approval queue/window, event de-duplication, batch approval actions, and Activity-page pending approval access.
+- Trust policy hardening has centralized protected-kind definitions for Short Text Notes and Zap Requests; domain policy evaluation and the `nostr.signEvent` RPC handler now force protected kinds through approval before session grants, explicit allow rules, Medium Trust, or High Trust can auto-sign them, and Medium Trust settings/UI filter protected kinds out of auto-allow controls.
 - Persistent activity log with real signing decisions, origin/kind filters, pagination, clear action, configurable retention up to 500 entries, and local JSON export.
 - Profile metadata management for NIP-01 kind:0 profile fetch/cache/display/edit/publish, relay settings, multi-relay querying, and relay publish support.
 - Full Options Page with General, Keys & Identities, Security, Permissions, Activity Log, Relays, and Advanced tabs plus local cross-context settings sync.

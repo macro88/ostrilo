@@ -1,5 +1,9 @@
 import type { StorageSuite } from "@/application/ports/storage";
 import { DEFAULT_RELAY_URLS, type AppSettingsV1, type Theme } from "@/domain/types";
+import {
+  DEFAULT_MEDIUM_ALLOW_KINDS,
+  getEffectiveMediumAllowKinds,
+} from "@/domain/policy/trust-definitions";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 
 const SETTINGS_KEY = "appSettings";
@@ -32,13 +36,26 @@ export class SettingsService {
     >(SETTINGS_KEY);
     if (existing && existing.__version === "settings.v1") {
       const current = existing as AppSettingsV1;
+      let changed = false;
+      const next = {
+        ...current,
+        mediumAllowKinds: Array.isArray(current.mediumAllowKinds)
+          ? current.mediumAllowKinds
+          : [...DEFAULT_MEDIUM_ALLOW_KINDS],
+      };
+      changed = next.mediumAllowKinds !== current.mediumAllowKinds;
+
       if (isLegacyDefaultRelaySet(current.relays)) {
-        const next = { ...current, relays: [...DEFAULT_RELAY_URLS] };
+        next.relays = [...DEFAULT_RELAY_URLS];
+        changed = true;
+      }
+
+      if (changed) {
         await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
         return next;
       }
 
-      return current;
+      return next;
     }
     // Initialize or migrate to defaults when missing or invalid
     const d = defaultSettings();
@@ -56,7 +73,7 @@ export class SettingsService {
         : d.origins,
       mediumAllowKinds: Array.isArray(existing?.mediumAllowKinds)
         ? (existing!.mediumAllowKinds as number[])
-        : d.mediumAllowKinds,
+        : [...DEFAULT_MEDIUM_ALLOW_KINDS],
       maxActivityEntries:
         typeof existing?.maxActivityEntries === "number"
           ? existing.maxActivityEntries
@@ -74,9 +91,16 @@ export class SettingsService {
 
   async update(patch: Partial<AppSettingsV1>): Promise<AppSettingsV1> {
     const current = (await this.get()) ?? defaultSettings();
+    const safePatch = { ...patch };
+    if (Array.isArray(patch.mediumAllowKinds)) {
+      safePatch.mediumAllowKinds = getEffectiveMediumAllowKinds(
+        patch.mediumAllowKinds
+      );
+    }
+
     const next = {
       ...current,
-      ...patch,
+      ...safePatch,
       __version: "settings.v1",
     } as AppSettingsV1;
     await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
@@ -97,7 +121,7 @@ export function defaultSettings(): AppSettingsV1 {
     autoLockMinutes: 15,
     relays: [...DEFAULT_RELAY_URLS],
     origins: [],
-    mediumAllowKinds: [6, 16, 7, 10002],
+    mediumAllowKinds: [...DEFAULT_MEDIUM_ALLOW_KINDS],
     sessionTTLMinutes: 0,
     maxActivityEntries: 50,
     selectedKeyId: undefined,
