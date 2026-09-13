@@ -45,17 +45,10 @@ export const Logo: React.FC<LogoProps> = ({
   if (mode === "model") {
     return (
       <div className={`relative ${sizeClasses[size]} ${className}`}>
-        <img
-          src={ostriloPoster}
-          alt=""
-          className="absolute inset-0 h-full w-full object-contain"
-          aria-hidden="true"
-        />
         <SceneSetup
           fileUrl={ostrilohead}
           textureUrl={undefined}
           config={DEFAULT_CONFIG}
-          posterUrl={ostriloPoster}
         />
       </div>
     );

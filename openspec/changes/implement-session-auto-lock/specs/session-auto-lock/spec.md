@@ -1,0 +1,307 @@
+## ADDED Requirements
+
+### Requirement: Inactivity Locks The Vault
+
+The extension SHALL lock the vault once the configured `autoLockMinutes` inactivity window elapses without recorded activity. Locking SHALL zeroize all decrypted key material held in the background, clear session grants, and record locked lock state.
+
+#### Scenario: Inactivity window elapses
+
+- **GIVEN** the vault is unlocked
+- **AND** `autoLockMinutes` is `5`
+- **WHEN** five minutes pass with no recorded activity
+- **THEN** the vault is locked
+- **AND** all decrypted key material held in the background is zeroized
+- **AND** stored session grants are cleared
+- **AND** extension UI surfaces show the lock screen
+
+#### Scenario: Activity before the deadline postpones the lock
+
+- **GIVEN** the vault is unlocked
+- **AND** `autoLockMinutes` is `5`
+- **WHEN** the user approves a signing request four minutes after the last recorded activity
+- **THEN** the inactivity deadline is recomputed from the approval
+- **AND** the vault remains unlocked
+
+#### Scenario: Signing request after the deadline is refused
+
+- **GIVEN** the vault was unlocked and the inactivity deadline has passed
+- **WHEN** an origin requests `nostr.signEvent`
+- **THEN** the request fails with the `locked` error code
+- **AND** no signature is produced
+
+### Requirement: Lock Enforcement Does Not Depend On A Timer Firing
+
+The extension SHALL derive lock state from the stored last-activity timestamp on every privileged access, and MUST NOT treat a fired timer as the only mechanism that locks the vault. A last-activity timestamp in the future SHALL be treated as expired.
+
+#### Scenario: Scheduled lock never runs
+
+- **GIVEN** the vault is unlocked and the inactivity deadline has passed
+- **AND** the scheduled lock did not run because the background worker was terminated
+- **WHEN** any privileged operation is attempted
+- **THEN** the vault reports locked
+- **AND** the privileged operation is refused with the `locked` error code
+
+#### Scenario: Device clock moves backwards
+
+- **GIVEN** the vault is unlocked
+- **WHEN** the stored last-activity timestamp is later than the current device clock
+- **THEN** the stored timestamp is treated as expired
+- **AND** the vault reports locked
+
+#### Scenario: Deadline is re-evaluated after a shorter timeout is configured
+
+- **GIVEN** the vault is unlocked with `autoLockMinutes` of `60` and the last activity was ten minutes ago
+- **WHEN** the user changes `autoLockMinutes` to `5`
+- **THEN** the inactivity deadline is re-evaluated against the new timeout
+- **AND** the vault reports locked
+
+### Requirement: Lock Scheduling Uses The Extension Alarms API
+
+The extension SHALL schedule automatic locking with the extension alarms API and SHALL declare the `alarms` permission in the generated Chrome and Firefox manifests. The background SHALL NOT rely on `setTimeout` or `setInterval` to lock the vault. Alarm scheduling MUST NOT persist decrypted key material, passwords, or derived key material in order to survive background termination.
+
+#### Scenario: Manifest declares the alarms permission
+
+- **WHEN** the Chrome MV3 and Firefox MV2 manifests are generated
+- **THEN** both declare the `alarms` permission alongside `storage`, `sidePanel`, and `windows`
+
+#### Scenario: Alarm is armed on unlock and re-armed on activity
+
+- **GIVEN** the vault is locked
+- **WHEN** the user unlocks the vault
+- **THEN** a lock alarm is scheduled for the configured inactivity deadline
+- **AND** recorded activity re-arms the alarm for the recomputed deadline
+
+#### Scenario: Platform alarm granularity does not weaken the lock
+
+- **GIVEN** the platform clamps alarm scheduling to a minimum period
+- **AND** the configured `autoLockMinutes` deadline falls between two alarm firings
+- **WHEN** a privileged operation is attempted after the deadline but before the next alarm fires
+- **THEN** the vault reports locked
+- **AND** the operation is refused with the `locked` error code
+
+#### Scenario: Scheduling does not persist secrets
+
+- **GIVEN** the vault is unlocked and a lock alarm is scheduled
+- **WHEN** stored extension data is inspected
+- **THEN** no decrypted private key, password, or derived key material is present in session storage
+- **AND** no decrypted private key, password, or derived key material is present in local or sync storage
+
+### Requirement: Lock State Fails Closed
+
+The extension SHALL report the vault as locked unless stored session lock state explicitly records an unlocked vault whose inactivity deadline has not passed. Missing, malformed, or unrecognised session lock state SHALL report locked.
+
+#### Scenario: Session storage holds no lock state
+
+- **GIVEN** the browser has restarted and session storage holds no lock state record
+- **WHEN** lock state is queried
+- **THEN** the vault reports locked
+
+#### Scenario: Public key is not disclosed from a vault that was never unlocked
+
+- **GIVEN** session storage holds no lock state record
+- **AND** at least one key record exists in local storage
+- **WHEN** a page calls `nostr.getPublicKey`
+- **THEN** the request fails with the `locked` error code
+- **AND** no public key is returned
+
+#### Scenario: Malformed lock state reports locked
+
+- **GIVEN** stored session lock state is present but does not explicitly record an unlocked vault
+- **WHEN** lock state is queried
+- **THEN** the vault reports locked
+
+#### Scenario: Explicit unlocked state within the deadline reports unlocked
+
+- **GIVEN** stored session lock state explicitly records an unlocked vault
+- **AND** the inactivity deadline has not passed
+- **WHEN** lock state is queried
+- **THEN** the vault reports unlocked
+
+### Requirement: Lock Status Is Reported Truthfully
+
+The extension SHALL report locked, and not denied, whenever a privileged operation fails because the vault is locked or because no decrypted key material is held. When stored lock state claims unlocked but the background holds no decrypted key material, the extension SHALL record locked lock state and report locked.
+
+#### Scenario: Background lost its key material
+
+- **GIVEN** stored session lock state records an unlocked vault
+- **AND** the background holds no decrypted key material because the worker was terminated
+- **WHEN** an origin requests `nostr.signEvent`
+- **THEN** stored lock state is corrected to locked
+- **AND** the request fails with the `locked` error code
+- **AND** the request does not fail with the `denied` error code
+
+#### Scenario: Extension UI shows the lock screen after key material is lost
+
+- **GIVEN** stored session lock state records an unlocked vault
+- **AND** the background holds no decrypted key material
+- **WHEN** the user opens the popup
+- **THEN** the lock screen is shown
+- **AND** the UI does not present an unlocked vault with no available keys
+
+#### Scenario: Header does not claim an unenforced timeout
+
+- **GIVEN** the vault is unlocked
+- **WHEN** the header lock status is displayed
+- **THEN** it reports the enforced inactivity timeout in effect
+- **AND** it does not offer or display a never-lock state
+
+### Requirement: Recorded Activity Postpones The Lock
+
+The extension SHALL treat deliberate user action in an extension surface and completed privileged operations as activity that postpones the lock. Background bookkeeping, broadcast handling, relay traffic, and lock-state polling from a locked UI SHALL NOT count as activity. Activity reporting SHALL be throttled and MUST NOT keep the background worker alive for the sole purpose of tracking activity.
+
+#### Scenario: User action in an extension surface records activity
+
+- **GIVEN** the vault is unlocked
+- **WHEN** the user unlocks the vault, selects a key, resolves an approval, or changes a setting from the popup, sidepanel, options tab, or approval window
+- **THEN** the last-activity timestamp is updated
+- **AND** the inactivity deadline is recomputed
+
+#### Scenario: A produced signature records activity
+
+- **GIVEN** the vault is unlocked
+- **WHEN** an origin request is auto-signed without an approval prompt
+- **THEN** the last-activity timestamp is updated
+
+#### Scenario: An idle open surface does not postpone the lock
+
+- **GIVEN** the vault is unlocked
+- **AND** the options page is left open with no user interaction
+- **WHEN** the inactivity window elapses
+- **THEN** the vault is locked
+- **AND** the open surface shows the lock screen
+
+#### Scenario: Locked UI polling does not postpone the lock
+
+- **GIVEN** the vault is locked
+- **AND** a UI surface is polling lock state to render the lock screen
+- **WHEN** lock state is queried repeatedly
+- **THEN** the last-activity timestamp is not updated
+- **AND** the vault remains locked
+
+### Requirement: Session End Leaves The Vault Locked
+
+The extension SHALL leave the vault locked after browser close, browser start, extension install, and extension update, and SHALL clear session grants in each case.
+
+#### Scenario: Browser is closed and reopened
+
+- **GIVEN** the vault was unlocked before the browser was closed
+- **WHEN** the browser is reopened and the extension starts
+- **THEN** stored lock state records a locked vault
+- **AND** session grants are cleared
+- **AND** the user must enter the password to unlock
+
+#### Scenario: Extension is installed or updated
+
+- **WHEN** the extension is installed or updated
+- **THEN** stored lock state records a locked vault
+- **AND** session grants are cleared
+
+#### Scenario: Machine sleeps past the deadline
+
+- **GIVEN** the vault is unlocked
+- **WHEN** the machine sleeps for longer than the configured inactivity window and then wakes
+- **THEN** the vault reports locked on the next privileged access
+- **AND** no signature is produced without a new unlock
+
+### Requirement: Privileged RPC Methods Require An Unlocked Vault
+
+The extension SHALL refuse privileged RPC methods with the `locked` error code while the vault is locked, and SHALL enforce this in the background handlers rather than relying on UI gating. Privileged methods SHALL include `settings.update`, `policy.setOrigin`, `policy.setKindRule`, `policy.setSession`, `policy.clearSession`, `policy.removeOrigin`, `policy.evaluate`, `vault.select`, `vault.renameKey`, `vault.deleteKey`, `vault.sign`, `vault.export`, `vault.reveal`, `nostr.getPublicKey`, `nostr.signEvent`, `approval.resolve`, all `activity.*` methods, and all `profile.*` methods. Methods that SHALL remain reachable while locked are `vault.unlock`, `state.getLock`, `keys.list`, `crypto.evaluatePassword`, `crypto.parsePrivateKey`, and `settings.get`. While the vault is locked, `keys.list` SHALL return only the identifiers needed to determine that keys exist, and `settings.get` SHALL return only the fields needed to render the lock screen and first-run flow.
+
+#### Scenario: Settings mutation is refused while locked
+
+- **GIVEN** the vault is locked
+- **WHEN** `settings.update` is called with any patch
+- **THEN** the call fails with the `locked` error code
+- **AND** stored settings are unchanged
+
+#### Scenario: Policy mutation is refused while locked
+
+- **GIVEN** the vault is locked
+- **WHEN** `policy.setOrigin` is called to raise an origin to `high` trust
+- **THEN** the call fails with the `locked` error code
+- **AND** the stored origin policy is unchanged
+
+#### Scenario: Activity log is not readable while locked
+
+- **GIVEN** the vault is locked
+- **AND** the activity log holds entries with content previews
+- **WHEN** `activity.getRecent` is called
+- **THEN** the call fails with the `locked` error code
+- **AND** no activity entry or content preview is returned
+
+#### Scenario: Unlock path stays reachable while locked
+
+- **GIVEN** the vault is locked
+- **WHEN** `state.getLock`, `keys.list`, `crypto.evaluatePassword`, `settings.get`, and `vault.unlock` are called
+- **THEN** each call is served
+- **AND** the user can complete an unlock
+
+#### Scenario: Locked reads are reduced to what the lock screen needs
+
+- **GIVEN** the vault is locked
+- **AND** origin policies, relays, and key labels are stored
+- **WHEN** `settings.get` and `keys.list` are called
+- **THEN** no origin policy, relay list entry, key label, or public key is returned
+- **AND** the response still allows the UI to distinguish a first run from a locked vault with existing keys
+
+#### Scenario: A newly added privileged method is classified
+
+- **WHEN** a new RPC method is added to the request union
+- **THEN** the method is classified as privileged or reachable while locked
+- **AND** an unclassified method is treated as privileged
+
+### Requirement: Pending Approvals Do Not Survive A Lock
+
+The extension SHALL resolve pending approval requests as denied when the vault locks, SHALL clear the approval badge, and SHALL refuse `approval.resolve` with the `locked` error code while the vault is locked.
+
+#### Scenario: Vault locks with a pending approval
+
+- **GIVEN** the vault is unlocked and an approval request is pending
+- **WHEN** the inactivity window elapses and the vault locks
+- **THEN** the pending request is resolved as denied
+- **AND** the approval badge is cleared
+- **AND** the requesting page receives a failure rather than a signature
+
+#### Scenario: Approval resolution is refused while locked
+
+- **GIVEN** the vault is locked
+- **WHEN** `approval.resolve` is called with an `allow` action
+- **THEN** the call fails with the `locked` error code
+- **AND** no signature is produced
+
+### Requirement: Auto-Lock Timeout Has One Shipped Default And A Bounded Range
+
+The extension SHALL define one shipped default for `autoLockMinutes` in a single location and SHALL use it in both the domain defaults and the settings service. Accepted values for `autoLockMinutes` SHALL be whole minutes from `1` to `60` inclusive, and a never-lock value SHALL NOT be accepted or selectable. Accepted values for `sessionTTLMinutes` SHALL be from `0` to `60` inclusive, where `0` means the grant lasts until the vault locks. Stored values outside the accepted range SHALL be normalized on read.
+
+#### Scenario: Fresh profile uses the single shipped default
+
+- **GIVEN** no settings are stored
+- **WHEN** settings are first read
+- **THEN** `autoLockMinutes` is the single shipped default
+- **AND** the domain defaults and the settings service report the same value
+
+#### Scenario: Never-lock value is rejected
+
+- **WHEN** `settings.update` is called with `autoLockMinutes` of `0`
+- **THEN** the call fails validation
+- **AND** stored settings are unchanged
+
+#### Scenario: Out-of-range value is rejected
+
+- **WHEN** `settings.update` is called with `autoLockMinutes` of `1440`
+- **THEN** the call fails validation
+- **AND** stored settings are unchanged
+
+#### Scenario: Stored never-lock value is normalized
+
+- **GIVEN** stored settings carry `autoLockMinutes` of `0` from an earlier version
+- **WHEN** settings are read
+- **THEN** `autoLockMinutes` is normalized to the shipped default
+- **AND** the normalized value is persisted
+
+#### Scenario: Session grant timeout stays bounded by the session
+
+- **GIVEN** `sessionTTLMinutes` is `0`
+- **WHEN** a session grant is created and the vault later locks
+- **THEN** the grant is cleared
+- **AND** the grant does not apply after the next unlock
