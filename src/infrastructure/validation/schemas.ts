@@ -19,6 +19,24 @@ export const AuthorisationSchema = z.enum(["allow", "deny", "ask"]);
 // Trust level validation
 const TrustLevelSchema = z.enum(["low", "medium", "high"]);
 
+/**
+ * A Nostr event kind.
+ *
+ * `.int()` is load-bearing, not tidiness. Kind policy is decided by set
+ * membership and object-key lookup, both of which are equality tests: without
+ * it, `1.0000001` is not `1`, so a fractional kind walks straight past the
+ * always-ask gate for kind 1. It also rejects NaN and Infinity in the same
+ * predicate.
+ *
+ * Declared here, above its first use, because `AppSettingsPatchSchema` is
+ * evaluated at module load.
+ */
+export const EventKindSchema = z
+  .number()
+  .int("Event kind must be an integer")
+  .min(0)
+  .max(65535, "Invalid event kind");
+
 // Event kind authorisation (mapping from kind number to authorisation)
 const NostrEventKindAuthorisationSchema = z.record(
   z.string().regex(/^\d+$/).transform(Number), // Keys should be numeric strings
@@ -32,7 +50,7 @@ export const OriginPolicyPatchSchema = z
     trustLevel: TrustLevelSchema.optional(),
     rules: NostrEventKindAuthorisationSchema.optional(),
     sessionGrantAll: z.boolean().optional(),
-    updatedAt: z.number().optional(),
+    updatedAt: z.number().int().nonnegative().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided for patch",
@@ -43,14 +61,19 @@ export const AppSettingsPatchSchema = z
   .strictObject({
     theme: ThemeSchema.optional(),
     sidePanel: z.boolean().optional(),
-    autoLockMinutes: z.number().min(0).max(1440).optional(), // 0 to 24 hours
+    // 1 to 60. There is no "never": a stored 0 normalizes to the shipped
+    // default on read. See AUTO_LOCK_BOUNDS in @/domain/types.
+    autoLockMinutes: z.number().int().min(1).max(60).optional(),
     maxActivityEntries: z.number().int().min(10).max(500).optional(),
     relays: z.array(z.url()).optional(),
     selectedKeyId: z.uuid().optional(),
-    mediumAllowKinds: z.array(z.number().min(0).max(65535)).optional(), // Valid Nostr kind range
-    sessionTTLMinutes: z.number().min(0).max(1440).optional(), // 0 to 24 hours
+    mediumAllowKinds: z.array(EventKindSchema).optional(), // Valid Nostr kind range
+    // Minimum 1: a zero TTL used to mean "until lock", which with auto-lock
+    // disabled is an unbounded grant of the broadest authority the product
+    // offers. No settings write may reintroduce one.
+    sessionTTLMinutes: z.number().int().min(1).max(60).optional(), // 1 to 60 min
     onboardingCompleted: z.boolean().optional(),
-    onboardingCompletedAt: z.number().optional(),
+    onboardingCompletedAt: z.number().int().nonnegative().optional(),
     // Note: origins array updates should go through policy.setOrigin, not settings.update
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -156,11 +179,6 @@ export const OriginSchema = z
 export const LabelSchema = z.string().max(100, "Label too long").optional();
 
 export const KeyIdSchema = z.uuid("Invalid key ID format");
-
-export const EventKindSchema = z
-  .number()
-  .min(0)
-  .max(65535, "Invalid event kind");
 
 export const ModeSchema = z.string().min(1, "Mode cannot be empty");
 

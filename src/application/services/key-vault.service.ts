@@ -17,6 +17,7 @@ import {
   KDF_SALT_LENGTH,
   AES_GCM_IV_LENGTH,
   DEK_LENGTH,
+  normalizeAutoLockMinutes,
 } from "@/domain/types";
 import { verifierAad, dekAad, skAad } from "@/domain/crypto/aad";
 import { deriveLegacyKeyReadOnly } from "@/infrastructure/crypto/adapters";
@@ -729,6 +730,22 @@ export class KeyVaultService {
     }
   }
 
+  /**
+   * Notified after every lock, however it was triggered.
+   *
+   * The vault must not import the approval queue - that points the
+   * dependency the wrong way through the layers - but something has to
+   * deny the requests that are waiting when the vault locks. Locking with
+   * an approval window open left the request pending and the badge showing
+   * a count; the next unlock could then approve a signature the user had
+   * walked away from.
+   */
+  private lockListeners: Array<() => void | Promise<void>> = [];
+
+  onLock(listener: () => void | Promise<void>): void {
+    this.lockListeners.push(listener);
+  }
+
   async lock(): Promise<void> {
     // zeroize all unlocked private keys
     this.unlocked.forEach((sk) => zeroize(sk));
@@ -757,11 +774,106 @@ export class KeyVaultService {
         browser.runtime.sendMessage({ __event: SETTINGS_CHANGED_EVENT });
       } catch {}
     }
+    // After the state is written and the keys are gone, so a listener sees a
+    // locked vault. Concurrent and settled, not sequential: the listeners are
+    // independent, and one that hangs or throws - a badge that will not clear,
+    // a broadcast with no listener - must not stop the vault from locking.
+    const results = await Promise.allSettled(
+      this.lockListeners.map((listener) => listener())
+    );
+    for (const result of results) {
+      if (result.status === "rejected") {
+        console.error("[Vault] lock listener failed:", result.reason);
+      }
+    }
   }
 
+  /**
+   * The single definition of "is the vault locked".
+   *
+   * This FAILS CLOSED. It used to be `isLocked: !!state?.isLocked`, which
+   * returns false - unlocked - whenever session storage holds no lock state at
+   * all. That is the situation after every browser restart, before anything has
+   * been unlocked, so a vault that had never been opened reported itself open.
+   * `nostr.getPublicKey` checks only this gate, so the user's Nostr identity
+   * leaked to any page from a vault they had never unlocked.
+   *
+   * Three ways to be locked, all of which now report locked:
+   *   1. No stored state, malformed state, or a read that throws.
+   *   2. The stored state says unlocked but the deadline has passed.
+   *   3. The stored state says unlocked but the background holds no key
+   *      material - which happens on every MV3 worker eviction. The record is
+   *      corrected on the way out so the two do not keep disagreeing.
+   */
   async getLockState(): Promise<{ isLocked: boolean; selectedKeyId?: string }> {
+    let state: LockState | undefined;
+    try {
+      state = await this.storage.session.get<LockState>(LOCK_STATE_STORAGE);
+    } catch {
+      return { isLocked: true };
+    }
+
+    // Absent or malformed: locked.
+    if (!state || typeof state !== "object" || state.isLocked !== false) {
+      return { isLocked: true, selectedKeyId: state?.selectedKeyId };
+    }
+
+    // Deadline passed: locked. A future timestamp is treated as expired rather
+    // than trusted, so a clock change cannot extend a session indefinitely.
+    const deadlinePassed = await this.isPastAutoLockDeadline(state);
+    if (deadlinePassed) {
+      await this.lock();
+      return { isLocked: true };
+    }
+
+    // Says unlocked, but there is nothing in memory: the worker was evicted.
+    // Correct the record rather than reporting an unlocked vault with no keys,
+    // which surfaced to the user as a confusing "denied" on the next signature.
+    if (this.unlocked.size === 0) {
+      await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
+        isLocked: true,
+        selectedKeyId: undefined,
+        lastActivity: Date.now(),
+      } as LockState);
+      return { isLocked: true };
+    }
+
+    return { isLocked: false, selectedKeyId: state.selectedKeyId };
+  }
+
+  /**
+   * True when `autoLockMinutes` has elapsed since the last recorded activity.
+   *
+   * Derived from a stored timestamp checked on access rather than from a timer
+   * firing, because a `setTimeout` in an MV3 service worker does not survive
+   * worker eviction: a timer-only design would silently never lock.
+   */
+  private async isPastAutoLockDeadline(state: LockState): Promise<boolean> {
+    const settings = await this.getSettings();
+    // Normalized, not read raw: a stored 0 used to mean "never lock", and
+    // that reading is exactly the fail-open this change removes. It is now
+    // the shipped default, as it is everywhere else settings are read.
+    const minutes = normalizeAutoLockMinutes(settings?.autoLockMinutes);
+
+    const last = typeof state.lastActivity === "number" ? state.lastActivity : 0;
+    if (last <= 0) return true;
+
+    const now = Date.now();
+    // A timestamp in the future means the clock moved or the record was
+    // tampered with. Treat it as expired rather than as a long lease.
+    if (last > now) return true;
+
+    return now - last >= minutes * 60 * 1000;
+  }
+
+  /** Records user activity and pushes the auto-lock deadline out. */
+  async touchActivity(): Promise<void> {
     const state = await this.storage.session.get<LockState>(LOCK_STATE_STORAGE);
-    return { isLocked: !!state?.isLocked, selectedKeyId: state?.selectedKeyId };
+    if (!state || state.isLocked !== false) return; // never revive a locked vault
+    await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
+      ...state,
+      lastActivity: Date.now(),
+    } as LockState);
   }
 
   private ensureUnlockedKey(keyId?: string): { keyId: string; sk: Uint8Array } {
@@ -846,6 +958,54 @@ export class KeyVaultService {
    * that the vault was unlocked, had no caller, and was reachable by any code
    * running in an extension page. It has been removed.
    */
+  /**
+   * Verifies a password without returning anything derived from it.
+   *
+   * Used to re-authenticate a high-risk action while the vault is already
+   * unlocked: deleting a key, raising an origin to `high` trust, or changing
+   * a security timeout. Those actions previously needed only an unlocked
+   * vault, so anyone with a minute at an unattended screen could grant an
+   * origin silent-signing authority that outlived their access to the device.
+   *
+   * Verification decrypts real key material - the same check `unlock` makes -
+   * rather than comparing against anything stored, and everything it derives
+   * is zeroized before it returns. Nothing is cached: a second action needs a
+   * second entry.
+   */
+  async verifyPassword(password: string): Promise<void> {
+    if (!password) throw new Error("password_required");
+
+    const records = await this.listKeys();
+    if (records.length === 0) throw new Error("vault_not_created");
+
+    const envelope = await this.getEnvelope();
+    let kek: SecretBytes | null = null;
+    let sk: SecretBytes | null = null;
+    try {
+      // Prefer a versioned record: the envelope verifier is the cheapest
+      // honest check. Fall back to a legacy record for a vault that has not
+      // been migrated yet.
+      const record =
+        records.find((r) => r.v !== undefined) ?? records[0];
+      if (record.v === undefined) {
+        sk = await this.openLegacyRecord(password, record);
+      } else {
+        if (!envelope) throw new Error("vault_not_created");
+        kek = await this.openEnvelope(password, envelope);
+        sk = await this.openPrivateKey(record, kek, envelope.kdf);
+      }
+      if (!(await this.matchesPubkey(sk, record.pubkey))) {
+        throw new Error("pubkey_mismatch");
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === "vault_not_created") throw error;
+      throw new Error("incorrect_password");
+    } finally {
+      if (sk) zeroize(sk);
+      if (kek) zeroize(kek);
+    }
+  }
+
   async revealKey(
     password: string,
     keyId?: string

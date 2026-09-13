@@ -316,14 +316,21 @@ describe("options page tab components", () => {
     expect(appSettingsMock.updateTheme).toHaveBeenCalledWith("dark");
   });
 
-  it("renders Security controls and wires slider updates", () => {
+  it("does not change a security timeout until the password is confirmed", () => {
+    // Both timeouts are password-gated. Moving the slider opens the
+    // re-authentication dialog; nothing is written until a password is
+    // supplied, and the background refuses the write without one anyway.
     const container = render(<SecuritySettingsTab />);
 
     clickByText(container, "Auto lock: 5");
-    clickByText(container, "Session TTL: 0");
 
-    expect(appSettingsMock.updateAutoLockMinutes).toHaveBeenCalledWith(10);
-    expect(appSettingsMock.updateSessionTTLMinutes).toHaveBeenCalledWith(30);
+    expect(
+      appSettingsMock.updateAutoLockMinutes,
+      "SECURITY REGRESSION: the auto-lock timeout changed without a password"
+    ).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain(
+      "Confirm with your password"
+    );
   });
 
   it("renders Keys & Identities with the key selector", () => {
@@ -351,22 +358,28 @@ describe("options page tab components", () => {
     ];
     const container = render(<PermissionsTab />);
 
+    // Removing a policy only ever reduces authority, so it is free.
     clickByText(container, "Remove origin");
-    clickByText(container, "Toggle session");
-    clickByText(container, "Set kind rule");
-
     expect(appSettingsMock.removeOriginPolicy).toHaveBeenCalledWith(
       "https://primal.net"
     );
-    expect(appSettingsMock.setSessionGrant).toHaveBeenCalledWith(
-      "https://primal.net",
-      true
+
+    // Granting a session and setting a kind rule to `allow` are standing
+    // permissions to sign without prompting. Both wait for a password.
+    clickByText(container, "Toggle session");
+    expect(
+      appSettingsMock.setSessionGrant,
+      "SECURITY REGRESSION: a session grant was created without a password"
+    ).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain(
+      "Confirm with your password"
     );
-    expect(appSettingsMock.setPerKindRule).toHaveBeenCalledWith(
-      "https://primal.net",
-      1,
-      "allow"
-    );
+
+    clickByText(container, "Set kind rule");
+    expect(
+      appSettingsMock.setPerKindRule,
+      "SECURITY REGRESSION: an allow rule was stored without a password"
+    ).not.toHaveBeenCalled();
   });
 
   it("wires Activity Log settings actions", async () => {

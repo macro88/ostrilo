@@ -6,6 +6,8 @@ import {
 } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { useState } from "react";
+import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
+import { useReauth } from "@/ui/hooks/useReauth";
 
 export function SecuritySettingsTab() {
   const {
@@ -15,7 +17,40 @@ export function SecuritySettingsTab() {
     updateSessionTTLMinutes,
     resetSettings,
   } = useAppSettings();
+  const reauth = useReauth();
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+
+  // Both timeouts are password-gated in the background. The gate is on the
+  // change, not on the direction: reasoning about "only when it gets
+  // weaker" is how gates end up with holes in them.
+  const changeAutoLock = async (minutes: number) => {
+    try {
+      await reauth.request(
+        {
+          action: `Change the auto-lock timeout to ${minutes} minutes.`,
+          consequence: "This controls how long an unattended vault stays open.",
+        },
+        (password) => updateAutoLockMinutes(minutes, password)
+      );
+    } catch {
+      // Cancelled. The stored timeout is unchanged.
+    }
+  };
+
+  const changeSessionTTL = async (minutes: number) => {
+    try {
+      await reauth.request(
+        {
+          action: `Change the session grant timeout to ${minutes} minutes.`,
+          consequence:
+            "A session grant signs for an origin without prompting until it expires.",
+        },
+        (password) => updateSessionTTLMinutes(minutes, password)
+      );
+    } catch {
+      // Cancelled.
+    }
+  };
   const biometricAvailable =
     "credentials" in navigator && "create" in navigator.credentials;
 
@@ -65,13 +100,15 @@ export function SecuritySettingsTab() {
 
         <AutoLockSlider
           value={settings.autoLockMinutes}
-          onChange={updateAutoLockMinutes}
+          onChange={changeAutoLock}
         />
 
         <SessionTTLSlider
           value={settings.sessionTTLMinutes}
-          onChange={updateSessionTTLMinutes}
+          onChange={changeSessionTTL}
         />
+
+        <ReauthDialog {...reauth.dialogProps} />
 
         {/* Action buttons */}
         <div className="space-y-2 border-t border-border pt-4">

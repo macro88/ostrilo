@@ -29,6 +29,23 @@ const APPROVAL_BADGE_COLOR = "#5f50a0";
  * RPC handler for NIP-07 Nostr operations
  * Handles: nostr.getPublicKey, nostr.signEvent
  */
+/**
+ * The vault errors that mean "locked", not "refused".
+ *
+ * `no_unlocked_key` used to fall through to the generic handler and surface
+ * as `denied`, which told a dapp its request had been rejected on policy
+ * grounds. It retried instead of prompting the user to unlock, and the raw
+ * message went out on a wire a web page can read.
+ */
+export const VAULT_LOCKED_ERRORS: readonly string[] = [
+  "key_locked_or_missing",
+  "no_unlocked_key",
+];
+
+export function isVaultLockedError(message: unknown): boolean {
+  return typeof message === "string" && VAULT_LOCKED_ERRORS.includes(message);
+}
+
 export class NostrRpcHandler implements RpcModule {
   constructor(
     private approvalQueue?: ApprovalQueueService,
@@ -316,7 +333,7 @@ export class NostrRpcHandler implements RpcModule {
     } catch (error) {
       // Translate service errors to RPC codes
       if (error instanceof Error) {
-        if (error.message === "key_locked_or_missing") {
+        if (isVaultLockedError(error.message)) {
           return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
             method: message.type,
           });
@@ -329,8 +346,10 @@ export class NostrRpcHandler implements RpcModule {
         }
       }
       // Generic signing error fallback
+      // Fixed string. The raw message is an internal identifier and does
+      // not belong on a wire a web page can read.
       return createRpcErrorResponse(RPC_ERROR_CODES.DENIED, {
-        details: error instanceof Error ? error.message : "Signing failed",
+        details: "Signing failed",
         method: message.type,
       });
     }

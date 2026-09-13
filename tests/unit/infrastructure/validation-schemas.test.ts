@@ -150,9 +150,30 @@ describe("Validation Schemas", () => {
     it("should reject non-number values", () => {
       expect(EventKindSchema.safeParse("1").success).toBe(false);
       expect(EventKindSchema.safeParse(null).success).toBe(false);
-      // Note: 1.5 is a valid number, but not a valid integer event kind
-      // However, Zod's number() accepts floats. We should use .int() if we want integers only
-      expect(EventKindSchema.safeParse(1.5).success).toBe(true);
+    });
+
+    it("rejects a fractional kind that would evade the protected-kind gate", () => {
+      // isProtectedKind is a Set membership test and rules are keyed by kind,
+      // so 1.0000001 would slip past every control keyed on kind 1.
+      expect(EventKindSchema.safeParse(1.0000001).success).toBe(false);
+      expect(EventKindSchema.safeParse(1.5).success).toBe(false);
+      expect(EventKindSchema.safeParse(9734.5).success).toBe(false);
+    });
+
+    it("rejects non-finite kinds", () => {
+      expect(EventKindSchema.safeParse(Number.NaN).success).toBe(false);
+      expect(EventKindSchema.safeParse(Number.POSITIVE_INFINITY).success).toBe(
+        false
+      );
+      expect(EventKindSchema.safeParse(Number.NEGATIVE_INFINITY).success).toBe(
+        false
+      );
+    });
+
+    it("still accepts ordinary integer kinds", () => {
+      expect(EventKindSchema.safeParse(0).success).toBe(true);
+      expect(EventKindSchema.safeParse(1).success).toBe(true);
+      expect(EventKindSchema.safeParse(30078).success).toBe(true);
     });
   });
 
@@ -262,6 +283,38 @@ describe("Validation Schemas", () => {
     it("should reject invalid theme values", () => {
       const result = AppSettingsPatchSchema.safeParse({ theme: "invalid" });
       expect(result.success).toBe(false);
+    });
+
+    it("bounds autoLockMinutes to 1..60", () => {
+      // There is no "never" and no multi-hour timeout. 0 used to be
+      // accepted and read as "do not auto-lock"; 1440 allowed a timeout
+      // longer than the browser session it was meant to bound.
+      for (const rejected of [0, -1, 61, 1441, 1.5, Number.NaN]) {
+        expect(
+          AppSettingsPatchSchema.safeParse({ autoLockMinutes: rejected })
+            .success,
+          `SECURITY REGRESSION: autoLockMinutes ${rejected} was accepted`
+        ).toBe(false);
+      }
+      for (const accepted of [1, 5, 30, 60]) {
+        expect(
+          AppSettingsPatchSchema.safeParse({ autoLockMinutes: accepted })
+            .success
+        ).toBe(true);
+      }
+    });
+
+    it("bounds sessionTTLMinutes to 1..60", () => {
+      for (const rejected of [0, -1, 61, 1440]) {
+        expect(
+          AppSettingsPatchSchema.safeParse({ sessionTTLMinutes: rejected })
+            .success,
+          `SECURITY REGRESSION: sessionTTLMinutes ${rejected} was accepted`
+        ).toBe(false);
+      }
+      expect(
+        AppSettingsPatchSchema.safeParse({ sessionTTLMinutes: 15 }).success
+      ).toBe(true);
     });
 
     it("should reject invalid autoLockMinutes values", () => {

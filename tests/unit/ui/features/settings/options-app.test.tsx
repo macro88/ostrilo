@@ -14,10 +14,23 @@ vi.mock("@/ui/hooks/useTheme", () => ({
   useTheme: vi.fn(),
 }));
 
+// The options page is now gated on lock state, so these tests must present
+// an unlocked vault with keys to reach the tabs at all.
+const keyManagerState = {
+  isLocked: false,
+  isLoading: false,
+  hasKeys: true,
+};
+
 vi.mock("@/ui/state/KeyManagerContext", () => ({
   KeyManagerProvider: ({ children }: { children: ReactNode }) => (
     <>{children}</>
   ),
+  useKeyManagerContext: () => keyManagerState,
+}));
+
+vi.mock("@/ui/features/authentication/components/LockScreen", () => ({
+  LockScreen: () => <section>Lock screen</section>,
 }));
 
 vi.mock("@/ui/components/logo/Logo", () => ({
@@ -75,6 +88,9 @@ function tabByName(container: HTMLElement, name: string) {
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/options.html");
+  keyManagerState.isLocked = false;
+  keyManagerState.isLoading = false;
+  keyManagerState.hasKeys = true;
 });
 
 afterEach(() => {
@@ -129,5 +145,62 @@ describe("OptionsApp", () => {
     ).toBe(
       "active"
     );
+  });
+});
+
+describe("OptionsApp lock gating", () => {
+  it("renders the lock screen, not the tabs, when the vault is locked", () => {
+    // The defect: the options page had no lock check at all. With the vault
+    // locked it still rendered every key label and public key, every origin
+    // policy, the relay list and the activity log.
+    keyManagerState.isLocked = true;
+    const container = render(<OptionsApp />);
+
+    expect(container.textContent).toContain("Lock screen");
+    for (const panel of [
+      "Keys panel",
+      "Permissions panel",
+      "Relays panel",
+      "Activity panel",
+      "Security panel",
+    ]) {
+      expect(
+        container.textContent,
+        `SECURITY REGRESSION: ${panel} rendered behind a locked vault`
+      ).not.toContain(panel);
+    }
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
+  });
+
+  it("shows onboarding guidance rather than a password prompt on a fresh install", () => {
+    keyManagerState.isLocked = true;
+    keyManagerState.hasKeys = false;
+    const container = render(<OptionsApp />);
+
+    expect(container.textContent).toContain("Create a key");
+    expect(container.textContent).not.toContain("Lock screen");
+  });
+
+  it("returns the user to the requested tab after unlocking", () => {
+    // The tab lives above the gate, so unlocking swaps the gate's children
+    // back in without losing where the user was heading.
+    window.history.replaceState(null, "", "/options.html#relays");
+    keyManagerState.isLocked = true;
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mountedRoots.push({ root, container });
+
+    act(() => root.render(<OptionsApp />));
+    expect(container.textContent).toContain("Lock screen");
+
+    keyManagerState.isLocked = false;
+    act(() => root.render(<OptionsApp />));
+
+    const selected = Array.from(
+      container.querySelectorAll('[role="tab"]')
+    ).find((tab) => tab.getAttribute("aria-selected") === "true");
+    expect(selected?.textContent).toContain("Relays");
   });
 });

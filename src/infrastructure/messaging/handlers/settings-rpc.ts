@@ -1,4 +1,8 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
+import {
+  patchNeedsReauth,
+  requireReauth,
+} from "@/infrastructure/messaging/reauth";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import { validateAppSettingsPatch } from "@/infrastructure/validation/schemas";
@@ -46,6 +50,19 @@ export class SettingsRpcHandler implements RpcModule {
           .join(", "),
         method: message.type,
       });
+    }
+
+    // Lengthening the auto-lock timeout, or the session-grant TTL, buys
+    // the next person at the keyboard time. Both are therefore
+    // password-gated, in either direction: a value is a value, and
+    // reasoning about "only when it gets weaker" is how gates get bypassed.
+    if (patchNeedsReauth(validationResult.data)) {
+      const reauth = await requireReauth(
+        message.password,
+        message.type,
+        context
+      );
+      if (reauth) return reauth;
     }
 
     const patch = { ...validationResult.data };

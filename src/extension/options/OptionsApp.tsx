@@ -1,5 +1,9 @@
 import { useState, useEffect } from "react";
-import { KeyManagerProvider } from "@/ui/state/KeyManagerContext";
+import {
+  KeyManagerProvider,
+  useKeyManagerContext,
+} from "@/ui/state/KeyManagerContext";
+import { LockScreen } from "@/ui/features/authentication/components/LockScreen";
 import { useTheme } from "@/ui/hooks/useTheme";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralSettingsTab } from "@/ui/features/settings/components/GeneralSettingsTab";
@@ -35,6 +39,45 @@ const TAB_KEYS = TABS.map((tab) => tab.key);
 function getHashTab() {
   const hash = window.location.hash.slice(1);
   return TAB_KEYS.includes(hash as any) ? hash : "general";
+}
+
+
+/**
+ * Lock gate for the options page.
+ *
+ * The popup renders LockScreen when locked; this page had NO lock check at all.
+ * With the vault locked it exposed every key label and pubkey, every origin
+ * policy (a record of which Nostr sites the user uses), the relay list, and the
+ * activity log with content previews of everything signed - and it permitted
+ * mutation. The chain that made it serious: brief access to a locked browser,
+ * open options, set an origin to high trust, walk away; the next time the user
+ * unlocks, that site signs silently and no prompt ever appears.
+ *
+ * Note this is defence in depth for the UI only. The authoritative check is in
+ * the RPC handlers: a UI gate is a gate an attacker skips by sending the
+ * message directly.
+ */
+function OptionsGate({ children }: { children: React.ReactNode }) {
+  const { isLocked, isLoading, hasKeys } = useKeyManagerContext();
+
+  if (isLoading) return null;
+
+  // No vault yet: nothing to lock, and nothing to show.
+  if (!hasKeys) {
+    return (
+      <div className="options-container py-16 text-center">
+        <p className="text-muted-foreground">
+          Create a key in the Ostrilo popup before opening settings.
+        </p>
+      </div>
+    );
+  }
+
+  if (isLocked) {
+    return <LockScreen onUnlock={() => undefined} />;
+  }
+
+  return <>{children}</>;
 }
 
 export function OptionsApp() {
@@ -89,6 +132,7 @@ export function OptionsApp() {
 
   return (
     <KeyManagerProvider>
+      <OptionsGate>
       <div className="app-canvas flex min-h-screen flex-col bg-background">
         <header className="border-b border-border bg-card">
           <div className="options-container py-4">
@@ -170,6 +214,7 @@ export function OptionsApp() {
           </div>
         </footer>
       </div>
+      </OptionsGate>
     </KeyManagerProvider>
   );
 }

@@ -1,3 +1,4 @@
+import { DEFAULT_SESSION_TTL_MINUTES } from "@/domain/policy/session-grants";
 // Settings types and defaults based on the requirements document
 import { DEFAULT_MEDIUM_ALLOW_KINDS } from "./policy/trust-definitions";
 
@@ -149,9 +150,38 @@ export interface AppSettingsV1 {
   selectedKeyId?: string; // ID of the currently selected key
   origins: OriginPolicy[]; // per-origin policies
   mediumAllowKinds: number[]; // shipped default for medium trust
-  sessionTTLMinutes: number; // 0 = until lock only
+  /** Session-grant lifetime. Bounded by DEFAULT/MAX_SESSION_TTL_MINUTES. */
+  sessionTTLMinutes: number;
   onboardingCompleted?: boolean; // track if user completed onboarding
   onboardingCompletedAt?: number; // epoch seconds when onboarding was completed
+}
+
+/**
+ * Auto-lock bounds, defined once and shared.
+ *
+ * There is no "never" any more. `autoLockMinutes: 0` used to mean "do not
+ * lock", which combined with a lock state that already failed open to leave a
+ * vault unlocked indefinitely. A stored 0 is now read as the shipped default.
+ *
+ * The ceiling is an hour. The old schema allowed 1440 (a day), which is longer
+ * than the browser session it is meant to bound.
+ */
+export const AUTO_LOCK_BOUNDS = { min: 1, max: 60, default: 5 } as const;
+
+/**
+ * Coerces any stored or supplied auto-lock value into the enforced range.
+ *
+ * Called on every read rather than only on write, because settings live in
+ * `storage.sync`: a value written by an older version, or by another profile
+ * on the same account, arrives without ever passing through the patch schema.
+ */
+export function normalizeAutoLockMinutes(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return AUTO_LOCK_BOUNDS.default;
+  }
+  const whole = Math.floor(value);
+  if (whole < AUTO_LOCK_BOUNDS.min) return AUTO_LOCK_BOUNDS.default;
+  return Math.min(whole, AUTO_LOCK_BOUNDS.max);
 }
 
 export const DEFAULT_RELAY_URLS = ["wss://relay.primal.net"] as const;
@@ -161,12 +191,12 @@ export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {
   __version: "settings.v1",
   theme: "system",
   sidePanel: false,
-  autoLockMinutes: 5,
+  autoLockMinutes: AUTO_LOCK_BOUNDS.default,
   maxActivityEntries: 50,
   relays: [...DEFAULT_RELAY_URLS],
   origins: [],
   mediumAllowKinds: [...DEFAULT_MEDIUM_ALLOW_KINDS],
-  sessionTTLMinutes: 0,
+  sessionTTLMinutes: DEFAULT_SESSION_TTL_MINUTES,
 };
 
 // Comprehensive Nostr event kinds mapping

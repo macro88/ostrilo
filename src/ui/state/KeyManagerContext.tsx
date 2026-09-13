@@ -23,6 +23,17 @@ import {
 } from "@/infrastructure/messaging/client";
 import { KeyRecord } from "@/domain/types";
 import { hexToBytes, publicKeyToBech32 } from "@/domain/utils/encoding";
+import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
+import { browser } from "wxt/browser";
+
+/**
+ * How often an open surface re-checks the lock state.
+ *
+ * Short enough that a vault which locks behind a visible page is noticed
+ * within a few seconds; long enough that an idle options page is not what
+ * keeps the MV3 service worker alive.
+ */
+const LOCK_POLL_MS = 5_000;
 
 // Secure UI-only types - no plaintext private keys
 export interface UIKeyInfo {
@@ -124,6 +135,66 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     };
 
     loadInitialState();
+  }, []);
+
+  /**
+   * Keeps an open surface honest about the lock state.
+   *
+   * It was read once on mount and never again, so a vault that locked while
+   * the options page was open left the page showing key labels, origin
+   * policies and the relay list until someone reloaded it. Mutation from
+   * that stale page is refused by the background, but the disclosure had
+   * already happened.
+   *
+   * Two signals, because neither is sufficient alone:
+   *  - the broadcast, which is immediate but is lost if the worker was
+   *    evicted before it could send;
+   *  - the poll, which is the backstop, and is also what evaluates the
+   *    auto-lock deadline, since that is checked lazily on access.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const sync = async () => {
+      try {
+        const state = await getLockState();
+        if (cancelled) return;
+        setLockState((prev) =>
+          prev.isLocked === state.isLocked
+            ? prev
+            : { ...prev, isLocked: state.isLocked }
+        );
+      } catch {
+        // Unreachable background: assume locked. Failing closed here costs
+        // the user a password; failing open costs them their key material.
+        if (!cancelled) {
+          setLockState((prev) =>
+            prev.isLocked ? prev : { ...prev, isLocked: true }
+          );
+        }
+      }
+    };
+
+    const onMessage = (message: unknown) => {
+      if (
+        typeof message === "object" &&
+        message !== null &&
+        "__event" in message &&
+        (message as { __event?: unknown }).__event ===
+          BROADCAST_EVENTS.VAULT_LOCKED
+      ) {
+        setLockState((prev) => ({ ...prev, isLocked: true }));
+      }
+    };
+
+    browser.runtime.onMessage.addListener(onMessage);
+    const interval = setInterval(sync, LOCK_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      browser.runtime.onMessage.removeListener(onMessage);
+    };
   }, []);
 
   const refreshKeys = useCallback(async () => {

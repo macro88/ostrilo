@@ -122,7 +122,8 @@ describe("RPC Validation Integration", () => {
       const testSettingsPatch = {
         theme: "system" as const,
         sidePanel: true,
-        autoLockMinutes: 120,
+        // 60 is the ceiling now, not 1440. See AUTO_LOCK_BOUNDS.
+        autoLockMinutes: 60,
         relays: ["wss://example.com"],
       };
 
