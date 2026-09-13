@@ -300,7 +300,7 @@ export function OnboardingImportKey({
           </div>
           <div className="h-2 rounded-full bg-muted">
             <div
-              className="h-2 rounded-full bg-primary transition-all duration-300"
+              className="h-2 rounded-full bg-primary transition-[width] duration-300"
               style={{
                 width: `${(currentStepIndex + 1) * 33.33}%`,
               }}

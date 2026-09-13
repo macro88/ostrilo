@@ -60,16 +60,10 @@ export function BackupVerification({
   const fileTextRef = useRef<string | null>(null);
   const [fileName, setFileName] = useState("");
 
-  // Clears the verification input when the check passes and when the step is
-  // left, so the tail of the nsec does not sit in state after it is useful.
-  useEffect(() => {
-    if (verified) {
-      setSuffix("");
-      setPassphrase("");
-      fileTextRef.current = null;
-    }
-  }, [verified]);
-
+  // Cleared in the handlers that succeed, not in an effect watching the
+  // `verified` prop: reacting to a prop change means an extra render with
+  // the secret still in state, and the handler knows the moment it stops
+  // being needed.
   useEffect(() => {
     return () => {
       fileTextRef.current = null;
@@ -80,6 +74,8 @@ export function BackupVerification({
     if (checkSuffix(suffix.trim())) {
       setError("");
       setSuffix("");
+      setPassphrase("");
+      fileTextRef.current = null;
       onVerified();
       return;
     }
@@ -125,6 +121,7 @@ export function BackupVerification({
       }
       setError("");
       setPassphrase("");
+      setSuffix("");
       fileTextRef.current = null;
       onVerified();
     } catch {
