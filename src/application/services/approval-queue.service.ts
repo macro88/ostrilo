@@ -23,6 +23,23 @@ interface QueueEntry {
   resolvers: RequestResolver[];
   timeoutId: ReturnType<typeof setTimeout>;
   eventIdHash?: string; // Optional event ID hash for de-duplication
+  dedupeKey?: string; // Composite (origin, eventIdHash) de-duplication key
+}
+
+/**
+ * Build the de-duplication key.
+ *
+ * The key includes the origin because an approval prompt is a statement about
+ * one site. De-duplicating on the event id alone means a click the user
+ * believed applied to site A also returns a signature to site B, which can
+ * predict or replay a byte-identical event. Origin attribution is the whole
+ * point of a consent prompt.
+ *
+ * The separator is a NUL, which cannot appear in an origin, so no pair of
+ * (origin, hash) values can collide by concatenation.
+ */
+function makeDedupeKey(origin: string, eventIdHash: string): string {
+  return `${origin}\u0000${eventIdHash}`;
 }
 
 /**
@@ -37,7 +54,7 @@ interface QueueEntry {
  */
 export class ApprovalQueueService {
   private queue: Map<string, QueueEntry> = new Map();
-  private eventIdMap: Map<string, QueueEntry> = new Map(); // Track by event ID hash for de-duplication
+  private eventIdMap: Map<string, QueueEntry> = new Map(); // Track by (origin, event ID hash) for de-duplication
   private timeoutMs: number;
   private timedOutRequests: Set<string> = new Set(); // Track which requests timed out
   private changeCallback?: QueueChangeCallback; // Optional callback for queue changes
@@ -66,10 +83,14 @@ export class ApprovalQueueService {
   /**
    * Enqueue a new approval request with automatic de-duplication.
    *
-   * If an eventIdHash is provided and matches an existing queued request,
-   * the existing PendingRequest is returned instead of creating a duplicate.
-   * This ensures identical Nostr events (same content, kind, tags, created_at)
-   * result in a single approval prompt, with all callers receiving the same result.
+   * If an eventIdHash is provided and matches an existing queued request FROM
+   * THE SAME ORIGIN, the existing PendingRequest is returned instead of
+   * creating a duplicate. This collapses one page firing the same request twice
+   * - a double-clicked button, a re-render - into a single prompt whose result
+   * fans out to both pending promises.
+   *
+   * Two different origins requesting a byte-identical event get two independent
+   * approvals. Resolving one never resolves the other.
    *
    * @param origin - The origin of the requesting dapp (e.g., "https://primal.net")
    * @param event - The unsigned Nostr event to be signed (NIP-01 format)
@@ -78,7 +99,8 @@ export class ApprovalQueueService {
    * @returns The PendingRequest (new or existing if duplicate detected)
    *
    * @remarks
-   * - De-duplication uses event ID hash (computed via NIP-01 canonical serialization)
+   * - De-duplication uses the requesting origin together with the event ID hash
+   *   (computed via NIP-01 canonical serialization)
    * - Duplicate detection logs a message but does NOT trigger change notifications
    * - Both queue Map and eventIdMap are updated for new requests
    * - Auto-timeout is set up for each request (default 5 minutes)
@@ -90,12 +112,14 @@ export class ApprovalQueueService {
     resolver: RequestResolver,
     eventIdHash?: string
   ): PendingRequest {
-    // Check for duplicate by event ID hash
-    if (eventIdHash && this.eventIdMap.has(eventIdHash)) {
-      const existingEntry = this.eventIdMap.get(eventIdHash)!;
+    // Check for a duplicate from THIS origin. The key is built here, inside the
+    // service, so no caller can forget to include the origin.
+    const dedupeKey = eventIdHash ? makeDedupeKey(origin, eventIdHash) : undefined;
+    if (dedupeKey && this.eventIdMap.has(dedupeKey)) {
+      const existingEntry = this.eventIdMap.get(dedupeKey)!;
       existingEntry.resolvers.push(resolver);
       console.log(
-        `[ApprovalQueue] Duplicate event detected (hash: ${eventIdHash.substring(
+        `[ApprovalQueue] Duplicate event detected for ${origin} (hash: ${eventIdHash!.substring(
           0,
           8
         )}...), reusing existing request ${existingEntry.request.id}`
@@ -124,12 +148,13 @@ export class ApprovalQueueService {
       resolvers: [resolver],
       timeoutId,
       eventIdHash,
+      dedupeKey,
     };
     this.queue.set(request.id, entry);
 
-    // Track by event ID hash if provided
-    if (eventIdHash) {
-      this.eventIdMap.set(eventIdHash, entry);
+    // Track by (origin, event ID hash) if a hash was provided
+    if (dedupeKey) {
+      this.eventIdMap.set(dedupeKey, entry);
     }
 
     // Notify listeners that queue has changed
@@ -186,8 +211,8 @@ export class ApprovalQueueService {
 
     // Remove from queue and event ID map before calling resolver (prevents double-resolve)
     this.queue.delete(requestId);
-    if (entry.eventIdHash) {
-      this.eventIdMap.delete(entry.eventIdHash);
+    if (entry.dedupeKey) {
+      this.eventIdMap.delete(entry.dedupeKey);
     }
 
     // Call every resolver attached to this queue entry. Duplicate callers share
@@ -217,8 +242,8 @@ export class ApprovalQueueService {
 
     // Remove from queue and event ID map
     this.queue.delete(requestId);
-    if (entry.eventIdHash) {
-      this.eventIdMap.delete(entry.eventIdHash);
+    if (entry.dedupeKey) {
+      this.eventIdMap.delete(entry.dedupeKey);
     }
 
     // Auto-deny on timeout (no policy change)
@@ -275,6 +300,9 @@ export class ApprovalQueueService {
    * @returns Array of currently queued event ID hashes
    */
   getQueuedEventIds(): string[] {
-    return Array.from(this.eventIdMap.keys());
+    // The map is keyed by (origin, hash); diagnostics still want the hashes.
+    return Array.from(this.eventIdMap.values()).map(
+      (entry) => entry.eventIdHash!
+    );
   }
 }

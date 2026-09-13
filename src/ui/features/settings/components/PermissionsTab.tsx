@@ -1,5 +1,7 @@
 import { Shield } from "lucide-react";
 import type { TrustLevel } from "@/domain/types";
+import { useCallback, useEffect, useState } from "react";
+import { policyGetSessionGrants } from "@/infrastructure/messaging/client";
 import { OriginPolicyTable } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
@@ -17,6 +19,23 @@ export function PermissionsTab() {
     updateOriginTrustLevel,
   } = useAppSettings();
   const reauth = useReauth();
+
+  // Read from the background rather than from the stored display flag, and
+  // re-read after every change, so an expired grant stops showing as live.
+  const [sessionGrants, setSessionGrants] = useState<
+    Array<{ origin: string; expiresAt: number }>
+  >([]);
+  const refreshGrants = useCallback(async () => {
+    try {
+      setSessionGrants(await policyGetSessionGrants());
+    } catch {
+      // A locked or unreachable background has no live grants to show.
+      setSessionGrants([]);
+    }
+  }, []);
+  useEffect(() => {
+    void refreshGrants();
+  }, [refreshGrants]);
 
   if (isLoading) {
     return (
@@ -78,6 +97,7 @@ export function PermissionsTab() {
   const handleToggleSession = async (origin: string, enabled: boolean) => {
     if (!enabled) {
       await setSessionGrant(origin, false);
+      await refreshGrants();
       return;
     }
     try {
@@ -89,6 +109,7 @@ export function PermissionsTab() {
         },
         (password) => setSessionGrant(origin, true, password)
       );
+      await refreshGrants();
     } catch {
       // Cancelled. No grant was created.
     }
@@ -123,6 +144,7 @@ export function PermissionsTab() {
           origins={settings.origins}
           mediumAllowKinds={settings.mediumAllowKinds}
           onUpdateTrust={handleUpdateTrust}
+          sessionGrants={sessionGrants}
           onRemove={removeOriginPolicy}
           onToggleSession={handleToggleSession}
           onSetPerKindRule={handleSetPerKindRule}

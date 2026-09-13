@@ -89,6 +89,25 @@ The original release dates are now historical planning targets. The status marke
 - Light/dark/system theme selection with live system-preference updates across popup, side panel, approval window, and options page.
 - WXT Chrome/Firefox build targets, Playwright extension E2E tests, smoke screenshot flow, and React Doctor CI.
 - Explicit manifest policy on both build targets: a declared `content_security_policy.extension_pages` (closed `default-src`, `script-src 'self'` with no `unsafe-eval`, no plaintext `http:`/`ws:` source), a reviewed permission set of `storage`, `windows` and `alarms` plus Chrome's `sidePanel`, `use_dynamic_url` on the injected NIP-07 provider so pages cannot probe a fixed extension URL, the Firefox target moved from MV2 to MV3 so no target keeps a persistent background page holding decrypted keys, and `console` output stripped from production bundles. `tests/security/manifest-assertions.test.ts` asserts all of it against the generated manifests, which is what caught — and now fences — the placeholder `sidebar_action` block Firefox had been shipping. SEC-004 stays 🔄 rather than ✅ because the suite is not yet wired into a CI job that builds first; see `docs/extension-manifest.md` and `docs/ci-verification.md`.
+- Encrypted key backup replaces the plaintext key download. The create-key backup
+  step no longer writes `{privateKey, privateKeyHex}` to disk in the clear: it
+  writes a versioned `ostrilo-key-backup` envelope sealed with the vault's own
+  Argon2id KDF and AES-GCM adapters under a passphrase supplied at export time and
+  deliberately separate from the master password, with the key name inside the
+  ciphertext and no key name in the filename. The same step bounds a copied nsec to
+  a 45-second clipboard window that is announced before the copy and cleared on
+  unmount and `pagehide`, drops the master password and the revealed key on every
+  exit rather than only on Finish, keeps key fields out of autofill and password
+  managers, and requires the user to re-enter the last 8 characters of the nsec — or
+  re-open the encrypted file — before Finish enables. The onboarding import path
+  reads the envelope back. See `docs/ostrilo-onboarding-requirements.md`.
+- The 892 KB three.js chunk no longer sits in any document that can hold key
+  material. `Logo.tsx` loads the 3D mascot behind a `React.lazy` boundary with the
+  static poster as its fallback, and refuses `mode="model"` outright in any document
+  named by `src/ui/components/logo/key-handling-documents.ts` — which today is all
+  four. `tests/security/key-handling-bundle.test.ts` walks each built document's
+  module and `modulepreload` graph and fails on the WebGL markers or a transitive
+  byte ceiling.
 
 **Partially implemented or narrower than the PRD wording:**
 
@@ -109,7 +128,20 @@ The original release dates are now historical planning targets. The status marke
 
 - Memory zeroization exists for `Uint8Array` key material and derived keys, but some password fields still pass through React state and JavaScript strings, so the "complete zeroization" and "secure UI isolation" goals are not fully met.
 - Approval prompts show event kind, content, tags, signer, event hash, and raw details, but they do not yet include risk scoring or NIP-specific semantic warnings.
-- Key reveal/export APIs and onboarding backup exist, but there is no encrypted backup/recovery workflow, cloud/user-controlled backup target, or full wipe-on-uninstall behavior.
+- Encrypted backup export and restore now exist (SEC-011), but there is still no
+  cloud or user-controlled remote backup target and no full wipe-on-uninstall
+  behavior, so SEC-011 stays 🔄. BIP-39 / NIP-06 seed phrases remain out of scope
+  and are tracked as SYNC-004 for v2.2: they change key *generation*, not key
+  *backup*, and folding them in would have delayed removing a plaintext key file
+  that shipped.
+- SEC-003 advances but does not complete. The create-key flow holds the revealed
+  key only in a `useRef`, writes it into the DOM imperatively and wipes it on
+  unmount, and clears the master password from reducer state on every exit path.
+  What did NOT ship: `LockScreen` still holds its password in `useState`, and the
+  dedicated `keyflow.html` / `welcome.html` documents described in
+  `openspec/changes/secure-key-backup-flow/design.md` (Decision 5, Steps B and C)
+  are not built, so the popup still hosts onboarding, unlock and the whole main app
+  in one realm.
 - Activity filtering covers origin and event kind; it does not yet include full-text search, date-range filtering, result filtering, or saved presets.
 - Accessibility has meaningful keyboard/ARIA coverage for key management and Radix-based controls, but no repo-wide WCAG 2.1 AA audit has been completed.
 - Relay/profile infrastructure exists, but NIP-specific protocol flows such as NIP-04, NIP-44, NIP-42, NIP-57 validation, NIP-65 publish workflows, and NIP-05 DNS verification remain unimplemented.

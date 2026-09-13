@@ -458,4 +458,204 @@ describe("settings shared components", () => {
       )
     ).toEqual(["Ask", "Deny"]);
   });
+
+  describe("effective decisions", () => {
+    function pressed(row: Element, label: string): string | null {
+      const button = Array.from(row.querySelectorAll("button")).find(
+        (candidate) => candidate.textContent === label
+      );
+      return button?.getAttribute("aria-pressed") ?? null;
+    }
+
+    it("does not show a trust-allowed kind as Ask", () => {
+      const container = render(
+        <OriginPolicyTable
+          origins={[
+            {
+              origin: "https://primal.net",
+              trustLevel: "medium",
+              rules: {},
+              updatedAt: 1,
+            },
+          ]}
+          mediumAllowKinds={[6, 16, 7, 10002]}
+          onRemove={vi.fn()}
+          onToggleSession={vi.fn()}
+          onSetPerKindRule={vi.fn()}
+        />
+      );
+
+      const reactionRow = container.querySelector(
+        '[data-testid="origin-policy-kind-7"]'
+      )!;
+      expect(pressed(reactionRow, "Allow")).toBe("true");
+      expect(pressed(reactionRow, "Ask")).toBe("false");
+      expect(reactionRow.textContent).toContain("this site's trust level");
+    });
+
+    it("shows a kind outside the high-trust allowlist as Ask", () => {
+      const container = render(
+        <OriginPolicyTable
+          origins={[
+            {
+              origin: "https://primal.net",
+              trustLevel: "high",
+              rules: {},
+              updatedAt: 1,
+            },
+          ]}
+          onRemove={vi.fn()}
+          onToggleSession={vi.fn()}
+          onSetPerKindRule={vi.fn()}
+        />
+      );
+
+      // Kind 0 is profile metadata: sensitive, reversible, and deliberately
+      // absent from every trust allowlist.
+      const profileRow = container.querySelector(
+        '[data-testid="origin-policy-kind-0"]'
+      )!;
+      expect(pressed(profileRow, "Ask")).toBe("true");
+      expect(profileRow.textContent).toContain("Asks every time");
+    });
+
+    it("never shows a stored allow on a protected kind as active auto-allow", () => {
+      const container = render(
+        <OriginPolicyTable
+          origins={[
+            {
+              origin: "https://primal.net",
+              trustLevel: "high",
+              rules: { 1: "allow", 27235: "allow" },
+              updatedAt: 1,
+            },
+          ]}
+          onRemove={vi.fn()}
+          onToggleSession={vi.fn()}
+          onSetPerKindRule={vi.fn()}
+        />
+      );
+
+      for (const kind of [1, 27235]) {
+        const row = container.querySelector(
+          `[data-testid="origin-policy-kind-${kind}"]`
+        )!;
+        expect(pressed(row, "Ask")).toBe("true");
+        expect(row.textContent).toContain(
+          "Always requires approval before signing"
+        );
+        expect(
+          Array.from(row.querySelectorAll("button")).map(
+            (button) => button.textContent
+          )
+        ).not.toContain("Allow");
+      }
+    });
+
+    it("shows an explicit deny as denied and names the rule as its source", () => {
+      const container = render(
+        <OriginPolicyTable
+          origins={[
+            {
+              origin: "https://primal.net",
+              trustLevel: "high",
+              rules: { 7: "deny" },
+              updatedAt: 1,
+            },
+          ]}
+          onRemove={vi.fn()}
+          onToggleSession={vi.fn()}
+          onSetPerKindRule={vi.fn()}
+        />
+      );
+
+      const reactionRow = container.querySelector(
+        '[data-testid="origin-policy-kind-7"]'
+      )!;
+      expect(pressed(reactionRow, "Deny")).toBe("true");
+      expect(reactionRow.textContent).toContain("a rule you set");
+    });
+
+    it("shows the untrusted fallback for a record with no usable trust level", () => {
+      const container = render(
+        <OriginPolicyTable
+          origins={[
+            {
+              origin: "https://primal.net",
+              rules: {},
+              updatedAt: 1,
+            } as never,
+          ]}
+          onRemove={vi.fn()}
+          onToggleSession={vi.fn()}
+          onSetPerKindRule={vi.fn()}
+        />
+      );
+
+      const reactionRow = container.querySelector(
+        '[data-testid="origin-policy-kind-7"]'
+      )!;
+      expect(pressed(reactionRow, "Ask")).toBe("true");
+    });
+  });
+
+  describe("trust level control", () => {
+    it("exposes a trust control and reports what each level permits", () => {
+      const onUpdateTrust = vi.fn();
+      const container = render(
+        <OriginPolicyTable
+          origins={[
+            {
+              origin: "https://primal.net",
+              trustLevel: "high",
+              rules: { 5: "deny" },
+              updatedAt: 1,
+            },
+          ]}
+          onUpdateTrust={onUpdateTrust}
+          onRemove={vi.fn()}
+          onToggleSession={vi.fn()}
+          onSetPerKindRule={vi.fn()}
+        />
+      );
+
+      const trustRow = container.querySelector(
+        '[data-testid="origin-trust-https://primal.net"]'
+      )!;
+      const buttons = Array.from(trustRow.querySelectorAll("button"));
+      expect(buttons.map((button) => button.textContent)).toEqual([
+        "Low",
+        "Medium",
+        "High",
+      ]);
+      // "High" must not read as "signs anything".
+      expect(trustRow.textContent).toContain("Everything else still asks");
+
+      const low = buttons.find((button) => button.textContent === "Low")!;
+      click(low);
+      expect(onUpdateTrust).toHaveBeenCalledWith("https://primal.net", "low");
+    });
+
+    it("hides the trust control when no handler is supplied", () => {
+      const container = render(
+        <OriginPolicyTable
+          origins={[
+            {
+              origin: "https://primal.net",
+              trustLevel: "high",
+              rules: {},
+              updatedAt: 1,
+            },
+          ]}
+          onRemove={vi.fn()}
+          onToggleSession={vi.fn()}
+          onSetPerKindRule={vi.fn()}
+        />
+      );
+
+      expect(
+        container.querySelector('[data-testid="origin-trust-https://primal.net"]')
+      ).toBeNull();
+    });
+  });
 });
