@@ -82,7 +82,10 @@ export default defineConfig({
     // drives the approval window. `sidePanel` is deliberately absent: WXT adds
     // it automatically for MV3 sidepanel entrypoints on Chromium, and it is
     // not a valid Firefox permission name.
-    permissions: ["storage", "windows"],
+    // `alarms` backs the auto-lock deadline. A setTimeout cannot do this job:
+    // an MV3 service worker is evicted after ~30s idle and the timer dies with
+    // it, so a timer-only auto-lock silently never fires.
+    permissions: ["storage", "windows", "alarms"],
     content_security_policy: {
       extension_pages: EXTENSION_PAGES_CSP,
     },
