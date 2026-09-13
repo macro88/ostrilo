@@ -256,12 +256,69 @@ describe("settings shared components", () => {
     click(addButton);
 
     expect(onAdd).not.toHaveBeenCalled();
-    expect(container.textContent).toContain("Relay URL must start with wss://");
+    expect(container.textContent).toContain("Enter a secure relay address");
+
+    changeTextInput(input, "ws://relay.example.com");
+    click(addButton);
+
+    expect(onAdd).not.toHaveBeenCalled();
+
+    changeTextInput(input, "wss://user:pass@relay.example.com");
+    click(addButton);
+
+    expect(onAdd).not.toHaveBeenCalled();
 
     changeTextInput(input, "wss://relay.example.com");
     click(addButton);
 
     expect(onAdd).toHaveBeenCalledWith("wss://relay.example.com");
+  });
+
+  it("discloses that a single relay sees every identity", () => {
+    const single = render(
+      <RelayList
+        relays={["wss://relay.example.com"]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    );
+
+    expect(single.textContent).toContain(
+      "that relay sees every identity this extension looks up"
+    );
+
+    const several = render(
+      <RelayList
+        relays={["wss://relay-a.example.com", "wss://relay-b.example.com"]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    );
+
+    expect(several.textContent).toContain(
+      "no single relay sees every identity you hold"
+    );
+  });
+
+  it("refuses to add more than the configured relay bound", () => {
+    const onAdd = vi.fn();
+    const relays = Array.from(
+      { length: 10 },
+      (_, index) => `wss://relay-${index}.example.com`
+    );
+    const container = render(
+      <RelayList relays={relays} onAdd={onAdd} onRemove={vi.fn()} />
+    );
+    const input = container.querySelector("input")!;
+    const addButton = container.querySelector(
+      'button[aria-label="Add relay"]'
+    )!;
+
+    changeTextInput(input, "wss://relay-11.example.com");
+    click(addButton);
+
+    expect(onAdd).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("at most 10 relays");
   });
 
   it("labels medium trust toggles by event kind", () => {

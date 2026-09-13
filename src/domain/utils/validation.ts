@@ -6,75 +6,42 @@
 import { CRYPTO_CONSTANTS } from "../crypto/interfaces";
 
 /**
- * Password strength evaluation
+ * Password strength, re-pointed at the single policy module.
+ *
+ * `meetsMinimum` is GONE on purpose. It was the one correct predicate in the
+ * codebase (`score >= 3 && length >= 8`) and nothing used it: two onboarding
+ * flows re-implemented half of it as `strength.score < 3`, which is satisfiable
+ * by character variety alone. Removing it turns every caller that reached for a
+ * home-grown predicate into a compile error, and the replacement verdict makes
+ * the bug unrepresentable - `acceptable` is false unless the blocklist was
+ * consulted, so a UI can report violations but can never green-light.
+ *
+ * See src/domain/utils/password-policy.ts.
  */
-export interface PasswordRequirement {
-  requirement: string;
-  passes: boolean;
-}
+export type {
+  PasswordVerdict,
+  PasswordViolation,
+  PasswordRequirement,
+} from "./password-policy";
+export {
+  PASSWORD_POLICY,
+  checkPassword,
+  describeViolation,
+} from "./password-policy";
 
-export interface PasswordStrength {
-  score: number; // 0-4
-  requirements: PasswordRequirement[];
-  meetsMinimum: boolean;
-}
+import { checkPassword as policyCheck } from "./password-policy";
 
 /**
- * Evaluate password strength based on security requirements
+ * Structural-only evaluation for display.
+ *
+ * Deliberately returns a verdict whose `acceptable` is false, because no
+ * blocklist is supplied here. Callers that need a decision must go through the
+ * background.
  */
-export function evaluatePasswordStrength(password: string): PasswordStrength {
-  const requirements: PasswordRequirement[] = [];
-  let score = 0;
-
-  // Length check
-  const hasMinLength = password.length >= 8;
-  if (hasMinLength) {
-    score += 1;
-  }
-  requirements.push({
-    requirement: "At least 8 characters long",
-    passes: hasMinLength,
-  });
-
-  // Character variety checks
-  const hasMixedCase = /[a-z]/.test(password) && /[A-Z]/.test(password);
-  if (hasMixedCase) {
-    score += 1;
-  }
-  requirements.push({
-    requirement: "Both uppercase and lowercase letters",
-    passes: hasMixedCase,
-  });
-
-  const hasNumber = /\d/.test(password);
-  if (hasNumber) {
-    score += 1;
-  }
-  requirements.push({
-    requirement: "At least one number",
-    passes: hasNumber,
-  });
-
-  const hasSpecial = /[^a-zA-Z\d]/.test(password);
-  if (hasSpecial) {
-    score += 1;
-  }
-  requirements.push({
-    requirement: "At least one special character",
-    passes: hasSpecial,
-  });
-
-  // Bonus for very long passwords
-  if (password.length >= 20) {
-    score = Math.min(4, score + 1);
-  }
-
-  return {
-    score,
-    requirements,
-    meetsMinimum: score >= 3 && password.length >= 8,
-  };
+export function evaluatePasswordStrength(password: string) {
+  return policyCheck(password);
 }
+
 
 /**
  * Validate private key format without importing crypto libraries
@@ -99,12 +66,25 @@ export function isValidPublicKeyHex(hex: string): boolean {
 }
 
 /**
- * Validate URL format for relay addresses
+ * Validate URL format for relay addresses.
+ *
+ * Only `wss:` is accepted. A relay is an untrusted remote party on a connection
+ * that carries the user's public keys, so cleartext `ws:` is refused even for
+ * localhost: there is no development relay workflow in this repository, and an
+ * exemption would be a permanent hole for a temporary convenience.
+ *
+ * Embedded credentials are refused as well, since they would place a secret in
+ * a value that is stored in settings and displayed back to the user.
  */
 export function isValidRelayUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "ws:" || parsed.protocol === "wss:";
+    return (
+      parsed.protocol === "wss:" &&
+      parsed.hostname.length > 0 &&
+      parsed.username === "" &&
+      parsed.password === ""
+    );
   } catch {
     return false;
   }

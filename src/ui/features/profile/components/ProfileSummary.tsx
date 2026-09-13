@@ -2,6 +2,7 @@ import type { ProfileMetadata } from "@/domain/profile/types";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { ProfileField } from "./ProfileField";
+import { RemoteUrlField } from "./RemoteUrlField";
 
 interface ProfileSummaryProps {
   profile: ProfileMetadata | null;
@@ -26,20 +27,16 @@ export function ProfileSummary({
   return (
     <div className="screen-shell">
       <div className="screen-header text-center">
-        {profile?.picture ? (
-          <img
-            src={profile.picture}
-            alt="Profile"
-            className="seal mx-auto mb-3 h-16 w-16 border-2 border-border object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-            }}
-          />
-        ) : (
-          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-3 h-16 w-16 text-2xl">
-            {profile?.name?.[0]?.toUpperCase() || "?"}
-          </div>
-        )}
+        {/*
+          The avatar is the local seal with the profile initial. A relay chooses
+          the picture URL, and this page holds the signing session, so loading
+          it here would tell an attacker-selected host the user's IP address
+          every time the profile surface renders. The URL stays inspectable
+          below instead.
+        */}
+        <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-3 h-16 w-16 text-2xl">
+          {(profile?.name || profile?.display_name)?.[0]?.toUpperCase() || "?"}
+        </div>
         <h2 className="screen-title">Profile Settings</h2>
         {truncatedNpub && (
           <p className="mx-auto my-2 w-fit rounded-lg bg-muted px-2.5 py-1 font-mono text-xs text-muted-foreground">
@@ -73,10 +70,17 @@ export function ProfileSummary({
           loading={showLoadingField}
           value={profile?.about || "Add a bio"}
         />
-        <ProfileField
+        <RemoteUrlField
           label="Website"
-          loading={showLoadingField}
-          value={profile?.website || "Add your website"}
+          value={profile?.website}
+          emptyText="Add your website"
+          openLabel="Open website in a new tab"
+        />
+        <RemoteUrlField
+          label="Picture URL"
+          value={profile?.picture}
+          emptyText="No picture URL set. Images are never loaded in this window."
+          openLabel="Open picture in a new tab"
         />
 
         {profile?.nip05 && (

@@ -19,7 +19,7 @@ All UI work must follow `docs/design/DESIGN_RULES.md`. Do not reintroduce gradie
 
 ### Development Workflow
 - Start development server: `npm run dev` or `npm run dev:firefox`
-  - Creates development builds in `.output/chrome-mv3-dev/` or `.output/firefox-mv2-dev/`
+  - Creates development builds in `.output/chrome-mv3-dev/` or `.output/firefox-mv3-dev/`
   - Development server may have connection issues but extension builds successfully
   - Extension can be loaded into browser from `.output/` directory for testing
 - Post-install setup: `npm run postinstall` (runs automatically via `wxt prepare`)
@@ -55,8 +55,8 @@ All UI work must follow `docs/design/DESIGN_RULES.md`. Do not reintroduce gradie
 - `application/services/approval-queue.service.ts` - Pending approval request management
 
 ### Build Outputs
-- Production: `.output/chrome-mv3/` and `.output/firefox-mv2/`
-- Development: `.output/chrome-mv3-dev/` and `.output/firefox-mv2-dev/`
+- Production: `.output/chrome-mv3/` and `.output/firefox-mv3/`
+- Development: `.output/chrome-mv3-dev/` and `.output/firefox-mv3-dev/`
 - Zip packages: `.output/ostrilo-0.0.0-chrome.zip` and similar for Firefox
 - Bundle size: ~503KB total, main app chunk ~422KB
 
@@ -88,7 +88,7 @@ All UI work must follow `docs/design/DESIGN_RULES.md`. Do not reintroduce gradie
 
 ### Extension Development
 - Load unpacked extension from `.output/chrome-mv3/` in Chrome developer mode
-- Load temporary add-on from `.output/firefox-mv2/manifest.json` in Firefox
+- Load temporary add-on from `.output/firefox-mv3/manifest.json` in Firefox
 - Development builds include hot reload capabilities and debugging features
 - Test crypto functionality by running manual tests in browser console
 

@@ -62,6 +62,45 @@ export class VaultRpcHandler implements RpcModule {
     }
   }
 
+
+  /**
+   * Applies the new-password policy, but ONLY when the vault has no keys yet.
+   *
+   * Adding a second key re-enters the EXISTING vault password (it must match,
+   * so the envelope verifier can open). Running a new-password policy there
+   * would tell a pre-existing user their own correct password is invalid, with
+   * no change-password flow to escape through.
+   *
+   * Returns an error response to send, or null when the password is acceptable.
+   */
+  private async enforceNewPasswordPolicy(
+    password: string,
+    method: string,
+    context: ServiceContext,
+    label?: string
+  ): Promise<RpcResponse | null> {
+    const existing = await context.vault.listKeys();
+    if (existing.length > 0) return null; // not a new password
+
+    // Background-only import: the blocklist must not reach a UI bundle.
+    const [{ COMMON_PASSWORDS }, { makeNewPasswordSchema }] =
+      await Promise.all([
+        import("@/domain/utils/wordlists/common-passwords"),
+        import("@/infrastructure/validation/schemas"),
+      ]);
+    const schema = makeNewPasswordSchema(
+      COMMON_PASSWORDS,
+      label ? [label] : []
+    );
+    const result = schema.safeParse(password);
+    if (result.success) return null;
+
+    return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
+      details: result.error.issues[0]?.message ?? "Password does not meet the policy.",
+      method,
+    });
+  }
+
   private async handleUnlock(
     message: Extract<RpcRequest, { type: "vault.unlock" }>,
     context: ServiceContext
@@ -75,8 +114,21 @@ export class VaultRpcHandler implements RpcModule {
       });
     }
 
+    // Checked BEFORE any derivation: deriving first would let an attacker
+    // spend the defender's CPU on every attempt regardless of the lockout.
+    const waitMs = await context.unlockThrottle.check();
+    if (waitMs > 0) {
+      return createRpcErrorResponse(RPC_ERROR_CODES.RATE_LIMITED, {
+        details: `Too many failed attempts. Try again in ${Math.ceil(
+          waitMs / 1000
+        )} seconds.`,
+        method: message.type,
+      });
+    }
+
     try {
       const data = await context.vault.unlock(message.password);
+      await context.unlockThrottle.recordSuccess();
       return { ok: true, data };
     } catch (error) {
       if (error instanceof Error) {
@@ -85,8 +137,14 @@ export class VaultRpcHandler implements RpcModule {
         // as "incorrect password", so a corrupt record sent the user hunting
         // for a password that was never wrong.
         if (error.message === "incorrect_password") {
+          const delay = await context.unlockThrottle.recordFailure();
           return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
-            details: "Incorrect password",
+            details:
+              delay > 0
+                ? `Incorrect password. Further attempts are paused for ${Math.ceil(
+                    delay / 1000
+                  )} seconds.`
+                : "Incorrect password",
             method: message.type,
           });
         }
@@ -141,6 +199,14 @@ export class VaultRpcHandler implements RpcModule {
         });
       }
     }
+
+    const policyError = await this.enforceNewPasswordPolicy(
+      message.password,
+      message.type,
+      context,
+      message.label
+    );
+    if (policyError) return policyError;
 
     try {
       const data = await context.vault.generateKey(
@@ -201,6 +267,14 @@ export class VaultRpcHandler implements RpcModule {
         });
       }
     }
+
+    const importPolicyError = await this.enforceNewPasswordPolicy(
+      message.password,
+      message.type,
+      context,
+      message.label
+    );
+    if (importPolicyError) return importPolicyError;
 
     try {
       const data = await context.vault.importKey(

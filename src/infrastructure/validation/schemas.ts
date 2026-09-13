@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  PASSWORD_POLICY,
+  checkPassword,
+  describeViolation,
+} from "@/domain/utils/password-policy";
 
 /**
  * Runtime validation schemas for RPC request payloads
@@ -64,10 +69,51 @@ export const validateOriginPolicyPatch = (data: unknown) =>
   OriginPolicyPatchSchema.safeParse(data);
 
 // Crypto validation schemas
+/**
+ * TRANSPORT HYGIENE ONLY. Non-empty, bounded length.
+ *
+ * This guards VERIFICATION paths - vault.unlock, vault.reveal,
+ * crypto.evaluatePassword - where the password being checked already exists and
+ * applying a new-password policy to it would lock out any user whose existing
+ * password predates the policy.
+ *
+ * It is NOT a password policy. Creation paths use NewPasswordSchema.
+ */
 export const PasswordSchema = z
   .string()
   .min(1, "Password cannot be empty")
-  .max(1000, "Password too long"); // Reasonable limit
+  .max(PASSWORD_POLICY.maxLength, "Password too long");
+
+/**
+ * The policy gate for a NEW vault password.
+ *
+ * Split from PasswordSchema deliberately. Applying a new-password policy to
+ * every path would tell an existing user, at unlock, that their own correct
+ * password is invalid - with no change-password flow to escape through. So the
+ * policy applies to creation only.
+ *
+ * The blocklist lives in the background and is passed in, because the module is
+ * large and must not reach a UI bundle. A verdict built without it is never
+ * `acceptable`, so this cannot accidentally pass a password it did not fully
+ * check.
+ */
+export function makeNewPasswordSchema(
+  blocklist: ReadonlySet<string>,
+  extraTerms: readonly string[] = []
+) {
+  return z.string().superRefine((value, ctx) => {
+    const verdict = checkPassword(value, { blocklist, extraTerms });
+    if (verdict.acceptable) return;
+    const first = verdict.violations[0];
+    ctx.addIssue({
+      code: "custom",
+      // Safe text only: never echoes the password.
+      message: first
+        ? describeViolation(first)
+        : "Password does not meet the policy.",
+    });
+  });
+}
 
 export const KeyInputSchema = z
   .string()

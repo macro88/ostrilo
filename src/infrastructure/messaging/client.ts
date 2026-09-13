@@ -1,4 +1,5 @@
 import { browser } from "wxt/browser";
+import type { PasswordVerdict } from "@/domain/utils/password-policy";
 import type { RpcRequest, RpcResponse, RpcErrorObject } from "./rpc";
 import type {
   AppSettingsPatch,
@@ -291,14 +292,20 @@ export async function policyRemoveOrigin(origin: string) {
   return rpc<null>({ type: "policy.removeOrigin", origin });
 }
 
-export async function evaluatePasswordStrength(password: string) {
-  return rpc<{
-    score: number;
-    requirements: { requirement: string; passes: boolean }[];
-    meetsMinimum: boolean;
-  }>({
+/**
+ * Authoritative password verdict from the background, which holds the
+ * blocklist. Gate on `acceptable`, never on `score` - `score` is for display
+ * and is deliberately re-anchored so a policy-violating password cannot show
+ * as strong.
+ */
+export async function evaluatePasswordStrength(
+  password: string,
+  label?: string
+) {
+  return rpc<PasswordVerdict>({
     type: "crypto.evaluatePassword",
     password,
+    label,
   });
 }
 

@@ -22,6 +22,11 @@ describe("RPC Router and Handlers", () => {
 
     // Create mock service context
     mockContext = {
+      unlockThrottle: {
+        check: vi.fn().mockResolvedValue(0),
+        recordFailure: vi.fn().mockResolvedValue(0),
+        recordSuccess: vi.fn().mockResolvedValue(undefined),
+      },
       vault: {
         unlock: vi.fn().mockResolvedValue({ selectedKeyId: "test-key" }),
         lock: vi.fn().mockResolvedValue(undefined),

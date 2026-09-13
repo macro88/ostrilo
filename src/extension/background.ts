@@ -9,6 +9,7 @@ import { KeyVaultService } from "@/application/services/key-vault.service";
 import { PolicyService } from "@/application/services/policy.service";
 import { SettingsService } from "@/application/services/settings.service";
 import { ActivityLogService } from "@/application/services/activity-log.service";
+import { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
 import { ProfileService } from "@/application/services/profile.service";
 import { RelayManager } from "@/infrastructure/relay";
 import {
@@ -244,12 +245,17 @@ export default defineBackground(() => {
   const profile = new ProfileService(storage, relayManager, vault);
 
   // Create service context
+  // Persisted in storage.local, not a timer: setTimeout does not survive MV3
+  // service-worker termination, so a timer-based lockout would evaporate.
+  const unlockThrottle = new UnlockThrottleService(storage.local);
+
   const serviceContext = {
     vault,
     policy,
     settings,
     activityLog,
     profile,
+    unlockThrottle,
   };
 
   // Create approval queue service

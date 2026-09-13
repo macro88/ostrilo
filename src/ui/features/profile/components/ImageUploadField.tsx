@@ -3,6 +3,7 @@ import { Input } from "@/ui/components/ui/input";
 import { Label } from "@/ui/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
+import { isAllowedRemoteUrl } from "@/domain/profile/types";
 
 interface ImageUploadFieldProps {
   id: string;
@@ -12,6 +13,31 @@ interface ImageUploadFieldProps {
   disabled?: boolean;
   placeholder?: string;
   helpText?: string;
+  /**
+   * HTTPS endpoint that receives the uploaded image.
+   *
+   * Undefined by default: sending a user's image to a third party is a decision
+   * the user makes, not a constant in a component, and a fresh install makes no
+   * outbound request to anyone but the configured relays.
+   */
+  uploadEndpoint?: string;
+}
+
+/**
+ * Return the host that would receive an upload, or null when the endpoint is
+ * missing or not an `https:` URL.
+ */
+function uploadHost(endpoint: string | undefined): string | null {
+  if (!endpoint) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(endpoint);
+    return parsed.protocol === "https:" ? parsed.host : null;
+  } catch {
+    return null;
+  }
 }
 
 export function ImageUploadField({
@@ -21,12 +47,16 @@ export function ImageUploadField({
   onChange,
   disabled = false,
   placeholder = "https://example.com/image.jpg",
-  helpText = "Upload an image or paste a URL. Max 5MB (JPEG, PNG, GIF, WebP)",
+  helpText = "Paste an https:// image URL. Max 5MB (JPEG, PNG, GIF, WebP) if you upload.",
+  uploadEndpoint,
 }: ImageUploadFieldProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const destinationHost = uploadHost(uploadEndpoint);
+  const canUpload = destinationHost !== null;
 
   useEffect(() => {
     if (!isUploading) {
@@ -48,12 +78,19 @@ export function ImageUploadField({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    if (!uploadEndpoint || !destinationHost) {
+      setUploadError("No image host is configured.");
+      event.target.value = "";
+      return;
+    }
+
     // Validate file type
     const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
     if (!validTypes.includes(file.type)) {
       setUploadError(
         "Please select a valid image file (JPEG, PNG, GIF, or WebP)"
       );
+      event.target.value = "";
       return;
     }
 
@@ -61,6 +98,16 @@ export function ImageUploadField({
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       setUploadError("Image must be smaller than 5MB");
+      event.target.value = "";
+      return;
+    }
+
+    // Name the destination before anything leaves the machine.
+    const confirmed = window.confirm(
+      `Send this image to ${destinationHost}?\n\nThe image and your IP address will be visible to that host.`
+    );
+    if (!confirmed) {
+      event.target.value = "";
       return;
     }
 
@@ -72,7 +119,7 @@ export function ImageUploadField({
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("https://nostr.build/api/v2/upload/files", {
+      const response = await fetch(uploadEndpoint, {
         method: "POST",
         body: formData,
       });
@@ -84,13 +131,18 @@ export function ImageUploadField({
       }
 
       const result = await response.json();
+      const returnedUrl = result?.data?.[0]?.url;
 
-      if (result.status === "success" && result.data && result.data[0]?.url) {
-        const imageUrl = result.data[0].url;
-        onChange(imageUrl);
+      // The upload service is a remote party too: the URL it hands back goes
+      // through the same https-only allowlist as anything a relay supplies,
+      // and is never fetched or rendered by this page.
+      if (result?.status === "success" && isAllowedRemoteUrl(returnedUrl)) {
+        onChange(returnedUrl);
         setUploadProgress(0);
       } else {
-        throw new Error("Invalid response from upload service");
+        throw new Error(
+          "The image host returned a URL that is not an https:// address"
+        );
       }
     } catch (err) {
       console.error("Image upload error:", err);
@@ -124,29 +176,33 @@ export function ImageUploadField({
         />
 
         <div className="flex gap-2">
-          <button
-            type="button"
-            className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold transition-colors ${
-              disabled || isUploading
-                ? "cursor-not-allowed opacity-50"
-                : "hover:bg-accent"
-            }`}
-            disabled={disabled || isUploading}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="h-4 w-4" />
-            {isUploading ? "Uploading..." : "Upload Image"}
-          </button>
-          <input
-            id={`${id}-upload`}
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp"
-            onChange={handleFileUpload}
-            disabled={disabled || isUploading}
-            className="hidden"
-            aria-label={`${label} file upload`}
-          />
+          {canUpload && (
+            <>
+              <button
+                type="button"
+                className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold transition-colors ${
+                  disabled || isUploading
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-accent"
+                }`}
+                disabled={disabled || isUploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4" />
+                {isUploading ? "Uploading..." : `Upload to ${destinationHost}`}
+              </button>
+              <input
+                id={`${id}-upload`}
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={handleFileUpload}
+                disabled={disabled || isUploading}
+                className="hidden"
+                aria-label={`${label} file upload`}
+              />
+            </>
+          )}
           {value && (
             <Button
               variant="outline"
@@ -172,6 +228,13 @@ export function ImageUploadField({
 
         {uploadError && (
           <p className="text-xs text-destructive">{uploadError}</p>
+        )}
+
+        {!canUpload && (
+          <p className="text-xs text-muted-foreground">
+            No image host is configured, so there is nowhere to upload to. Paste
+            an https:// image URL instead.
+          </p>
         )}
 
         <p className="text-xs text-muted-foreground">{helpText}</p>

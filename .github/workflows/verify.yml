@@ -67,6 +67,12 @@ jobs:
       - run: pnpm run build
       - run: pnpm run build:firefox
 
+      # The manifest and build-output assertions need BUILT output, which the
+      # verify job does not produce. Without this line the whole suite skips
+      # in CI: verify runs tests without building, build builds without
+      # running them.
+      - run: pnpm exec vitest run tests/security/manifest-assertions.test.ts
+
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest

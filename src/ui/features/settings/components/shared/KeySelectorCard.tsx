@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/ui/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/ui/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { Edit, Check, X, Trash2 } from "lucide-react";
 
@@ -15,6 +15,10 @@ export interface KeyRecord {
 export interface KeyProfile {
   display_name?: string;
   name?: string;
+  /**
+   * Relay-supplied avatar URL. Retained so it can be inspected on the profile
+   * surface; never used as an image source here.
+   */
   picture?: string;
 }
 
@@ -91,7 +95,6 @@ export function KeySelectorCard({
         const profile = profiles.get(key.publicKeyHex);
         const displayName =
           profile?.display_name || profile?.name || key.label || "Unnamed Key";
-        const avatarUrl = profile?.picture;
         const isActive = key.id === selectedKeyId;
         const isEditing = editingKeyId === key.id;
         const truncatedNpub = key.publicKeyBech32
@@ -108,8 +111,12 @@ export function KeySelectorCard({
               isActive ? "border-primary bg-accent" : "border-border"
             )}
           >
-            <Avatar className="h-10 w-10">
-              {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
+            {/*
+              Local seal avatar only. The picture URL comes from a relay, and this
+              list is where the user picks which identity signs; loading it would
+              leak the user's IP address to a host the relay chose.
+            */}
+            <Avatar shape="seal" className="h-10 w-10">
               <AvatarFallback className="text-sm">
                 {displayName.charAt(0).toUpperCase()}
               </AvatarFallback>
