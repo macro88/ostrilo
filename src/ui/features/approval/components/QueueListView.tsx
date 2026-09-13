@@ -52,8 +52,10 @@ export function QueueListView({
   disabled = false,
   className,
 }: QueueListViewProps) {
+  // Lazy: the Set was being rebuilt on every render even though only the
+  // first one is ever used, and this list re-renders on every queue change.
   const [expandedOrigins, setExpandedOrigins] = useState<Set<string>>(
-    new Set(requests.map((r) => r.origin))
+    () => new Set(requests.map((r) => r.origin))
   );
 
   // Group requests by origin
