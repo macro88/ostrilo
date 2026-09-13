@@ -9,6 +9,95 @@ export type Theme = "dark" | "light" | "system";
 export type Authorisation = "allow" | "deny" | "ask";
 export type TrustLevel = "low" | "medium" | "high";
 
+// ============================================
+// Vault encryption schema
+// ============================================
+
+/**
+ * Current vault format version.
+ *
+ * A record without `v` is a legacy record written before the vault carried its
+ * own parameters: PBKDF2-HMAC-SHA256, 100,000 iterations, no AAD, one
+ * derivation per key. Those are read-only and lazily migrated on unlock.
+ */
+export const VAULT_VERSION = 1 as const;
+
+/** Versions this build can read. Reject anything else rather than guessing. */
+export const SUPPORTED_VAULT_VERSIONS: readonly number[] = [VAULT_VERSION];
+
+/**
+ * Recorded KDF parameters.
+ *
+ * The point of storing these is that the work factor can be raised later
+ * without guessing how an existing record was encrypted. Never infer these
+ * from code constants when reading a record.
+ */
+export type KdfParams =
+  | {
+      alg: "argon2id";
+      /** Memory cost in KiB. */
+      m: number;
+      /** Time cost (passes). */
+      t: number;
+      /** Parallelism. */
+      p: number;
+      salt: number[];
+    }
+  | {
+      alg: "pbkdf2-sha256";
+      /** Iteration count. */
+      c: number;
+      salt: number[];
+    };
+
+/**
+ * Parameter floors. A record whose recorded cost is below these is refused
+ * rather than silently accepted, so an attacker who can write to storage
+ * cannot roll the work factor back to something cheap.
+ *
+ * Argon2id values are the OWASP-listed configuration; see
+ * openspec/changes/harden-vault-key-derivation/kdf-measurements.md for the
+ * measurements behind the choice.
+ */
+export const KDF_FLOORS = {
+  argon2id: { m: 19456, t: 2, p: 1 },
+  "pbkdf2-sha256": { c: 600_000 },
+} as const;
+
+/** Parameters used for newly written material. */
+export const KDF_DEFAULTS: KdfParams = {
+  alg: "argon2id",
+  m: 19456,
+  t: 2,
+  p: 1,
+  salt: [],
+};
+
+export const KDF_SALT_LENGTH = 16;
+export const AES_GCM_IV_LENGTH = 12;
+export const DEK_LENGTH = 32;
+
+/**
+ * Vault-level envelope.
+ *
+ * One password-derived key-encryption key (KEK) per vault wraps a per-key
+ * data-encryption key (DEK). That means unlock costs exactly one KDF run
+ * regardless of how many keys the vault holds - the property that makes a
+ * memory-hard KDF affordable at all. The previous design derived once per
+ * record, so a five-key vault paid five times the cost.
+ *
+ * `verifier` is a known plaintext encrypted under the KEK. Decrypting it
+ * proves the password before any per-record work is attempted, and gives a
+ * clean "wrong password" signal that a damaged record cannot masquerade as.
+ */
+export interface VaultEnvelope {
+  v: number;
+  kdf: KdfParams;
+  verifier: { ct: number[]; iv: number[] };
+  createdAt: number;
+  updatedAt: number;
+}
+
 // Secret key record (encrypted at rest)
 export interface KeyRecord {
   id: string; // uuid (stable internal id)
@@ -16,7 +105,20 @@ export interface KeyRecord {
   pubkey: string; // hex
   ct: number[]; // AES-GCM ciphertext (private key) as byte array for storage
   iv: number[]; // 12-byte IV
-  salt: number[]; // KDF salt
+  /**
+   * Legacy KDF salt. Present only on unversioned records, where the key was
+   * encrypted directly under a per-record password-derived key. Removed once
+   * the record has been migrated to the envelope.
+   */
+  salt?: number[];
+  /**
+   * Format version. Absent means a legacy record; see VAULT_VERSION.
+   */
+  v?: number;
+  /**
+   * The record's DEK, wrapped under the vault KEK. Present on v:1 records.
+   */
+  wrappedDek?: { ct: number[]; iv: number[] };
   createdAt: number; // epoch seconds
   lastUsedAt?: number;
   isSelected?: boolean; // active key

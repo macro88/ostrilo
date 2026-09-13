@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import {
   WebCryptoAesGcm,
-  NoblePbkdf2,
+  VaultKdf,
   NobleSchnorr,
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
@@ -41,7 +41,7 @@ describe("Security Testing", () => {
     keyVault = new KeyVaultService(
       storage,
       WebCryptoAesGcm,
-      NoblePbkdf2,
+      VaultKdf,
       NobleSchnorr
     );
   });
@@ -68,20 +68,24 @@ describe("Security Testing", () => {
       const record1 = keys.find(k => k.id === key1.id)!;
       const record2 = keys.find(k => k.id === key2.id)!;
 
-      // Verify different salts
-      expect(record1.salt).not.toEqual(record2.salt);
-      
-      // Verify different IVs  
+      // The KDF salt now lives on the vault envelope, not on each record: one
+      // password derivation serves the whole vault, and each record gets its
+      // own data-encryption key instead of its own derivation.
+      const envelope = (await keyVault.getEnvelope())!;
+      expect(envelope).toBeDefined();
+      expect(envelope.kdf.salt).toHaveLength(16);
+      expect(record1.salt, "v:1 records carry no per-record KDF salt").toBeUndefined();
+      expect(record2.salt).toBeUndefined();
+
+      // Each record still gets a unique IV and a unique wrapped DEK.
       expect(record1.iv).not.toEqual(record2.iv);
+      expect(record1.iv).toHaveLength(12); // AES-GCM uses a 12-byte IV
+      expect(record2.iv).toHaveLength(12);
+      expect(record1.wrappedDek!.ct).not.toEqual(record2.wrappedDek!.ct);
+      expect(record1.wrappedDek!.iv).not.toEqual(record2.wrappedDek!.iv);
 
       // Verify different ciphertext (even with same password)
       expect(record1.ct).not.toEqual(record2.ct);
-
-      // Verify salt and IV lengths (should be 16 bytes each for AES-GCM)
-      expect(record1.salt).toHaveLength(16);
-      expect(record1.iv).toHaveLength(12); // AES-GCM uses 12-byte IV
-      expect(record2.salt).toHaveLength(16);
-      expect(record2.iv).toHaveLength(12);
     });
 
     it("creates secure non-deterministic signatures", async () => {
@@ -175,7 +179,7 @@ describe("Security Testing", () => {
         new KeyVaultService(
           createMemoryStorage(),
           WebCryptoAesGcm,
-          NoblePbkdf2,
+          VaultKdf,
           NobleSchnorr
         );
 
@@ -213,9 +217,14 @@ describe("Security Testing", () => {
       const record1 = keys.find(k => k.id === key1.id)!;
       const record2 = keys.find(k => k.id === key2.id)!;
 
-      // Different salts should result in different derived keys
-      // and thus different ciphertext even with same password
-      expect(record1.salt).not.toEqual(record2.salt);
+      // The vault salt is drawn fresh per vault, so two installations using
+      // the same password derive different KEKs and share no precomputation.
+      const envelope = (await keyVault.getEnvelope())!;
+      expect(envelope.kdf.salt).toHaveLength(16);
+      expect(envelope.kdf.salt.some((b) => b !== 0)).toBe(true);
+
+      // Within a vault, each record still encrypts under its own DEK, so the
+      // ciphertexts differ even though the password and KEK are shared.
       expect(record1.ct).not.toEqual(record2.ct);
 
       // Both should unlock with same password
@@ -349,10 +358,16 @@ describe("Security Testing", () => {
       // Should not contain nsec format (private key)
       expect(storageString).not.toMatch(/nsec1[a-z0-9]+/);
       
-      // Should contain encrypted data fields
+      // Should contain encrypted data fields. The per-record KDF salt is gone:
+      // a v:1 record carries its ciphertext, its IV, and its DEK wrapped under
+      // the vault KEK. The salt lives once, on the envelope.
+      expect(storedRecord.v).toBe(1);
       expect(storedRecord.ct).toBeDefined(); // ciphertext
-      expect(storedRecord.salt).toBeDefined();
       expect(storedRecord.iv).toBeDefined();
+      expect(storedRecord.wrappedDek).toBeDefined();
+      expect(storedRecord.wrappedDek.ct).toBeDefined();
+      expect(storedRecord.wrappedDek.iv).toBeDefined();
+      expect(storedRecord.salt).toBeUndefined();
       
       // Should contain public information
       expect(storedRecord.id).toBe(keyRecord.id);

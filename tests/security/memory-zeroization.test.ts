@@ -45,6 +45,11 @@ import type { SecretBytes } from "@/application/ports/crypto";
 
 const NON_ZERO_PATTERN = 0xab;
 
+const hexOf = (u: Uint8Array) =>
+  Array.from(u)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
 /** Retains the byte storage behind a view, so a view swap cannot hide a miss. */
 function retain(buf: Uint8Array) {
   const storage = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
@@ -85,20 +90,6 @@ function memoryStorage() {
   };
 }
 
-/** A record whose ciphertext is irrelevant: the fake AEAD decides the outcome. */
-function keyRecord(id: string) {
-  return {
-    id,
-    label: id,
-    pubkey: "a".repeat(64),
-    salt: Array.from(new Uint8Array(16).fill(7)),
-    iv: Array.from(new Uint8Array(12).fill(8)),
-    ct: Array.from(new Uint8Array(32).fill(9)),
-    createdAt: 0,
-    isSelected: true,
-  };
-}
-
 describe("Memory zeroization (real buffers, not call counts)", () => {
   let derivedKeys: ReturnType<typeof retain>[];
   let decryptedKeys: ReturnType<typeof retain>[];
@@ -119,33 +110,77 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
    */
   function fakeKdf() {
     return {
-      async deriveKey(): Promise<SecretBytes> {
+      async deriveKey(password: string): Promise<SecretBytes> {
+        // Must actually depend on the password: otherwise a wrong password
+        // would still open the verifier and the "rejects on bad password"
+        // tests would pass for the wrong reason.
         const buf = makeSecret(NON_ZERO_PATTERN);
+        const pw = new TextEncoder().encode(password);
+        for (let i = 0; i < pw.length; i++) buf[i % buf.length] ^= pw[i];
         derivedKeys.push(retain(buf));
         return buf;
       },
     };
   }
 
+  /**
+   * A real-behaviour in-memory AEAD. It genuinely round-trips, so the service's
+   * envelope logic (verifier check, DEK wrap/unwrap, pubkey verification) runs
+   * for real; only the cryptography is replaced. Ciphertexts are tagged with
+   * their key and AAD so a mismatch rejects, exactly as AES-GCM would.
+   */
   function fakeAead(opts: { decryptRejects?: boolean } = {}) {
+    const vault = new Map<string, Uint8Array>();
+    let seq = 0;
+    const tag = (k: Uint8Array, aad: Uint8Array) =>
+      `${hexOf(k)}|${hexOf(aad)}`;
+
     return {
-      async importKey(): Promise<CryptoKey> {
-        return {} as CryptoKey;
+      async importKey(raw: SecretBytes): Promise<CryptoKey> {
+        // Snapshot the key bytes: the caller zeroizes `raw` right after, and a
+        // real CryptoKey would have copied them internally anyway.
+        return { __k: Uint8Array.from(raw) } as unknown as CryptoKey;
       },
-      async encrypt(): Promise<SecretBytes> {
-        return makeSecret(0x11);
+      async encrypt(
+        key: CryptoKey,
+        _iv: SecretBytes,
+        data: SecretBytes,
+        aad: SecretBytes
+      ): Promise<SecretBytes> {
+        const k = (key as unknown as { __k: Uint8Array }).__k;
+        const handle = `ct${seq++}`;
+        vault.set(`${handle}:${tag(k, aad)}`, Uint8Array.from(data));
+        const out = new Uint8Array(32) as SecretBytes;
+        new TextEncoder().encodeInto(handle, out);
+        return out;
       },
-      async decrypt(): Promise<SecretBytes> {
+      async decrypt(
+        key: CryptoKey,
+        _iv: SecretBytes,
+        data: SecretBytes,
+        aad: SecretBytes
+      ): Promise<SecretBytes> {
         if (opts.decryptRejects) throw new Error("decrypt failed");
-        const buf = makeSecret(0x5c);
-        decryptedKeys.push(retain(buf));
+        const k = (key as unknown as { __k: Uint8Array }).__k;
+        const handle = new TextDecoder().decode(data).replace(/\0+$/, "");
+        const found = vault.get(`${handle}:${tag(k, aad)}`);
+        if (!found) throw new Error("aead_auth_failed");
+        const buf = Uint8Array.from(found) as SecretBytes;
+        if (buf.byteLength === 32) decryptedKeys.push(retain(buf));
         return buf;
       },
     };
   }
 
+  // Derives a DISTINCT pubkey per secret key, so multi-key vaults do not all
+  // collide on the duplicate-pubkey check, and so pubkey verification is a
+  // real check rather than a tautology.
   const fakeSchnorr = {
-    getPublicKey: () => new Uint8Array(32).fill(3),
+    getPublicKey: (sk: Uint8Array) => {
+      const out = new Uint8Array(32);
+      for (let i = 0; i < 32; i++) out[i] = (sk[i] ?? 0) ^ 0x5a;
+      return out;
+    },
     sign: () => new Uint8Array(64).fill(4),
   };
 
@@ -161,55 +196,70 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
   }
 
   describe("unlock", () => {
-    it("zeroizes the derived key after a successful unlock", async () => {
-      const { svc, maps } = service();
-      maps.local.set("encryptedKeys", [keyRecord("k1")]);
+    it("zeroizes the key-encryption key after a successful unlock", async () => {
+      const { svc } = service();
+      await svc.generateKey("correct horse battery staple", "k1");
+      derivedKeys.length = 0; // ignore the derivations from setup
 
       await svc.unlock("correct horse battery staple");
 
-      expect(derivedKeys).toHaveLength(1);
-      // Guard against a trivial pass: prove it was non-zero at handoff.
-      expect(derivedKeys[0].isAllPattern(NON_ZERO_PATTERN)).toBe(false);
-      expect(derivedKeys[0].isAllZero()).toBe(true);
+      expect(derivedKeys.length).toBeGreaterThanOrEqual(1);
+      for (const d of derivedKeys) {
+        // Guard against a trivial pass: prove it was non-zero at handoff.
+        expect(d.isAllPattern(NON_ZERO_PATTERN)).toBe(false);
+        expect(d.isAllZero()).toBe(true);
+      }
     });
 
-    it("zeroizes the derived key when AEAD decrypt rejects", async () => {
-      const { svc, maps } = service({ decryptRejects: true });
-      maps.local.set("encryptedKeys", [keyRecord("k1")]);
+    it("zeroizes the KEK when the vault cannot be opened", async () => {
+      const { svc } = service();
+      await svc.generateKey("pw", "k1");
+      derivedKeys.length = 0;
 
-      await expect(svc.unlock("wrong")).rejects.toThrow("decrypt failed");
+      await expect(svc.unlock("wrong-password")).rejects.toThrow();
 
-      expect(derivedKeys).toHaveLength(1);
-      expect(derivedKeys[0].isAllZero()).toBe(true);
+      expect(derivedKeys.length).toBeGreaterThanOrEqual(1);
+      for (const d of derivedKeys) expect(d.isAllZero()).toBe(true);
     });
 
-    it("zeroizes one derived key per record, for every record", async () => {
-      const { svc, maps } = service();
-      maps.local.set("encryptedKeys", [
-        keyRecord("k1"),
-        keyRecord("k2"),
-        keyRecord("k3"),
-      ]);
+    it("derives exactly ONE key regardless of how many keys the vault holds", async () => {
+      // This is the property that makes a memory-hard KDF affordable. The
+      // previous design derived once per record, so a five-key vault paid five
+      // times the cost and Argon2id was unaffordable by construction.
+      const { svc } = service();
+      await svc.generateKey("pw", "k1");
+      await svc.importKey("11".repeat(32), "pw", "k2");
+      await svc.importKey("22".repeat(32), "pw", "k3");
+      derivedKeys.length = 0;
 
       await svc.unlock("pw");
 
-      expect(derivedKeys).toHaveLength(3);
-      for (const d of derivedKeys) expect(d.isAllZero()).toBe(true);
+      expect(
+        derivedKeys,
+        "unlock must derive the KEK once for the whole vault, not once per key record"
+      ).toHaveLength(1);
+      expect(derivedKeys[0].isAllZero()).toBe(true);
     });
   });
 
   describe("lock", () => {
     it("zeroizes every unlocked private key, and signing then fails", async () => {
-      const { svc, maps } = service();
-      maps.local.set("encryptedKeys", [keyRecord("k1"), keyRecord("k2")]);
+      const { svc } = service();
+      await svc.generateKey("pw", "k1");
+      await svc.importKey("33".repeat(32), "pw", "k2");
+      decryptedKeys.length = 0;
 
       await svc.unlock("pw");
 
-      // The decrypted buffers are held by the service while unlocked.
-      expect(decryptedKeys).toHaveLength(2);
-      for (const d of decryptedKeys) {
-        expect(d.isAllZero()).toBe(false); // non-zero while unlocked
-      }
+      // Every 32-byte decrypt is captured, which includes the wrapped-DEK
+      // unwraps as well as the private keys. The DEKs are already cleared by
+      // the time unlock returns, so the ones still non-zero here are exactly
+      // the private keys the service is holding open.
+      const live = decryptedKeys.filter((d) => !d.isAllZero());
+      expect(
+        live.length,
+        "two keys were unlocked, so two private-key buffers should be live"
+      ).toBe(2);
 
       await svc.lock();
 
@@ -282,8 +332,7 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
 
   describe("encryptPrivateKey and revealKey", () => {
     it("zeroizes the derived key on the import path", async () => {
-      const { svc, maps } = service();
-      maps.local.set("encryptedKeys", []);
+      const { svc } = service();
 
       await svc.importKey("11".repeat(32), "pw", "imported");
 
@@ -292,22 +341,16 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
     });
 
     it("zeroizes the derived key when revealKey rejects on a bad password", async () => {
-      const { suite, maps } = memoryStorage();
-      maps.local.set("encryptedKeys", [keyRecord("k1")]);
-      maps.sync.set("appSettings", { selectedKeyId: "k1" });
-      const svc = new KeyVaultService(
-        suite as never,
-        fakeAead({ decryptRejects: true }) as never,
-        fakeKdf() as never,
-        fakeSchnorr as never
-      );
+      const { svc } = service();
+      const rec = await svc.generateKey("pw", "k1");
+      derivedKeys.length = 0;
 
-      await expect(svc.revealKey("wrong-password", "k1")).rejects.toThrow(
+      await expect(svc.revealKey("wrong-password", rec.id)).rejects.toThrow(
         "incorrect_password"
       );
 
-      expect(derivedKeys).toHaveLength(1);
-      expect(derivedKeys[0].isAllZero()).toBe(true);
+      expect(derivedKeys.length).toBeGreaterThanOrEqual(1);
+      for (const d of derivedKeys) expect(d.isAllZero()).toBe(true);
     });
   });
 
@@ -373,8 +416,8 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
     }
 
     it("does not retain the password on the service after unlock", async () => {
-      const { svc, maps } = service();
-      maps.local.set("encryptedKeys", [keyRecord("k1")]);
+      const { svc } = service();
+      await svc.generateKey(PASSWORD, "k1");
 
       await svc.unlock(PASSWORD);
 
@@ -382,8 +425,7 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
     });
 
     it("does not retain the password after generateKey", async () => {
-      const { svc, maps } = service();
-      maps.local.set("encryptedKeys", []);
+      const { svc } = service();
 
       await svc.generateKey(PASSWORD, "k");
 
@@ -394,8 +436,7 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
       // A separate instance: the stub schnorr returns a constant pubkey, so
       // reusing the vault from the previous case would trip the
       // key_already_exists duplicate check rather than testing retention.
-      const { svc, maps } = service();
-      maps.local.set("encryptedKeys", []);
+      const { svc } = service();
 
       await svc.importKey("22".repeat(32), PASSWORD, "k2");
 
@@ -404,7 +445,7 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
 
     it("never writes the password into any storage area", async () => {
       const { svc, maps } = service();
-      maps.local.set("encryptedKeys", [keyRecord("k1")]);
+      await svc.generateKey(PASSWORD, "k1");
 
       await svc.unlock(PASSWORD);
 

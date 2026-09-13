@@ -39,7 +39,7 @@ import {
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import {
   WebCryptoAesGcm,
-  NoblePbkdf2,
+  VaultKdf,
   NobleSchnorr,
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
@@ -93,7 +93,7 @@ afterEach(() => {
 
 /**
  * PBKDF2-HMAC-SHA256, c = 100,000, dkLen = 32 - the parameters both
- * `NoblePbkdf2.deriveKey` and `deriveKeyFromPassword` hard-code.
+ * `VaultKdf.deriveKey` and `deriveKeyFromPassword` hard-code.
  *
  * Each expected value was computed once with OpenSSL, not with the function
  * under test. Reproduce with:
@@ -131,11 +131,16 @@ const PBKDF2_VECTORS = [
 
 describe("Entropy - Part A: PBKDF2 known-answer tests", () => {
   for (const vector of PBKDF2_VECTORS) {
-    it(`NoblePbkdf2.deriveKey reproduces the OpenSSL value: ${vector.name}`, async () => {
-      const derived = await NoblePbkdf2.deriveKey(
-        vector.password,
-        fromHex(vector.saltHex)
-      );
+    it(`VaultKdf.deriveKey reproduces the OpenSSL value: ${vector.name}`, async () => {
+      // These known-answer values were computed at PBKDF2 c=100,000, which is
+      // what the legacy on-disk format used. Passing the parameters explicitly
+      // keeps the vectors meaningful now that the KDF dispatches on recorded
+      // parameters rather than a code constant.
+      const derived = await VaultKdf.deriveKey(vector.password, {
+        alg: "pbkdf2-sha256",
+        c: 100_000,
+        salt: Array.from(fromHex(vector.saltHex)),
+      });
       expect(derived).toHaveLength(32);
       expect(toHex(derived)).toBe(vector.expectedHex);
     });
@@ -152,7 +157,11 @@ describe("Entropy - Part A: PBKDF2 known-answer tests", () => {
 
   it("the two derivation paths agree byte for byte", async () => {
     const salt = fromHex(PBKDF2_VECTORS[0].saltHex);
-    const viaPort = await NoblePbkdf2.deriveKey("shared-password", salt);
+    const viaPort = await VaultKdf.deriveKey("shared-password", {
+      alg: "pbkdf2-sha256",
+      c: 100_000,
+      salt: Array.from(salt),
+    });
     const viaDomain = await deriveKeyFromPassword("shared-password", salt);
     expect(toHex(viaPort)).toBe(toHex(viaDomain));
   });
@@ -230,7 +239,7 @@ describe("Entropy - Part B: key material comes from the platform CSPRNG", () => 
     const vault = new KeyVaultService(
       createMemoryStorage(),
       WebCryptoAesGcm,
-      NoblePbkdf2,
+      VaultKdf,
       NobleSchnorr
     );
     const draws = observePlatformCsprng();
@@ -244,22 +253,30 @@ describe("Entropy - Part B: key material comes from the platform CSPRNG", () => 
     // meaning rather than an exact sequence, so an added or removed incidental
     // draw elsewhere in the path cannot break this for a non-entropy reason.
     const sizes = draws.map((draw) => draw.requestedBytes);
-    expect(sizes).toContain(16); // PBKDF2 salt
+    expect(sizes).toContain(16); // KDF salt for the vault envelope
     expect(sizes).toContain(12); // AES-GCM IV
 
-    // The real invariant: exactly one 32-byte request, and the key that was
-    // stored is the bytes the platform returned for it. Deriving the public
-    // key from those bytes has to reproduce the stored pubkey.
+    // The real invariant is identity, not a draw count: the key that was
+    // stored must BE the bytes the platform returned. Deriving the public key
+    // from the first 32-byte draw has to reproduce the stored pubkey.
+    //
+    // Deliberately not asserting an exact number of 32-byte draws. Under the
+    // envelope design generateKey draws 32 bytes twice - once for the private
+    // key, once for the record's data-encryption key - and pinning that count
+    // would couple this test to an implementation detail that has nothing to
+    // do with where the entropy comes from.
     const keyDraws = draws.filter((draw) => draw.requestedBytes === 32);
     expect(
-      keyDraws,
-      "KeyVaultService.generateKey must take its private key from a single " +
-        "32-byte crypto.getRandomValues request"
-    ).toHaveLength(1);
+      keyDraws.length,
+      "generateKey must request its private key from crypto.getRandomValues"
+    ).toBeGreaterThanOrEqual(1);
     const expectedPubkey = toHex(
       schnorr.getPublicKey(keyDraws[0].returnedBytes)
     );
-    expect(record.pubkey).toBe(expectedPubkey);
+    expect(
+      record.pubkey,
+      "the stored pubkey must derive from the exact bytes the platform CSPRNG returned"
+    ).toBe(expectedPubkey);
   });
 
   it("generatePrivateKey throws when crypto.getRandomValues is missing, with no fallback", () => {
@@ -282,7 +299,7 @@ describe("Entropy - Part B: key material comes from the platform CSPRNG", () => 
     const vault = new KeyVaultService(
       storage,
       WebCryptoAesGcm,
-      NoblePbkdf2,
+      VaultKdf,
       NobleSchnorr
     );
     vi.stubGlobal("crypto", cryptoWithoutGetRandomValues());
