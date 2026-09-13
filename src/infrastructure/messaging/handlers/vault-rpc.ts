@@ -6,12 +6,20 @@ import {
   KeyInputSchema,
   LabelSchema,
   KeyIdSchema,
-  HashHexSchema,
 } from "@/infrastructure/validation/schemas";
 
 /**
  * RPC handler for vault-related operations
- * Handles: vault.unlock, vault.lock, vault.generate, vault.import, vault.select, vault.sign, vault.export, vault.reveal, keys.list
+ * Handles: vault.unlock, vault.lock, vault.generate, vault.import, vault.select, vault.reveal, keys.list
+ *
+ * Deliberately NOT handled:
+ * - vault.export: returned the raw nsec with no password, no consent and no
+ *   activity-log entry, and had no caller. vault.reveal is the supported
+ *   path; it re-verifies the password before releasing any key material.
+ * - vault.sign: signed any 32-byte value with no origin, no policy check and
+ *   no approval - a blind signing oracle - and had no caller. Signing goes
+ *   through nostr.signEvent, which forces the pubkey, recomputes the event id
+ *   and evaluates policy first.
  */
 export class VaultRpcHandler implements RpcModule {
   async handleRequest(
@@ -33,12 +41,6 @@ export class VaultRpcHandler implements RpcModule {
 
       case "vault.select":
         return this.handleSelect(message, context);
-
-      case "vault.sign":
-        return this.handleSign(message, context);
-
-      case "vault.export":
-        return this.handleExport(message, context);
 
       case "vault.reveal":
         return this.handleReveal(message, context);
@@ -249,53 +251,6 @@ export class VaultRpcHandler implements RpcModule {
 
     await context.vault.selectKey(message.id);
     return { ok: true, data: null };
-  }
-
-  private async handleSign(
-    message: Extract<RpcRequest, { type: "vault.sign" }>,
-    context: ServiceContext
-  ): Promise<RpcResponse> {
-    // Validate hash hex
-    const hashValidation = HashHexSchema.safeParse(message.hashHex);
-    if (!hashValidation.success) {
-      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_HASH, {
-        details: hashValidation.error.issues[0]?.message,
-        method: message.type,
-      });
-    }
-
-    // Validate key ID if provided
-    if (message.keyId !== undefined) {
-      const keyIdValidation = KeyIdSchema.safeParse(message.keyId);
-      if (!keyIdValidation.success) {
-        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
-          details: keyIdValidation.error.issues[0]?.message,
-          method: message.type,
-        });
-      }
-    }
-
-    const data = await context.vault.sign(message.hashHex, message.keyId);
-    return { ok: true, data };
-  }
-
-  private async handleExport(
-    message: Extract<RpcRequest, { type: "vault.export" }>,
-    context: ServiceContext
-  ): Promise<RpcResponse> {
-    // Validate key ID if provided
-    if (message.keyId !== undefined) {
-      const keyIdValidation = KeyIdSchema.safeParse(message.keyId);
-      if (!keyIdValidation.success) {
-        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
-          details: keyIdValidation.error.issues[0]?.message,
-          method: message.type,
-        });
-      }
-    }
-
-    const data = await context.vault.exportKey(message.keyId);
-    return { ok: true, data };
   }
 
   private async handleReveal(

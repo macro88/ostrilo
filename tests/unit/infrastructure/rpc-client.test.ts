@@ -60,8 +60,8 @@ describe("RPC client", () => {
       error: RPC_ERROR_CODES.LOCKED,
     });
 
-    await expect(rpc({ type: "vault.export" } as any)).rejects.toThrow(
-      "rpc:vault.export:locked"
+    await expect(rpc({ type: "vault.reveal" } as any)).rejects.toThrow(
+      "rpc:vault.reveal:locked"
     );
   });
 });

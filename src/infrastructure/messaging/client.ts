@@ -42,7 +42,26 @@ export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
         | RpcResponse
         | undefined;
 
-      console.log("[CLIENT] Received response for", method, ":", res);
+      // Status only, NEVER the response body.
+      //
+      // This line used to log `res` in full. The responses that pass through
+      // here include vault.reveal -> {nsec, hex} and, before it was changed,
+      // crypto.parsePrivateKey -> the raw 32-byte secret scalar. So revealing a
+      // key for backup wrote it in cleartext into the extension page's console,
+      // where it stayed in the message buffer for the life of the document -
+      // defeating the care taken elsewhere to hold the key in a ref and null it.
+      // The background side already logged method and status only; this is the
+      // client matching it.
+      console.log(
+        "[CLIENT] Received response for",
+        method,
+        ":",
+        res && typeof res === "object" && "ok" in res
+          ? (res as RpcResponse).ok
+            ? "ok"
+            : (res as Extract<RpcResponse, { ok: false }>).error?.data?.errorCode
+          : "malformed"
+      );
 
       // More detailed error diagnostics
       if (!res) {
@@ -65,7 +84,14 @@ export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
       const legacyError = typeof err === "string" ? err : "unknown_error";
       throw new Error(`rpc:${method}:${legacyError}`);
     } catch (e: any) {
-      console.log("[CLIENT] RPC error for", method, ":", e);
+      // Machine error code and method, not the thrown object: a thrown error
+      // can carry a payload, and this runs in the page realm.
+      console.log(
+        "[CLIENT] RPC error for",
+        method,
+        ":",
+        e instanceof RpcClientError ? e.errorCode : "error"
+      );
       // Preserve original error if it's already formatted
       if (e?.message?.startsWith?.(`rpc:${method}:`)) {
         throw e;
@@ -166,20 +192,7 @@ export async function getLockState() {
   });
 }
 
-export async function signHash(hashHex: string, keyId?: string) {
-  return rpc<{ sigHex: string; keyId: string }>({
-    type: "vault.sign",
-    hashHex,
-    keyId,
-  });
-}
 
-export async function exportKey(keyId?: string) {
-  return rpc<{ nsec: string; hex: string }>({
-    type: "vault.export",
-    keyId,
-  });
-}
 
 export async function revealKey(password: string, keyId?: string) {
   return rpc<{ nsec: string; hex: string }>({
@@ -289,8 +302,12 @@ export async function evaluatePasswordStrength(password: string) {
   });
 }
 
+/**
+ * Validates a private key WITHOUT the bytes ever crossing the message bus.
+ * Resolves `{ valid: true }` or rejects with `invalid_key_input`.
+ */
 export async function parsePrivateKey(keyInput: string) {
-  return rpc<Uint8Array>({
+  return rpc<{ valid: true }>({
     type: "crypto.parsePrivateKey",
     keyInput,
   });

@@ -58,10 +58,26 @@ export class CryptoRpcHandler implements RpcModule {
       });
     }
 
-    // Import the function dynamically to keep it in background only
+    // Return a VERDICT, never the key bytes.
+    //
+    // This used to return `Array.from(privateKey)` - the raw 32-byte secret
+    // scalar - back across the message bus into whichever page called it,
+    // where it landed in a plain JS array that nothing zeroizes and that the
+    // RPC client then logged. The caller only ever needed to know whether the
+    // input was a well-formed private key.
     const { parsePrivateKey } = await import("@/domain/utils/crypto");
-    const privateKey = parsePrivateKey(message.keyInput);
-    // Convert Uint8Array to Array for JSON serialization
-    return { ok: true, data: Array.from(privateKey) };
+    let sk: Uint8Array | null = null;
+    try {
+      sk = parsePrivateKey(message.keyInput);
+      return { ok: true, data: { valid: true as const } };
+    } catch (error) {
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_KEY_INPUT, {
+        details:
+          error instanceof Error ? error.message : "Invalid private key",
+        method: message.type,
+      });
+    } finally {
+      if (sk) sk.fill(0);
+    }
   }
 }

@@ -90,7 +90,9 @@ export function OnboardingImportKey({
   // Import state - Use refs to avoid storing secret in React state
   const privateKeyRef = useRef<HTMLInputElement>(null);
   const privateKeyValueRef = useRef<string | null>(null);
-  const parsedKeyRef = useRef<Uint8Array | null>(null);
+  // Holds only whether the input validated. The private key bytes are never
+  // sent to the UI: crypto.parsePrivateKey returns a verdict.
+  const parsedKeyRef = useRef<boolean>(false);
 
   const validateImport = async () => {
     const keyInput = privateKeyRef.current?.value.trim();
@@ -105,9 +107,8 @@ export function OnboardingImportKey({
     }
 
     try {
-      const parsed = await parsePrivateKey(keyInput);
-      // Convert array back to Uint8Array since RPC returns arrays
-      parsedKeyRef.current = new Uint8Array(parsed);
+      await parsePrivateKey(keyInput);
+      parsedKeyRef.current = true;
       privateKeyValueRef.current = keyInput;
       dispatch({ type: "setImportError", value: "" });
       dispatch({ type: "setHasParsedKey", value: true });
@@ -181,7 +182,7 @@ export function OnboardingImportKey({
         privateKeyRef.current.value = "";
       }
       privateKeyValueRef.current = null;
-      parsedKeyRef.current = null;
+      parsedKeyRef.current = false;
       dispatch({ type: "setHasParsedKey", value: false });
       dispatch({ type: "setStep", value: "success" });
     } catch (error) {

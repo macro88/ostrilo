@@ -331,11 +331,11 @@ describe("Crypto Security", () => {
 describe("Memory Security", () => {
   it("should clear sensitive data", async () => {
     await vault.unlock("password");
-    const signature = await vault.sign("message");
+    const signature = await vault.signEvent(unsignedEvent);
     expect(signature).toBeDefined();
 
     await vault.lock();
-    await expect(vault.sign("message")).rejects.toThrow();
+    await expect(vault.signEvent(unsignedEvent)).rejects.toThrow();
   });
 });
 ```

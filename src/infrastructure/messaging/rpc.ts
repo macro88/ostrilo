@@ -33,11 +33,9 @@ export type RpcRequest =
   | { type: "vault.select"; id: string }
   | { type: "vault.renameKey"; id: string; label: string }
   | { type: "vault.deleteKey"; id: string }
-  | { type: "vault.export"; keyId?: string }
   | { type: "vault.reveal"; keyId?: string; password: string }
   | { type: "keys.list" }
   | { type: "state.getLock" }
-  | { type: "vault.sign"; hashHex: string; keyId?: string }
   | { type: "settings.get" }
   | { type: "settings.update"; patch: AppSettingsPatch }
   | { type: "policy.setOrigin"; origin: string; patch: OriginPolicyPatch }
