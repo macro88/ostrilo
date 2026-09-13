@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures/extension";
 import type { Page } from "./fixtures/extension";
 
-const PASSWORD = "Ostrilo-Remembered-Allow-E2E-2026!";
+const PASSWORD = "Juniper-Bramble-Saffron-2026!";
 const DAPP_ORIGIN = "http://127.0.0.1:8765";
 const DAPP_URL = `${DAPP_ORIGIN}/test-page.html`;
 
@@ -75,9 +75,17 @@ async function completeCreateKeyOnboarding(page: Page) {
   await page.getByRole("button", { name: /Create Key/i }).click();
   await expect(page.getByRole("heading", { name: "Backup Your Key" }))
     .toBeVisible({ timeout: 15_000 });
+  // Finish is gated on backup verification, not on the acknowledgement
+  // checkbox. Reveal, read the key, and re-enter its last 8 characters.
+  await page.getByRole("button", { name: "Reveal Private Key" }).click();
+  await page.getByRole("button", { name: "Show private key" }).click();
+  const nsec = await page.getByLabel("Private Key (nsec format)").inputValue();
   await page
     .getByRole("checkbox", { name: "Confirm private key backup" })
     .check();
+  await page.getByLabel("Last 8 characters of your nsec").fill(nsec.slice(-8));
+  await page.getByRole("button", { name: "Check", exact: true }).click();
+  await expect(page.getByText("Backup verified")).toBeVisible();
   await page.getByRole("button", { name: "Finish" }).click();
 
   await expect(

@@ -1,0 +1,252 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NO_AUTOFILL_PROPS } from "@/components/ui/password-input";
+import { AlertTriangle, Check } from "lucide-react";
+import {
+  BACKUP_DECRYPT_FAILURE_MESSAGE,
+  openKeyBackup,
+  parseKeyBackupEnvelope,
+} from "../../backup/key-backup-envelope";
+
+/**
+ * How much of the nsec the user re-enters.
+ *
+ * Full 63-character re-entry is disproportionate: users would paste, which
+ * proves nothing, or give up. Eight characters is enough to catch a
+ * transcription that went wrong at the end, which is where it goes wrong.
+ */
+export const VERIFICATION_SUFFIX_LENGTH = 8;
+
+interface BackupVerificationProps {
+  /** `true` when a suffix matches the nsec the flow holds. Never gets the key. */
+  checkSuffix: (value: string) => boolean;
+  /** `true` when a decrypted backup is the key this flow just created. */
+  checkNsec: (nsec: string) => boolean;
+  verified: boolean;
+  onVerified: () => void;
+  /** Offered only once a file has actually been written in this flow. */
+  fileRouteAvailable: boolean;
+}
+
+type Route = "transcription" | "file";
+
+/**
+ * Evidence that the key was actually recorded, replacing a checkbox.
+ *
+ * What this can and cannot prove, stated plainly because the design should not
+ * oversell itself: no in-browser check can establish that a key was written on
+ * paper, and within the clipboard window the transcription route can be
+ * satisfied from the clipboard. The goal is to defeat accidental click-through,
+ * which is the common failure. A determined bypass is the user's own risk.
+ *
+ * The file route is the stronger of the two: it establishes that the file
+ * exists, that it is readable, and that the user knows its passphrase - which
+ * is exactly what recovery needs.
+ */
+export function BackupVerification({
+  checkSuffix,
+  checkNsec,
+  verified,
+  onVerified,
+  fileRouteAvailable,
+}: BackupVerificationProps) {
+  const [route, setRoute] = useState<Route>("transcription");
+  const [suffix, setSuffix] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const fileTextRef = useRef<string | null>(null);
+  const [fileName, setFileName] = useState("");
+
+  // Clears the verification input when the check passes and when the step is
+  // left, so the tail of the nsec does not sit in state after it is useful.
+  useEffect(() => {
+    if (verified) {
+      setSuffix("");
+      setPassphrase("");
+      fileTextRef.current = null;
+    }
+  }, [verified]);
+
+  useEffect(() => {
+    return () => {
+      fileTextRef.current = null;
+    };
+  }, []);
+
+  const handleCheckSuffix = useCallback(() => {
+    if (checkSuffix(suffix.trim())) {
+      setError("");
+      setSuffix("");
+      onVerified();
+      return;
+    }
+    setError(
+      `That is not the last ${VERIFICATION_SUFFIX_LENGTH} characters of your key. Reveal it again and check.`
+    );
+  }, [checkSuffix, onVerified, suffix]);
+
+  const handleFileSelected = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+      setError("");
+      setFileName(file.name);
+      fileTextRef.current = await file.text();
+    },
+    []
+  );
+
+  const handleCheckFile = useCallback(async () => {
+    const text = fileTextRef.current;
+    if (!text) {
+      setError("Choose the backup file you saved.");
+      return;
+    }
+    const envelope = parseKeyBackupEnvelope(text);
+    if (!envelope) {
+      setError("That file is not an Ostrilo encrypted backup.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      // The plaintext lives for exactly this comparison and is never rendered.
+      const payload = await openKeyBackup(envelope, passphrase);
+      const matches = checkNsec(payload.nsec);
+      payload.nsec = "";
+      payload.hex = "";
+      if (!matches) {
+        setError("That backup holds a different key.");
+        return;
+      }
+      setError("");
+      setPassphrase("");
+      fileTextRef.current = null;
+      onVerified();
+    } catch {
+      setError(BACKUP_DECRYPT_FAILURE_MESSAGE);
+    } finally {
+      setBusy(false);
+    }
+  }, [checkNsec, onVerified, passphrase]);
+
+  if (verified) {
+    return (
+      <div className="seal-chip seal-chip-success flex" role="status">
+        <Check className="h-4 w-4" />
+        Backup verified
+      </div>
+    );
+  }
+
+  return (
+    <div className="ink-card space-y-3 p-4">
+      <div>
+        <h3 className="text-sm font-semibold">Check your backup</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Prove the key really was recorded before you leave this screen.
+        </p>
+      </div>
+
+      {fileRouteAvailable && (
+        <div className="flex gap-2" role="tablist" aria-label="Verification method">
+          <Button
+            variant={route === "transcription" ? "secondary" : "ghost"}
+            size="sm"
+            role="tab"
+            aria-selected={route === "transcription"}
+            onClick={() => {
+              setRoute("transcription");
+              setError("");
+            }}
+          >
+            Re-enter the key
+          </Button>
+          <Button
+            variant={route === "file" ? "secondary" : "ghost"}
+            size="sm"
+            role="tab"
+            aria-selected={route === "file"}
+            onClick={() => {
+              setRoute("file");
+              setError("");
+            }}
+          >
+            Use the saved file
+          </Button>
+        </div>
+      )}
+
+      {route === "transcription" || !fileRouteAvailable ? (
+        <div className="space-y-2">
+          <Label htmlFor="backupVerification">
+            Last {VERIFICATION_SUFFIX_LENGTH} characters of your nsec
+          </Label>
+          <Input
+            id="backupVerification"
+            type="text"
+            value={suffix}
+            maxLength={VERIFICATION_SUFFIX_LENGTH}
+            // Pasting the answer proves nothing about a backup.
+            onPaste={(event) => event.preventDefault()}
+            onChange={(event) => setSuffix(event.target.value)}
+            className="font-mono"
+            {...NO_AUTOFILL_PROPS}
+          />
+          <Button
+            variant="secondary"
+            onClick={handleCheckSuffix}
+            disabled={suffix.trim().length !== VERIFICATION_SUFFIX_LENGTH}
+            className="w-full"
+          >
+            Check
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label
+            htmlFor="backupFile"
+            className="inline-flex cursor-pointer items-center rounded-lg border border-input bg-card px-3 py-2 text-sm font-semibold hover:bg-accent hover:text-accent-foreground"
+          >
+            {fileName || "Choose backup file"}
+          </Label>
+          <input
+            id="backupFile"
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={handleFileSelected}
+            aria-label="Choose backup file"
+          />
+          <Label htmlFor="backupFilePassphrase">Backup passphrase</Label>
+          <Input
+            id="backupFilePassphrase"
+            type="password"
+            value={passphrase}
+            onChange={(event) => setPassphrase(event.target.value)}
+            {...NO_AUTOFILL_PROPS}
+          />
+          <Button
+            variant="secondary"
+            onClick={handleCheckFile}
+            disabled={busy || !fileName || passphrase.length === 0}
+            className="w-full"
+          >
+            {busy ? "Checking" : "Check file"}
+          </Button>
+        </div>
+      )}
+
+      {error && (
+        <div className="seal-chip seal-chip-danger flex" role="alert">
+          <AlertTriangle className="h-4 w-4" />
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}

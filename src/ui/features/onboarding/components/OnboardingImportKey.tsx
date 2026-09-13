@@ -1,5 +1,7 @@
 import { describeViolation } from "@/domain/utils/password-policy";
-import { useReducer, useRef } from "react";
+import { useCallback, useReducer, useRef } from "react";
+import { useEncryptedBackupImport } from "../backup/useEncryptedBackupImport";
+import type { KeyBackupPayload } from "../backup/key-backup-envelope";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import { useOnboarding } from "../hooks/useOnboarding";
 import {
@@ -94,6 +96,25 @@ export function OnboardingImportKey({
   // Holds only whether the input validated. The private key bytes are never
   // sent to the UI: crypto.parsePrivateKey returns a verdict.
   const parsedKeyRef = useRef<boolean>(false);
+
+  /**
+   * A key recovered from an encrypted backup lands in the same input a typed
+   * nsec does, so it takes the same path: validated, then re-encrypted under
+   * the master password the user chooses on the next step.
+   */
+  const handleRecoveredBackup = useCallback(
+    (payload: KeyBackupPayload) => {
+      if (privateKeyRef.current) {
+        privateKeyRef.current.value = payload.nsec;
+      }
+      if (payload.name && !state.keyName) {
+        dispatch({ type: "setKeyName", value: payload.name });
+      }
+    },
+    [state.keyName]
+  );
+
+  const backupImport = useEncryptedBackupImport(handleRecoveredBackup);
 
   const validateImport = async () => {
     const keyInput = privateKeyRef.current?.value.trim();
@@ -204,14 +225,26 @@ export function OnboardingImportKey({
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    const fileName = file.name;
 
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
 
+        // An Ostrilo encrypted backup is not readable without its passphrase,
+        // so it cannot be dropped straight into the key field the way the old
+        // plaintext export could. Hold the ciphertext and ask.
+        if (backupImport.offerFile(content, fileName)) {
+          dispatch({ type: "setImportError", value: "" });
+          return;
+        }
+
         try {
           const keyData = JSON.parse(content);
+          // Reads the plaintext export this build no longer writes. Files that
+          // already exist on disk still have to be importable; the requirement
+          // is that nothing produces another one.
           if (keyData.privateKey) {
             if (privateKeyRef.current) {
               privateKeyRef.current.value = keyData.privateKey;
@@ -228,7 +261,7 @@ export function OnboardingImportKey({
             privateKeyRef.current.value = content.trim();
           }
         }
-      } catch (error) {
+      } catch {
         dispatch({ type: "setImportError", value: "Failed to read file" });
       }
     };
@@ -282,12 +315,19 @@ export function OnboardingImportKey({
             importError={state.importError}
             isLoading={isLoading}
             privateKeyRef={privateKeyRef}
+            backupFileName={backupImport.fileName}
+            backupPassphrase={backupImport.passphrase}
+            backupError={backupImport.error}
+            backupBusy={backupImport.busy}
             onBack={onBack}
             onKeyNameChange={(value) =>
               dispatch({ type: "setKeyName", value })
             }
             onTogglePrivateKey={() => dispatch({ type: "togglePrivateKey" })}
             onFileUpload={handleFileUpload}
+            onBackupPassphraseChange={backupImport.setPassphrase}
+            onUnlockBackup={() => void backupImport.unlock()}
+            onCancelBackup={backupImport.cancel}
             onContinue={handleImportKey}
           />
         )}

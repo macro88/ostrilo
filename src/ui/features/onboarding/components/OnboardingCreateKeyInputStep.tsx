@@ -1,7 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
+import {
+  NO_AUTOFILL_PROPS,
+  PasswordInput,
+} from "@/components/ui/password-input";
 import { ArrowLeft, ArrowRight, Key } from "lucide-react";
 import { SealMark } from "@/components/common/SealMark";
 
@@ -43,11 +46,15 @@ export function OnboardingCreateKeyInputStep({
       <div className="ink-card space-y-4 p-4">
         <div>
           <Label htmlFor="keyName">Key Name</Label>
+          {/* The key name is not secret, but it sits in the same form as the
+              master password and is the field a manager would offer to fill
+              first. Nothing here belongs in an autofill store. */}
           <Input
             id="keyName"
             placeholder="My Nostr Key"
             value={keyName}
             onChange={(e) => onKeyNameChange(e.target.value)}
+            {...NO_AUTOFILL_PROPS}
           />
         </div>
 
