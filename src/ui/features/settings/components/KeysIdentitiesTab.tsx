@@ -14,6 +14,8 @@ import {
 import { CreateKeyForm } from "@/ui/components/dialogs/CreateKeyForm";
 import { ImportKeyForm } from "@/ui/components/dialogs/ImportKeyForm";
 import { useState } from "react";
+import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
+import { useReauth } from "@/ui/hooks/useReauth";
 
 type AddKeyMode = "choice" | "create" | "import" | null;
 
@@ -21,15 +23,32 @@ async function handleRename(keyId: string, newLabel: string) {
   await renameKey(keyId, newLabel);
 }
 
-async function handleDelete(keyId: string) {
-  await deleteKey(keyId);
-}
 
 export function KeysIdentitiesTab() {
   const { keys, selectedUnlockedKey, selectKey } = useKeyManager();
   const pubkeys = keys.map((key) => key.publicKeyHex);
   const { profiles } = useProfileMetadata(pubkeys);
   const [addKeyMode, setAddKeyMode] = useState<AddKeyMode>(null);
+  const reauth = useReauth();
+
+  // Deleting a key is irreversible, and for a key that was never backed up
+  // it destroys the identity. The background refuses the deletion without a
+  // verified password regardless of what this dialog does.
+  const handleDelete = async (keyId: string) => {
+    const label = keys.find((k) => k.id === keyId)?.label ?? "this key";
+    try {
+      await reauth.request(
+        {
+          action: `Delete “${label}”.`,
+          consequence:
+            "If this key is not backed up, the identity is gone for good.",
+        },
+        (password) => deleteKey(keyId, password)
+      );
+    } catch {
+      // Cancelled. Nothing was deleted.
+    }
+  };
 
   const handleSelectKey = async (keyId: string) => {
     try {
@@ -77,6 +96,8 @@ export function KeysIdentitiesTab() {
         onRename={handleRename}
         onDelete={handleDelete}
       />
+
+      <ReauthDialog {...reauth.dialogProps} />
 
       {/* Add Key Dialog */}
       <Dialog open={addKeyMode !== null} onOpenChange={(open) => !open && setAddKeyMode(null)}>

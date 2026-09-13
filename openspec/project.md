@@ -241,7 +241,7 @@ Ostrilo implements key management for the Nostr protocol, a decentralized social
 - Private keys MUST be encrypted at rest with AES-GCM
 - Plaintext keys MUST be zeroized from memory on lock
 - No remote code execution - CSP prevents eval, no remote scripts
-- Manifest: MV3 on BOTH Chrome and Firefox. Permissions are `storage` and `windows` on both targets, plus `sidePanel` on Chrome only (WXT adds it automatically for the MV3 sidepanel entrypoint). An explicit Content Security Policy is declared; see `docs/extension-manifest.md`.
+- Manifest: MV3 on BOTH Chrome and Firefox. Permissions are `storage`, `windows` and `alarms` on both targets, plus `sidePanel` on Chrome only (WXT adds it automatically for the MV3 sidepanel entrypoint). `alarms` is required because a `setTimeout` does not survive MV3 worker eviction, so it is the only way auto-lock can fire at all. An explicit Content Security Policy is declared; see `docs/extension-manifest.md`.
 - All crypto operations use audited libraries (@noble/curves, @noble/hashes, Web Crypto API)
 
 **Browser Extension Constraints:**

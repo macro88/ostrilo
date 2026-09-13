@@ -13,7 +13,7 @@ Ostrilo is a browser extension that provides secure key management for the Nostr
 - **Policy-Based Security**: Configure per-origin trust levels and signing policies
 - **Dedicated Options Page**: Manage advanced settings in a full browser tab while keeping quick controls in the popup
 - **Cross-Browser Support**: Compatible with Chrome, Firefox, and Safari
-- **Session Management**: Automatic locking with configurable timeouts
+- **Session Management**: The vault locks automatically after a period of inactivity you choose (1-60 minutes, 5 by default), enforced by a `chrome.alarms` alarm plus a deadline checked on every access
 - **Multi-Relay Integration**: Query multiple Nostr relays in parallel for profile data
 - **Developer-Friendly**: Clean APIs for integration with Nostr applications
 
@@ -106,6 +106,20 @@ Ostrilo implements multiple layers of security:
 - **Input Validation**: Comprehensive validation of all inputs
 - **Policy Enforcement**: Granular permission controls
 - **Session Isolation**: Proper isolation between unlock sessions
+- **Fails Closed**: Absent, malformed or unreadable lock state reports the
+  vault as locked, so a vault that has never been opened discloses nothing
+- **Re-Authentication**: Deleting a key, raising an origin to `high` trust,
+  granting a signing session, and changing either security timeout each
+  require the password again, verified in the background
+
+### Why the extension asks for the `alarms` permission
+
+An MV3 service worker is evicted after roughly thirty seconds of idle time,
+and `setTimeout` does not survive that. A timer-based auto-lock would
+silently never fire. `chrome.alarms` is the only scheduler that outlives
+worker termination, so it is what wakes the worker to lock the vault. The
+deadline is also re-checked on every access to the lock state, so a missed
+alarm delays the lock rather than cancelling it.
 
 For security issues, please review our security testing documentation and follow responsible disclosure practices.
 

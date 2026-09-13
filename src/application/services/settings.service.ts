@@ -1,5 +1,15 @@
 import type { StorageSuite } from "@/application/ports/storage";
-import { DEFAULT_RELAY_URLS, type AppSettingsV1, type Theme } from "@/domain/types";
+import {
+  AUTO_LOCK_BOUNDS,
+  DEFAULT_RELAY_URLS,
+  normalizeAutoLockMinutes,
+  type AppSettingsV1,
+  type Theme,
+} from "@/domain/types";
+import {
+  DEFAULT_SESSION_TTL_MINUTES,
+  resolveSessionTTLMinutes,
+} from "@/domain/policy/session-grants";
 import {
   DEFAULT_MEDIUM_ALLOW_KINDS,
   getEffectiveMediumAllowKinds,
@@ -45,6 +55,22 @@ export class SettingsService {
       };
       changed = next.mediumAllowKinds !== current.mediumAllowKinds;
 
+      // Normalize the session bounds on READ, not only on write. These live
+      // in storage.sync, so a value written by an older build - or by another
+      // profile signed into the same account - arrives here without ever
+      // having passed through AppSettingsPatchSchema. A stored 0, which used
+      // to mean "never auto-lock", becomes the shipped default.
+      const autoLock = normalizeAutoLockMinutes(current.autoLockMinutes);
+      if (autoLock !== current.autoLockMinutes) {
+        next.autoLockMinutes = autoLock;
+        changed = true;
+      }
+      const ttl = resolveSessionTTLMinutes(current.sessionTTLMinutes);
+      if (ttl !== current.sessionTTLMinutes) {
+        next.sessionTTLMinutes = ttl;
+        changed = true;
+      }
+
       if (isLegacyDefaultRelaySet(current.relays)) {
         next.relays = [...DEFAULT_RELAY_URLS];
         changed = true;
@@ -64,7 +90,7 @@ export class SettingsService {
       // Preserve known fields if present
       theme: (existing?.theme ?? d.theme) as Theme,
       sidePanel: existing?.sidePanel ?? d.sidePanel,
-      autoLockMinutes: existing?.autoLockMinutes ?? d.autoLockMinutes,
+      autoLockMinutes: normalizeAutoLockMinutes(existing?.autoLockMinutes),
       relays: Array.isArray(existing?.relays)
         ? (existing!.relays as string[])
         : d.relays,
@@ -78,10 +104,7 @@ export class SettingsService {
         typeof existing?.maxActivityEntries === "number"
           ? existing.maxActivityEntries
           : d.maxActivityEntries,
-      sessionTTLMinutes:
-        typeof existing?.sessionTTLMinutes === "number"
-          ? (existing!.sessionTTLMinutes as number)
-          : d.sessionTTLMinutes,
+      sessionTTLMinutes: resolveSessionTTLMinutes(existing?.sessionTTLMinutes),
       selectedKeyId: existing?.selectedKeyId ?? d.selectedKeyId,
       __version: "settings.v1",
     };
@@ -95,6 +118,17 @@ export class SettingsService {
     if (Array.isArray(patch.mediumAllowKinds)) {
       safePatch.mediumAllowKinds = getEffectiveMediumAllowKinds(
         patch.mediumAllowKinds
+      );
+    }
+    // The patch schema bounds these at the RPC edge; this bounds them for
+    // every in-process caller too, so there is one enforced range rather than
+    // one per entry point.
+    if ("autoLockMinutes" in patch) {
+      safePatch.autoLockMinutes = normalizeAutoLockMinutes(patch.autoLockMinutes);
+    }
+    if ("sessionTTLMinutes" in patch) {
+      safePatch.sessionTTLMinutes = resolveSessionTTLMinutes(
+        patch.sessionTTLMinutes
       );
     }
 
@@ -118,11 +152,11 @@ export function defaultSettings(): AppSettingsV1 {
     __version: "settings.v1",
     theme: "system" as Theme,
     sidePanel: false,
-    autoLockMinutes: 15,
+    autoLockMinutes: AUTO_LOCK_BOUNDS.default,
     relays: [...DEFAULT_RELAY_URLS],
     origins: [],
     mediumAllowKinds: [...DEFAULT_MEDIUM_ALLOW_KINDS],
-    sessionTTLMinutes: 0,
+    sessionTTLMinutes: DEFAULT_SESSION_TTL_MINUTES,
     maxActivityEntries: 50,
     selectedKeyId: undefined,
   };

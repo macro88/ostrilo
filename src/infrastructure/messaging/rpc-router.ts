@@ -79,6 +79,91 @@ export function isTrustedExtensionSender(
   return s.url.startsWith(extensionOrigin);
 }
 
+/**
+ * RPC methods that must remain reachable while the vault is LOCKED.
+ *
+ * Everything else that mutates state or touches keys is refused with `locked`.
+ * The rule is deliberately an allowlist: a new method is lock-gated by default,
+ * so forgetting to think about it fails safe.
+ *
+ * `keys.list` stays reachable because the UI decides between the onboarding
+ * flow and the lock screen by asking whether any key exists; gating it would
+ * show a locked user the onboarding flow instead of the unlock prompt.
+ */
+const LOCKED_REACHABLE_METHODS: ReadonlySet<string> = new Set([
+  "vault.unlock",
+  "vault.lock",
+  "state.getLock",
+  "state.touch",
+  "keys.list",
+  "crypto.evaluatePassword",
+  "crypto.parsePrivateKey",
+  // Creating or importing the FIRST key happens before there is a vault to
+  // unlock, and both verify the password themselves.
+  "vault.generate",
+  "vault.import",
+  // Reveal re-verifies the password itself, which is a stronger check.
+  "vault.reveal",
+  "settings.get",
+]);
+
+/**
+ * What a locked-reachable method is allowed to DISCLOSE while locked.
+ *
+ * Reachable is not the same as unredacted. The lock screen needs to know
+ * whether any key exists, so that a fresh install shows onboarding rather
+ * than a password prompt - it does not need the labels or the public keys,
+ * and handing those to a locked UI hands them to anyone holding the device.
+ *
+ * Applied in the listener, after the handler runs, so a handler cannot
+ * forget it.
+ */
+const LOCKED_PROJECTIONS: ReadonlyMap<string, (data: unknown) => unknown> =
+  new Map([
+    [
+      "keys.list",
+      (data: unknown) =>
+        Array.isArray(data)
+          ? data.map((k) => ({ id: (k as { id?: string })?.id }))
+          : data,
+    ],
+    [
+      "settings.get",
+      (data: unknown) => {
+        if (!data || typeof data !== "object") return data;
+        const s = data as Record<string, unknown>;
+        // Shape preserved so the UI does not have to special-case a locked
+        // read; the fields that identify the user are emptied, not omitted.
+        return {
+          __version: s.__version,
+          theme: s.theme,
+          sidePanel: s.sidePanel,
+          onboardingCompleted: s.onboardingCompleted,
+          onboardingCompletedAt: s.onboardingCompletedAt,
+          autoLockMinutes: s.autoLockMinutes,
+          sessionTTLMinutes: s.sessionTTLMinutes,
+          maxActivityEntries: s.maxActivityEntries,
+          relays: [],
+          origins: [],
+          mediumAllowKinds: [],
+          selectedKeyId: undefined,
+        };
+      },
+    ],
+  ]);
+
+/** The redaction applied to this method while the vault is locked, if any. */
+export function lockedProjectionFor(
+  method: string
+): ((data: unknown) => unknown) | undefined {
+  return LOCKED_PROJECTIONS.get(method);
+}
+
+/** True when this method may run against a locked vault. */
+export function isLockedReachable(method: string): boolean {
+  return LOCKED_REACHABLE_METHODS.has(method);
+}
+
 /** Resolves the namespace of an RPC message type, or undefined. */
 export function namespaceOf(messageType: unknown): string | undefined {
   if (typeof messageType !== "string") return undefined;
@@ -209,13 +294,15 @@ export function createRpcMessageListener(
       }
     }
 
-    // Handle request asynchronously
-    (async () => {
+    const dispatch = async (project?: (data: unknown) => unknown) => {
       try {
-        const result = await router.handleRequest(
+        let result = await router.handleRequest(
           message as RpcRequest,
           context
         );
+        if (project && result.ok) {
+          result = { ...result, data: project(result.data) };
+        }
         const status = result.ok ? "success" : result.error.data.errorCode;
         console.log("[RPC] Sending response for", message.type, ":", status);
         sendResponse(result);
@@ -229,15 +316,40 @@ export function createRpcMessageListener(
           }
         );
         console.error("[RPC] Error handling", message.type, error);
-        console.log(
-          "[RPC] Error handling",
-          message.type,
-          ":",
-          errorResult.error.data.errorCode
-        );
         sendResponse(errorResult);
       }
-    })();
+    };
+
+    // Lock gate. Applied here so every privileged namespace is covered by one
+    // rule rather than each handler remembering to check, and so it is an
+    // ALLOWLIST: a new method is lock-gated by default and forgetting to think
+    // about it fails safe.
+    //
+    // The options page had no lock check at all. With the vault locked it
+    // exposed every key label and pubkey, every origin policy, the relay list
+    // and the activity log, and it permitted mutation - which let brief
+    // physical access raise an origin to high trust that then signs silently
+    // the next time the user unlocks.
+    const gated = !isLockedReachable(message.type);
+    const projection = lockedProjectionFor(message.type);
+    if (gated || projection) {
+      void (async () => {
+        const lockState = await context.vault.getLockState();
+        if (lockState.isLocked && gated) {
+          console.log("[RPC] Refused while locked:", message.type);
+          sendResponse(
+            createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+              method: message.type,
+            })
+          );
+          return;
+        }
+        await dispatch(lockState.isLocked ? projection : undefined);
+      })();
+      return true;
+    }
+
+    void dispatch();
 
     return true; // Keep message port open for async response
   };

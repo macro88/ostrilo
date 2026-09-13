@@ -1,4 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
+import { requireReauth } from "@/infrastructure/messaging/reauth";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
@@ -442,6 +443,11 @@ export class VaultRpcHandler implements RpcModule {
         method: message.type,
       });
     }
+
+    // Deleting a key is irreversible and, for a key that is not backed up,
+    // final. An unlocked vault is not enough authority for that.
+    const reauth = await requireReauth(message.password, message.type, context);
+    if (reauth) return reauth;
 
     try {
       const data = await context.vault.deleteKey(message.id);

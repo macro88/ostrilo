@@ -32,16 +32,33 @@ export type RpcRequest =
   | { type: "vault.import"; keyInput: string; password: string; label?: string }
   | { type: "vault.select"; id: string }
   | { type: "vault.renameKey"; id: string; label: string }
-  | { type: "vault.deleteKey"; id: string }
+  | { type: "vault.deleteKey"; id: string; password: string }
   | { type: "vault.reveal"; keyId?: string; password: string }
   | { type: "keys.list" }
   | { type: "state.getLock" }
+  | { type: "state.touch" }
   | { type: "settings.get" }
-  | { type: "settings.update"; patch: AppSettingsPatch }
-  | { type: "policy.setOrigin"; origin: string; patch: OriginPolicyPatch }
-  | { type: "policy.setKindRule"; origin: string; kind: number; mode: string }
+  | { type: "settings.update"; patch: AppSettingsPatch; password?: string }
+  | {
+      type: "policy.setOrigin";
+      origin: string;
+      patch: OriginPolicyPatch;
+      password?: string;
+    }
+  | {
+      type: "policy.setKindRule";
+      origin: string;
+      kind: number;
+      mode: string;
+      password?: string;
+    }
   | { type: "policy.clearSession"; origin: string }
-  | { type: "policy.setSession"; origin: string; enabled: boolean }
+  | {
+      type: "policy.setSession";
+      origin: string;
+      enabled: boolean;
+      password?: string;
+    }
   | { type: "policy.removeOrigin"; origin: string }
   | { type: "crypto.evaluatePassword"; password: string; label?: string }
   | { type: "crypto.parsePrivateKey"; keyInput: string }

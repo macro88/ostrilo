@@ -1,5 +1,6 @@
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { AUTO_LOCK_BOUNDS, normalizeAutoLockMinutes } from "@/domain/types";
 
 interface AutoLockSliderProps {
   value: number;
@@ -12,24 +13,27 @@ interface AutoLockSliderProps {
 export function AutoLockSlider({
   value,
   onChange,
-  min = 0,
-  max = 60,
-  step = 5,
+  min = AUTO_LOCK_BOUNDS.min,
+  max = AUTO_LOCK_BOUNDS.max,
+  step = 1,
 }: AutoLockSliderProps) {
   const handleChange = (values: number[]) => {
     onChange(values[0]);
   };
 
+  // A stored 0 used to render as "Never", and nothing enforced the timeout, so
+  // the label was true for the wrong reason. Both are gone: the value is
+  // normalized for display exactly as the background normalizes it for use.
+  const minutes = normalizeAutoLockMinutes(value);
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label>Auto-lock after inactivity</Label>
-        <span className="text-sm text-muted-foreground">
-          {value === 0 ? "Never" : `${value} min`}
-        </span>
+        <span className="text-sm text-muted-foreground">{minutes} min</span>
       </div>
       <Slider
-        value={[value]}
+        value={[minutes]}
         onValueChange={handleChange}
         max={max}
         min={min}
@@ -37,6 +41,10 @@ export function AutoLockSlider({
         className="w-full"
         aria-label="Auto-lock timeout"
       />
+      <p className="text-xs text-muted-foreground">
+        Measured from your last activity in the extension, not from when you
+        unlocked.
+      </p>
     </div>
   );
 }

@@ -254,7 +254,12 @@ describe("message listener enforces the boundary", () => {
     router.registerModule("vault", spyModule);
     router.registerModule("nostr", spyModule);
     return {
-      listener: mod.createRpcMessageListener(router, {} as never),
+      listener: mod.createRpcMessageListener(
+        router,
+        // The listener now also applies a lock gate, so the context needs a
+        // vault. Unlocked here: this suite is about the SENDER boundary.
+        { vault: { getLockState: async () => ({ isLocked: false }) } } as never
+      ),
       reached,
     };
   }
@@ -318,5 +323,89 @@ describe("message listener enforces the boundary", () => {
     const res = await collect(listener, { type: "vault.unlock" }, undefined);
     expect(res.ok).toBe(false);
     expect(reached).toHaveLength(0);
+  });
+});
+
+describe("lock gate on the RPC surface", () => {
+  it("is an allowlist, so a new method is lock-gated by default", async () => {
+    vi.resetModules();
+    const { isLockedReachable } = await import(
+      "@/infrastructure/messaging/rpc-router"
+    );
+
+    // Reachable while locked, because the user needs them to get unlocked.
+    for (const m of [
+      "vault.unlock",
+      "state.getLock",
+      "keys.list",
+      "vault.reveal", // re-verifies the password itself
+    ]) {
+      expect(isLockedReachable(m), `${m} must work while locked`).toBe(true);
+    }
+
+    // Everything else refused. These are the ones the options page exposed.
+    for (const m of [
+      "policy.setOrigin",
+      "policy.setPerKindRule",
+      "settings.update",
+      "activity.getRecent",
+      "profile.get",
+      "approval.resolve",
+      "vault.deleteKey",
+      "vault.select",
+      "nostr.signEvent",
+      "some.futureMethod",
+    ]) {
+      expect(
+        isLockedReachable(m),
+        `SECURITY REGRESSION: ${m} became reachable while the vault is locked`
+      ).toBe(false);
+    }
+  });
+
+  it("refuses a privileged method while locked, without invoking the handler", async () => {
+    vi.resetModules();
+    vi.doMock("wxt/browser", () => ({
+      browser: {
+        runtime: {
+          id: RUNTIME_ID,
+          getURL: (p: string) => `${ORIGIN}${p.replace(/^\//, "")}`,
+        },
+      },
+    }));
+    const mod = await import("@/infrastructure/messaging/rpc-router");
+    const router = new mod.RpcRouter();
+    const reached: string[] = [];
+    router.registerModule("policy", {
+      handleRequest: async (m: { type: string }) => {
+        reached.push(m.type);
+        return { ok: true as const, data: null };
+      },
+    });
+
+    const listener = mod.createRpcMessageListener(router, {
+      vault: { getLockState: async () => ({ isLocked: true }) },
+    } as never);
+
+    const res = await new Promise<{ ok: boolean; code?: string }>((resolve) => {
+      (listener as (m: unknown, s: unknown, r: (x: unknown) => void) => unknown)(
+        { type: "policy.setOrigin", origin: "https://evil.example" },
+        { id: RUNTIME_ID, url: `${ORIGIN}options.html` },
+        (r: unknown) => {
+          const x = r as { ok: boolean; error?: { data?: { errorCode?: string } } };
+          resolve({ ok: x.ok, code: x.error?.data?.errorCode });
+        }
+      );
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe(RPC_ERROR_CODES.LOCKED);
+    expect(
+      reached,
+      "the handler must not run for a locked vault"
+    ).toHaveLength(0);
+
+    vi.doUnmock("wxt/browser");
+    vi.resetModules();
   });
 });

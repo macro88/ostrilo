@@ -1,8 +1,11 @@
 import { Shield } from "lucide-react";
+import type { TrustLevel } from "@/domain/types";
 import { OriginPolicyTable } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
 import { EmptyState } from "@/ui/components/common/EmptyState";
+import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
+import { useReauth } from "@/ui/hooks/useReauth";
 
 export function PermissionsTab() {
   const {
@@ -11,7 +14,9 @@ export function PermissionsTab() {
     setSessionGrant,
     removeOriginPolicy,
     setPerKindRule,
+    updateOriginTrustLevel,
   } = useAppSettings();
+  const reauth = useReauth();
 
   if (isLoading) {
     return (
@@ -21,10 +26,71 @@ export function PermissionsTab() {
     );
   }
 
-  const handleSetPerKindRule = (origin: string, kind: number, rule: string) => {
-    // Validate rule is a valid mode
-    if (rule === "allow" || rule === "deny" || rule === "ask") {
-      setPerKindRule(origin, kind, rule);
+  // `allow` and an enabled session grant are standing permissions to sign
+  // without prompting. Both are password-gated in the background; `deny`,
+  // `ask` and turning a grant off only ever add friction, so they are free.
+  const handleSetPerKindRule = async (
+    origin: string,
+    kind: number,
+    rule: string
+  ) => {
+    if (rule !== "allow" && rule !== "deny" && rule !== "ask") return;
+    if (rule !== "allow") {
+      await setPerKindRule(origin, kind, rule);
+      return;
+    }
+    try {
+      await reauth.request(
+        {
+          action: `Always allow kind ${kind} for ${origin}.`,
+          consequence: "Events of that kind will be signed without a prompt.",
+        },
+        (password) => setPerKindRule(origin, kind, rule, password)
+      );
+    } catch {
+      // Cancelled. The rule is unchanged.
+    }
+  };
+
+  // Raising to `high` is a standing grant to sign the high-trust kinds
+  // without prompting, so it costs a password. Lowering trust does not:
+  // a user revoking access should not have to find their password first.
+  const handleUpdateTrust = async (origin: string, trustLevel: string) => {
+    if (trustLevel !== "high") {
+      await updateOriginTrustLevel(origin, trustLevel as TrustLevel);
+      return;
+    }
+    try {
+      await reauth.request(
+        {
+          action: `Raise ${origin} to high trust.`,
+          consequence:
+            "It will sign the high-trust event kinds without prompting you again.",
+        },
+        (password) =>
+          updateOriginTrustLevel(origin, trustLevel as TrustLevel, password)
+      );
+    } catch {
+      // Cancelled. The trust level is unchanged.
+    }
+  };
+
+  const handleToggleSession = async (origin: string, enabled: boolean) => {
+    if (!enabled) {
+      await setSessionGrant(origin, false);
+      return;
+    }
+    try {
+      await reauth.request(
+        {
+          action: `Grant ${origin} a signing session.`,
+          consequence:
+            "It will sign every unprotected kind without prompting until the session expires or the vault locks.",
+        },
+        (password) => setSessionGrant(origin, true, password)
+      );
+    } catch {
+      // Cancelled. No grant was created.
     }
   };
 
@@ -55,11 +121,15 @@ export function PermissionsTab() {
       ) : (
         <OriginPolicyTable
           origins={settings.origins}
+          mediumAllowKinds={settings.mediumAllowKinds}
+          onUpdateTrust={handleUpdateTrust}
           onRemove={removeOriginPolicy}
-          onToggleSession={setSessionGrant}
+          onToggleSession={handleToggleSession}
           onSetPerKindRule={handleSetPerKindRule}
         />
       )}
+
+      <ReauthDialog {...reauth.dialogProps} />
     </div>
   );
 }

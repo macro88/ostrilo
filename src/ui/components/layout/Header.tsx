@@ -5,6 +5,7 @@ import { useAppSettings } from "@/hooks/useAppSettings";
 import { SealMark } from "@/components/common/SealMark";
 import { KeySelector } from "./KeySelector";
 import { Logo } from "../logo/Logo";
+import { normalizeAutoLockMinutes } from "@/domain/types";
 
 interface HeaderProps {
   onAddKey?: () => void;
@@ -13,10 +14,12 @@ interface HeaderProps {
 export function Header({ onAddKey }: HeaderProps) {
   const { lock } = useKeyManager();
   const { settings } = useAppSettings();
-  const lockLabel =
-    settings.autoLockMinutes === 0
-      ? "Unlocked"
-      : `Unlocked · ${settings.autoLockMinutes}m`;
+  // Always shows a timeout now. The `=== 0` branch rendered a bare
+  // "Unlocked", which was the honest label only because nothing enforced
+  // the timeout in the first place.
+  const lockLabel = `Unlocked · ${normalizeAutoLockMinutes(
+    settings.autoLockMinutes
+  )}m`;
 
   return (
     <header className="flex w-full max-w-full items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">

@@ -1,4 +1,5 @@
 import { browser } from "wxt/browser";
+import { normalizeAutoLockMinutes } from "@/domain/types";
 import { createStorageSuite } from "@/infrastructure/storage/adapters";
 import {
   WebCryptoAesGcm,
@@ -261,6 +262,23 @@ export default defineBackground(() => {
   // Create approval queue service
   const approvalQueue = new ApprovalQueueService();
 
+  // Locking denies whatever is waiting for approval.
+  //
+  // A pending request outlived the session that raised it: the badge kept
+  // its count, the approval window kept its buttons, and approving after a
+  // later unlock signed an event the user had already walked away from.
+  // `clear()` resolves every pending entry as a denial, so the calling page
+  // gets an answer rather than a hang.
+  vault.onLock(() => {
+    approvalQueue.clear();
+    void updateApprovalBadge(0);
+    // Tell every open surface. Best-effort: with no listener this rejects,
+    // and a page that misses it still notices on its next poll.
+    browser.runtime
+      .sendMessage({ __event: BROADCAST_EVENTS.VAULT_LOCKED })
+      .catch(() => {});
+  });
+
   // Set up callback to broadcast queue changes to UI
   approvalQueue.setChangeCallback(() => {
     updateApprovalBadge(approvalQueue.count()).catch((err) => {
@@ -374,6 +392,70 @@ export default defineBackground(() => {
       console.warn("Ostrilo: behavior apply failed", e);
     }
   }
+
+  // ==========================================================================
+  // Auto-lock
+  //
+  // `autoLockMinutes` was a purely cosmetic setting: it drove two sliders and a
+  // header label, and nothing enforced it. There was no chrome.alarms usage
+  // anywhere, no browser.idle, and no timer that called lock(). The only call
+  // to lock() in the whole codebase was the manual button. Meanwhile the README
+  // advertised 'Automatic locking with configurable timeouts'.
+  //
+  // Two mechanisms, deliberately:
+  //   1. An alarm fires and locks. This is the active path.
+  //   2. getLockState() independently compares the stored lastActivity against
+  //      the deadline on every access. This is the safety net: an MV3 worker can
+  //      be evicted with the alarm pending, and a lock that depends only on a
+  //      timer firing is a lock that can silently never happen.
+  //
+  // No key material, password or derived key is persisted to survive worker
+  // termination. Eviction drops the keys, which is the desired outcome.
+  // ==========================================================================
+  const AUTO_LOCK_ALARM = 'ostrilo.autoLock';
+
+  async function armAutoLock(): Promise<void> {
+    const s = await settings.get();
+    const minutes = normalizeAutoLockMinutes(s?.autoLockMinutes);
+    await browser.alarms.clear(AUTO_LOCK_ALARM);
+    // chrome.alarms enforces a minimum period; ask for the deadline but poll at
+    // least once a minute so a short timeout is still honoured promptly by the
+    // deadline check in getLockState().
+    await browser.alarms.create(AUTO_LOCK_ALARM, {
+      delayInMinutes: Math.max(minutes, 1),
+      periodInMinutes: Math.max(Math.min(minutes, 5), 1),
+    });
+  }
+
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== AUTO_LOCK_ALARM) return;
+    // getLockState() locks and zeroizes when the deadline has passed, so the
+    // deadline logic lives in exactly one place.
+    vault
+      .getLockState()
+      .then((state) => {
+        if (state.isLocked) return browser.alarms.clear(AUTO_LOCK_ALARM);
+      })
+      .catch((err) => console.warn('[Background] auto-lock check failed', err));
+  });
+
+  // A fresh browser session starts locked. Session storage is normally cleared
+  // by the browser, but do not rely on that for a security property.
+  const startLocked = async () => {
+    try {
+      await vault.lock();
+      await browser.alarms.clear(AUTO_LOCK_ALARM);
+    } catch (err) {
+      console.warn('[Background] failed to force locked state at startup', err);
+    }
+  };
+  browser.runtime.onStartup.addListener(() => void startLocked());
+  browser.runtime.onInstalled.addListener(() => void startLocked());
+
+  // Re-arm whenever the timeout changes or activity is recorded.
+  void armAutoLock();
+  (globalThis as unknown as { __ostriloArmAutoLock?: () => Promise<void> })
+    .__ostriloArmAutoLock = armAutoLock;
   apply();
   browser.storage.onChanged.addListener((changes) => {
     if (changes.appSettings?.newValue) {
@@ -382,6 +464,11 @@ export default defineBackground(() => {
 
     if ("isDocked" in changes) {
       apply();
+    }
+
+    if (changes.appSettings?.newValue) {
+      // The timeout may have changed; re-arm against the new deadline.
+      void armAutoLock();
     }
   });
 });

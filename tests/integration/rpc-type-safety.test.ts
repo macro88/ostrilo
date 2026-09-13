@@ -71,7 +71,8 @@ describe("RPC Validation Integration", () => {
       const complexSettingsPatch = {
         theme: "system" as const,
         sidePanel: true,
-        autoLockMinutes: 120,
+        // 60 is the ceiling now, not 1440. See AUTO_LOCK_BOUNDS.
+        autoLockMinutes: 60,
         relays: ["wss://relay1.com", "wss://relay2.com"],
         mediumAllowKinds: [0, 1, 6, 1984],
       };

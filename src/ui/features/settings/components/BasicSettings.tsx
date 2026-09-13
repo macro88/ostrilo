@@ -1,4 +1,6 @@
 import { Button } from "@/components/ui/button";
+import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
+import { useReauth } from "@/ui/hooks/useReauth";
 import { Key, Settings as SettingsIcon } from "lucide-react";
 import { Pubkey } from "@/components/common/pubkey";
 import {
@@ -19,6 +21,23 @@ function openOptionsPage() {
 export function BasicSettings() {
   const { settings, isLoading, updateTheme, updateAutoLockMinutes } =
     useAppSettings();
+  const reauth = useReauth();
+
+  // Same gate as the Security tab. The popup is the surface most likely to
+  // be open on an unattended screen, so it is the one that most needs it.
+  const changeAutoLock = async (minutes: number) => {
+    try {
+      await reauth.request(
+        {
+          action: `Change the auto-lock timeout to ${minutes} minutes.`,
+          consequence: "This controls how long an unattended vault stays open.",
+        },
+        (password) => updateAutoLockMinutes(minutes, password)
+      );
+    } catch {
+      // Cancelled.
+    }
+  };
   const { selectedUnlockedKey } = useKeyManager();
 
   // Note: useAppSettings hook already handles storage changes internally via useWxtStorage
@@ -68,8 +87,9 @@ export function BasicSettings() {
       <div className="ink-card p-4">
         <AutoLockSlider
           value={settings.autoLockMinutes}
-          onChange={updateAutoLockMinutes}
+          onChange={changeAutoLock}
         />
+        <ReauthDialog {...reauth.dialogProps} />
       </div>
 
       <Button

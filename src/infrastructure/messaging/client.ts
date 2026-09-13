@@ -183,14 +183,31 @@ export async function renameKey(id: string, label: string) {
   return rpc<null>({ type: "vault.renameKey", id, label });
 }
 
-export async function deleteKey(id: string) {
-  return rpc<{ newSelectedKeyId?: string }>({ type: "vault.deleteKey", id });
+/**
+ * Deletes a key. The password is re-verified in the background.
+ *
+ * Callers should zeroize their copy of `password` as soon as this
+ * resolves; a JS string cannot be wiped, so the practical rule is to drop
+ * the reference and never put it in component state that outlives the
+ * dialog.
+ */
+export async function deleteKey(id: string, password: string) {
+  return rpc<{ newSelectedKeyId?: string }>({
+    type: "vault.deleteKey",
+    id,
+    password,
+  });
 }
 
 export async function getLockState() {
   return rpc<{ isLocked: boolean; selectedKeyId?: string }>({
     type: "state.getLock",
   });
+}
+
+/** Records genuine user activity so the auto-lock deadline moves. */
+export async function touchActivity() {
+  return rpc<null>({ type: "state.touch" });
 }
 
 
@@ -235,10 +252,15 @@ export async function getSettings(forceRefresh = false) {
   return data;
 }
 
-export async function updateSettings(patch: AppSettingsPatch) {
+/** `password` is required only when the patch changes a security timeout. */
+export async function updateSettings(
+  patch: AppSettingsPatch,
+  password?: string
+) {
   const result = await rpc<import("@/domain/types").AppSettingsV1>({
     type: "settings.update",
     patch,
+    password,
   });
 
   // Invalidate cache after update
@@ -265,27 +287,40 @@ export function subscribeSettingsChanged(cb: () => void) {
   return () => browser.runtime.onMessage.removeListener(handler);
 }
 
+/** `password` is required only when the patch raises trust to `high`. */
 export async function policySetOrigin(
   origin: string,
-  patch: OriginPolicyPatch
+  patch: OriginPolicyPatch,
+  password?: string
 ) {
-  return rpc<null>({ type: "policy.setOrigin", origin, patch });
+  return rpc<null>({ type: "policy.setOrigin", origin, patch, password });
 }
 
 export async function policySetKindRule(
   origin: string,
   kind: number,
-  mode: "allow" | "deny" | "ask"
+  mode: "allow" | "deny" | "ask",
+  password?: string
 ) {
-  return rpc<null>({ type: "policy.setKindRule", origin, kind, mode });
+  return rpc<null>({
+    type: "policy.setKindRule",
+    origin,
+    kind,
+    mode,
+    password,
+  });
 }
 
 export async function policyClearSession(origin: string) {
   return rpc<null>({ type: "policy.clearSession", origin });
 }
 
-export async function policySetSession(origin: string, enabled: boolean) {
-  return rpc<null>({ type: "policy.setSession", origin, enabled });
+export async function policySetSession(
+  origin: string,
+  enabled: boolean,
+  password?: string
+) {
+  return rpc<null>({ type: "policy.setSession", origin, enabled, password });
 }
 
 export async function policyRemoveOrigin(origin: string) {

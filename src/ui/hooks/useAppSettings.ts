@@ -109,8 +109,8 @@ export function useAppSettings() {
 
   // Save settings to storage
   const updateSettings = useCallback(
-    async (updates: Partial<AppSettingsV1>) => {
-      await rpcUpdateSettings(updates);
+    async (updates: Partial<AppSettingsV1>, password?: string) => {
+      await rpcUpdateSettings(updates, password);
     },
     []
   );
@@ -130,9 +130,12 @@ export function useAppSettings() {
     [updateSettings]
   );
 
+  // Password-gated in the background: lengthening the timeout buys the next
+  // person at the keyboard time, so it is not a setting an unattended
+  // session can change.
   const updateAutoLockMinutes = useCallback(
-    (autoLockMinutes: number) => {
-      return updateSettings({ autoLockMinutes });
+    (autoLockMinutes: number, password?: string) => {
+      return updateSettings({ autoLockMinutes }, password);
     },
     [updateSettings]
   );
@@ -179,17 +182,18 @@ export function useAppSettings() {
   );
 
   const updateSessionTTLMinutes = useCallback(
-    (sessionTTLMinutes: number) => {
-      return updateSettings({ sessionTTLMinutes });
+    (sessionTTLMinutes: number, password?: string) => {
+      return updateSettings({ sessionTTLMinutes }, password);
     },
     [updateSettings]
   );
 
   // Origin policy management
   const updateOriginPolicy = useCallback(
-    (origin: string, policy: Partial<OriginPolicy>) => {
-      // Delegate mutations to background PolicyService
-      return policySetOrigin(origin, policy);
+    (origin: string, policy: Partial<OriginPolicy>, password?: string) => {
+      // Delegate mutations to background PolicyService. A password is
+      // required there only when the patch raises trust to `high`.
+      return policySetOrigin(origin, policy, password);
     },
     []
   );
@@ -199,28 +203,35 @@ export function useAppSettings() {
   }, []);
 
   const updateOriginTrustLevel = useCallback(
-    (origin: string, trustLevel: TrustLevel) => {
-      return updateOriginPolicy(origin, { trustLevel });
+    (origin: string, trustLevel: TrustLevel, password?: string) => {
+      return updateOriginPolicy(origin, { trustLevel }, password);
     },
     [updateOriginPolicy]
   );
 
   // Per-kind rule helper
   const setPerKindRule = useCallback(
-    (origin: string, kind: number, mode: "allow" | "deny" | "ask") => {
-      return policySetKindRule(origin, kind, mode);
+    (
+      origin: string,
+      kind: number,
+      mode: "allow" | "deny" | "ask",
+      password?: string
+    ) => {
+      return policySetKindRule(origin, kind, mode, password);
     },
     []
   );
 
   // Session grant toggle
   const setSessionGrant = useCallback(
-    async (origin: string, enabled: boolean) => {
+    async (origin: string, enabled: boolean, password?: string) => {
+      // Turning a grant OFF is free. Turning one on allows every
+      // unprotected kind for that origin with no further prompting.
       if (!enabled) return policyClearSession(origin);
       const { policySetSession } = await import(
         "@/infrastructure/messaging/client"
       );
-      return policySetSession(origin, true);
+      return policySetSession(origin, true, password);
     },
     []
   );

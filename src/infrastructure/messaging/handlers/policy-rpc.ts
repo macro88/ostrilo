@@ -1,4 +1,5 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
+import { requireReauth } from "@/infrastructure/messaging/reauth";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
@@ -97,6 +98,18 @@ export class PolicyRpcHandler implements RpcModule {
       });
     }
 
+    // `high` trust signs without prompting from then on. Granting it is a
+    // one-way decision the user will not be reminded of, so it costs a
+    // password. Lowering trust, renaming, and clearing do not.
+    if (validationResult.data.trustLevel === "high") {
+      const reauth = await requireReauth(
+        message.password,
+        message.type,
+        context
+      );
+      if (reauth) return reauth;
+    }
+
     await context.policy.setOriginPolicy(message.origin, validationResult.data);
     return { ok: true, data: null };
   }
@@ -130,6 +143,17 @@ export class PolicyRpcHandler implements RpcModule {
         details: modeValidation.error.issues[0]?.message,
         method: message.type,
       });
+    }
+
+    // `allow` is a standing, silent permission for that kind. `deny` and
+    // `ask` only ever add friction, so they stay free.
+    if (message.mode === "allow") {
+      const reauth = await requireReauth(
+        message.password,
+        message.type,
+        context
+      );
+      if (reauth) return reauth;
     }
 
     await context.policy.setPerKindRule(
@@ -168,6 +192,17 @@ export class PolicyRpcHandler implements RpcModule {
         details: originValidation.error.issues[0]?.message,
         method: message.type,
       });
+    }
+
+    // Enabling a session grant allows every unprotected kind for that
+    // origin with no further prompting. Turning one OFF is free.
+    if (message.enabled) {
+      const reauth = await requireReauth(
+        message.password,
+        message.type,
+        context
+      );
+      if (reauth) return reauth;
     }
 
     await context.policy.setSessionGrant(message.origin, message.enabled);
