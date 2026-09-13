@@ -78,6 +78,65 @@ private async handleNewMethod(
 }
 ```
 
+## Privilege boundary: page-reachable vs UI-only
+
+Namespaces are split in two, and the split is enforced in
+`createRpcMessageListener` **before** any handler or service is touched.
+
+| Class | Namespaces | Reachable from |
+|---|---|---|
+| Page-reachable | `nostr` | a web page, via the content script |
+| UI-only | `vault`, `keys`, `crypto`, `policy`, `settings`, `state`, `approval`, `activity`, `profile` | the extension's own pages only |
+
+Unknown namespaces default to **UI-only**. Adding a namespace does not
+accidentally expose it to the web.
+
+### The sender rule
+
+For a UI-only namespace the sender must satisfy BOTH:
+
+- `sender.id === browser.runtime.id`, and
+- `sender.url` starts with `browser.runtime.getURL("/")`.
+
+Note what is deliberately **not** used: `sender.tab`. The options page is
+`options_ui.open_in_tab: true` and the approval window is created with
+`browser.windows.create`, so both are extension pages that carry a
+`sender.tab`; requiring its absence would break them. And `sender.id` alone is
+insufficient, because this extension's own content script also reports
+`sender.id === browser.runtime.id`. The sender's URL is the usable signal.
+
+A rejected sender gets `unknown_namespace` - the same response an unregistered
+namespace gets - so a caller that is not allowed here learns nothing about what
+exists.
+
+This is defence in depth. The content script already builds its own request
+objects and forwards exactly two methods, so a page cannot name an arbitrary
+RPC type today. But that allowlist lives in a different file from the thing it
+protects, and anyone adding a third forwarded method would inherit the whole
+privileged surface.
+
+### Methods that deliberately do not exist
+
+- **`vault.export`** - returned the raw nsec whenever the vault was unlocked,
+  with no password, no consent and no activity-log entry. Removed. Use
+  `vault.reveal`, which re-verifies the password before releasing anything.
+- **`vault.sign`** - signed any 32-byte value with no origin, no policy
+  evaluation and no approval. Removed. Signing goes through
+  `nostr.signEvent`, which forces the pubkey to the selected key, recomputes
+  the event id rather than trusting a caller-supplied one, and evaluates
+  policy first.
+
+### Logging policy
+
+Log the method name and the status or machine error code. **Never log a
+request payload or a response body.** `vault.reveal` returns an nsec;
+`crypto.parsePrivateKey` used to return raw key bytes. A single
+`console.log(res)` in the RPC client was enough to write a private key into the
+page console, where it stayed for the life of the document.
+
+Error responses carry a fixed `details` string. Thrown error text can contain
+internal paths and state, and the response travels back toward the caller.
+
 ### 3. Register Handler (if new namespace)
 
 If creating a new namespace, register it in `background.ts`:

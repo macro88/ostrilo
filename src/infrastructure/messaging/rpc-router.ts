@@ -1,3 +1,4 @@
+import { browser } from "wxt/browser";
 import type { RpcRequest, RpcResponse } from "./rpc";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "./error-codes";
 import type { KeyVaultService } from "@/application/services/key-vault.service";
@@ -36,8 +37,66 @@ export interface RpcModule {
 /**
  * RPC router that delegates requests to appropriate modules based on namespace
  */
+/**
+ * Namespaces a WEB PAGE may reach, via the content script.
+ *
+ * Everything else is UI-only: reachable from the extension's own pages
+ * (popup, sidepanel, options, approval window) and from nowhere else.
+ *
+ * This is defence in depth. The content script already builds its own request
+ * objects and forwards exactly two methods, so a page cannot name an arbitrary
+ * RPC type today. But that allowlist lives in a different file from the thing
+ * it protects, and anyone adding a third forwarded method would inherit the
+ * entire privileged surface - including the vault. The check belongs next to
+ * the dispatch as well.
+ */
+const PAGE_REACHABLE_NAMESPACES: ReadonlySet<string> = new Set(["nostr"]);
+
+/**
+ * Decides whether a sender may reach a UI-only namespace.
+ *
+ * Note what is NOT used here: `sender.tab`. The options page is
+ * `options_ui.open_in_tab: true` and the approval window is created with
+ * `browser.windows.create`, so BOTH are extension pages that carry a
+ * `sender.tab`. Requiring its absence would break them. `sender.id` alone is
+ * also insufficient: this extension's own content script reports
+ * `sender.id === browser.runtime.id`.
+ *
+ * The usable signal is the sender's URL: an extension page's URL starts with
+ * the extension origin, a content script's does not.
+ */
+export function isTrustedExtensionSender(
+  sender: unknown,
+  runtimeId: string,
+  extensionOrigin: string
+): boolean {
+  if (!sender || typeof sender !== "object") return false;
+  const s = sender as { id?: unknown; url?: unknown };
+  if (typeof s.id !== "string" || s.id !== runtimeId) return false;
+  if (typeof s.url !== "string" || s.url.length === 0) return false;
+  return s.url.startsWith(extensionOrigin);
+}
+
+/** Resolves the namespace of an RPC message type, or undefined. */
+export function namespaceOf(messageType: unknown): string | undefined {
+  if (typeof messageType !== "string") return undefined;
+  const ns = messageType.split(".")[0];
+  return ns ? ns : undefined;
+}
+
+/**
+ * RPC router that delegates requests to appropriate modules based on namespace
+ */
 export class RpcRouter {
-  private modules: Record<string, RpcModule> = {};
+  // A Map, not an object literal: an object literal resolves inherited keys, so
+  // a message type of "__proto__.x" or "constructor.x" found a truthy value on
+  // Object.prototype and passed the existence check before failing later.
+  private modules: Map<string, RpcModule> = new Map();
+
+  /** True when a web page may reach this namespace through the content script. */
+  static isPageReachable(namespace: string): boolean {
+    return PAGE_REACHABLE_NAMESPACES.has(namespace);
+  }
 
   /**
    * Register an RPC module for a specific namespace
@@ -45,7 +104,7 @@ export class RpcRouter {
    * @param module - The RPC module to handle requests for this namespace
    */
   registerModule(namespace: string, module: RpcModule): void {
-    this.modules[namespace] = module;
+    this.modules.set(namespace, module);
   }
 
   /**
@@ -66,7 +125,7 @@ export class RpcRouter {
         return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_REQUEST);
       }
 
-      const module = this.modules[namespace];
+      const module = this.modules.get(namespace);
       if (!module) {
         return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_NAMESPACE, {
           details: namespace,
@@ -75,10 +134,13 @@ export class RpcRouter {
       }
 
       return await module.handleRequest(message, context);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      // Log internally, but do NOT put raw error text on the wire: thrown
+      // messages can carry internal paths and state, and this response travels
+      // back toward the caller.
       console.error("[RPC Router] Error handling request:", error);
       return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
-        details: error?.message ?? String(error),
+        details: "Request could not be handled",
         method: message.type,
       });
     }
@@ -88,7 +150,7 @@ export class RpcRouter {
    * Get list of registered namespaces
    */
   getRegisteredNamespaces(): string[] {
-    return Object.keys(this.modules);
+    return [...this.modules.keys()];
   }
 }
 
@@ -102,6 +164,11 @@ export function createRpcMessageListener(
   router: RpcRouter,
   context: ServiceContext
 ) {
+  // Captured once. browser.runtime.getURL("/") yields the extension origin,
+  // e.g. chrome-extension://<id>/ or moz-extension://<uuid>/.
+  const runtimeId = browser.runtime.id;
+  const extensionOrigin = browser.runtime.getURL("/");
+
   return (
     message: any,
     sender: any,
@@ -116,6 +183,30 @@ export function createRpcMessageListener(
       return false;
     }
 
+    // Privilege boundary, enforced BEFORE any handler or service is touched.
+    //
+    // Only the `nostr` namespace is reachable from a web page. Everything else
+    // - vault, policy, settings, crypto, keys, approval, activity, profile -
+    // requires a sender that is one of the extension's own pages.
+    const namespace = namespaceOf(message.type);
+    if (!namespace) {
+      sendResponse(createRpcErrorResponse(RPC_ERROR_CODES.INVALID_REQUEST));
+      return false;
+    }
+    if (!RpcRouter.isPageReachable(namespace)) {
+      if (!isTrustedExtensionSender(sender, runtimeId, extensionOrigin)) {
+        // Deliberately the same response an unknown namespace gets: a caller
+        // that is not allowed here learns nothing about what exists.
+        console.log("[RPC] Rejected privileged namespace from untrusted sender");
+        sendResponse(
+          createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_NAMESPACE, {
+            method: message.type,
+          })
+        );
+        return false;
+      }
+    }
+
     // Handle request asynchronously
     (async () => {
       try {
@@ -123,24 +214,19 @@ export function createRpcMessageListener(
           message as RpcRequest,
           context
         );
-        const status = result.ok
-          ? "success"
-          : result.error.data.errorCode;
-        console.log(
-          "[RPC] Sending response for",
-          message.type,
-          ":",
-          status
-        );
+        const status = result.ok ? "success" : result.error.data.errorCode;
+        console.log("[RPC] Sending response for", message.type, ":", status);
         sendResponse(result);
-      } catch (error: any) {
+      } catch (error: unknown) {
+        // Method and status only. The raw error is not put on the wire.
         const errorResult: RpcResponse = createRpcErrorResponse(
           RPC_ERROR_CODES.UNKNOWN_METHOD,
           {
-            details: error?.message ?? String(error),
+            details: "Request could not be handled",
             method: message.type,
           }
         );
+        console.error("[RPC] Error handling", message.type, error);
         console.log(
           "[RPC] Error handling",
           message.type,

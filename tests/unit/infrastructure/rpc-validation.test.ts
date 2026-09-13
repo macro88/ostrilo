@@ -130,17 +130,33 @@ describe("RPC Validation", () => {
       }
     });
 
-    it("should reject invalid hash format", async () => {
-      const message = {
-        type: "vault.sign",
-        hashHex: "invalid-hash", // Not 64-char hex
-      } as const;
-
-      const result = await handler.handleRequest(message, mockContext);
+    it("no longer exposes vault.sign at all", async () => {
+      // vault.sign signed any 32-byte value with no origin, no policy check
+      // and no approval. It was removed rather than validated more strictly:
+      // the defect was the method existing, not its input handling. Signing
+      // goes through nostr.signEvent, which forces the pubkey, recomputes the
+      // event id, and evaluates policy before the key is used.
+      const result = await handler.handleRequest(
+        { type: "vault.sign", hashHex: "ab".repeat(32) } as never,
+        mockContext
+      );
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error.data.errorCode).toBe(RPC_ERROR_CODES.INVALID_HASH);
+        expect(result.error.data.errorCode).toBe(RPC_ERROR_CODES.UNKNOWN_METHOD);
+      }
+    });
+
+    it("no longer exposes vault.export at all", async () => {
+      // vault.export returned the raw nsec with no password and no consent.
+      const result = await handler.handleRequest(
+        { type: "vault.export" } as never,
+        mockContext
+      );
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.data.errorCode).toBe(RPC_ERROR_CODES.UNKNOWN_METHOD);
       }
     });
 

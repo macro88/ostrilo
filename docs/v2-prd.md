@@ -129,6 +129,7 @@ Security is the foundation of trust in a signing extension. Users entrust Ostril
 | SEC-015 | Key Derivation Hardening (Argon2id) | M | ✅ | v2.0 | 1 | "Create a proposal to upgrade key derivation from PBKDF2 to Argon2id with tunable parameters (memory-hard, GPU-resistant) for stronger password-based encryption" |
 | SEC-016 | Sandboxed Crypto Operations | S | ⬜ | v2.1 | 1 | "Create a proposal to isolate cryptographic operations in dedicated Web Workers or separate contexts to minimize attack surface and prevent side-channel attacks" |
 | SEC-017 | Supply Chain Security Verification | M | 🔄 | v2.0 | 1 | "Create a proposal to implement dependency verification with lock file integrity checks, automated security audits (npm audit), and reproducible builds" |
+| SEC-019 | RPC Privilege Separation and Log Hygiene | M | ✅ | v2.0 | 1 | "Split the RPC surface into page-reachable and UI-only namespaces and enforce a sender check before dispatch; remove passwordless key export and the blind signing oracle; never log an RPC request payload or response body; strip console output from production builds." |
 | SEC-018 | Deterministic Event Signing Detection | S | ⬜ | v2.0 | 1 | "Create a proposal to detect and warn users about requests for deterministic signatures (replay attacks) versus standard randomized Schnorr signatures" |
 
 ---

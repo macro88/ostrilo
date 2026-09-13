@@ -99,9 +99,15 @@ describe("RPC Router and Handlers", () => {
       );
     });
 
-    it("should handle module errors", async () => {
+    it("does not leak raw error text back across the RPC boundary", async () => {
+      // The router used to return `error?.message ?? String(error)` as
+      // `details`. Thrown messages can carry internal paths and state, and
+      // this response travels back toward the caller, so the text is now
+      // fixed and the real error is logged internally instead.
       const mockHandler = {
-        handleRequest: vi.fn().mockRejectedValue(new Error("Test error")),
+        handleRequest: vi
+          .fn()
+          .mockRejectedValue(new Error("ENOENT /Users/someone/secret/path")),
       };
 
       router.registerModule("test", mockHandler);
@@ -109,12 +115,34 @@ describe("RPC Router and Handlers", () => {
       const message = { type: "test.method" as any };
       const result = await router.handleRequest(message, mockContext);
 
-      expect(result).toEqual(
-        createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
-          details: "Test error",
-          method: "test.method",
-        })
-      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.data.errorCode).toBe(
+          RPC_ERROR_CODES.UNKNOWN_METHOD
+        );
+        expect(result.error.data.method).toBe("test.method");
+        const serialised = JSON.stringify(result);
+        expect(serialised).not.toContain("ENOENT");
+        expect(serialised).not.toContain("/Users/someone");
+      }
+    });
+
+    it("does not resolve inherited object keys as namespaces", async () => {
+      // The module registry was a plain object literal, so "__proto__.x" and
+      // "constructor.x" found a truthy value on Object.prototype and passed
+      // the existence check before failing on the method call.
+      for (const type of ["__proto__.x", "constructor.x", "toString.x"]) {
+        const result = await router.handleRequest(
+          { type } as never,
+          mockContext
+        );
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.error.data.errorCode).toBe(
+            RPC_ERROR_CODES.UNKNOWN_NAMESPACE
+          );
+        }
+      }
     });
   });
 
@@ -257,14 +285,11 @@ describe("RPC Router and Handlers", () => {
     });
 
     it("should handle crypto.evaluatePassword", async () => {
-      // Mock the dynamic import
-      const mockEvaluatePasswordStrength = vi
-        .fn()
-        .mockReturnValue({ score: 4 });
-      vi.doMock("@/domain/utils/crypto", () => ({
-        evaluatePasswordStrength: mockEvaluatePasswordStrength,
-      }));
-
+      // No module mock here on purpose. The handler imports
+      // evaluatePasswordStrength from "@/domain/utils/validation", not
+      // from "@/domain/utils/crypto", so the doMock that used to sit here
+      // never affected this test - but it DID leak into later tests in
+      // this file and break their dynamic imports. Use the real function.
       const message = {
         type: "crypto.evaluatePassword",
         password: "strong-password",
@@ -274,24 +299,41 @@ describe("RPC Router and Handlers", () => {
       expect(result.ok).toBe(true);
     });
 
-    it("should handle crypto.parsePrivateKey", async () => {
-      // Mock the dynamic import
-      const mockParsePrivateKey = vi
-        .fn()
-        .mockReturnValue(new Uint8Array([1, 2, 3]));
-      vi.doMock("@/domain/utils/crypto", () => ({
-        parsePrivateKey: mockParsePrivateKey,
-      }));
-
+    it("validates a private key WITHOUT returning the key bytes", async () => {
+      // This handler used to return Array.from(privateKey) - the raw 32-byte
+      // secret scalar - across the message bus into the calling page, where it
+      // landed in a plain JS array nothing zeroizes and the RPC client logged
+      // it. The caller only ever needed a yes/no answer.
       const message = {
         type: "crypto.parsePrivateKey",
-        keyInput: "nsec1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq", // Valid nsec format
+        keyInput: "ab".repeat(32),
       } as const;
       const result = await handler.handleRequest(message, mockContext);
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.data).toEqual([1, 2, 3]); // Converted to Array from Uint8Array
+        expect(result.data).toEqual({ valid: true });
+
+        // The decisive assertion: no key material anywhere in the response.
+        const serialised = JSON.stringify(result.data);
+        expect(serialised).not.toContain("ab".repeat(32));
+        expect(Array.isArray(result.data)).toBe(false);
+      }
+    });
+
+    it("rejects an npub, which is not a private key", async () => {
+      const result = await handler.handleRequest(
+        {
+          type: "crypto.parsePrivateKey",
+          keyInput: "npub1" + "q".repeat(58),
+        } as const,
+        mockContext
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.data.errorCode).toBe(
+          RPC_ERROR_CODES.INVALID_KEY_INPUT
+        );
       }
     });
   });

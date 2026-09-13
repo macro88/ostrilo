@@ -836,23 +836,15 @@ export class KeyVaultService {
   }
 
   /**
-   * Export private key in nsec bech32 format
-   * Requires vault to be unlocked
-   */
-  async exportKey(keyId?: string): Promise<{ nsec: string; hex: string }> {
-    const { sk } = this.ensureUnlockedKey(keyId);
-    // Convert to nsec bech32 format
-    const words = bech32.toWords(sk);
-    const nsec = bech32.encode("nsec", words);
-    // Also provide hex format
-    const hex = this.toHex(sk);
-    return { nsec, hex };
-  }
-
-  /**
    * Reveal private key with password re-verification.
-   * This is a security-hardened alternative to exportKey that requires
-   * password re-entry to prevent UI state from holding sensitive keys.
+   * The ONLY path that releases private key material. It re-verifies the
+   * password against the vault envelope rather than trusting the unlocked
+   * session, and checks the recovered key against the record's stored pubkey
+   * before returning anything.
+   *
+   * A passwordless `exportKey` used to sit alongside this. It required only
+   * that the vault was unlocked, had no caller, and was reachable by any code
+   * running in an extension page. It has been removed.
    */
   async revealKey(
     password: string,
