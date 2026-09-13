@@ -132,19 +132,17 @@ describe("NIP-01 cross-implementation event vectors", () => {
 
     it("records the true two-or-more-implementations split without rounding it up", () => {
       // Honest bookkeeping, asserted so it cannot drift into an overstatement.
-      // 10 vectors carry two or more distinct named implementations; 4 carry
-      // exactly one and are kept for the serialization shapes they cover.
+      // 12 vectors carry two or more distinct named implementations; 2 carry
+      // exactly one, and are kept for the serialization shapes they cover.
       const multi = vectors.filter(
         (v) => v.provenance.distinct_implementations.length >= 2
       );
       const single = vectors.filter(
         (v) => v.provenance.distinct_implementations.length === 1
       );
-      expect(multi).toHaveLength(10);
+      expect(multi).toHaveLength(12);
       expect(single.map((v) => v.name).sort()).toEqual([
         "kind-1-hello-world-secret-key-one",
-        "kind-1-tab-and-newline",
-        "kind-10002-relay-list-empty-content",
         "kind-3-contacts-json-content",
       ]);
     });

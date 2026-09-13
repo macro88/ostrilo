@@ -52,7 +52,8 @@ Two kinds of attestation are recorded, per vector, under
 - **Served by a public relay.** The rest were retrieved live from public relays
   on 2026-09-13 and then queried back by id across several relays running
   *different* server implementations - strfry (C++), nostr-rs-relay (Rust),
-  NFDB (Go), haven (Go, khatru/go-nostr) and nostr.wine. A vector is only
+  memlay (Rust), NFDB (Go), haven (Go, khatru/go-nostr), wot-relay (Go) and
+  nostr.wine. A vector is only
   recorded as attested by a relay when that relay returned the event
   byte-identical. Relays validate `id` and `sig` on ingest, so an event a relay
   accepted and re-served is an event that implementation agreed with.
@@ -62,13 +63,15 @@ labelled as self-declared, because it is.
 
 Honest counts, which the tests assert and do not round up:
 
-- 10 of 14 vectors carry **two or more** distinct named implementations.
-- 4 carry exactly **one**: `kind-3-contacts-json-content` and
-  `kind-1-hello-world-secret-key-one` (the go-nostr fixture only),
-  `kind-1-tab-and-newline` (strfry only) and
-  `kind-10002-relay-list-empty-content` (NFDB only). They are kept because each
-  covers a serialization shape nothing else here covers, and their thinner
-  provenance is recorded rather than hidden.
+- 12 of 14 vectors carry **two or more** distinct named implementations. Seven
+  distinct relay implementations appear across the set: strfry (C++),
+  nostr-rs-relay (Rust), memlay (Rust), NFDB (Go), haven (Go, khatru/go-nostr),
+  wot-relay (Go) and nostr.wine.
+- 2 carry exactly **one**: `kind-3-contacts-json-content` and
+  `kind-1-hello-world-secret-key-one`, both from the go-nostr fixture only. No
+  relay queried still holds either event - they date from 2022 and 2023. They
+  are kept because each covers a serialization shape nothing else here covers,
+  and their thinner provenance is recorded rather than hidden.
 
 Every event was independently checked at assembly time - id recomputed from the
 serialized fields, signature verified against the pubkey - using

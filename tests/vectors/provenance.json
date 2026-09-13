@@ -67,12 +67,24 @@
           "implementation": "nostr.wine 0.3.3",
           "url": "wss://nostr.wine",
           "retrieved": "2026-09-13"
+        },
+        {
+          "kind": "public relay",
+          "implementation": "memlay 0.2.0 (Rust)",
+          "url": "wss://relay.snort.social",
+          "retrieved": "2026-09-13"
+        },
+        {
+          "kind": "public relay",
+          "implementation": "wot-relay v0.2.1-8-g7c5803f (Go)",
+          "url": "wss://nostrelites.org",
+          "retrieved": "2026-09-13"
         }
       ],
       "retrieved": "2026-09-13",
-      "sha256": "393afe16498bd7176c3d6d6dd33beb911262ca0b82dab19e9359f70ff72f0a88",
+      "sha256": "9ee60ea09d7864459a1ca9b8bc49a29889e3c06f7e3a95b0a47749f89a98eddd",
       "vector_count": 14,
-      "notes": "The sha256 is of this repository's assembled file, not of an upstream artifact. It detects local drift; it is not an upstream attestation. Every event was independently checked at assembly time: the id was recomputed from the serialized fields and the signature verified against the pubkey, using @noble/curves directly rather than Ostrilo's code, so the selection is not circular. Ten of the fourteen vectors carry two or more distinct named implementations; four carry exactly one - kind-3-contacts-json-content and kind-1-hello-world-secret-key-one (the go-nostr fixture only), kind-1-tab-and-newline (strfry only) and kind-10002-relay-list-empty-content (NFDB only). Those counts are recorded per vector and are not rounded up."
+      "notes": "The sha256 is of this repository's assembled file, not of an upstream artifact. It detects local drift; it is not an upstream attestation. Every event was independently checked at assembly time: the id was recomputed from the serialized fields and the signature verified against the pubkey, using @noble/curves directly rather than Ostrilo's code, so the selection is not circular. Twelve of the fourteen vectors carry two or more distinct named implementations; two carry exactly one - kind-3-contacts-json-content and kind-1-hello-world-secret-key-one, which come from the go-nostr fixture only because both are old enough that no queried relay still holds them. Those counts are recorded per vector and are not rounded up."
     }
   }
 }

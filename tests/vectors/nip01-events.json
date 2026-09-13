@@ -509,13 +509,19 @@
       "provenance": {
         "class": "cross-implementation",
         "distinct_implementations": [
-          "strfry"
+          "strfry",
+          "wot-relay"
         ],
         "attestations": [
           {
             "implementation": "strfry 1.1.0-158-gb705403ddf49 (C++)",
             "role": "relay accepted this event and served it back byte-identical on 2026-09-13",
             "source": "wss://relay.damus.io"
+          },
+          {
+            "implementation": "wot-relay v0.2.1-8-g7c5803f (Go)",
+            "role": "relay accepted this event and served it back byte-identical on 2026-09-13",
+            "source": "wss://nostrelites.org"
           }
         ]
       }
@@ -616,44 +622,36 @@
     },
     {
       "name": "kind-10002-relay-list-empty-content",
-      "exercises": "Empty content string with twelve tags.",
+      "exercises": "Empty content string with fourteen tags. The most widely replicated vector here: five distinct relay implementations served it byte-identical.",
       "event": {
-        "id": "d0bb63e7d5f97e0226763d7731bb9eedc6e1af2ef67892533fbd8ba886639202",
-        "pubkey": "e5f32301bb46fc87ac2303028b7ca24801bfe801dec9aeee3c51d976a512bd1d",
-        "created_at": 1790114835,
+        "id": "a323f5731c826e458c4f6b1d44ab165c6c3db9c32394a246d6b7de3499a4e19c",
+        "pubkey": "431fa2f340f0adf8963d6d7c6e2c20d913278c691fe609fd3857db13d8f39feb",
+        "created_at": 1789300613,
         "kind": 10002,
         "tags": [
           [
             "r",
-            "wss://data-space.world/r/relais-public-2"
+            "wss://relay.nostrcheck.me"
           ],
           [
             "r",
-            "wss://relay.drss.io"
+            "wss://relay.snort.social"
           ],
           [
             "r",
-            "wss://relay.nostr.net"
+            "wss://relay.mostr.pub"
           ],
           [
             "r",
-            "wss://data-space.world/r/relais-public-1"
+            "wss://relay.damus.io"
           ],
           [
             "r",
-            "wss://infinity-radio-relay.digitalforlifeagency.workers.dev"
+            "wss://purplepag.es"
           ],
           [
             "r",
-            "wss://relay.primal.net"
-          ],
-          [
-            "r",
-            "wss://nos.lol"
-          ],
-          [
-            "r",
-            "wss://relay.noswhere.com"
+            "wss://nostr.oxtr.dev"
           ],
           [
             "r",
@@ -661,30 +659,70 @@
           ],
           [
             "r",
-            "wss://infinity-signal-relay.digitalforlifeagency.workers.dev"
+            "wss://nostr.bitcoiner.social"
           ],
           [
             "r",
-            "wss://nostr.land"
+            "wss://nostr-pub.wellorder.net"
           ],
           [
             "r",
-            "wss://relay.0xchat.com"
+            "wss://nos.lol"
+          ],
+          [
+            "r",
+            "wss://njump.me"
+          ],
+          [
+            "r",
+            "wss://btc.klendazu.com"
+          ],
+          [
+            "r",
+            "wss://relay.primal.net"
+          ],
+          [
+            "r",
+            "wss://search.nos.today"
           ]
         ],
         "content": "",
-        "sig": "33e926c7bb544796b896bbc73e8038f5816e4d024825d394a355c12c64357a22e21514cfada47dd12cb6bb022da9dad7876f35e671b75786544c0bdecbff89cf"
+        "sig": "b2d1c34e356346dc15c9f82f9059d96b01dd4d921a5d77a4841fb8f7b2f3889f49f76717f36a86bdfd46f100024fdaef98d9ce69e7c2fedcce432e3ab01c50b2"
       },
       "provenance": {
         "class": "cross-implementation",
         "distinct_implementations": [
-          "NFDB"
+          "NFDB",
+          "memlay",
+          "nostr-rs-relay",
+          "strfry",
+          "wot-relay"
         ],
         "attestations": [
+          {
+            "implementation": "strfry 1.1.0-158-gb705403ddf49 (C++)",
+            "role": "relay accepted this event and served it back byte-identical on 2026-09-13",
+            "source": "wss://relay.damus.io"
+          },
+          {
+            "implementation": "nostr-rs-relay 0.9.0 (Rust)",
+            "role": "relay accepted this event and served it back byte-identical on 2026-09-13",
+            "source": "wss://nostr-pub.wellorder.net"
+          },
           {
             "implementation": "NFDB 2.0 (Go)",
             "role": "relay accepted this event and served it back byte-identical on 2026-09-13",
             "source": "wss://nostr.land"
+          },
+          {
+            "implementation": "memlay 0.2.0 (Rust)",
+            "role": "relay accepted this event and served it back byte-identical on 2026-09-13",
+            "source": "wss://relay.snort.social"
+          },
+          {
+            "implementation": "wot-relay v0.2.1-8-g7c5803f (Go)",
+            "role": "relay accepted this event and served it back byte-identical on 2026-09-13",
+            "source": "wss://nostrelites.org"
           }
         ]
       }
