@@ -22,8 +22,7 @@ import {
   importKey as rpcImportKey,
   selectKey as rpcSelectKey,
 } from "@/infrastructure/messaging/client";
-import { KeyRecord } from "@/domain/types";
-import { hexToBytes, publicKeyToBech32 } from "@/domain/utils/encoding";
+import type { KeyListEntry } from "@/infrastructure/messaging/handlers/vault-rpc";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 import { browser } from "wxt/browser";
 
@@ -42,9 +41,38 @@ export interface UIKeyInfo {
   label: string;
   publicKeyHex: string;
   publicKeyBech32: string;
+  /**
+   * The stored record's public key could not be read, so there is no npub to
+   * show. Surfaces have to render this as an error: the previous code called
+   * a hex decoder that substituted zero bytes for unparseable characters, so
+   * a corrupt record displayed a real, well-formed npub for a key nobody
+   * holds, and the user had no way to tell it from their own identity.
+   */
+  isUnreadable: boolean;
   createdAt: number;
   lastUsedAt: number;
   isSelected: boolean;
+}
+
+/**
+ * Projects one stored record into the view model.
+ *
+ * The npub arrives already encoded from the background. The UI used to do
+ * `publicKeyToBech32(hexToBytes(key.pubkey))` here, which reached
+ * `@scure/base` from a React render and would now throw on a malformed
+ * record - an exception a context provider has nowhere to put.
+ */
+function toUIKeyInfo(key: KeyListEntry): UIKeyInfo {
+  return {
+    id: key.id,
+    label: key.label || "Unnamed",
+    publicKeyHex: key.pubkey,
+    publicKeyBech32: key.npub ?? "",
+    isUnreadable: key.npub === undefined,
+    createdAt: key.createdAt,
+    lastUsedAt: key.lastUsedAt || key.createdAt, // Use createdAt as fallback
+    isSelected: key.isSelected || false,
+  };
 }
 
 export interface UILockState {
@@ -117,15 +145,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
         });
 
         // Convert KeyRecord to UIKeyInfo (remove sensitive fields)
-        const uiKeys: UIKeyInfo[] = keysResult.map((key: KeyRecord) => ({
-          id: key.id,
-          label: key.label || "Unnamed",
-          publicKeyHex: key.pubkey,
-          publicKeyBech32: publicKeyToBech32(hexToBytes(key.pubkey)),
-          createdAt: key.createdAt,
-          lastUsedAt: key.lastUsedAt || key.createdAt, // Use createdAt as fallback
-          isSelected: key.isSelected || false,
-        }));
+        const uiKeys: UIKeyInfo[] = keysResult.map(toUIKeyInfo);
 
         setKeys(uiKeys);
       } catch (error) {
@@ -201,15 +221,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
   const refreshKeys = useCallback(async () => {
     try {
       const keysResult = await listKeys();
-      const uiKeys: UIKeyInfo[] = keysResult.map((key: KeyRecord) => ({
-        id: key.id,
-        label: key.label || "Unnamed",
-        publicKeyHex: key.pubkey,
-        publicKeyBech32: publicKeyToBech32(hexToBytes(key.pubkey)),
-        createdAt: key.createdAt,
-        lastUsedAt: key.lastUsedAt || key.createdAt, // Use createdAt as fallback
-        isSelected: key.isSelected || false,
-      }));
+      const uiKeys: UIKeyInfo[] = keysResult.map(toUIKeyInfo);
       setKeys(uiKeys);
     } catch (error) {
       console.error("Failed to refresh keys:", error);

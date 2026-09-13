@@ -1,129 +1,94 @@
+/**
+ * NIP-01 event id and signing, exercised through the surviving
+ * implementations.
+ *
+ * Every symbol this file used to import - `computeEventId`, `signEventHash`,
+ * `verifyEventSignature`, `generatePrivateKey`, `getPublicKey`,
+ * `publicKeyToHex` - lived in `src/domain/utils/crypto.ts`, a second copy of
+ * the product's crypto that reached `@noble/*` directly from the domain layer.
+ * Two of those functions had no caller in `src/` at all, so the assertions
+ * below were describing code the extension never ran.
+ *
+ * They now run against: the single application-layer `computeEventId` bound to
+ * the SHA-256 adapter, the `Schnorr` adapter for derivation and verification,
+ * and `KeyVaultService` for the end-to-end path a signature actually takes.
+ */
+
 import { describe, it, expect } from "vitest";
-import {
-  computeEventId,
-  signEventHash,
-  verifyEventSignature,
-  generatePrivateKey,
-  getPublicKey,
-  publicKeyToHex,
-} from "@/domain/utils/crypto";
+import { NobleSchnorr, NostrEventCrypto } from "@/infrastructure/crypto/adapters";
+import { bytesToHex, hexToBytes } from "@/domain/utils/hex";
+import { testVault, TEST_VAULT_PASSWORD } from "../../helpers/vault";
+
+const PUBKEY_A =
+  "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+const PUBKEY_B =
+  "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+
+const SECRET_KEY_A = hexToBytes(
+  "0000000000000000000000000000000000000000000000000000000000000003"
+);
+const SECRET_KEY_B = hexToBytes(
+  "b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef"
+);
+
+function eventId(fields: {
+  pubkey?: string;
+  created_at?: number;
+  kind?: number;
+  tags?: string[][];
+  content?: string;
+}): string {
+  return NostrEventCrypto.computeEventId({
+    pubkey: fields.pubkey ?? PUBKEY_A,
+    created_at: fields.created_at ?? 1234567890,
+    kind: fields.kind ?? 1,
+    tags: fields.tags ?? [],
+    content: fields.content ?? "Hello",
+  });
+}
+
+function sign(eventIdHex: string, secretKey: Uint8Array): string {
+  return bytesToHex(NobleSchnorr.sign(hexToBytes(eventIdHex), secretKey));
+}
 
 describe("NIP-01 Event ID Computation", () => {
   describe("computeEventId", () => {
-    it("computes correct event ID for a simple text note", () => {
-      // Test vector: A simple kind 1 text note
-      const pubkey =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const created_at = 1234567890;
-      const kind = 1;
-      const tags: string[][] = [];
-      const content = "Hello, Nostr!";
-
-      const id = computeEventId(pubkey, created_at, kind, tags, content);
-
-      // The ID should be a 64-character lowercase hex string
+    it("computes a 64-character lowercase hex id for a simple text note", () => {
+      const id = eventId({ content: "Hello, Nostr!" });
       expect(id).toMatch(/^[0-9a-f]{64}$/);
       expect(id.length).toBe(64);
     });
 
     it("produces different IDs for different content", () => {
-      const pubkey =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const created_at = 1234567890;
-      const kind = 1;
-      const tags: string[][] = [];
-
-      const id1 = computeEventId(pubkey, created_at, kind, tags, "Hello");
-      const id2 = computeEventId(pubkey, created_at, kind, tags, "World");
-
-      expect(id1).not.toBe(id2);
+      expect(eventId({ content: "Hello" })).not.toBe(
+        eventId({ content: "World" })
+      );
     });
 
     it("produces different IDs for different timestamps", () => {
-      const pubkey =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const kind = 1;
-      const tags: string[][] = [];
-      const content = "Hello";
-
-      const id1 = computeEventId(pubkey, 1000000000, kind, tags, content);
-      const id2 = computeEventId(pubkey, 1000000001, kind, tags, content);
-
-      expect(id1).not.toBe(id2);
+      expect(eventId({ created_at: 1000000000 })).not.toBe(
+        eventId({ created_at: 1000000001 })
+      );
     });
 
     it("produces different IDs for different kinds", () => {
-      const pubkey =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const created_at = 1234567890;
-      const tags: string[][] = [];
-      const content = "Hello";
-
-      const id1 = computeEventId(pubkey, created_at, 1, tags, content);
-      const id2 = computeEventId(pubkey, created_at, 6, tags, content);
-
-      expect(id1).not.toBe(id2);
+      expect(eventId({ kind: 1 })).not.toBe(eventId({ kind: 6 }));
     });
 
     it("produces different IDs for different pubkeys", () => {
-      const created_at = 1234567890;
-      const kind = 1;
-      const tags: string[][] = [];
-      const content = "Hello";
-
-      const pubkey1 =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const pubkey2 =
-        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
-
-      const id1 = computeEventId(pubkey1, created_at, kind, tags, content);
-      const id2 = computeEventId(pubkey2, created_at, kind, tags, content);
-
-      expect(id1).not.toBe(id2);
+      expect(eventId({ pubkey: PUBKEY_A })).not.toBe(
+        eventId({ pubkey: PUBKEY_B })
+      );
     });
 
     it("handles events with tags correctly", () => {
-      const pubkey =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const created_at = 1234567890;
-      const kind = 1;
-      const content = "Hello";
-
-      const tagsEmpty: string[][] = [];
-      const tagsWithP: string[][] = [
-        [
-          "p",
-          "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+      const idEmpty = eventId({ tags: [] });
+      const idWithP = eventId({ tags: [["p", PUBKEY_B]] });
+      const idWithE = eventId({
+        tags: [
+          ["e", "abc123def456abc123def456abc123def456abc123def456abc123def456abc1"],
         ],
-      ];
-      const tagsWithE: string[][] = [
-        [
-          "e",
-          "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
-        ],
-      ];
-
-      const idEmpty = computeEventId(
-        pubkey,
-        created_at,
-        kind,
-        tagsEmpty,
-        content
-      );
-      const idWithP = computeEventId(
-        pubkey,
-        created_at,
-        kind,
-        tagsWithP,
-        content
-      );
-      const idWithE = computeEventId(
-        pubkey,
-        created_at,
-        kind,
-        tagsWithE,
-        content
-      );
+      });
 
       expect(idEmpty).not.toBe(idWithP);
       expect(idEmpty).not.toBe(idWithE);
@@ -131,154 +96,117 @@ describe("NIP-01 Event ID Computation", () => {
     });
 
     it("produces deterministic IDs for identical inputs", () => {
-      const pubkey =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const created_at = 1234567890;
-      const kind = 1;
-      const tags: string[][] = [["t", "nostr"]];
-      const content = "Test determinism";
-
-      const id1 = computeEventId(pubkey, created_at, kind, tags, content);
-      const id2 = computeEventId(pubkey, created_at, kind, tags, content);
-
-      expect(id1).toBe(id2);
+      const fields = { tags: [["t", "nostr"]], content: "Test determinism" };
+      expect(eventId(fields)).toBe(eventId(fields));
     });
 
     it("handles empty content correctly", () => {
-      const pubkey =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const created_at = 1234567890;
-      const kind = 1;
-      const tags: string[][] = [];
-      const content = "";
-
-      const id = computeEventId(pubkey, created_at, kind, tags, content);
-
-      expect(id).toMatch(/^[0-9a-f]{64}$/);
+      expect(eventId({ content: "" })).toMatch(/^[0-9a-f]{64}$/);
     });
 
     it("handles special characters in content", () => {
-      const pubkey =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const created_at = 1234567890;
-      const kind = 1;
-      const tags: string[][] = [];
       const content = '{"json": true, "emoji": "🎉", "unicode": "日本語"}';
-
-      const id = computeEventId(pubkey, created_at, kind, tags, content);
-
-      expect(id).toMatch(/^[0-9a-f]{64}$/);
+      expect(eventId({ content })).toMatch(/^[0-9a-f]{64}$/);
     });
   });
 
-  describe("signEventHash", () => {
+  describe("Schnorr signing through the adapter", () => {
     it("produces valid 128-character hex signatures", () => {
-      const privateKey = generatePrivateKey();
-      const eventId =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-
-      const signature = signEventHash(eventId, privateKey);
-
+      const signature = sign(PUBKEY_A, SECRET_KEY_A);
       expect(signature).toMatch(/^[0-9a-f]{128}$/);
       expect(signature.length).toBe(128);
     });
 
     it("produces different signatures for different event IDs", () => {
-      const privateKey = generatePrivateKey();
-      const eventId1 =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const eventId2 =
-        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
-
-      const sig1 = signEventHash(eventId1, privateKey);
-      const sig2 = signEventHash(eventId2, privateKey);
-
-      expect(sig1).not.toBe(sig2);
+      expect(sign(PUBKEY_A, SECRET_KEY_A)).not.toBe(
+        sign(PUBKEY_B, SECRET_KEY_A)
+      );
     });
   });
 
   describe("verifyEventSignature", () => {
     it("verifies valid signatures", () => {
-      const privateKey = generatePrivateKey();
-      const publicKey = getPublicKey(privateKey);
-      const pubkeyHex = publicKeyToHex(publicKey);
+      const pubkeyHex = bytesToHex(NobleSchnorr.getPublicKey(SECRET_KEY_A));
+      const signature = sign(PUBKEY_A, SECRET_KEY_A);
 
-      const eventId =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const signature = signEventHash(eventId, privateKey);
-
-      const isValid = verifyEventSignature(eventId, signature, pubkeyHex);
-
-      expect(isValid).toBe(true);
+      expect(
+        NostrEventCrypto.verifyEventSignature(PUBKEY_A, signature, pubkeyHex)
+      ).toBe(true);
     });
 
     it("rejects signatures with wrong event ID", () => {
-      const privateKey = generatePrivateKey();
-      const publicKey = getPublicKey(privateKey);
-      const pubkeyHex = publicKeyToHex(publicKey);
+      const pubkeyHex = bytesToHex(NobleSchnorr.getPublicKey(SECRET_KEY_A));
+      const signature = sign(PUBKEY_A, SECRET_KEY_A);
 
-      const eventId1 =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const eventId2 =
-        "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
-      const signature = signEventHash(eventId1, privateKey);
-
-      const isValid = verifyEventSignature(eventId2, signature, pubkeyHex);
-
-      expect(isValid).toBe(false);
+      expect(
+        NostrEventCrypto.verifyEventSignature(PUBKEY_B, signature, pubkeyHex)
+      ).toBe(false);
     });
 
     it("rejects signatures with wrong public key", () => {
-      const privateKey1 = generatePrivateKey();
-      const privateKey2 = generatePrivateKey();
-      const publicKey2 = getPublicKey(privateKey2);
-      const pubkeyHex2 = publicKeyToHex(publicKey2);
+      const otherPubkeyHex = bytesToHex(
+        NobleSchnorr.getPublicKey(SECRET_KEY_B)
+      );
+      const signature = sign(PUBKEY_A, SECRET_KEY_A);
 
-      const eventId =
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-      const signature = signEventHash(eventId, privateKey1);
+      expect(
+        NostrEventCrypto.verifyEventSignature(
+          PUBKEY_A,
+          signature,
+          otherPubkeyHex
+        )
+      ).toBe(false);
+    });
 
-      const isValid = verifyEventSignature(eventId, signature, pubkeyHex2);
-
-      expect(isValid).toBe(false);
+    it("rejects a non-hex signature", () => {
+      // Kept as a plain outcome check. It does NOT prove the hex guard: an
+      // all-zero signature fails verification on the curve too, so this
+      // assertion passes with or without the guard. What the guard actually
+      // buys - that malformed input never reaches the curve at all - is
+      // asserted in tests/security/crypto-consolidation.test.ts, where a
+      // verifier double records whether it was called.
+      const pubkeyHex = bytesToHex(NobleSchnorr.getPublicKey(SECRET_KEY_A));
+      expect(
+        NostrEventCrypto.verifyEventSignature(
+          PUBKEY_A,
+          "z".repeat(128),
+          pubkeyHex
+        )
+      ).toBe(false);
     });
   });
 
   describe("End-to-end event signing", () => {
-    it("creates and verifies a complete signed event", () => {
-      // Generate keypair
-      const privateKey = generatePrivateKey();
-      const publicKey = getPublicKey(privateKey);
-      const pubkeyHex = publicKeyToHex(publicKey);
+    it("creates and verifies a complete signed event through the vault", async () => {
+      const { vault } = testVault();
+      const record = await vault.generateKey(TEST_VAULT_PASSWORD, "signer");
+      await vault.unlock(TEST_VAULT_PASSWORD);
 
-      // Create event data
-      const created_at = Math.floor(Date.now() / 1000);
-      const kind = 1;
-      const tags: string[][] = [];
-      const content = "Hello, Nostr!";
+      const unsigned = {
+        pubkey: record.pubkey,
+        created_at: Math.floor(Date.now() / 1000),
+        kind: 1,
+        tags: [] as string[][],
+        content: "Hello, Nostr!",
+      };
 
-      // Compute event ID
-      const eventId = computeEventId(
-        pubkeyHex,
-        created_at,
-        kind,
-        tags,
-        content
-      );
+      const signed = await vault.signEvent(unsigned, record.id);
 
-      // Sign the event
-      const signature = signEventHash(eventId, privateKey);
+      expect(signed.id).toMatch(/^[0-9a-f]{64}$/);
+      expect(signed.sig).toMatch(/^[0-9a-f]{128}$/);
 
-      // Verify the signature
-      const isValid = verifyEventSignature(eventId, signature, pubkeyHex);
+      // The returned id must be the id of the returned fields, not merely a
+      // well-formed hex string: this is the property that says the extension
+      // signed what it showed.
+      expect(signed.id).toBe(NostrEventCrypto.computeEventId(unsigned));
 
-      expect(isValid).toBe(true);
-
-      // Verify the event ID format
-      expect(eventId).toMatch(/^[0-9a-f]{64}$/);
-
-      // Verify the signature format
-      expect(signature).toMatch(/^[0-9a-f]{128}$/);
+      expect(
+        NostrEventCrypto.verifyEventSignature(
+          signed.id,
+          signed.sig,
+          record.pubkey
+        )
+      ).toBe(true);
     });
   });
 });

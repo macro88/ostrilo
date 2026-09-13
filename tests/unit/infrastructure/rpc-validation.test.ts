@@ -180,11 +180,11 @@ describe("RPC Validation", () => {
 
     beforeEach(() => {
       handler = new CryptoRpcHandler();
-      // Mock the dynamic import
-      vi.doMock("@/domain/utils/crypto", () => ({
-        parsePrivateKey: vi.fn().mockReturnValue(new Uint8Array(32)),
-        evaluatePasswordStrength: vi.fn().mockReturnValue({ score: 4 }),
-      }));
+      // No module mock. The handler used to reach its parser through a
+      // dynamic `import("@/domain/utils/crypto")`, and this `doMock` pointed
+      // at a module that no longer exists - so it had stopped standing in for
+      // anything. The parser is a static import now, and these cases are all
+      // schema rejections that never reach it.
     });
 
     it("should reject empty password", async () => {

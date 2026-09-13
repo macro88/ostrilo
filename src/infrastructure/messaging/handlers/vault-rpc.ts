@@ -8,6 +8,28 @@ import {
   LabelSchema,
   KeyIdSchema,
 } from "@/infrastructure/validation/schemas";
+import type { KeyRecord } from "@/domain/types";
+import { isValidHex, hexToBytes } from "@/domain/utils/hex";
+import { CRYPTO_CONSTANTS } from "@/domain/crypto/constants";
+import { ScureBech32 } from "@/infrastructure/crypto/adapters";
+
+/**
+ * A stored key record plus its bech32 public key.
+ *
+ * `npub` is ADDITIVE: an existing caller that ignores it behaves exactly as
+ * before. It exists so the UI stops encoding bech32 itself. The options page
+ * used to call `publicKeyToBech32(hexToBytes(key.pubkey))` inside a React
+ * render, which put `@scure/base` in a UI bundle and - because that decoder
+ * silently substituted zero bytes for unparseable characters - turned a
+ * corrupt stored pubkey into a real, well-formed npub for a key nobody holds.
+ *
+ * It is OPTIONAL by design. A record whose stored `pubkey` is not 64
+ * characters of hex gets no `npub` at all, and the UI renders that record as
+ * unreadable. Encoding it anyway is what produced the zero-derived identity.
+ */
+export interface KeyListEntry extends KeyRecord {
+  npub?: string;
+}
 
 /**
  * RPC handler for vault-related operations
@@ -391,7 +413,16 @@ export class VaultRpcHandler implements RpcModule {
   }
 
   private async handleListKeys(context: ServiceContext): Promise<RpcResponse> {
-    const data = await context.vault.listKeys();
+    const records = await context.vault.listKeys();
+    const data: KeyListEntry[] = records.map((record) => ({
+      ...record,
+      npub: isValidHex(record.pubkey, 32)
+        ? ScureBech32.encode(
+            CRYPTO_CONSTANTS.NOSTR_PUBLIC_KEY_PREFIX,
+            hexToBytes(record.pubkey)
+          )
+        : undefined,
+    }));
     return { ok: true, data };
   }
 

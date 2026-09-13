@@ -12,6 +12,7 @@ import {
   verifyParsedRelayEvent,
 } from "@/domain/relay";
 import { isValidRelayUrl } from "@/domain/utils/validation";
+import { NostrEventCrypto } from "@/infrastructure/crypto/adapters";
 
 interface RelaySubscription {
   filter: NostrFilter;
@@ -267,7 +268,11 @@ export class NostrRelayAdapter implements INostrRelay {
       return;
     }
 
-    const verification = verifyParsedRelayEvent(payload, sub.filter);
+    const verification = verifyParsedRelayEvent(
+      NostrEventCrypto,
+      payload,
+      sub.filter
+    );
     if (!verification.ok) {
       console.warn(
         `Discarded relay event from ${this.relayUrl}: ${verification.reason}`

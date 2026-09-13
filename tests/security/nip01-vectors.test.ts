@@ -31,7 +31,7 @@
 
 import { createHash } from "node:crypto";
 import { describe, it, expect } from "vitest";
-import { computeEventId, verifyEventSignature } from "@/domain/utils/crypto";
+import { NostrEventCrypto } from "@/infrastructure/crypto/adapters";
 import {
   loadNip01Vectors,
   provenance,
@@ -71,13 +71,13 @@ const EDGE_CASE_CREATED_AT = 1700000000;
 const EDGE_CASE_KIND = 1;
 
 function edgeCaseId(rawContent: string): string {
-  return computeEventId(
-    EDGE_CASE_PUBKEY,
-    EDGE_CASE_CREATED_AT,
-    EDGE_CASE_KIND,
-    [],
-    rawContent
-  );
+  return NostrEventCrypto.computeEventId({
+    pubkey: EDGE_CASE_PUBKEY,
+    created_at: EDGE_CASE_CREATED_AT,
+    kind: EDGE_CASE_KIND,
+    tags: [],
+    content: rawContent,
+  });
 }
 
 function expectedEdgeCaseId(serializedContent: string): string {
@@ -90,13 +90,7 @@ function expectedEdgeCaseId(serializedContent: string): string {
 }
 
 function recomputeId(event: Nip01Event): string {
-  return computeEventId(
-    event.pubkey,
-    event.created_at,
-    event.kind,
-    event.tags,
-    event.content
-  );
+  return NostrEventCrypto.computeEventId(event);
 }
 
 function title(v: Nip01Vector): string {
@@ -173,7 +167,11 @@ describe("NIP-01 cross-implementation event vectors", () => {
     for (const v of vectors) {
       it(`verifies the signature for ${title(v)}`, () => {
         expect(
-          verifyEventSignature(v.event.id, v.event.sig, v.event.pubkey),
+          NostrEventCrypto.verifyEventSignature(
+            v.event.id,
+            v.event.sig,
+            v.event.pubkey
+          ),
           `Ostrilo rejected a signature that ${v.provenance.distinct_implementations.join(
             " and "
           )} accepted`
@@ -216,7 +214,11 @@ describe("NIP-01 cross-implementation event vectors", () => {
           ).not.toBe(v.event.id);
 
           expect(
-            verifyEventSignature(mutatedId, v.event.sig, v.event.pubkey),
+            NostrEventCrypto.verifyEventSignature(
+              mutatedId,
+              v.event.sig,
+              v.event.pubkey
+            ),
             `the published signature still verified against an id built from an altered ${mutation.field}`
           ).toBe(false);
         }
@@ -228,7 +230,11 @@ describe("NIP-01 cross-implementation event vectors", () => {
         const tampered =
           (v.event.sig[0] === "0" ? "1" : "0") + v.event.sig.slice(1);
         expect(
-          verifyEventSignature(v.event.id, tampered, v.event.pubkey),
+          NostrEventCrypto.verifyEventSignature(
+            v.event.id,
+            tampered,
+            v.event.pubkey
+          ),
           `${v.name} accepted a signature with a flipped leading digit`
         ).toBe(false);
       }
@@ -339,9 +345,13 @@ describe("NIP-01 cross-implementation event vectors", () => {
       // input produces no id at all. Implementations genuinely differ, so this
       // input can produce three different outcomes across the network.
       //
-      // Pinned with its observed behaviour so the divergence is a decision on
-      // record. Whether `computeEventId` should reject such content instead is
-      // an open question owned by `consolidate-crypto-implementations`.
+      // RESOLVED by `consolidate-crypto-implementations`: the serializer keeps
+      // this behaviour, and `UnsignedEventSchema` now rejects any event whose
+      // content or tags are not well-formed UTF-16, so an unpaired surrogate
+      // cannot reach event id computation through `nostr.signEvent` at all.
+      // These cases still assert what the serializer does with one, because it
+      // is reachable from the relay verification path, where a hostile relay
+      // supplies the event and the id has to be recomputed to reject it.
       it("emits a lone high surrogate as the escape \\ud800", () => {
         const raw = String.fromCharCode(0xd800);
         expect(edgeCaseId(raw)).toBe(expectedEdgeCaseId("\\ud800"));

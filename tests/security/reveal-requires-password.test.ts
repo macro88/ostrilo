@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import {
-  NobleSchnorr,
+  NobleSchnorr, NobleSha256, ScureBech32,
   VaultKdf,
   WebCryptoAesGcm,
 } from "@/infrastructure/crypto/adapters";
@@ -52,7 +52,9 @@ describe("revealing a private key re-verifies the password", () => {
       memoryStorage(),
       WebCryptoAesGcm,
       VaultKdf,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     const record = await svc.generateKey(PASSWORD, "Everyday identity");
     keyId = record.id;

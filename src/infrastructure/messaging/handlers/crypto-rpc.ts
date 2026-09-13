@@ -2,6 +2,9 @@ import { RpcRequest, RpcResponse, RpcHandler } from "../rpc.js";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import { PasswordSchema, KeyInputSchema } from "../../validation/schemas.js";
 import type { RpcModule, ServiceContext } from "../rpc-router";
+import { parsePrivateKey } from "@/application/crypto/private-key";
+import { zeroize } from "@/domain/utils/memory";
+import { ScureBech32 } from "@/infrastructure/crypto/adapters";
 
 /**
  * RPC handler for crypto utility operations
@@ -72,10 +75,13 @@ export class CryptoRpcHandler implements RpcModule {
     // where it landed in a plain JS array that nothing zeroizes and that the
     // RPC client then logged. The caller only ever needed to know whether the
     // input was a well-formed private key.
-    const { parsePrivateKey } = await import("@/domain/utils/crypto");
+    //
+    // The parser is the SAME one `vault.importKey` uses. It used to be a
+    // second, independently written implementation, so the import forms
+    // pre-validated a key with one parser and then imported it with another.
     let sk: Uint8Array | null = null;
     try {
-      sk = parsePrivateKey(message.keyInput);
+      sk = parsePrivateKey(ScureBech32, message.keyInput);
       return { ok: true, data: { valid: true as const } };
     } catch (error) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_KEY_INPUT, {
@@ -84,7 +90,7 @@ export class CryptoRpcHandler implements RpcModule {
         method: message.type,
       });
     } finally {
-      if (sk) sk.fill(0);
+      if (sk) zeroize(sk);
     }
   }
 }

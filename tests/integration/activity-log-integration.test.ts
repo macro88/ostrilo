@@ -19,12 +19,11 @@ class MockStorage implements StoragePort {
   }
 }
 
-// Mock crypto utils to avoid actual crypto operations in test
-vi.mock("@/domain/utils/crypto", () => ({
-  computeEventId: () => "mock-event-id",
-  signEventHash: () => "mock-signature",
-  publicKeyToHex: () => "mock-pubkey",
-}));
+// No crypto mock. This file used to stub `@/domain/utils/crypto` so that
+// `computeEventId` returned "mock-event-id", which meant the handler under
+// test never computed an id at all. That module is gone; event ids now come
+// from the one application-layer implementation, and running it for real is
+// microseconds of SHA-256.
 
 describe("Activity Log Integration", () => {
   let storage: MockStorage;

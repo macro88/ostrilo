@@ -3,7 +3,7 @@ import { KeyVaultService } from "@/application/services/key-vault.service";
 import {
   WebCryptoAesGcm,
   VaultKdf,
-  NobleSchnorr,
+  NobleSchnorr, NobleSha256, ScureBech32,
   deriveLegacyKeyReadOnly,
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
@@ -82,7 +82,9 @@ function svc(storage: StorageSuite) {
     storage,
     WebCryptoAesGcm,
     fastKdf as never,
-    NobleSchnorr
+    NobleSchnorr,
+    NobleSha256,
+    ScureBech32
   );
 }
 
@@ -146,7 +148,9 @@ describe("vault envelope: versioning and recorded parameters", () => {
       storage,
       WebCryptoAesGcm,
       counting as never,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     await v2.generateKey(PASSWORD, "k1");
     await v2.importKey("11".repeat(32), PASSWORD, "k2");
@@ -384,7 +388,9 @@ describe("vault envelope: legacy records and lazy migration", () => {
       storage,
       flakyAead as never,
       fastKdf as never,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
 
     const result = await vault.unlock(PASSWORD);

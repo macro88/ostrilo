@@ -1,4 +1,14 @@
-import { describe, it, expect } from "vitest";
+/**
+ * Domain utility tests.
+ *
+ * This file used to have a twin. `tests/unit/domain/domain-utils.test.ts` was a
+ * 278-line near-copy covering the same modules and differing in five
+ * assertions - duplicated tests for duplicated code, where a fix to one was
+ * invisible in the other. They are collapsed here, keeping every assertion that
+ * actually differed.
+ */
+
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   evaluatePasswordStrength,
   isValidPrivateKeyFormat,
@@ -6,23 +16,18 @@ import {
   isValidRelayUrl,
   isValidOrigin,
 } from "@/domain/utils/validation";
-import {
-  hexToBytes,
-  bytesToHex,
-  isValidHex,
-  isValidBech32,
-  bytesToBech32,
-  bech32ToBytes,
-  publicKeyToBech32,
-  privateKeyToBech32,
-  parsePrivateKey,
-} from "@/domain/utils/encoding";
-import {
-  zeroize,
-  generatePrivateKey,
-  getPublicKey,
-  generateKeyPair,
-} from "@/domain/utils/crypto";
+import { hexToBytes, bytesToHex, isValidHex } from "@/domain/utils/hex";
+import { zeroize } from "@/domain/utils/memory";
+import { parsePrivateKey } from "@/application/crypto/private-key";
+import { CRYPTO_CONSTANTS } from "@/domain/crypto/constants";
+import type { KeyVaultService } from "@/application/services/key-vault.service";
+import { NobleSchnorr, ScureBech32 } from "@/infrastructure/crypto/adapters";
+import { testVault, TEST_VAULT_PASSWORD } from "../../helpers/vault";
+
+/** A fixed secret key, so encoding assertions do not depend on a draw. */
+const FIXED_SECRET_KEY = hexToBytes(
+  "0101010101010101010101010101010101010101010101010101010101010101"
+);
 
 describe("Domain Utils - Validation", () => {
   describe("evaluatePasswordStrength", () => {
@@ -65,15 +70,22 @@ describe("Domain Utils - Validation", () => {
     });
 
     it("validates nsec private keys", () => {
-      // Generate a valid nsec for testing
-      const privateKey = generatePrivateKey();
-      const nsec = privateKeyToBech32(privateKey);
+      const nsec = ScureBech32.encode(
+        CRYPTO_CONSTANTS.NOSTR_PRIVATE_KEY_PREFIX,
+        FIXED_SECRET_KEY
+      );
       expect(isValidPrivateKeyFormat(nsec)).toBe(true);
+    });
 
-      // Invalid nsec should fail - this is just basic length validation
-      // The actual validation function only checks prefix + has more chars
-      expect(isValidPrivateKeyFormat("nsec1invalid")).toBe(true); // This will pass basic validation
-      expect(isValidPrivateKeyFormat("nsec")).toBe(false); // This should fail as it's exactly the prefix length
+    it("only checks that an nsec is longer than its prefix", () => {
+      // Both halves of the collapsed twin files asserted this, with different
+      // examples. Kept together, because the point is the weakness of the
+      // check, not any one input: this is a shape test, and the real parse
+      // happens in `parsePrivateKey`.
+      expect(isValidPrivateKeyFormat("nsec1invalid")).toBe(true);
+      expect(isValidPrivateKeyFormat("nsec1x")).toBe(true);
+      expect(isValidPrivateKeyFormat("nsec1")).toBe(true);
+      expect(isValidPrivateKeyFormat("nsec")).toBe(false); // exactly the prefix
     });
   });
 
@@ -126,7 +138,7 @@ describe("Domain Utils - Validation", () => {
   });
 });
 
-describe("Domain Utils - Encoding", () => {
+describe("Domain Utils - Hex codec", () => {
   describe("hexToBytes/bytesToHex", () => {
     it("converts hex to bytes and back", () => {
       const hex = "deadbeef";
@@ -137,15 +149,32 @@ describe("Domain Utils - Encoding", () => {
       expect(hexBack).toBe(hex);
     });
 
-    it("handles uppercase hex", () => {
-      const hex = "DEADBEEF";
-      const bytes = hexToBytes(hex);
+    it("accepts uppercase hex and always emits lowercase", () => {
+      const bytes = hexToBytes("DEADBEEF");
       expect(Array.from(bytes)).toEqual([0xde, 0xad, 0xbe, 0xef]);
+      expect(bytesToHex(bytes)).toBe("deadbeef");
     });
 
-    it("throws on invalid hex", () => {
-      expect(() => hexToBytes("invalid")).toThrow();
-      expect(() => hexToBytes("deadbee")).toThrow(); // odd length
+    // The assertion that used to stand here was
+    // `expect(() => hexToBytes("invalid")).toThrow()`, which looks like
+    // coverage of malformed input and is not: "invalid" has seven characters,
+    // so it only ever tripped the odd-length branch. No test in either twin
+    // file passed even-length non-hex input, which is exactly the input the
+    // old decoder got wrong. The two cases are separated here so neither can
+    // stand in for the other.
+    it("rejects odd-length input, naming the length", () => {
+      expect(() => hexToBytes("deadbee")).toThrow(/length/i);
+    });
+
+    it("rejects even-length non-hex input, naming the characters", () => {
+      expect(() => hexToBytes("zzzz")).toThrow(/non-hexadecimal/i);
+      expect(() => hexToBytes("gg")).toThrow(/non-hexadecimal/i);
+    });
+
+    it("rejects partially malformed input without returning a partial result", () => {
+      // The old decoder would have returned [0xde, 0xad, 0x00, 0x00] here:
+      // `parseInt("zz", 16)` is NaN, and NaN stored into a Uint8Array is 0.
+      expect(() => hexToBytes("deadzzzz")).toThrow(/non-hexadecimal/i);
     });
   });
 
@@ -154,112 +183,112 @@ describe("Domain Utils - Encoding", () => {
       expect(isValidHex("deadbeef")).toBe(true);
       expect(isValidHex("DEADBEEF")).toBe(true);
       expect(isValidHex("1234567890abcdef")).toBe(true);
-      expect(isValidHex("")).toBe(false); // empty is not valid (requires at least one char)
+      expect(isValidHex("")).toBe(false); // empty is not valid
 
       expect(isValidHex("invalid")).toBe(false);
-      expect(isValidHex("deadbee")).toBe(true); // odd length is allowed by the regex
       expect(isValidHex("deadbeeg")).toBe(false); // invalid char
     });
 
-    it("validates hex with expected length", () => {
+    it("rejects odd length, unlike the codec it replaces", () => {
+      // BEHAVIOUR CHANGE, deliberate. The old `isValidHex` tested only
+      // `^[0-9a-fA-F]+$`, so it reported an odd-length string as valid while
+      // `hexToBytes` threw on it. A predicate that disagrees with the decoder
+      // it guards is worse than no predicate.
+      expect(isValidHex("deadbee")).toBe(false);
+    });
+
+    it("validates hex with an expected byte length", () => {
       expect(isValidHex("deadbeef", 4)).toBe(true);
       expect(isValidHex("deadbeef", 3)).toBe(false);
     });
   });
+});
 
-  describe("bech32 encoding", () => {
-    it("encodes and decodes bech32 strings", () => {
-      const data = new Uint8Array([1, 2, 3, 4, 5]);
-      const encoded = bytesToBech32("test", data);
-      expect(encoded).toMatch(/^test1/);
+describe("Domain Utils - Nostr key encoding", () => {
+  it("encodes and decodes bech32 through the single codec", () => {
+    const data = new Uint8Array([1, 2, 3, 4, 5]);
+    const encoded = ScureBech32.encode("test", data);
+    expect(encoded).toMatch(/^test1/);
 
-      const decoded = bech32ToBytes(encoded);
-      expect(decoded.prefix).toBe("test");
-      expect(Array.from(decoded.bytes)).toEqual([1, 2, 3, 4, 5]);
-    });
-
-    it("validates bech32 format", () => {
-      const data = new Uint8Array([1, 2, 3, 4, 5]);
-      const encoded = bytesToBech32("test", data);
-      expect(isValidBech32(encoded)).toBe(true);
-      expect(isValidBech32(encoded, "test")).toBe(true);
-      expect(isValidBech32(encoded, "wrong")).toBe(false);
-
-      expect(isValidBech32("invalid")).toBe(false);
-    });
+    const decoded = ScureBech32.decode(encoded);
+    expect(decoded.prefix).toBe("test");
+    expect(Array.from(decoded.bytes)).toEqual([1, 2, 3, 4, 5]);
   });
 
-  describe("Nostr key encoding", () => {
-    it("converts public key to npub format", () => {
-      const keyPair = generateKeyPair();
-      const npub = publicKeyToBech32(keyPair.publicKey);
-      expect(npub).toMatch(/^npub1/);
-      expect(npub.length).toBeGreaterThan(60);
-    });
+  it("rejects malformed bech32 rather than returning a value", () => {
+    expect(() => ScureBech32.decode("invalid")).toThrow();
+  });
 
-    it("converts private key to nsec format", () => {
-      const keyPair = generateKeyPair();
-      const nsec = privateKeyToBech32(keyPair.privateKey);
-      expect(nsec).toMatch(/^nsec1/);
-      expect(nsec.length).toBeGreaterThan(60);
-    });
+  it("converts a public key to npub format", () => {
+    const pub = NobleSchnorr.getPublicKey(FIXED_SECRET_KEY);
+    const npub = ScureBech32.encode(
+      CRYPTO_CONSTANTS.NOSTR_PUBLIC_KEY_PREFIX,
+      pub
+    );
+    expect(npub).toMatch(/^npub1/);
+    expect(npub.length).toBeGreaterThan(60);
+  });
 
-    it("parses private keys from different formats", () => {
-      const keyPair = generateKeyPair();
-      const hex = bytesToHex(keyPair.privateKey);
-      const nsec = privateKeyToBech32(keyPair.privateKey);
+  it("converts a private key to nsec format", () => {
+    const nsec = ScureBech32.encode(
+      CRYPTO_CONSTANTS.NOSTR_PRIVATE_KEY_PREFIX,
+      FIXED_SECRET_KEY
+    );
+    expect(nsec).toMatch(/^nsec1/);
+    expect(nsec.length).toBeGreaterThan(60);
+  });
 
-      // Parse from hex
-      const parsedFromHex = parsePrivateKey(hex);
-      expect(Array.from(parsedFromHex)).toEqual(Array.from(keyPair.privateKey));
+  it("parses private keys from hex and from nsec, through one parser", () => {
+    const hex = bytesToHex(FIXED_SECRET_KEY);
+    const nsec = ScureBech32.encode(
+      CRYPTO_CONSTANTS.NOSTR_PRIVATE_KEY_PREFIX,
+      FIXED_SECRET_KEY
+    );
 
-      // Parse from nsec
-      const parsedFromNsec = parsePrivateKey(nsec);
-      expect(Array.from(parsedFromNsec)).toEqual(
-        Array.from(keyPair.privateKey)
-      );
-    });
+    expect(Array.from(parsePrivateKey(ScureBech32, hex))).toEqual(
+      Array.from(FIXED_SECRET_KEY)
+    );
+    expect(Array.from(parsePrivateKey(ScureBech32, nsec))).toEqual(
+      Array.from(FIXED_SECRET_KEY)
+    );
   });
 });
 
-describe("Domain Utils - Crypto", () => {
-  describe("generatePrivateKey", () => {
-    it("generates 32-byte private keys", () => {
-      const privateKey = generatePrivateKey();
-      expect(privateKey.length).toBe(32);
-    });
+describe("Domain Utils - Key material", () => {
+  // These used to exercise `generatePrivateKey`, `getPublicKey` and
+  // `generateKeyPair` from `domain/utils/crypto.ts` - a second generator that
+  // no module in `src/` ever called. Asserting properties of an implementation
+  // the product does not run proves nothing about the product, so they point
+  // at the generator the vault actually uses.
+  let svc: KeyVaultService;
 
-    it("generates different keys", () => {
-      const key1 = generatePrivateKey();
-      const key2 = generatePrivateKey();
-      expect(Array.from(key1)).not.toEqual(Array.from(key2));
-    });
+  beforeEach(() => {
+    svc = testVault().vault;
   });
 
-  describe("getPublicKey", () => {
-    it("derives public key from private key", () => {
-      const privateKey = generatePrivateKey();
-      const publicKey = getPublicKey(privateKey);
-      expect(publicKey.length).toBe(33); // secp256k1 compressed public key is 33 bytes
+  it("generates a key whose stored pubkey is 32 bytes of hex", async () => {
+    const record = await svc.generateKey(TEST_VAULT_PASSWORD, "first");
+    expect(record.pubkey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("generates a different key each time", async () => {
+    const first = await svc.generateKey(TEST_VAULT_PASSWORD, "first");
+    const second = await svc.generateKey(TEST_VAULT_PASSWORD, "second");
+    expect(first.pubkey).not.toBe(second.pubkey);
+  });
+
+  describe("public key derivation", () => {
+    it("derives a 32-byte x-only public key", () => {
+      const publicKey = NobleSchnorr.getPublicKey(FIXED_SECRET_KEY);
+      // BIP-340 keys are x-only. The deleted `getPublicKey` returned a 33-byte
+      // compressed SEC1 key and every caller sliced the parity byte back off.
+      expect(publicKey.length).toBe(32);
     });
 
     it("produces consistent results", () => {
-      const privateKey = generatePrivateKey();
-      const pubkey1 = getPublicKey(privateKey);
-      const pubkey2 = getPublicKey(privateKey);
+      const pubkey1 = NobleSchnorr.getPublicKey(FIXED_SECRET_KEY);
+      const pubkey2 = NobleSchnorr.getPublicKey(FIXED_SECRET_KEY);
       expect(Array.from(pubkey1)).toEqual(Array.from(pubkey2));
-    });
-  });
-
-  describe("generateKeyPair", () => {
-    it("generates matching key pairs", () => {
-      const keyPair = generateKeyPair();
-      expect(keyPair.privateKey.length).toBe(32);
-      expect(keyPair.publicKey.length).toBe(33); // secp256k1 compressed public key is 33 bytes
-
-      // Verify they match
-      const derivedPublic = getPublicKey(keyPair.privateKey);
-      expect(Array.from(derivedPublic)).toEqual(Array.from(keyPair.publicKey));
     });
   });
 

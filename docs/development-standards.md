@@ -22,6 +22,7 @@ If these documents conflict, prefer the most specific current document for the a
   - `src/ui` contains React presentation, feature components, hooks, and local UI state.
 - Prefer existing services, ports, adapters, hooks, and component primitives before adding new patterns.
 - Keep cross-layer dependencies pointed inward through ports and services. UI and extension code should not bypass application services to reach storage, crypto, or domain internals directly.
+- **Cryptographic primitives live in `src/infrastructure/crypto/` and nowhere else.** Every other layer reaches them through the ports in `src/application/ports/crypto.ts` - `CryptoAead`, `CryptoKdf`, `Schnorr`, `CryptoHash`, `Bech32Codec` - and receives an adapter by injection. This is enforced, not advisory: `eslint.config.js` fails any `@noble/*` or `@scure/*` import outside the adapter directory (`pnpm run lint`), and `tests/security/crypto-single-implementation.test.ts` fails if a primitive gains a second implementation anywhere under `src/`, including inside the adapter directory where lint permits the import. If you need a primitive that has no port, add the port; do not add the import.
 - Put new RPC behavior into typed request/response definitions, namespace handlers, and service methods rather than expanding ad hoc message handling.
 
 ## Security And Privacy Rules
@@ -45,6 +46,7 @@ If these documents conflict, prefer the most specific current document for the a
 
 - Before handing off, verify the work at the level of risk and surface area changed. Prefer focused checks first, then broader checks when shared behavior is touched.
 - Run `pnpm run compile` after TypeScript changes.
+- Run `pnpm run lint` after any change that touches cryptographic code or adds an import under `src/`. It carries one rule - the crypto layer boundary above - and is blocking in CI.
 - Run relevant Vitest suites for changed domain, application, infrastructure, security, and UI logic. Use `pnpm test` when changes cross layers or risk is broad.
 - Run Playwright extension tests for user workflows, browser-extension integration, onboarding, approval, NIP-07, options, or permission-policy changes.
 - Run `pnpm run build` when changes affect extension entry points, manifests, bundling, assets, or runtime wiring. Add `pnpm run build:firefox` when cross-browser behavior could be affected.

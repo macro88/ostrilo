@@ -209,13 +209,14 @@ Let's see how this looks in the Ostrilo codebase:
 
 - **`src/application` (The Application Layer):** This layer orchestrates the domain logic. It defines the application's capabilities.
 
-  - `ports/`: Defines the interfaces (output ports) for external services. For example, `src/application/ports/storage.ts` defines the `IStorage` interface, which specifies a contract for storage, and `crypto.ts` defines interfaces like `CryptoAead` and `Schnorr`.
+  - `ports/`: Defines the interfaces (output ports) for external services. For example, `src/application/ports/storage.ts` defines the `IStorage` interface, which specifies a contract for storage, and `crypto.ts` defines `CryptoAead`, `CryptoKdf`, `Schnorr`, `CryptoHash` and `Bech32Codec`.
+  - `crypto/`: Composition over those ports, with no library import of its own. `event-id.ts` holds the single NIP-01 event id computation and signature verification; `private-key.ts` holds the single private-key parser. Both take the port they need as their first argument rather than owning it, because the vault service and the RPC handlers both need them.
   - `services/`: Contains the application services that implement core use cases. For example, `KeyVaultService` manages keys, `PolicyService` manages permissions, `SettingsService` manages user settings, `ActivityLogService` manages the persistent activity log with a ring buffer, and `ApprovalQueueService` manages pending approval requests. These services are the primary entry point (input ports) to the application logic.
 
 - **`src/infrastructure` (The Adapters):** This is where the ports are implemented. It's the bridge between the application and the outside world.
 
   - `storage/adapters.ts`: Provides `StorageAdapter` which implements the `IStorage` port using the browser's `chrome.storage` API.
-  - `crypto/adapters.ts`: Implements the crypto ports using WebCrypto for AES-GCM and the Noble library for Schnorr signatures.
+  - `crypto/adapters.ts`: The **only** module in `src/` permitted to import `@noble/*` or `@scure/*`. It implements every crypto port: `WebCryptoAesGcm` (AES-GCM via WebCrypto), `VaultKdf` (Argon2id, with a PBKDF2 branch), `NobleSchnorr` (BIP-340 sign, verify and public-key derivation), `NobleSha256` and `ScureBech32`. A lint rule and a Vitest assertion keep it the only one; see `docs/development-standards.md`.
   - `messaging/`: Contains the RPC system, which acts as an adapter for communication between the UI and the background script.
 
 - **`src/ui` (A Driving Adapter):** The React components, hooks, and state management that make up the user interface. The UI calls the application services (via the RPC adapter) to get work done.
