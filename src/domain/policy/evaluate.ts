@@ -8,6 +8,8 @@ import {
   defaultForTrust,
   getEffectiveMediumAllowKinds,
   isProtectedKind,
+  isSignableKindValue,
+  normaliseTrustLevel,
 } from "./trust-definitions";
 
 export function evaluatePolicy(
@@ -28,7 +30,10 @@ export function evaluatePolicy(
     return { mode: "deny", reason: "rule" };
   }
 
-  if (isProtectedKind(kind)) {
+  // A kind that cannot be compared for set membership - fractional, NaN,
+  // Infinity, negative - gets the strictest treatment available rather than
+  // slipping past every gate keyed on a kind number.
+  if (!isSignableKindValue(kind) || isProtectedKind(kind)) {
     return { mode: "ask", reason: "protected" };
   }
 
@@ -42,7 +47,7 @@ export function evaluatePolicy(
 
   if (policy) {
     const mode = defaultForTrust(
-      policy.trustLevel,
+      normaliseTrustLevel(policy.trustLevel),
       kind,
       effectiveMediumAllowKinds
     );

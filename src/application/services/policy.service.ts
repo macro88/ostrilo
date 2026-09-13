@@ -7,12 +7,20 @@ import {
 } from "@/domain/types";
 import { evaluatePolicy } from "@/domain/policy/evaluate";
 import { DEFAULT_MEDIUM_ALLOW_KINDS } from "@/domain/policy/trust-definitions";
+import {
+  computeGrantExpiry,
+  isGrantActive,
+  resolveSessionTTLMinutes,
+} from "@/domain/policy/session-grants";
 import { StorageSuite } from "@/application/ports/storage";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
 
 const SETTINGS_KEY = "appSettings";
 
 export class PolicyService {
+  private consentMigrationDone = false;
+  private consentMigrationInFlight?: Promise<any | undefined>;
+
   constructor(private storage: StorageSuite) {}
 
   async loadContext(): Promise<{
@@ -26,10 +34,14 @@ export class PolicyService {
       this.storage.session.get<{ isLocked?: boolean }>("lockState"),
       this.storage.session.get<Record<string, number>>(SESSION_GRANTS_KEY),
     ]);
-    const mediumAllowKinds: number[] = Array.isArray(settings?.mediumAllowKinds)
-      ? settings.mediumAllowKinds
+    // Repair consent data written by the fabricated-trust bug before the first
+    // evaluation reads it. Idempotent, and marked so it runs once.
+    const migrated = await this.ensureConsentMigration(settings);
+    const effective = migrated ?? settings;
+    const mediumAllowKinds: number[] = Array.isArray(effective?.mediumAllowKinds)
+      ? effective.mediumAllowKinds
       : [...DEFAULT_MEDIUM_ALLOW_KINDS];
-    const origins: OriginPolicy[] = settings?.origins ?? [];
+    const origins: OriginPolicy[] = effective?.origins ?? [];
     const unlocked: boolean = lock?.isLocked === false;
     return {
       unlocked,
@@ -42,10 +54,10 @@ export class PolicyService {
   async evaluate(input: { origin: string; kind: number }): Promise<PolicyOutput> {
     const { unlocked, mediumAllowKinds, policies, sessionGrants } =
       await this.loadContext();
-    // Apply active session grant if present and not expired
-    const grant = sessionGrants[input.origin];
-    const now = Date.now();
-    const hasGrant = typeof grant === "number" && (grant === 0 || grant > now);
+    // Apply an active session grant if one is present and unexpired. There is
+    // no "never expires" value: a grant with no future expiry is simply not
+    // active.
+    const hasGrant = isGrantActive(sessionGrants[input.origin]);
     const patchedPolicies = policies.map((p: OriginPolicy) =>
       p.origin === input.origin ? { ...p, sessionGrantAll: hasGrant } : p
     );
@@ -89,9 +101,11 @@ export class PolicyService {
         updatedAt: now,
       } as OriginPolicy;
     } else {
+      // A record created as a side effect of a decision starts untrusted. The
+      // caller's patch may still set a level the user actually chose.
       origins.push({
         origin,
-        trustLevel: "medium",
+        trustLevel: "low",
         rules: {},
         updatedAt: now,
         ...patch,
@@ -126,14 +140,124 @@ export class PolicyService {
       (rules as any)[kind] = mode;
       origins[idx] = { ...origins[idx], rules, updatedAt: now };
     } else {
+      // A remembered decision grants exactly the decision the user made. It
+      // must never also hand the origin a trust level, which would auto-allow
+      // kinds the user was never asked about - including on a remembered DENY.
       origins.push({
         origin,
-        trustLevel: "medium",
+        trustLevel: "low",
         rules: { [kind]: mode } as any,
         updatedAt: now,
       });
     }
     await this.putSettings({ ...settings, origins });
+  }
+
+  /**
+   * Live session-grant state: which origins currently hold a grant-everything
+   * session, and when each expires.
+   *
+   * Surfaces must read this rather than the persisted `sessionGrantAll` field
+   * on an origin record, which nothing writes `true` to and which therefore
+   * always renders a grant as inactive.
+   */
+  async getSessionGrants(
+    now: number = Date.now()
+  ): Promise<Array<{ origin: string; expiresAt: number }>> {
+    const grants =
+      (await this.storage.session.get<Record<string, number>>(
+        SESSION_GRANTS_KEY
+      )) ?? {};
+    return Object.entries(grants)
+      .filter(([, expiresAt]) => isGrantActive(expiresAt, now))
+      .map(([origin, expiresAt]) => ({ origin, expiresAt }));
+  }
+
+  /**
+   * Repair consent data written before trust levels stopped being fabricated.
+   *
+   * Every stored `medium` trust level was assigned by `setPerKindRule` or
+   * `setOriginPolicy`, not chosen by a user: no shipped UI path has ever
+   * written a trust level. `high` cannot have come from those paths, so it is
+   * left alone, and explicit per-kind rules are preserved untouched - the
+   * migration changes one field per record.
+   *
+   * Stored `allow` rules for the newly protected kinds are deliberately left in
+   * place: evaluation forces a protected kind to `ask` regardless, so they are
+   * inert, and the settings surface shows them as always requiring approval.
+   *
+   * @param settings - Settings already read by the caller, to avoid a second read.
+   * @returns The migrated settings when a write happened, otherwise undefined.
+   */
+  async runConsentMigration(settings?: any): Promise<any | undefined> {
+    const current =
+      settings ?? (await this.storage.sync.get<any>(SETTINGS_KEY));
+
+    if (!current || typeof current !== "object") {
+      // Nothing stored yet, so nothing to repair.
+      return undefined;
+    }
+
+    if (
+      typeof current.__consentMigrations === "number" &&
+      current.__consentMigrations >= CONSENT_MIGRATION_VERSION
+    ) {
+      return undefined;
+    }
+
+    const origins: any[] = Array.isArray(current.origins) ? current.origins : [];
+    const migratedOrigins = origins.map((origin) => {
+      if (!origin || typeof origin !== "object") {
+        return origin;
+      }
+      const next = { ...origin };
+      if (next.trustLevel === "medium") {
+        next.trustLevel = "low";
+      }
+      if (next.sessionGrantAll === true) {
+        // Live grant state is session storage only; a persisted `true` is stale.
+        delete next.sessionGrantAll;
+      }
+      return next;
+    });
+
+    const next = {
+      ...current,
+      origins: migratedOrigins,
+      sessionTTLMinutes: resolveSessionTTLMinutes(current.sessionTTLMinutes),
+      __consentMigrations: CONSENT_MIGRATION_VERSION,
+    };
+
+    await this.putSettings(next);
+    return next;
+  }
+
+  /**
+   * Run the consent migration at most once per service instance, before the
+   * first policy evaluation reads the data. A failure is logged and retried on
+   * the next call rather than wedging evaluation.
+   */
+  private ensureConsentMigration(settings: any): Promise<any | undefined> {
+    if (this.consentMigrationDone) {
+      return Promise.resolve(undefined);
+    }
+
+    if (!this.consentMigrationInFlight) {
+      this.consentMigrationInFlight = this.runConsentMigration(settings)
+        .then((migrated) => {
+          this.consentMigrationDone = true;
+          return migrated;
+        })
+        .catch((err) => {
+          console.error("[PolicyService] Consent migration failed:", err);
+          return undefined;
+        })
+        .finally(() => {
+          this.consentMigrationInFlight = undefined;
+        });
+    }
+
+    return this.consentMigrationInFlight;
   }
 
   async clearSessionGrant(origin: string): Promise<void> {
@@ -152,14 +276,13 @@ export class PolicyService {
 
   async setSessionGrant(origin: string, enabled: boolean): Promise<void> {
     const settings = await this.getSettings();
-    const ttlMin: number = settings.sessionTTLMinutes ?? 0;
     const grants =
       (await this.storage.session.get<Record<string, number>>(
         SESSION_GRANTS_KEY
       )) ?? {};
     if (enabled) {
-      const expiresAt = ttlMin > 0 ? Date.now() + ttlMin * 60 * 1000 : 0;
-      grants[origin] = expiresAt;
+      // A stored TTL of 0 reads as the default lifetime, not as "until lock".
+      grants[origin] = computeGrantExpiry(settings.sessionTTLMinutes);
     } else {
       delete grants[origin];
     }
@@ -171,3 +294,9 @@ export class PolicyService {
 }
 
 const SESSION_GRANTS_KEY = "sessionGrants";
+
+/**
+ * Bumped when a new consent repair is added. A stored settings object at or
+ * above this version is left alone, which is what makes re-running a no-op.
+ */
+const CONSENT_MIGRATION_VERSION = 1;

@@ -28,6 +28,9 @@ export class PolicyRpcHandler implements RpcModule {
       case "policy.setKindRule":
         return this.handleSetKindRule(message, context);
 
+      case "policy.getSessionGrants":
+        return { ok: true, data: await context.policy.getSessionGrants() };
+
       case "policy.clearSession":
         return this.handleClearSession(message, context);
 

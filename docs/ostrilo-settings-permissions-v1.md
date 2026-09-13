@@ -19,28 +19,52 @@
 Given `(origin, kind, state)`:
 
 1. If **locked** → return `error:"locked"`.
-2. If **sessionGrantAll=TRUE** for `origin` and unlocked → **allow**.
-3. If **explicit per-kind rule** exists for `(origin, kind)` → apply (`allow|deny|ask`).
-4. Else apply **trust level default** for `origin`.
-5. Else fallback → **ask**.
+2. If an **explicit per-kind `deny`** exists for `(origin, kind)` → **deny**.
+3. If the kind is **not a non-negative integer**, or is a **protected kind** → **ask**.
+4. If **sessionGrantAll=TRUE** for `origin` and the grant has not expired → **allow**.
+5. If an **explicit per-kind rule** exists for `(origin, kind)` → apply (`allow|ask`).
+6. Else apply the **trust level default** for `origin`.
+7. Else fallback → **ask**.
 
 Rules:
-- **deny overrides everything** (even session grant).
-- All decisions are logged with `(origin, kind, mode, reason)` where reason ∈ `{locked, session, rule, trust, fallback}`.
+- **deny overrides everything** (even a session grant or high trust).
+- **Protected kinds always ask**, ahead of session grants, explicit `allow` rules and every trust level. A stored `allow` on a protected kind is inert, not active.
+- A **missing or unrecognised** `trustLevel` on a stored record reads as `low`.
+- All decisions are logged with `(origin, kind, mode, reason)` where reason ∈ `{locked, rule, protected, session, trust, fallback}`.
+
+### Protected kinds
+
+A kind is protected when signing it is **irreversible**, or when the signature **functions as a credential outside the user's own Nostr content**.
+
+| Kind | Name | Why protected |
+|---|---|---|
+| 1 | Short Text Note | Publishes speech attributable to the user. |
+| 5 | Event Deletion Request | Asks relays to destroy existing posts. Irreversible, and a hostile page can erase a history it never created. |
+| 9734 | Zap Request | Authorises a payment. |
+| 22242 | Client Authentication (NIP-42) | A signed challenge is a relay session credential. |
+| 27235 | HTTP Auth (NIP-98) | A signed bearer token for an arbitrary HTTP API. A silent signature here is a silent login. |
+
+Kinds 0 (Profile Metadata), 3 (Contacts) and 4 (legacy DM) are **not** protected - they are dangerous but reversible, and the Settings quick controls present them as allow-eligible. They are instead absent from every trust allowlist, so only an explicit per-kind `allow` the user wrote can auto-sign them.
 
 ---
 
 ## Trust level defaults
+
+Trust levels are **allowlists**, not denylists. A kind absent from the allowlist for the origin's trust level evaluates to `ask` - including every kind the protocol registers in future.
+
+`HIGH_TRUST_ALLOW_KINDS = [6, 7, 16, 10000, 10001, 10002, 10003, 30078]`: low-consequence social signals (repost, reaction, generic repost) plus the user's own replaceable state that clients must maintain to function (mute list, pin list, relay list, bookmark list, application data).
 
 Shipped presets (user can edit in Settings):
 
 | Trust | Kinds allowed silently | Kinds asked/prompted |
 |---|---|---|
 | low | — | all kinds |
-| medium | 6 Repost, 16 Generic Repost, 7 Reaction, 10002 Relay list | 1 Note, 3 Contacts, 4/14 DMs, 9735 Zap request, others |
-| high | all kinds | — |
+| medium | 6 Repost, 16 Generic Repost, 7 Reaction, 10002 Relay list | everything else |
+| high | 6, 7, 16, 10000, 10001, 10002, 10003, 30078 | everything else, including 0 Profile, 3 Contacts, 4/14 DMs, 30023 Long-form, and unregistered kinds |
 
-> Rationale: medium enables quick interactions but prompts for posting, social graph changes, DMs, and payments.
+Medium trust is intersected with the high-trust allowlist, so a polluted or legacy `mediumAllowKinds` can never grant a kind that high trust itself refuses.
+
+> Rationale: medium enables quick interactions but prompts for posting, social graph changes, DMs, and payments. High trust no longer means "sign anything": an allowlist fails safe as the protocol grows, where a denylist is permanently one NIP behind.
 
 ---
 
@@ -111,7 +135,7 @@ export interface AppSettingsV1 {
   keys: KeyRecord[];          // multi-key
   origins: OriginPolicy[];    // per-origin policies
   mediumAllowKinds: number[]; // shipped default for medium trust
-  sessionTTLMinutes: number;  // 0 = until lock only
+  sessionTTLMinutes: number;  // minutes; a stored 0 reads as the shipped default
   selectedKeyId?: string;     // convenience mirror of active key
 }
 ```
@@ -176,9 +200,14 @@ export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {
 
 ## Acceptance tests
 
-1. **Session ALL precedence:** With session grant active and unlocked, any kind signs silently unless an explicit deny exists. After lock, next request prompts or follows rules/trust.
+1. **Session ALL precedence:** With a session grant active and unlocked, any unprotected kind signs silently unless an explicit deny exists. After lock, or after the grant expires, the next request prompts or follows rules/trust.
 2. **Deny wins:** Set trust=high and session grant active, but rule(kind:1)=deny → signing blocked with `denied`.
-3. **Per-kind overrides trust:** trust=high but rule(kind:1)=ask → prompt.
+3. **Per-kind overrides trust:** trust=high but rule(kind:6)=ask → prompt.
 4. **Medium defaults:** With no explicit rules and trust=medium, allow kinds {6,16,7,10002}; ask for 1,3,4,14,9735.
+5. **Protected kinds always ask:** trust=high with rule(kind:27235)=allow and a session grant active → prompt, reason `protected`.
+6. **Allowlist holds:** trust=high with no explicit rule for kind 30023 or 31337 → prompt, reason `trust`.
+7. **Deny does not widen:** deny-and-remember on kind 1 for a new origin → kinds 6, 16, 7 and 10002 still prompt.
+8. **Fractional kinds:** `signEvent` with kind 1.0000001 → `invalid_event`, never signed.
+9. **Grants expire:** a grant written with `sessionTTLMinutes: 0` still carries a future expiry and stops allowing once it passes.
 5. **Persistence:** Reload BG and popup; policies and defaults persist. Session grant cleared.
 6. **Multi-key independence:** Change active key; per-origin policies unchanged.

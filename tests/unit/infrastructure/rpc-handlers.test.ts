@@ -260,8 +260,10 @@ describe("RPC Router and Handlers", () => {
 
       await handler.handleRequest(message, mockContext);
 
+      // 1 and 9734 are protected; 9735 is unprotected but outside the
+      // high-trust allowlist, so medium trust could never act on it either.
       expect(mockContext.settings.update).toHaveBeenCalledWith({
-        mediumAllowKinds: [6, 9735],
+        mediumAllowKinds: [6],
       });
     });
   });
@@ -452,6 +454,55 @@ describe("RPC Router and Handlers", () => {
         tags: [],
         created_at: 1234567890,
       };
+
+      it.each([1.0000001, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+        "rejects kind %s before policy evaluation",
+        async (kind) => {
+          const message = {
+            type: "nostr.signEvent",
+            event: { ...validUnsignedEvent, kind },
+            origin: "https://example.com",
+          } as any;
+
+          const result = await handler.handleRequest(message, nostrMockContext);
+
+          expect(result.ok).toBe(false);
+          if (!result.ok) {
+            expect(result.error.data.errorCode).toBe(
+              RPC_ERROR_CODES.INVALID_EVENT
+            );
+          }
+          // The protected-kind gate for kind 1 must not be reachable by
+          // arithmetic: nothing downstream of validation may run.
+          expect(nostrMockContext.policy.evaluate).not.toHaveBeenCalled();
+          expect(nostrMockContext.vault.sign).not.toHaveBeenCalled();
+        }
+      );
+
+      it.each([5, 22242, 27235])(
+        "still requires approval for newly protected kind %i even when policy allows",
+        async (kind) => {
+          nostrMockContext.policy.evaluate = vi
+            .fn()
+            .mockResolvedValue({ mode: "allow", reason: "trust" });
+
+          const message = {
+            type: "nostr.signEvent",
+            event: { ...validUnsignedEvent, kind },
+            origin: "https://example.com",
+          } as any;
+
+          const result = await handler.handleRequest(message, nostrMockContext);
+
+          expect(result.ok).toBe(false);
+          if (!result.ok) {
+            expect(result.error.data.errorCode).toBe(
+              RPC_ERROR_CODES.NEEDS_APPROVAL
+            );
+          }
+          expect(nostrMockContext.vault.sign).not.toHaveBeenCalled();
+        }
+      );
 
       it("should sign event when vault is unlocked and policy allows", async () => {
         const message = {

@@ -53,6 +53,10 @@ export type RpcRequest =
       password?: string;
     }
   | { type: "policy.clearSession"; origin: string }
+  // Read-only. The session-grant switch was write-only: it set a grant and
+  // then rendered a stale `sessionGrantAll` display flag from settings, so a
+  // user could not see whether a live grant existed or when it expired.
+  | { type: "policy.getSessionGrants" }
   | {
       type: "policy.setSession";
       origin: string;

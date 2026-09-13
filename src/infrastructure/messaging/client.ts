@@ -311,6 +311,13 @@ export async function policySetKindRule(
   });
 }
 
+/** Live session grants: origin and absolute expiry, active ones only. */
+export async function policyGetSessionGrants() {
+  return rpc<Array<{ origin: string; expiresAt: number }>>({
+    type: "policy.getSessionGrants",
+  });
+}
+
 export async function policyClearSession(origin: string) {
   return rpc<null>({ type: "policy.clearSession", origin });
 }
