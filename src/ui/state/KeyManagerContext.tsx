@@ -10,6 +10,7 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useMemo,
   ReactNode,
 } from "react";
 import {
@@ -299,26 +300,47 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
   );
 
   // Get selected key info (public data only)
-  const selectedKeyInfo = lockState.selectedKeyId
-    ? keys.find((key) => key.id === lockState.selectedKeyId)
-    : undefined;
+  const selectedKeyInfo = useMemo(
+    () =>
+      lockState.selectedKeyId
+        ? keys.find((key) => key.id === lockState.selectedKeyId)
+        : undefined,
+    [keys, lockState.selectedKeyId]
+  );
 
-  const contextValue: KeyManagerContextType = {
-    // State
-    isLocked: lockState.isLocked,
-    isLoading,
-    selectedKeyInfo,
-    keys,
-    hasKeys: keys.length > 0,
+  // Memoized because this provider now re-renders on a timer: the lock poll
+  // runs every few seconds, and a fresh object literal here would re-render
+  // every consumer on every tick even when nothing changed.
+  const contextValue = useMemo<KeyManagerContextType>(
+    () => ({
+      // State
+      isLocked: lockState.isLocked,
+      isLoading,
+      selectedKeyInfo,
+      keys,
+      hasKeys: keys.length > 0,
 
-    // Actions
-    lock,
-    unlock,
-    generateKey,
-    importKey,
-    selectKey,
-    refreshKeys,
-  };
+      // Actions
+      lock,
+      unlock,
+      generateKey,
+      importKey,
+      selectKey,
+      refreshKeys,
+    }),
+    [
+      lockState.isLocked,
+      isLoading,
+      selectedKeyInfo,
+      keys,
+      lock,
+      unlock,
+      generateKey,
+      importKey,
+      selectKey,
+      refreshKeys,
+    ]
+  );
 
   return (
     <KeyManagerContext.Provider value={contextValue}>
