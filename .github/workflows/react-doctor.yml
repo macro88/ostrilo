@@ -29,12 +29,17 @@ jobs:
   react-doctor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      # Third-party actions are pinned to commit SHAs, not tags. A tag can be
+      # moved to point at different code; a SHA cannot.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: millionco/react-doctor@v2
-        # Common configuration knobs — uncomment any to override the default.
+      - uses: millionco/react-doctor@7f8d5ed1d496e83e8949544a911668306d9fd438 # v2.2.9
+        with:
+          # Match the version pinned in devDependencies so CI and local runs
+          # score against the same rule set.
+          version: "0.9.14"
+        # Further configuration knobs, all nested under the `with:` above.
         # Full reference: https://www.react.doctor/ci
-        # with:
         #   blocking: warning        # Gate level: "error" (default) | "warning" | "none" (advisory)
         #   scope: full              # On PRs, scan the whole project instead of just changed files
         #   comment: false           # Disable the sticky PR summary comment

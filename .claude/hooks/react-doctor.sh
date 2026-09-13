@@ -40,28 +40,20 @@ NODE
 }
 
 run_react_doctor() {
+  # Pinned local binary only. The pnpm dlx / npx --yes fallbacks were removed:
+  # they fetched an unpinned dependency tree from the network and executed it
+  # after every file edit, on the machine that holds the project's signing
+  # keys. See openspec change restore-security-test-assurance, Decision 8.
   if [ -x ./node_modules/.bin/react-doctor ]; then
     ./node_modules/.bin/react-doctor --verbose --diff --blocking warning --no-score
     return
   fi
 
-  if command -v react-doctor >/dev/null 2>&1; then
-    react-doctor --verbose --diff --blocking warning --no-score
-    return
-  fi
-
-  if command -v pnpm >/dev/null 2>&1; then
-    pnpm dlx react-doctor@latest --verbose --diff --blocking warning --no-score
-    return
-  fi
-
-  if command -v npx >/dev/null 2>&1; then
-    npx --yes react-doctor@latest --verbose --diff --blocking warning --no-score
-    return
-  fi
-
-  printf '%s\n' 'react-doctor: command not found; skipping agent hook scan.'
-  return 0
+  printf '%s\n' \
+    'react-doctor: pinned binary not found at ./node_modules/.bin/react-doctor.' \
+    'Install it with:  pnpm install --frozen-lockfile' \
+    'Refusing to skip: a security tool that cannot run is a failure, not a pass.' >&2
+  return 1
 }
 
 if ! should_scan; then

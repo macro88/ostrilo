@@ -21,13 +21,15 @@ Use this order to choose the next slice. PRD refs are the rows to update in `doc
 | 2 | Durable per-site signing permissions | Epic 3 `UX-018` | Apply `fix-remembered-site-signing-policies` | Remembered allow from approval persists visible origin+kind rules, future matching unprotected requests auto-sign, protected kinds still require approval, and settings can revoke the rule. |
 | 3 | Secure input and zeroization cleanup | Epic 1 `SEC-001`, `SEC-003`, `SEC-011`; Epic 8 `KEYMGMT-008` | Propose if no accepted change exists | Sensitive password/key material is removed from React state where practical, reveal/export paths are tightened, and zeroization coverage is verified. |
 | 4 | Auto-lock and session proof | Epic 1 `SEC-012`, `SEC-013`; Epic 5 `PERF-008` | Propose if no accepted change exists | Timeout/session-grant behavior is proven across popup, side panel, background restart boundaries, and signing requests. |
-| 5 | Security automation | Epic 1 `SEC-004`, `SEC-005`, `SEC-017`; Epic 5 `PERF-003`, `PERF-004`, `PERF-009` | Propose if no accepted change exists | CSP/build-output checks, secrets scanning, dependency audit, bundle-size guardrails, and memory-leak checks are in CI or documented local gates. |
+| 5 | Security automation | Epic 1 `SEC-004`, `SEC-005`, `SEC-017`; Epic 5 `PERF-003`, `PERF-004`, `PERF-009` | Apply `restore-security-test-assurance` (accepted) | Partially shipped: CI now runs typecheck, all Vitest suites, both builds and a dependency audit, and tooling is pinned. NOT covered by that change: secrets scanning (`SEC-005`), CSP/build-output checks (owned by `harden-manifest-and-build`), bundle-size guardrails, and memory-leak checks. |
 | 6 | Approval intelligence and activity polish | Epic 1 `SEC-008`; Epic 3 `UX-001`, `UX-003`, `UX-006`, `UX-013` | Propose if no accepted change exists | NIP-aware previews, risk copy, richer activity filtering/search, result/date filters, and CSV export are shipped. |
 | 7 | Developer contract | Epic 4 `DEV-002`, `DEV-006`, `DEV-010`, `DEV-013` | Propose if no accepted change exists | Public types, capability detection, versioning/deprecation rules, and concise dApp-facing docs are published. |
 | 8 | Protocol depth | Epic 2 `PROTO-001`, `PROTO-002`, `PROTO-007`, `PROTO-008`, `PROTO-009`, `PROTO-011`, then `PROTO-003`, `PROTO-005`, `PROTO-006`, `PROTO-010`, `PROTO-012` | Use one focused change per NIP family | Explicit NIP support is implemented, tested, and reflected in capability/developer docs. |
 | 9 | Sync and backup | Epic 6 `SYNC-001`, `SYNC-002`, `SYNC-003`, `SYNC-006`; Epic 1 `SEC-011`; Epic 8 `KEYMGMT-008` | Keep NIP-78/decentralized sync separate | Browser sync conflicts, encrypted backup formats, QR transfer, and backup/restore UX are complete. |
 
 If a slice has no clean PRD home, amend `docs/v2-prd.md` before implementation rather than tracking it only in this workflow file.
+
+Slice 5 has an accepted OpenSpec change, `restore-security-test-assurance`, covering the verification and supply-chain half of the slice. It deliberately excludes secrets scanning, CSP and build-output assertions, bundle-size guardrails, and memory-leak checks; those still need their own proposals, and `harden-manifest-and-build` owns the CSP and build-output part.
 
 ## Per-Slice Workflow
 
@@ -77,7 +79,7 @@ For code changes, the default gate is:
 - focused Vitest suites for changed logic
 - relevant Playwright extension tests for approval, NIP-07, options, onboarding, or policy behavior
 - `pnpm run build` and `pnpm run build:firefox` when extension wiring or build output changes
-- `npx react-doctor@latest` until it reports `No issues found!` and `100 / 100`
+- `pnpm run doctor` (pinned local React Doctor), addressing findings in the files you changed; report the score rather than gating on it
 
 For docs-only changes, verify local references and run `git diff --check`.
 

@@ -3,9 +3,9 @@ import type {
   CryptoAead,
   CryptoKdf,
   Schnorr,
+  SecretBytes,
 } from "@/application/ports/crypto";
 import { AppSettingsV1, KeyRecord } from "@/domain/types";
-import { randomBytes } from "@noble/hashes/utils.js";
 import { bech32 } from "@scure/base";
 import { zeroize, computeEventId, signEventHash } from "@/domain/utils/crypto";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
@@ -50,7 +50,7 @@ export class KeyVaultService {
       .join("");
   }
 
-  private parsePrivateKey(input: string): Uint8Array {
+  private parsePrivateKey(input: string): SecretBytes {
     const trimmed = input.trim();
     const isHex =
       /^[0-9a-fA-F]{64}$/.test(trimmed) || /^0x[0-9a-fA-F]{64}$/.test(trimmed);
@@ -73,11 +73,15 @@ export class KeyVaultService {
   }
 
   private async encryptPrivateKey(
-    sk: Uint8Array,
+    sk: SecretBytes,
     password: string
   ): Promise<{ ct: number[]; iv: number[]; salt: number[] }> {
-    const salt = randomBytes(16);
-    const iv = randomBytes(12);
+    // Same platform CSPRNG entry point as generateKey(). Using
+    // crypto.getRandomValues directly for the salt and IV too keeps every
+    // random draw in this service on one auditable source, which is what
+    // tests/security asserts against.
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
     const rawKey = await this.kdf.deriveKey(password, salt);
     try {
       const key = await this.aead.importKey(rawKey, ["encrypt"]);
@@ -303,37 +307,42 @@ export class KeyVaultService {
       this.listKeys(),
     ]);
 
-    // Convert password to buffer for zeroization
-    const passwordBuffer = new TextEncoder().encode(password);
+    // NOTE: there is deliberately no `passwordBuffer` here any more. This
+    // method used to encode `password` into a Uint8Array and zeroize that in a
+    // finally block, which looked like the password was being cleared. It was
+    // not: the encoded copy was never passed to anything - deriveKey takes the
+    // string - so the code created a *second* copy of the secret purely to
+    // have something to wipe. Removing it strictly reduces the number of copies
+    // of the password in memory.
+    //
+    // The honest position: `password` is an immutable JavaScript string. It
+    // cannot be erased, and the engine may have interned or copied it. What we
+    // can do is avoid extra copies and drop references promptly, which is what
+    // tests/security/memory-zeroization.test.ts actually asserts.
 
-    try {
-      // Derive and decrypt each key into memory
-      this.unlocked.clear();
-      await Promise.all(records.map(async (rec) => {
-        const salt = new Uint8Array(rec.salt);
-        const iv = new Uint8Array(rec.iv);
-        const ct = new Uint8Array(rec.ct);
-        const rawKey = await this.kdf.deriveKey(password, salt);
-        let pt: Uint8Array | null = null;
-        try {
-          const key = await this.aead.importKey(rawKey, ["decrypt"]);
-          pt = await this.aead.decrypt(key, iv, ct);
-          this.unlocked.set(rec.id, pt);
-          // Clear the local reference after storing
-          pt = null;
-        } finally {
-          // Always zeroize derived key material
-          zeroize(rawKey);
-          // Zeroize the plaintext if it exists and wasn't stored
-          if (pt) {
-            zeroize(pt);
-          }
+    // Derive and decrypt each key into memory
+    this.unlocked.clear();
+    await Promise.all(records.map(async (rec) => {
+      const salt = new Uint8Array(rec.salt);
+      const iv = new Uint8Array(rec.iv);
+      const ct = new Uint8Array(rec.ct);
+      const rawKey = await this.kdf.deriveKey(password, salt);
+      let pt: Uint8Array | null = null;
+      try {
+        const key = await this.aead.importKey(rawKey, ["decrypt"]);
+        pt = await this.aead.decrypt(key, iv, ct);
+        this.unlocked.set(rec.id, pt);
+        // Clear the local reference after storing
+        pt = null;
+      } finally {
+        // Always zeroize derived key material
+        zeroize(rawKey);
+        // Zeroize the plaintext if it exists and wasn't stored
+        if (pt) {
+          zeroize(pt);
         }
-      }));
-    } finally {
-      // Always zeroize password buffer
-      zeroize(passwordBuffer);
-    }
+      }
+    }));
 
     const selectedKeyId = settings?.selectedKeyId ?? records[0]?.id;
     await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {

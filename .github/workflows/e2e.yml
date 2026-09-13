@@ -1,0 +1,60 @@
+# Playwright extension end-to-end suite.
+#
+# Deliberately NOT a required status check. See docs/ci-verification.md for the
+# reasoning: the suite builds the extension, starts a fixture server and drives
+# a persistent Chromium extension context with workers: 1 and retries: 2. A
+# flaky required check teaches contributors to re-run until green and then to
+# bypass the gate, which recreates false assurance in a new place.
+#
+# It still has to run often and visibly, so: nightly, on demand, on pushes to
+# the default branch, and on any pull request carrying the `run-e2e` label.
+
+name: E2E
+
+on:
+  schedule:
+    # 03:00 UTC daily.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    types: [labeled, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright extension suite
+    # On pull requests, only run when explicitly labelled `run-e2e`.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'run-e2e')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - run: pnpm run test:e2e
+
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
