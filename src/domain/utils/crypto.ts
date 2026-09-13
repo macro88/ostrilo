@@ -4,6 +4,18 @@
  *
  * Requirements:
  * - NS-N-001: Noble secp256k1 schnorr + SHA-256; WebCrypto AES-GCM; Argon2id
+ *
+ * STATUS: the vault's live encryption path is NOT in this file. Key wrapping,
+ * key derivation and the AES-GCM envelope live in
+ * src/application/services/key-vault.service.ts and
+ * src/infrastructure/crypto/adapters.ts, which do satisfy NS-N-001 (Argon2id,
+ * recorded parameters, AAD-bound ciphertext).
+ *
+ * The encryptPrivateKey / decryptPrivateKey / deriveKeyFromPassword functions
+ * below are a SECOND, legacy implementation kept only so old material and old
+ * tests can still be read. They are read-only by policy: do not wire them into
+ * a write path. Removing them entirely belongs to the separate
+ * consolidate-crypto-implementations change.
  * - NS-N-002: AES-GCM ciphertext only in storage with random salt+iv
  * - NS-N-003: Overwrite Uint8Array secrets on lock/unload
  */
@@ -172,8 +184,16 @@ export function parsePrivateKey(input: string): Uint8Array {
 }
 
 /**
- * Derive encryption key from password using PBKDF2
- * Note: Changed from Argon2id to PBKDF2 for browser compatibility
+ * LEGACY, READ-ONLY. PBKDF2-HMAC-SHA256 at 100,000 iterations.
+ *
+ * The previous comment here claimed the switch from Argon2id to PBKDF2 was
+ * made "for browser compatibility". That was not true: the installed
+ * @noble/hashes ships argon2.js, and Argon2id was measured running correctly
+ * inside the MV3 service worker (611 ms at m=19456, t=2, p=1). The live vault
+ * now uses Argon2id via VaultKdf.
+ *
+ * This function remains only to read material written before the versioned
+ * vault format existed. Do not use it to write anything.
  */
 export async function deriveKeyFromPassword(
   password: string,

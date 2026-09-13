@@ -27,7 +27,7 @@ Traceable requirements table for the WXT + React + shadcn Nostr signer extension
 
 | ID | Title | Priority | Description | Rationale | Acceptance Criteria | Verification |
 |---|---|---|---|---|---|---|
-| NS-N-001 | Crypto suite | Must | Noble secp256k1 schnorr + SHA-256; WebCrypto AES-GCM; Argon2id or PBKDF2 | Correctness | Test vectors pass | Unit tests |
+| NS-N-001 | Crypto suite | Must | Noble secp256k1 schnorr + SHA-256; WebCrypto AES-GCM with AAD; **Argon2id (m=19456 KiB, t=2, p=1, dkLen=32)** as shipped in vault format `v:1`. Parameters are recorded per vault, never implied by code, and validated against a floor on read. PBKDF2-HMAC-SHA256 is a supported recorded variant (floor 600,000 iterations, native WebCrypto); pure-JS PBKDF2 at 100,000 iterations is retained read-only for pre-`v:1` material. | Correctness | BIP-340 and NIP-01 vectors pass; envelope/AAD/migration suite passes | Unit + security tests |
 | NS-N-002 | Key encryption at rest | Must | AES-GCM ciphertext only in storage with random salt+iv | Security | No plaintext key or passphrase in storage | Storage dump |
 | NS-N-003 | Zeroization | Must | Overwrite Uint8Array secrets on lock/unload | Defense in depth | Buffers are zeroed after lock | Unit test |
 | NS-N-004 | Auto-lock | Must | Lock on idle and on BG suspend | Risk control | After idle minutes or suspend, state is locked | Simulated idle test |

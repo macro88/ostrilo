@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import {
   WebCryptoAesGcm,
-  NoblePbkdf2,
+  VaultKdf,
   NobleSchnorr,
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
@@ -51,9 +51,15 @@ describe("KeyVaultService", () => {
     const sk = crypto.getRandomValues(new Uint8Array(32));
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const raw = await NoblePbkdf2.deriveKey(password, salt);
+    // Builds a LEGACY-shaped record (no v, no wrappedDek, PBKDF2-100k, no AAD)
+    // so this suite also exercises the legacy read and migration path.
+    const raw = await VaultKdf.deriveKey(password, {
+      alg: "pbkdf2-sha256",
+      c: 100_000,
+      salt: Array.from(salt),
+    });
     const key = await WebCryptoAesGcm.importKey(raw, ["encrypt"]);
-    const ct = await WebCryptoAesGcm.encrypt(key, iv, sk);
+    const ct = await WebCryptoAesGcm.encrypt(key, iv, sk, new Uint8Array(0));
     raw.fill(0);
     const pub = await NobleSchnorr.getPublicKey(sk);
     keyRecord = {
@@ -72,7 +78,7 @@ describe("KeyVaultService", () => {
     svc = new KeyVaultService(
       storage,
       WebCryptoAesGcm,
-      NoblePbkdf2,
+      VaultKdf,
       NobleSchnorr
     );
   });

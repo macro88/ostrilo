@@ -2,7 +2,7 @@ import { browser } from "wxt/browser";
 import { createStorageSuite } from "@/infrastructure/storage/adapters";
 import {
   WebCryptoAesGcm,
-  NoblePbkdf2,
+  VaultKdf,
   NobleSchnorr,
 } from "@/infrastructure/crypto/adapters";
 import { KeyVaultService } from "@/application/services/key-vault.service";
@@ -209,7 +209,7 @@ export default defineBackground(() => {
   const vault = new KeyVaultService(
     storage,
     WebCryptoAesGcm,
-    NoblePbkdf2,
+    VaultKdf,
     NobleSchnorr
   );
   const policy = new PolicyService(storage);

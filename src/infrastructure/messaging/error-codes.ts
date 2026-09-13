@@ -33,6 +33,10 @@ export const RPC_ERROR_CODES = {
 
   /** Password failed validation rules */
   INVALID_PASSWORD: "invalid_password",
+  /** Vault exists but cannot be read: unknown format version, or stored KDF
+   * parameters below the accepted floor. Distinct from INVALID_PASSWORD so a
+   * damaged or tampered vault never tells the user their password is wrong. */
+  VAULT_UNREADABLE: "vault_unreadable",
 
   /** Private key input is not valid nsec1 or hex format */
   INVALID_KEY_INPUT: "invalid_key_input",
@@ -114,6 +118,7 @@ export const RPC_NUMERIC_ERROR_CODES: Record<RpcErrorCode, number> = {
   [RPC_ERROR_CODES.INVALID_EVENT]: -32602,
   [RPC_ERROR_CODES.INVALID_ORIGIN]: -32602,
   [RPC_ERROR_CODES.INVALID_PASSWORD]: -32602,
+  [RPC_ERROR_CODES.VAULT_UNREADABLE]: -32005,
   [RPC_ERROR_CODES.INVALID_KEY_INPUT]: -32602,
   [RPC_ERROR_CODES.INVALID_HASH]: -32602,
 
@@ -137,6 +142,7 @@ export const RPC_ERROR_MESSAGES: Record<RpcErrorCode, string> = {
   [RPC_ERROR_CODES.INVALID_EVENT]: "Invalid event",
   [RPC_ERROR_CODES.INVALID_ORIGIN]: "Invalid origin",
   [RPC_ERROR_CODES.INVALID_PASSWORD]: "Invalid password",
+  [RPC_ERROR_CODES.VAULT_UNREADABLE]: "Vault cannot be read",
   [RPC_ERROR_CODES.INVALID_KEY_INPUT]: "Invalid key input",
   [RPC_ERROR_CODES.INVALID_HASH]: "Invalid hash",
   [RPC_ERROR_CODES.INVALID_REQUEST]: "Invalid request",

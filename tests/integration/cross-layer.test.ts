@@ -4,7 +4,7 @@ import { PolicyService } from "@/application/services/policy.service";
 import { SettingsService } from "@/application/services/settings.service";
 import {
   WebCryptoAesGcm,
-  NoblePbkdf2,
+  VaultKdf,
   NobleSchnorr,
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
@@ -47,7 +47,7 @@ describe("Cross-Layer Integration Tests", () => {
     keyVault = new KeyVaultService(
       storage,
       WebCryptoAesGcm,
-      NoblePbkdf2,
+      VaultKdf,
       NobleSchnorr
     );
     

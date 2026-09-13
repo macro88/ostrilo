@@ -73,8 +73,42 @@ export class VaultRpcHandler implements RpcModule {
       });
     }
 
-    const data = await context.vault.unlock(message.password);
-    return { ok: true, data };
+    try {
+      const data = await context.vault.unlock(message.password);
+      return { ok: true, data };
+    } catch (error) {
+      if (error instanceof Error) {
+        // A wrong password and a damaged vault are different problems and must
+        // not be reported identically. Previously every unlock failure surfaced
+        // as "incorrect password", so a corrupt record sent the user hunting
+        // for a password that was never wrong.
+        if (error.message === "incorrect_password") {
+          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
+            details: "Incorrect password",
+            method: message.type,
+          });
+        }
+        if (error.message === "vault_not_created") {
+          return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
+            details:
+              "No vault exists yet. Create or import a key before unlocking.",
+            method: message.type,
+          });
+        }
+        if (
+          error.message === "vault_version_unsupported" ||
+          error.message === "kdf_below_floor" ||
+          error.message === "kdf_unknown_algorithm"
+        ) {
+          return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
+            details:
+              "This vault was written by a different version of Ostrilo, or its stored encryption parameters are not acceptable. Update the extension; do not re-create your vault.",
+            method: message.type,
+          });
+        }
+      }
+      throw error;
+    }
   }
 
   private async handleLock(context: ServiceContext): Promise<RpcResponse> {
