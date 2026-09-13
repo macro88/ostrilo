@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { RelayManager } from "@/infrastructure/relay/relay-manager";
-import { DEFAULT_RELAY_URLS } from "@/domain/types";
 import type {
   NostrEvent,
   NostrEventCallback,
@@ -52,10 +51,16 @@ function createRelay(options: {
 }
 
 describe("RelayManager", () => {
-  it("falls back to the default relay list when no relays are configured yet", () => {
-    const manager = new RelayManager([]);
+  it("reflects exactly the relay list it is given, with no implicit defaults", () => {
+    // The default relay list is applied by SettingsService (see
+    // settings.service.ts and its tests), not here. RelayManager must stay
+    // faithful to its input: if it substituted defaults for an empty list,
+    // removing every relay in Settings would silently reconnect the user to
+    // the default relay they had just removed.
+    expect(new RelayManager([]).getRelayUrls()).toEqual([]);
 
-    expect(manager.getRelayUrls()).toEqual([...DEFAULT_RELAY_URLS]);
+    const configured = ["wss://relay.example", "wss://relay.other"];
+    expect(new RelayManager(configured).getRelayUrls()).toEqual(configured);
   });
 
   it("keeps profile subscriptions alive when one relay fails", async () => {
