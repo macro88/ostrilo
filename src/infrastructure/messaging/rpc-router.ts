@@ -6,6 +6,7 @@ import type { PolicyService } from "@/application/services/policy.service";
 import type { SettingsService } from "@/application/services/settings.service";
 import type { ActivityLogService } from "@/application/services/activity-log.service";
 import type { ProfileService } from "@/application/services/profile.service";
+import type { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
 
 /**
  * Service context passed to RPC handlers containing all application services
@@ -16,6 +17,7 @@ export interface ServiceContext {
   settings: SettingsService;
   activityLog: ActivityLogService;
   profile: ProfileService;
+  unlockThrottle: UnlockThrottleService;
 }
 
 /**

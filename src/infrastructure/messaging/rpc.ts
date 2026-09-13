@@ -43,7 +43,7 @@ export type RpcRequest =
   | { type: "policy.clearSession"; origin: string }
   | { type: "policy.setSession"; origin: string; enabled: boolean }
   | { type: "policy.removeOrigin"; origin: string }
-  | { type: "crypto.evaluatePassword"; password: string }
+  | { type: "crypto.evaluatePassword"; password: string; label?: string }
   | { type: "crypto.parsePrivateKey"; keyInput: string }
   // NIP-07 Nostr operations
   | { type: "nostr.getPublicKey" }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RELAY_BOUNDS } from "@/domain/relay/constants";
 
 /**
  * Profile metadata per NIP-01 kind:0 event content.
@@ -28,17 +29,51 @@ export interface ProfileCacheEntry {
   createdAt?: number; // Event created_at timestamp
 }
 
+/** Field length bounds for profile metadata. */
+export const PROFILE_FIELD_BOUNDS = {
+  NAME: 50,
+  DISPLAY_NAME: 50,
+  ABOUT: 500,
+  URL: RELAY_BOUNDS.MAX_REMOTE_URL_CHARS,
+  NIP05: 254,
+  LUD16: 254,
+  LUD06: 512,
+} as const;
+
 /**
- * URL validation helper that returns true if the string is a valid URL.
+ * URL fields ordered by how readily they are dropped when metadata exceeds the
+ * serialised ceiling. Largest and least load-bearing first.
  */
-const isValidUrl = (url: string): boolean => {
+const SHEDDABLE_FIELDS: (keyof ProfileMetadata)[] = [
+  "banner",
+  "lud06",
+  "about",
+  "picture",
+  "website",
+  "nip05",
+  "lud16",
+  "display_name",
+];
+
+/**
+ * Accept a URL supplied by a remote party only when it is `https:`.
+ *
+ * A bare `new URL()` parse constrains nothing about the scheme, which is how
+ * `http:`, `data:` and `javascript:` values previously survived validation and
+ * reached an extension page. The scheme is the whole check here; the length
+ * bound keeps a relay from parking kilobytes in a URL field.
+ */
+export function isAllowedRemoteUrl(url: unknown): url is string {
+  if (typeof url !== "string" || url.length > PROFILE_FIELD_BOUNDS.URL) {
+    return false;
+  }
+
   try {
-    new URL(url);
-    return true;
+    return new URL(url).protocol === "https:";
   } catch {
     return false;
   }
-};
+}
 
 /**
  * Email-like format validation for nip05 and lud16.
@@ -47,106 +82,189 @@ const isEmailLike = (value: string): boolean => {
   return /^[^@]+@[^@]+\.[^@]+$/.test(value);
 };
 
+const RemoteUrlSchema = z
+  .string()
+  .max(PROFILE_FIELD_BOUNDS.URL)
+  .refine(isAllowedRemoteUrl, {
+    message: "URL must use the https: scheme",
+  });
+
 /**
- * Zod validation schema for ProfileMetadata with constraints:
- * - name: max 50 characters
- * - about: max 500 characters
- * - URLs: validated with URL constructor
- * - nip05 and lud16: email-like format
+ * Zod validation schema for ProfileMetadata.
+ *
+ * Strict rather than loose: kind:0 content is chosen by a relay, and an unknown
+ * key is an attacker-chosen key in a record the UI iterates over and the cache
+ * persists. Adding a field when a NIP warrants it is a one-line change; keeping
+ * arbitrary keys is a standing liability.
  */
-export const ProfileMetadataSchema = z
-  .looseObject({
-    name: z.string().max(50).optional(),
-    display_name: z.string().max(50).optional(),
-    about: z.string().max(500).optional(),
-    picture: z
-      .string()
-      .refine((url) => isValidUrl(url), {
-        message: "Invalid picture URL",
-      })
-      .optional(),
-    banner: z
-      .string()
-      .refine((url) => isValidUrl(url), {
-        message: "Invalid banner URL",
-      })
-      .optional(),
-    website: z
-      .string()
-      .refine((url) => isValidUrl(url), {
-        message: "Invalid website URL",
-      })
-      .optional(),
-    nip05: z
-      .string()
-      .refine((value) => isEmailLike(value), {
-        message: "NIP-05 must be in format user@domain.com",
-      })
-      .optional(),
-    lud16: z
-      .string()
-      .refine((value) => isEmailLike(value), {
-        message: "Lightning address must be in format user@domain.com",
-      })
-      .optional(),
-    lud06: z.string().optional(),
-  }); // Allow additional fields from relays
+export const ProfileMetadataSchema = z.strictObject({
+  name: z.string().max(PROFILE_FIELD_BOUNDS.NAME).optional(),
+  display_name: z.string().max(PROFILE_FIELD_BOUNDS.DISPLAY_NAME).optional(),
+  about: z.string().max(PROFILE_FIELD_BOUNDS.ABOUT).optional(),
+  picture: RemoteUrlSchema.optional(),
+  banner: RemoteUrlSchema.optional(),
+  website: RemoteUrlSchema.optional(),
+  nip05: z
+    .string()
+    .max(PROFILE_FIELD_BOUNDS.NIP05)
+    .refine((value) => isEmailLike(value), {
+      message: "NIP-05 must be in format user@domain.com",
+    })
+    .optional(),
+  lud16: z
+    .string()
+    .max(PROFILE_FIELD_BOUNDS.LUD16)
+    .refine((value) => isEmailLike(value), {
+      message: "Lightning address must be in format user@domain.com",
+    })
+    .optional(),
+  lud06: z.string().max(PROFILE_FIELD_BOUNDS.LUD06).optional(),
+});
+
+/**
+ * Outcome of validating profile metadata, including what was thrown away.
+ *
+ * A dropped field is reported rather than swallowed so the profile editor can
+ * tell the user which value did not survive - a user whose avatar is on a plain
+ * `http:` host should see why it disappeared, not just that it did.
+ */
+export interface ProfileValidationResult {
+  metadata: ProfileMetadata | null;
+  rejectedFields: string[];
+}
+
+/**
+ * Validate profile metadata, reporting the fields that were dropped.
+ * Invalid fields are omitted rather than rejecting the entire profile.
+ */
+export function validateProfileMetadataDetailed(
+  data: unknown
+): ProfileValidationResult {
+  try {
+    const result = ProfileMetadataSchema.safeParse(data);
+    if (result.success) {
+      return { metadata: result.data as ProfileMetadata, rejectedFields: [] };
+    }
+
+    if (typeof data !== "object" || data === null || Array.isArray(data)) {
+      return { metadata: null, rejectedFields: [] };
+    }
+
+    // Partial validation: keep valid fields, omit invalid ones.
+    const partial: ProfileMetadata = {};
+    const rejected = new Set<string>();
+    const obj = data as Record<string, unknown>;
+
+    const keepString = (
+      key: "name" | "display_name" | "about" | "lud06",
+      max: number
+    ) => {
+      if (obj[key] === undefined) return;
+      if (typeof obj[key] === "string" && (obj[key] as string).length <= max) {
+        partial[key] = obj[key] as string;
+      } else {
+        rejected.add(key);
+      }
+    };
+
+    const keepUrl = (key: "picture" | "banner" | "website") => {
+      if (obj[key] === undefined) return;
+      if (isAllowedRemoteUrl(obj[key])) {
+        partial[key] = obj[key] as string;
+      } else {
+        rejected.add(key);
+      }
+    };
+
+    const keepEmailLike = (key: "nip05" | "lud16", max: number) => {
+      if (obj[key] === undefined) return;
+      if (
+        typeof obj[key] === "string" &&
+        (obj[key] as string).length <= max &&
+        isEmailLike(obj[key] as string)
+      ) {
+        partial[key] = obj[key] as string;
+      } else {
+        rejected.add(key);
+      }
+    };
+
+    keepString("name", PROFILE_FIELD_BOUNDS.NAME);
+    keepString("display_name", PROFILE_FIELD_BOUNDS.DISPLAY_NAME);
+    keepString("about", PROFILE_FIELD_BOUNDS.ABOUT);
+    keepUrl("picture");
+    keepUrl("banner");
+    keepUrl("website");
+    keepEmailLike("nip05", PROFILE_FIELD_BOUNDS.NIP05);
+    keepEmailLike("lud16", PROFILE_FIELD_BOUNDS.LUD16);
+    keepString("lud06", PROFILE_FIELD_BOUNDS.LUD06);
+
+    // Anything the schema does not define is a relay-chosen key. Record it as
+    // rejected so the drop is visible, but never carry the value forward.
+    for (const key of Object.keys(obj)) {
+      if (!(key in ProfileMetadataSchema.shape)) {
+        rejected.add(key);
+      }
+    }
+
+    return { metadata: partial, rejectedFields: Array.from(rejected) };
+  } catch (error) {
+    console.warn(
+      "Profile metadata validation failed:",
+      error instanceof Error ? error.message : "unknown error"
+    );
+    return { metadata: null, rejectedFields: [] };
+  }
+}
 
 /**
  * Validate profile metadata and return sanitized result.
  * Invalid fields are omitted rather than rejecting the entire profile.
  */
 export function validateProfileMetadata(data: unknown): ProfileMetadata | null {
-  try {
-    const result = ProfileMetadataSchema.safeParse(data);
-    if (result.success) {
-      return result.data as ProfileMetadata;
-    }
-
-    // Partial validation: keep valid fields, omit invalid ones
-    if (typeof data === "object" && data !== null) {
-      const partial: ProfileMetadata = {};
-      const obj = data as Record<string, unknown>;
-
-      // Validate each field individually
-      if (typeof obj.name === "string" && obj.name.length <= 50) {
-        partial.name = obj.name;
-      }
-      if (
-        typeof obj.display_name === "string" &&
-        obj.display_name.length <= 50
-      ) {
-        partial.display_name = obj.display_name;
-      }
-      if (typeof obj.about === "string" && obj.about.length <= 500) {
-        partial.about = obj.about;
-      }
-      if (typeof obj.picture === "string" && isValidUrl(obj.picture)) {
-        partial.picture = obj.picture;
-      }
-      if (typeof obj.banner === "string" && isValidUrl(obj.banner)) {
-        partial.banner = obj.banner;
-      }
-      if (typeof obj.website === "string" && isValidUrl(obj.website)) {
-        partial.website = obj.website;
-      }
-      if (typeof obj.nip05 === "string" && isEmailLike(obj.nip05)) {
-        partial.nip05 = obj.nip05;
-      }
-      if (typeof obj.lud16 === "string" && isEmailLike(obj.lud16)) {
-        partial.lud16 = obj.lud16;
-      }
-      if (typeof obj.lud06 === "string") {
-        partial.lud06 = obj.lud06;
-      }
-
-      return partial;
-    }
-
-    return null;
-  } catch (error) {
-    console.warn("Profile metadata validation failed:", error);
-    return null;
-  }
+  return validateProfileMetadataDetailed(data).metadata;
 }
 
+/**
+ * Serialised byte size of a metadata record.
+ */
+export function profileMetadataByteSize(metadata: ProfileMetadata): number {
+  return new TextEncoder().encode(JSON.stringify(metadata)).length;
+}
+
+/**
+ * Reduce metadata to the serialised ceiling by shedding optional fields.
+ *
+ * The alternative - caching whatever the relay sent - puts a relay in control
+ * of how much of the extension's storage budget it consumes. Fields are shed in
+ * a fixed order, largest and least identity-bearing first, so `name` survives
+ * to the last: the point of a cached profile is telling identities apart.
+ */
+export function boundProfileMetadata(metadata: ProfileMetadata): {
+  metadata: ProfileMetadata;
+  droppedFields: string[];
+} {
+  const bounded: ProfileMetadata = { ...metadata };
+  const dropped: string[] = [];
+
+  for (const field of SHEDDABLE_FIELDS) {
+    if (profileMetadataByteSize(bounded) <= RELAY_BOUNDS.MAX_METADATA_BYTES) {
+      break;
+    }
+    if (bounded[field] !== undefined) {
+      delete bounded[field];
+      dropped.push(field);
+    }
+  }
+
+  // `name` is shed last and only if it alone still breaks the ceiling.
+  if (
+    profileMetadataByteSize(bounded) > RELAY_BOUNDS.MAX_METADATA_BYTES &&
+    bounded.name !== undefined
+  ) {
+    delete bounded.name;
+    dropped.push("name");
+  }
+
+  return { metadata: bounded, droppedFields: dropped };
+}

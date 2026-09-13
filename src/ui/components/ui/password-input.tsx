@@ -1,20 +1,13 @@
 import { useEffect, useState, useMemo } from "react";
 import { evaluatePasswordStrength } from "@/infrastructure/messaging/client";
+import type { PasswordVerdict as PasswordStrength } from "@/domain/utils/password-policy";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Shield, Check, X } from "lucide-react";
 
-// Define PasswordStrength interface here since we're not importing it from crypto
-interface PasswordRequirement {
-  requirement: string;
-  passes: boolean;
-}
-
-interface PasswordStrength {
-  score: number;
-  requirements: PasswordRequirement[];
-  meetsMinimum: boolean;
-}
+// The verdict shape is declared ONCE, in the domain policy module. This file
+// used to redeclare it, which is how a UI ended up gating on its own idea of
+// what "strong enough" meant.
 
 interface PasswordInputProps {
   label: string;
@@ -184,7 +177,7 @@ export function PasswordInput({
               <div className="text-xs text-muted-foreground">Requirements:</div>
               {displayedStrength.requirements.map((req) => (
                 <div
-                  key={req.requirement}
+                  key={req.label}
                   className="flex items-center gap-2 text-xs"
                 >
                   {req.passes ? (
@@ -197,7 +190,7 @@ export function PasswordInput({
                       req.passes ? "text-foreground" : "text-muted-foreground"
                     }
                   >
-                    {req.requirement}
+                    {req.label}
                   </span>
                 </div>
               ))}

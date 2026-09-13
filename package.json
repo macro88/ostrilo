@@ -19,6 +19,7 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:security": "vitest run tests/security",
+    "test:manifest": "wxt build && wxt build -b firefox && vitest run tests/security/manifest-assertions.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:coverage:ui": "vitest --coverage --ui",
     "test:ci": "vitest run --coverage --reporter=junit --outputFile=test-results.xml",

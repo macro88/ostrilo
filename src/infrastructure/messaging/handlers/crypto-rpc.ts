@@ -38,11 +38,18 @@ export class CryptoRpcHandler implements RpcModule {
       });
     }
 
-    // Import the function from domain validation utilities
-    const { evaluatePasswordStrength } = await import(
-      "@/domain/utils/validation"
-    );
-    const strength = evaluatePasswordStrength(passwordValidation.data);
+    // Runs in the BACKGROUND, so the blocklist is available here and the
+    // verdict the UI receives is authoritative rather than structural-only.
+    // A verdict built without the blocklist can never be `acceptable`, which
+    // is what stops a UI green-lighting a password it did not fully check.
+    const [{ checkPassword }, { COMMON_PASSWORDS }] = await Promise.all([
+      import("@/domain/utils/password-policy"),
+      import("@/domain/utils/wordlists/common-passwords"),
+    ]);
+    const strength = checkPassword(passwordValidation.data, {
+      blocklist: COMMON_PASSWORDS,
+      extraTerms: message.label ? [message.label] : [],
+    });
     return { ok: true, data: strength };
   }
 

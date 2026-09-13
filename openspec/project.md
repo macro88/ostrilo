@@ -196,7 +196,7 @@ The extension uses a modular RPC system for communication between UI (popup/side
 **Build Validation:**
 - Always test both Chrome and Firefox builds when making changes
 - Development builds available via `pnpm dev` and `pnpm run dev:firefox`
-- Load unpacked extension from `.output/chrome-mv3/` or `.output/firefox-mv2/`
+- Load unpacked extension from `.output/chrome-mv3/` or `.output/firefox-mv3/`
 
 **Important Timeouts:**
 - `pnpm install` can take close to a minute - NEVER CANCEL, set timeout to 90+ seconds
@@ -241,12 +241,12 @@ Ostrilo implements key management for the Nostr protocol, a decentralized social
 - Private keys MUST be encrypted at rest with AES-GCM
 - Plaintext keys MUST be zeroized from memory on lock
 - No remote code execution - CSP prevents eval, no remote scripts
-- Minimal manifest permissions: only `storage` and `sidePanel`
+- Manifest: MV3 on BOTH Chrome and Firefox. Permissions are `storage` and `windows` on both targets, plus `sidePanel` on Chrome only (WXT adds it automatically for the MV3 sidepanel entrypoint). An explicit Content Security Policy is declared; see `docs/extension-manifest.md`.
 - All crypto operations use audited libraries (@noble/curves, @noble/hashes, Web Crypto API)
 
 **Browser Extension Constraints:**
 - Chrome Manifest V3 - service worker background, no persistent background pages
-- Firefox Manifest V2 - persistent background scripts supported
+- Firefox Manifest V3 - persistent background scripts supported
 - Content Security Policy restrictions apply
 - Storage limited to chrome.storage.local API
 - Communication between UI and background via message passing only

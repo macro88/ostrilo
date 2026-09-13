@@ -125,6 +125,34 @@ change touched. Recorded as a baseline so later runs can be compared; the score
 is reported, not gated. Before this change the tool had not run at all, because
 every invocation was refused by the supply-chain policy.
 
+## Manifest and build-output assertions
+
+`tests/security/manifest-assertions.test.ts` reads the generated
+`.output/<target>/manifest.json` for both targets and asserts the content
+security policy, the permission set, the web-accessible resource declaration,
+the content-script match list, the manifest version, the absence of a persistent
+background context, and the absence of any scaffold placeholder string. It also
+asserts that the production bundles contain no `console` call, no `.map` file
+and no `sourceMappingURL` comment.
+
+Added by the OpenSpec change `harden-manifest-and-build`. The full policy and
+the reasoning behind each value are in `docs/extension-manifest.md`.
+
+It asserts on **generated output**, not on `wxt.config.ts`. That distinction is
+the whole point: the Firefox `sidebar_action` block shipped for months carrying
+WXT's scaffold placeholders, and none of them appear anywhere in the config.
+
+**Known gap: the suite skips in CI today.** It needs real build output, so it
+skips — with a message naming the required build command — when
+`.output/<target>/manifest.json` is absent. The `verify` job runs `pnpm run test`
+without building, and the `build` job builds without running tests, so in CI
+these assertions currently skip rather than run.
+
+Closing it is one line in `verify.yml`: add `pnpm run test:manifest` to the
+`build` job, after the two build steps. That script builds both targets and then
+runs this suite, so it is correct to run anywhere. Until that lands, the
+assertions are a local and pre-commit gate only.
+
 ## Making Verify required
 
 Landing the workflow and making it required are deliberately separate steps, so
@@ -150,10 +178,17 @@ A user installing a signer from a store cannot audit what they received. A
 published checksum and a documented reproduce procedure are the difference
 between trusting the source and trusting the publisher.
 
-Toolchain recorded for release builds:
+Toolchain pinned for release builds:
 
-- Node 22 (CI), pnpm `11.5.2` (from `packageManager` in `package.json`)
-- wxt `0.20.26`
+- Node: `.nvmrc` pins `22`, which is also the version every CI job installs.
+  Before this pin there was no constraint at all — `openspec/project.md` merely
+  described the development environment as "Node.js 24.x", which is not the same
+  thing as requiring it.
+- pnpm `11.5.2`, from `packageManager` in `package.json`.
+- wxt `0.20.26`, an exact devDependency.
+
+The determinism measurement below was taken on Node v24.16.0, before the pin.
+Determinism *across* Node majors has not been measured; see the gap table.
 
 **Measured, not assumed.** Two consecutive `pnpm run build` runs from the same
 source and lockfile produce byte-identical JavaScript and `manifest.json`:
@@ -171,13 +206,83 @@ nondeterministic input is archive metadata: `pnpm zip` records file timestamps.
 Set `SOURCE_DATE_EPOCH` when producing release archives so those are fixed too.
 That is where any remaining verification effort should go, not the bundle.
 
-To reproduce and compare a release:
+### The exact release commands
 
 ```bash
 git checkout <release-tag>
-pnpm install --frozen-lockfile
-SOURCE_DATE_EPOCH=<epoch from the release notes> pnpm run build
-shasum -a 256 .output/chrome-mv3/*.js .output/chrome-mv3/manifest.json
+nvm use                                    # reads .nvmrc
+corepack pnpm install --frozen-lockfile    # pnpm 11.5.2, from packageManager
+SOURCE_DATE_EPOCH=<epoch from the release notes> pnpm run zip          # Chrome
+SOURCE_DATE_EPOCH=<epoch from the release notes> pnpm run zip:firefox  # Firefox + sources
 ```
 
-Compare against the checksums published with the release tag.
+`pnpm run zip` and `pnpm run zip:firefox` build first, so they are the only two
+commands a release needs. They produce, in `.output/`:
+
+| Artifact | Contents |
+|---|---|
+| `ostrilo-<version>-chrome.zip` | The unpacked Chrome extension, minus the excluded files below. |
+| `ostrilo-<version>-firefox.zip` | The same for Firefox. |
+| `ostrilo-<version>-sources.zip` | The source archive AMO requires, built from an explicit allowlist. |
+
+### What the archives may contain
+
+Both are governed by explicit allowlists in `wxt.config.ts`, because both tool
+defaults fail open: `zip.exclude` defaults to empty, so everything in the output
+ships, and `zip.excludeSources` enumerates what to omit, so anything new is
+included. Neither reads `.gitignore`.
+
+- **Extension archive.** `zip.exclude` drops `**/*.map` and the unreferenced
+  root `icon.png` (659 KB) and `icon.svg` (200 KB), which are copied from
+  `public/` and pointed at by no manifest key — the `icons` block references the
+  sized files `@wxt-dev/auto-icons` generates from `src/assets/icon.png`. Result:
+  24 files, 1.2 MB.
+- **Sources archive.** WXT's source filter is `include-match OR NOT
+  exclude-match`, so `excludeSources: ["**/*"]` paired with an explicit
+  `includeSources` allowlist makes the archive fail closed: a new top-level
+  directory is excluded by default rather than shipped by default. Result: 169
+  files, 1.8 MB, containing only `src/`, `public/`, `package.json`,
+  `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `wxt.config.ts`, `tsconfig.json`,
+  `components.json`, `LICENSE` and `README.md`.
+
+  This one was a real finding, not a tidiness exercise. Under the defaults the
+  sources archive was 4,701 files and 277 MB, of which 4,313 files came from
+  `test-results/` — including `chromium-user-data/Default/Local Extension
+  Settings`, the extension's own vault storage captured from end-to-end runs.
+  That was the archive that would have been uploaded to Mozilla.
+
+Verified after the change: extracting `ostrilo-<version>-sources.zip` into a
+clean directory and running `pnpm install --frozen-lockfile && pnpm run
+build:firefox` succeeds, and produces a `manifest.json` byte-identical to the
+one built in the repository.
+
+### Obtaining and comparing digests
+
+```bash
+# Per-file digests of the built extension
+shasum -a 256 .output/chrome-mv3/manifest.json \
+              .output/chrome-mv3/*.js \
+              .output/chrome-mv3/chunks/*.js
+
+# One digest for the whole build, order-stable
+find .output/chrome-mv3 -type f \( -name '*.js' -o -name 'manifest.json' \) \
+  | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256
+
+# Digests of the published archives
+shasum -a 256 .output/*.zip
+```
+
+Publish the archive digests with the release tag. A user who wants to check a
+release rebuilds from the tag and compares the per-file digests, or compares the
+whole-build digest.
+
+### What still blocks a byte-identical comparison
+
+| Gap | Status |
+|---|---|
+| No pinned Node version | **Fixed.** `.nvmrc` pins `22`. |
+| No documented build procedure | **Fixed.** The commands above. |
+| No published digests | **Fixed.** The procedure above; publishing them is a release-time step. |
+| Archive timestamps | **Mitigated.** `pnpm zip` records file timestamps; set `SOURCE_DATE_EPOCH` when producing release archives. |
+| Store re-signing | **Deferred, structural.** Both the Chrome Web Store and AMO re-sign uploads, so the installed artifact is never byte-identical to the uploaded one. Comparison has to be against the uploaded archive, or per-file against the unpacked install. |
+| Cross-machine and cross-Node-major determinism | **Deferred, unverified.** Two consecutive builds on one machine are byte-identical (measured above). Nobody has built on two machines, or on two Node majors, and diffed the result. Until someone has, determinism is an assumption. A CI job that builds twice and diffs is the natural next step. |

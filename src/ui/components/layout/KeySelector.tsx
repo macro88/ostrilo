@@ -7,7 +7,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/ui/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/ui/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/ui/components/ui/avatar";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { useProfileMetadata } from "@/ui/hooks/useProfileMetadata";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,7 @@ interface KeySelectorProps {
  * ```
  * 
  * Features:
- * - Profile-aware key display with avatars and names from Nostr metadata
+ * - Profile-aware key display with local seal avatars and names from Nostr metadata
  * - Dropdown menu with all available keys
  * - Visual indicator (checkmark) for currently selected key
  * - Optional "Add Key" action at bottom of dropdown
@@ -52,6 +52,11 @@ interface KeySelectorProps {
  * This component uses Radix UI DropdownMenu for accessible dropdown behavior.
  * Profile metadata is fetched via useProfileMetadata hook and cached for 5 minutes.
  * All keys share the same vault password and are encrypted at rest.
+ *
+ * Avatars are always the local seal with the key's initial. A relay chooses the
+ * profile picture URL, and this is the surface on which the user confirms which
+ * identity is about to sign, so no request is ever made to a relay-supplied host
+ * from here.
  */
 export const KeySelector = memo(function KeySelector({
   onAddKey,
@@ -86,12 +91,11 @@ export const KeySelector = memo(function KeySelector({
     const profile = profiles.get(key.publicKeyHex);
     const displayName =
       profile?.display_name || profile?.name || key.label || "Unnamed Key";
-    const avatarUrl = profile?.picture;
     const truncatedNpub = key.publicKeyBech32
       ? `${key.publicKeyBech32.slice(0, 12)}...${key.publicKeyBech32.slice(-4)}`
       : "";
 
-    return { displayName, avatarUrl, truncatedNpub };
+    return { displayName, truncatedNpub };
   };
 
   if (!selectedUnlockedKey) {
@@ -117,12 +121,6 @@ export const KeySelector = memo(function KeySelector({
         aria-controls="key-selector-listbox"
       >
         <Avatar shape="seal" className="h-6 w-6">
-          {currentKeyDisplay.avatarUrl && (
-            <AvatarImage
-              src={currentKeyDisplay.avatarUrl}
-              alt={currentKeyDisplay.displayName}
-            />
-          )}
           <AvatarFallback className="text-xs">
             {currentKeyDisplay.displayName.charAt(0).toUpperCase()}
           </AvatarFallback>
@@ -177,13 +175,7 @@ export const KeySelector = memo(function KeySelector({
                   <Check className="h-4 w-4 text-primary" aria-hidden="true" />
                 )}
               </div>
-        <Avatar shape="seal" className="h-8 w-8">
-                {keyDisplay.avatarUrl && (
-                  <AvatarImage
-                    src={keyDisplay.avatarUrl}
-                    alt={keyDisplay.displayName}
-                  />
-                )}
+              <Avatar shape="seal" className="h-8 w-8">
                 <AvatarFallback className="text-xs">
                   {keyDisplay.displayName.charAt(0).toUpperCase()}
                 </AvatarFallback>

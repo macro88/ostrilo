@@ -28,17 +28,19 @@ class MockStorage implements StoragePort {
 
 describe("ProfileService Unit Tests", () => {
   let storage: StorageSuite;
-  let mockStorage: MockStorage;
+  let localStore: MockStorage;
+  let sessionStore: MockStorage;
   let relay: INostrRelay;
   let keyVault: KeyVaultService;
   let service: ProfileService;
 
   beforeEach(() => {
-    mockStorage = new MockStorage();
+    localStore = new MockStorage();
+    sessionStore = new MockStorage();
     storage = {
-      local: mockStorage,
-      sync: mockStorage,
-      session: mockStorage,
+      local: localStore,
+      sync: new MockStorage(),
+      session: sessionStore,
     };
 
     relay = {
@@ -58,7 +60,8 @@ describe("ProfileService Unit Tests", () => {
   });
 
   afterEach(() => {
-    mockStorage.clear();
+    localStore.clear();
+    sessionStore.clear();
     vi.clearAllMocks();
   });
 
@@ -72,7 +75,7 @@ describe("ProfileService Unit Tests", () => {
       const now = Math.floor(Date.now() / 1000);
 
       // Pre-populate cache
-      await storage.local.set("profileCache", {
+      await storage.session.set("profileCache", {
         [pubkey]: {
           pubkey,
           metadata: cachedProfile,
@@ -124,7 +127,7 @@ describe("ProfileService Unit Tests", () => {
       );
 
       // Verify cache was updated
-      const cache = await storage.local.get<any>("profileCache");
+      const cache = await storage.session.get<any>("profileCache");
       expect(cache[pubkey]).toBeDefined();
       expect(cache[pubkey].metadata).toEqual(fetchedProfile);
     });
@@ -138,7 +141,7 @@ describe("ProfileService Unit Tests", () => {
       const now = Math.floor(Date.now() / 1000);
 
       // Pre-populate with expired cache
-      await storage.local.set("profileCache", {
+      await storage.session.set("profileCache", {
         [pubkey]: {
           pubkey,
           metadata: oldProfile,
@@ -177,7 +180,7 @@ describe("ProfileService Unit Tests", () => {
       const now = Math.floor(Date.now() / 1000);
 
       // Pre-populate cache with valid (non-expired) entry
-      await storage.local.set("profileCache", {
+      await storage.session.set("profileCache", {
         [pubkey]: {
           pubkey,
           metadata: cachedProfile,
@@ -317,7 +320,7 @@ describe("ProfileService Unit Tests", () => {
       const now = Math.floor(Date.now() / 1000);
 
       // Pre-populate with expired cache
-      await storage.local.set("profileCache", {
+      await storage.session.set("profileCache", {
         [pubkey]: {
           pubkey,
           metadata: cachedProfile,
@@ -418,7 +421,7 @@ describe("ProfileService Unit Tests", () => {
       expect(relay.publish).toHaveBeenCalledWith(signedEvent);
 
       // Verify cache was updated
-      const cache = await storage.local.get<any>("profileCache");
+      const cache = await storage.session.get<any>("profileCache");
       expect(cache["pubkey1"]).toBeDefined();
       expect(cache["pubkey1"].metadata).toEqual(metadata);
     });
@@ -512,10 +515,10 @@ describe("ProfileService Unit Tests", () => {
         },
       };
 
-      await storage.local.set("profileCache", cache);
+      await storage.session.set("profileCache", cache);
       await service.clearCache("pubkey1");
 
-      const updatedCache = await storage.local.get<any>("profileCache");
+      const updatedCache = await storage.session.get<any>("profileCache");
       expect(updatedCache.pubkey1).toBeUndefined();
       expect(updatedCache.pubkey2).toBeDefined();
     });
@@ -530,10 +533,10 @@ describe("ProfileService Unit Tests", () => {
         },
       };
 
-      await storage.local.set("profileCache", cache);
+      await storage.session.set("profileCache", cache);
       await service.clearCache();
 
-      const updatedCache = await storage.local.get<any>("profileCache");
+      const updatedCache = await storage.session.get<any>("profileCache");
       expect(updatedCache).toBeUndefined();
     });
   });
@@ -552,7 +555,7 @@ describe("ProfileService Unit Tests", () => {
           ttl: 3600,
         };
       }
-      await storage.local.set("profileCache", cache);
+      await storage.session.set("profileCache", cache);
 
       // Add one more profile to trigger eviction
       const newProfile: ProfileMetadata = { name: "New User" };
@@ -572,7 +575,7 @@ describe("ProfileService Unit Tests", () => {
 
       await service.getProfile("pubkey-new");
 
-      const updatedCache = await storage.local.get<any>("profileCache");
+      const updatedCache = await storage.session.get<any>("profileCache");
 
       // Should still have 50 entries (oldest evicted)
       expect(Object.keys(updatedCache).length).toBe(50);

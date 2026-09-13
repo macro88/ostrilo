@@ -1,88 +1,88 @@
 ## 1. Fix The Broken Firefox Manifest Output
 
-- [ ] 1.1 Replace the placeholder `<title>Default Side Panel Title</title>` in `src/extension/sidepanel/index.html` with a real title.
-- [ ] 1.2 Delete the scaffold `<meta name="manifest.default_icon">`, `<meta name="manifest.open_at_install">`, and `<meta name="manifest.browser_style">` tags and the commented `manifest.include`/`manifest.exclude` lines from the same file.
-- [ ] 1.3 Rebuild the Firefox target and confirm `sidebar_action` reduces to a valid `default_panel` plus `default_title` with no `true|false`, no `/icon-16.png`, and no ellipsis strings.
-- [ ] 1.4 Confirm the side panel still renders and still picks up the extension `icons` block.
+- [x] 1.1 Replace the placeholder `<title>Default Side Panel Title</title>` in `src/extension/sidepanel/index.html` with a real title.
+- [x] 1.2 Delete the scaffold `<meta name="manifest.default_icon">`, `<meta name="manifest.open_at_install">`, and `<meta name="manifest.browser_style">` tags and the commented `manifest.include`/`manifest.exclude` lines from the same file.
+- [x] 1.3 Rebuild the Firefox target and confirm `sidebar_action` reduces to a valid `default_panel` plus `default_title` with no `true|false`, no `/icon-16.png`, and no ellipsis strings. Result: `{"default_panel":"sidepanel.html","default_title":"Ostrilo"}`.
+- [x] 1.4 Confirm the side panel still renders and still picks up the extension `icons` block. `sidepanel.html` loads with no console error and renders its 3D canvas (automated page smoke, and `options-page`/`agent-smoke` Playwright specs). `sidebar_action` declares no `default_icon`, so Firefox falls back to the manifest `icons` block, which is present and unchanged. Firefox itself was not launched — no Firefox runner is configured in this repo.
 
 ## 2. Declare The Content Security Policy
 
-- [ ] 2.1 Add `content_security_policy.extension_pages` to the `manifest` block in `wxt.config.ts` with the directives from design Decision 1.
-- [ ] 2.2 Build both targets and read both generated manifests to confirm the MV3 object form and, if the Firefox target is still MV2 at this point, the flattened MV2 string.
-- [ ] 2.3 Confirm `connect-src` includes `'self'` so the bundled `.glb` still loads, includes a `wss:` source for relays, and includes `https://nostr.build` for profile image upload.
-- [ ] 2.4 Confirm `img-src` allows `'self'`, `data:`, and `https:` but not `http:`.
-- [ ] 2.5 Confirm `style-src` includes `'unsafe-inline'` so Radix runtime style injection keeps working, and that `script-src` does not.
-- [ ] 2.6 Verify no `eval`, `new Function`, or WebAssembly use has been introduced that would need `script-src` relaxed.
+- [x] 2.1 Add `content_security_policy.extension_pages` to the `manifest` block in `wxt.config.ts` with the directives from design Decision 1.
+- [x] 2.2 Build both targets and read both generated manifests to confirm the MV3 object form and, if the Firefox target is still MV2 at this point, the flattened MV2 string. Both targets are MV3 (task 5.1), so both carry the object form and the MV2 string path never applies. The CSP string is byte-identical across the two manifests.
+- [x] 2.3 Confirm `connect-src` includes `'self'` so the bundled `.glb` still loads, includes a `wss:` source for relays, and includes `https://nostr.build` for profile image upload. Verified empirically as well as textually: loading `popup.html` and `sidepanel.html` under the declared CSP fetches `assets/ostrilo-CsJ2X-eS.glb` successfully, with no `securitypolicyviolation` for `connect-src` and no failed request.
+- [x] 2.4 Confirm `img-src` allows `'self'`, `data:`, and `https:` but not `http:`.
+- [x] 2.5 Confirm `style-src` includes `'unsafe-inline'` so Radix runtime style injection keeps working, and that `script-src` does not. Both are asserted positively in the manifest test, so removing `'unsafe-inline'` from `style-src` fails the build rather than silently breaking dialog scroll-lock.
+- [x] 2.6 Verify no `eval`, `new Function`, or WebAssembly use has been introduced that would need `script-src` relaxed. `grep` finds no `eval(` or `new Function(` in `src/`, and — stronger — no `eval(`, `Function(` or `new Function(` token survives anywhere in the built output. See the note under 10.7 about the `eval` violation the page smoke does report; it originates in the Playwright harness, and Chrome's own default extension policy blocks it identically, so it is not affected by this change.
 
 ## 3. Least-Privilege Permissions And Resource Exposure
 
-- [ ] 3.1 Remove the explicit `"sidePanel"` entry from `permissions` in `wxt.config.ts`.
-- [ ] 3.2 Confirm the Chrome manifest still contains `sidePanel` because WXT adds it for MV3 sidepanel entrypoints, and that the docked side panel still opens.
-- [ ] 3.3 Confirm the Firefox manifest no longer requests the invalid `sidePanel` permission.
-- [ ] 3.4 Confirm `storage` and `windows` remain in both manifests and that no `host_permissions` key appears.
-- [ ] 3.5 Add `use_dynamic_url: true` to the `injected.js` `web_accessible_resources` entry.
-- [ ] 3.6 Align the `web_accessible_resources` `matches` list with the content-script `matches` list owned by `harden-provider-trust-boundary`.
-- [ ] 3.7 Load a real page and confirm `window.nostr` is still injected under the dynamic resource URL.
+- [x] 3.1 Remove the explicit `"sidePanel"` entry from `permissions` in `wxt.config.ts`.
+- [x] 3.2 Confirm the Chrome manifest still contains `sidePanel` because WXT adds it for MV3 sidepanel entrypoints, and that the docked side panel still opens. Chrome manifest: `"permissions":["storage","windows","sidePanel"]` plus `"side_panel":{"default_path":"sidepanel.html"}`. The panel page itself opens and renders; docking is driven by `useSidePanelDock`, which feature-detects `browser.sidePanel` and is unchanged by this work.
+- [x] 3.3 Confirm the Firefox manifest no longer requests the invalid `sidePanel` permission. Firefox manifest: `"permissions":["storage","windows"]`.
+- [x] 3.4 Confirm `storage` and `windows` remain in both manifests and that no `host_permissions` key appears. Asserted per target in the manifest test.
+- [x] 3.5 Add `use_dynamic_url: true` to the `injected.js` `web_accessible_resources` entry. Chrome only — the key is Chrome-specific, so `wxt.config.ts` uses a `manifest` factory and omits it when `env.browser === "firefox"` rather than emitting an unknown key that the AMO validator would flag.
+- [x] 3.6 Align the `web_accessible_resources` `matches` list with the content-script `matches` list owned by `harden-provider-trust-boundary`. That change has not started (0 of 77 tasks), so the current list — `["http://*/*","https://*/*"]` — is recorded as a literal in `PROVIDER_MATCHES` in `wxt.config.ts` and in the assertion test. When `harden-provider-trust-boundary` narrows `content.ts` to `["https://*/*"]` it must update both literals; the test fails until it does, which is the intended coupling.
+- [x] 3.7 Load a real page and confirm `window.nostr` is still injected under the dynamic resource URL. Verified against `https://example.com` with the built extension loaded unpacked: `window.nostr` is present with `getPublicKey`, `signEvent`, `nip04`, `nip44`. The Playwright `nip07-provider` spec, including "injected early before DOMContentLoaded", also passes against the `use_dynamic_url` build.
 
 ## 4. Strip Console Output From Production Builds
 
-- [ ] 4.1 Add an esbuild `drop` setting for `console` and `debugger` to the `vite` factory in `wxt.config.ts`, applied to production builds only.
-- [ ] 4.2 Confirm no `console` call remains in `.output/chrome-mv3/background.js` or any other production output file.
-- [ ] 4.3 Confirm a development build still retains console output.
-- [ ] 4.4 Confirm `remove-key-exfiltration-surface` does not also add a build-level console-drop setting, per the ownership split in design Decision 4.
+- [x] 4.1 Add an esbuild `drop` setting for `console` and `debugger` to the `vite` factory in `wxt.config.ts`, applied to production builds only.
+- [x] 4.2 Confirm no `console` call remains in `.output/chrome-mv3/background.js` or any other production output file. Zero `console.<name>(` call expressions in either target. What does remain are inert *references* — WXT's own internal logger compiles to `{debug: (...a) => print(console.debug, ...a)}` where `print` is an empty function in production. esbuild's `drop` removes call expressions, not references, and those references never write to the console. The assertion test therefore matches a call, not the bare word, and says why.
+- [x] 4.3 Confirm a development build still retains console output. `wxt build --mode development` keeps 35 `console.log(`, 19 `console.warn(` and 18 `console.error(` in `.output/chrome-mv3-dev/background.js`.
+- [x] 4.4 Confirm `remove-key-exfiltration-surface` does not also add a build-level console-drop setting, per the ownership split in design Decision 4. Checked: its tasks 8.1, 8.2 and 11.5 are marked `[~]` and explicitly defer the setting to this change, and it does not touch `wxt.config.ts`.
 
 ## 5. Firefox Manifest Version
 
-- [ ] 5.1 Set `manifestVersion: 3` for the Firefox target in `wxt.config.ts`.
-- [ ] 5.2 Confirm the generated Firefox manifest declares a non-persistent background context and no persistent background page.
-- [ ] 5.3 Update every hardcoded `.output/firefox-mv2` reference in docs, test fixtures, and CI to the new output path.
-- [ ] 5.4 Review module-scope state in `src/extension/background.ts`, including `approvalWindowId` and `approvalWindowOperation`, for assumptions that the background context survives suspension.
-- [ ] 5.5 If MV3 migration is blocked, fall back to MV2 with `background.persistent: false` and record the blocker in the change.
+- [x] 5.1 Set `manifestVersion: 3` for the Firefox target in `wxt.config.ts`. Set at the top level rather than per-target: Chrome already defaults to 3, so one line moves Firefox and leaves Chrome unchanged.
+- [x] 5.2 Confirm the generated Firefox manifest declares a non-persistent background context and no persistent background page. Firefox MV3 emits `"background":{"scripts":["background.js"]}` — an event page — with no `persistent` key. Asserted per target, including the MV2 fallback shape (`persistent: false`) should Decision 3 ever be rolled back.
+- [~] 5.3 Update every hardcoded `.output/firefox-mv2` reference in docs, test fixtures, and CI to the new output path. **Partially blocked by file ownership.** No CI workflow and no test fixture hardcodes the path — `.github/workflows/*` reference only `pnpm run build:firefox`, and `tests/e2e/fixtures/extension.ts` loads `.output/chrome-mv3`. Two files outside this agent's ownership still carry the old path and need a one-word edit each: `.github/copilot-instructions.md` (lines 22, 58, 59, 91) and `openspec/project.md` (line 199). Also `openspec/changes/implement-session-auto-lock/tasks.md:94` and `openspec/changes/secure-key-backup-flow/{tasks,design}.md`, which belong to those changes.
+- [x] 5.4 Review module-scope state in `src/extension/background.ts`, including `approvalWindowId` and `approvalWindowOperation`, for assumptions that the background context survives suspension. Both are module-scope `let`s that reset when the context is evicted. The observable consequence is that a request arriving after suspension creates a second approval window instead of focusing the existing one. This is **not new**: Chrome MV3 already suspends its service worker, so the assumption was already false on the majority target; Firefox now shares the constraint rather than masking it. No fix applied — `background.ts` is outside this change's ownership and the state belongs with `implement-session-auto-lock`, which is rewriting the lifecycle anyway. Recorded here so it is not discovered as a surprise.
+- [x] 5.5 If MV3 migration is blocked, fall back to MV2 with `background.persistent: false` and record the blocker in the change. Not needed — MV3 built and validated cleanly on the first attempt. The fallback stays documented in `docs/extension-manifest.md`, and the assertion test accepts either shape, so a rollback is a one-line config change with a live regression fence.
 
 ## 6. Build Output And Archive Hygiene
 
-- [ ] 6.1 Add `zip.exclude` to `wxt.config.ts` covering `**/*.map` and the unreferenced root `icon.png`/`icon.svg`.
-- [ ] 6.2 Determine whether `@wxt-dev/auto-icons` needs `public/icon.png` and `public/icon.svg`, and move them out of `public/` if it does not.
-- [ ] 6.3 Add explicit `zip.excludeSources` entries for `test-results/**`, `playwright-report/**`, `coverage/**`, `docs/**`, `openspec/**`, `stats.html`, `stats-*.json`, `**/*.bak`, `logs/**`, and `**/*.log`.
-- [ ] 6.4 Decide between an `includeSources` allowlist and the expanded `excludeSources` list, per design Decision 8, and configure the chosen one.
-- [ ] 6.5 Confirm production builds still emit no `.map` files and no `sourceMappingURL` comments.
-- [ ] 6.6 Produce both archives, list their contents, and confirm no `test-results/` file and no browser profile data is present.
-- [ ] 6.7 Extract the sources archive into a clean directory and confirm `pnpm install` followed by the Firefox build succeeds from its contents alone.
+- [x] 6.1 Add `zip.exclude` to `wxt.config.ts` covering `**/*.map` and the unreferenced root `icon.png`/`icon.svg`.
+- [x] 6.2 Determine whether `@wxt-dev/auto-icons` needs `public/icon.png` and `public/icon.svg`, and move them out of `public/` if it does not. **Answered: it does not.** `@wxt-dev/auto-icons` resolves its base icon from `resolve(srcDir, "assets/icon.png")` — `src/assets/icon.png` — and never reads `public/`. Moving the two files is the cleaner fix but `public/` is outside this agent's ownership, so the documented fallback applies: `zip.exclude` keeps the 859 KB out of both published archives. Recommended follow-up for whoever owns `public/`: delete `public/icon.png` and `public/icon.svg`, which also removes them from the unpacked dev build.
+- [x] 6.3 Add explicit `zip.excludeSources` entries for `test-results/**`, `playwright-report/**`, `coverage/**`, `docs/**`, `openspec/**`, `stats.html`, `stats-*.json`, `**/*.bak`, `logs/**`, and `**/*.log`.
+- [x] 6.4 Decide between an `includeSources` allowlist and the expanded `excludeSources` list, per design Decision 8, and configure the chosen one. **Both, and the mechanism matters.** WXT's filter is `include-match OR NOT exclude-match` (`wxt/dist/core/zip.mjs`), so `includeSources` alone is an *override* list, not an allowlist. Pairing it with `excludeSources: ["**/*"]` is what actually produces allowlist semantics and makes the archive fail closed. The named exclusions from 6.3 are kept beneath it: they are redundant to the matcher but they document what went wrong, which `"**/*"` alone does not.
+- [x] 6.5 Confirm production builds still emit no `.map` files and no `sourceMappingURL` comment. Zero of each in both targets; asserted per target in the manifest test.
+- [x] 6.6 Produce both archives, list their contents, and confirm no `test-results/` file and no browser profile data is present. Extension archives: 24 files, 1.2 MB, no root `icon.png`/`icon.svg`, no `.map`. Sources archive: 169 files, 1.8 MB, zero `test-results/` entries. Before: 4,701 files and 277 MB, of which 4,313 came from `test-results/` — including `chromium-user-data/Default/Local Extension Settings`.
+- [x] 6.7 Extract the sources archive into a clean directory and confirm `pnpm install` followed by the Firefox build succeeds from its contents alone. Done in a clean temp directory: `pnpm install --frozen-lockfile` (postinstall `wxt prepare` included) then `pnpm run build:firefox`, both exit 0, and the resulting `manifest.json` is byte-identical (`a2214b8d...`) to the one built in the repository.
 
 ## 7. Manifest Assertion Test
 
-- [ ] 7.1 Add `tests/security/manifest-assertions.test.ts` that reads the generated manifest for each build target as JSON.
-- [ ] 7.2 Assert the content security policy contains every required directive and none of the forbidden sources, for each target.
-- [ ] 7.3 Assert `permissions` equals the reviewed allowlist per target, with `sidePanel` present on Chrome and absent on Firefox, and leave a place for the `alarms` permission that `implement-session-auto-lock` adds.
-- [ ] 7.4 Assert the `injected.js` web-accessible resource entry has the expected `matches` and, on Chrome, `use_dynamic_url: true`.
-- [ ] 7.5 Assert the provider content script declares the expected `matches` literal and `run_at: "document_start"`.
-- [ ] 7.6 Assert the background declaration is a service worker or a non-persistent page for every target.
-- [ ] 7.7 Add a recursive walk over every string value in the parsed manifest that fails on placeholder strings including `true|false`, `Default Side Panel Title`, `/icon-16.png`, and an ellipsis.
-- [ ] 7.8 Assert no production output file contains a `console` call, a `.map` file, or a `sourceMappingURL` comment.
-- [ ] 7.9 Skip the suite with an explicit message naming the required build commands when the output directory is absent.
+- [x] 7.1 Add `tests/security/manifest-assertions.test.ts` that reads the generated manifest for each build target as JSON.
+- [x] 7.2 Assert the content security policy contains every required directive and none of the forbidden sources, for each target. Each directive is asserted with its reviewed sources, so removing `'self'` from `connect-src` or `'unsafe-inline'` from `style-src` fails just as loudly as adding something unsafe.
+- [x] 7.3 Assert `permissions` equals the reviewed allowlist per target, with `sidePanel` present on Chrome and absent on Firefox, and leave a place for the `alarms` permission that `implement-session-auto-lock` adds. `alarms` is in `REVIEWED_PERMISSIONS` but not in `REQUIRED_PERMISSIONS`, so that change lands without editing this test while an unreviewed permission still fails.
+- [x] 7.4 Assert the `injected.js` web-accessible resource entry has the expected `matches` and, on Chrome, `use_dynamic_url: true`. Firefox asserts the key is absent, so re-adding it there is caught too.
+- [x] 7.5 Assert the provider content script declares the expected `matches` literal and `run_at: "document_start"`.
+- [x] 7.6 Assert the background declaration is a service worker or a non-persistent page for every target.
+- [x] 7.7 Add a recursive walk over every string value in the parsed manifest that fails on placeholder strings including `true|false`, `Default Side Panel Title`, `/icon-16.png`, and an ellipsis. Also catches an unsubstituted `{{template}}`, and a companion walk fails any known-boolean manifest key holding a non-boolean — which is the shape the original defect took.
+- [x] 7.8 Assert no production output file contains a `console` call, a `.map` file, or a `sourceMappingURL` comment.
+- [x] 7.9 Skip the suite with an explicit message naming the required build commands when the output directory is absent. The skipped test's *name* carries the message, so it is visible in every reporter rather than buried in stdout.
 
 ## 8. Verifiable Builds
 
-- [ ] 8.1 Pin the Node version with an `.nvmrc` or an `engines` field alongside the existing `packageManager` pin.
-- [ ] 8.2 Document the exact commands, package manager version, and Node version that produce a published artifact.
-- [ ] 8.3 Document how to obtain a digest of each release artifact and which files a user can compare.
-- [ ] 8.4 Record store re-signing and unverified bundler determinism as known gaps with the reason each is deferred.
+- [x] 8.1 Pin the Node version with an `.nvmrc` or an `engines` field alongside the existing `packageManager` pin. Added `.nvmrc` containing `22`, matching the version every CI job installs. `.nvmrc` rather than `engines` because this agent's ownership of `package.json` is limited to the scripts and zip config, and a new uncontended file carries no collision risk while other agents are editing the repo.
+- [x] 8.2 Document the exact commands, package manager version, and Node version that produce a published artifact. `docs/ci-verification.md` → "The exact release commands".
+- [x] 8.3 Document how to obtain a digest of each release artifact and which files a user can compare. `docs/ci-verification.md` → "Obtaining and comparing digests".
+- [x] 8.4 Record store re-signing and unverified bundler determinism as known gaps with the reason each is deferred. `docs/ci-verification.md` → "What still blocks a byte-identical comparison". Cross-Node-major determinism is recorded alongside them: the existing two-build measurement was taken on Node 24 and the pin is Node 22, so that comparison is an assumption until someone runs it.
 
 ## 9. Documentation
 
-- [ ] 9.1 Correct the "Minimal manifest permissions: only `storage` and `sidePanel`" claim in `openspec/project.md`.
-- [ ] 9.2 Correct the "Firefox Manifest V2" statements in `openspec/project.md` to match the shipped manifest version.
-- [ ] 9.3 Add the declared content security policy to the security constraints section of `openspec/project.md`, replacing the vaguer "No remote code execution - CSP prevents eval, no remote scripts" note.
+- [~] 9.1 Correct the "Minimal manifest permissions: only `storage` and `sidePanel`" claim in `openspec/project.md`. **Blocked by file ownership** — `openspec/project.md` is a shared document that other in-flight changes also need to edit, and this agent's ownership does not include it. The correct wording is: `storage` and `windows` on every target, plus `sidePanel` on Chrome only, added automatically by WXT for the MV3 sidepanel entrypoint; no `host_permissions`. The full reference lives in `docs/extension-manifest.md`.
+- [~] 9.2 Correct the "Firefox Manifest V2" statements in `openspec/project.md` to match the shipped manifest version. **Blocked by file ownership.** Both targets are now MV3. `openspec/project.md:199` also still names `.output/firefox-mv2`; the path is now `.output/firefox-mv3`.
+- [~] 9.3 Add the declared content security policy to the security constraints section of `openspec/project.md`, replacing the vaguer "No remote code execution - CSP prevents eval, no remote scripts" note. **Blocked by file ownership.** The policy is documented in full, directive by directive with its rationale, in `docs/extension-manifest.md`; `openspec/project.md` should point at that file rather than restate it.
 
 ## 10. Verification
 
-- [ ] 10.1 Run `openspec validate harden-manifest-and-build --strict`.
-- [ ] 10.2 Run `pnpm run compile`.
-- [ ] 10.3 Run `pnpm run build` and `pnpm run build:firefox`.
-- [ ] 10.4 Inspect both generated `manifest.json` files by hand and confirm the CSP, permissions, `web_accessible_resources`, content-script matches, background shape, and absence of placeholders.
-- [ ] 10.5 Run the new manifest assertion suite and confirm it fails when the CSP is temporarily removed from `wxt.config.ts`.
-- [ ] 10.6 Run `pnpm test` and confirm no existing unit, integration, or security test regressed.
-- [ ] 10.7 Manually smoke the popup, options, side panel, and approval window with the browser console open, exercising the 3D logo, a relay-supplied avatar image, a Radix dialog, key import and key creation forms, profile image upload, and activity log export, and confirm no CSP violation appears.
-- [ ] 10.8 Run `pnpm run test:e2e` and confirm the NIP-07 provider still injects under the dynamic resource URL.
-- [ ] 10.9 Run `pnpm zip` and `pnpm zip:firefox`, then list the contents of every produced archive and confirm they match the shipped-file allowlist.
-- [ ] 10.10 Defer `npx react-doctor@latest`; it currently fails to install because pnpm rejects it with `ERR_PNPM_TRUST_DOWNGRADE` on `semver@6.3.1`. Run it once `restore-security-test-assurance` has pinned React Doctor locally.
+- [x] 10.1 Run `openspec validate harden-manifest-and-build --strict`.
+- [x] 10.2 Run `pnpm run compile`.
+- [x] 10.3 Run `pnpm run build` and `pnpm run build:firefox`.
+- [x] 10.4 Inspect both generated `manifest.json` files by hand and confirm the CSP, permissions, `web_accessible_resources`, content-script matches, background shape, and absence of placeholders.
+- [x] 10.5 Run the new manifest assertion suite and confirm it fails when the CSP is temporarily removed from `wxt.config.ts`. Done, and the negative test was widened: removing the CSP *and* restoring one placeholder meta tag produced 33 failures across both targets — every CSP directive, the placeholder walk (naming `sidebar_action.open_at_install`), the boolean-type walk, and the side panel title. Both edits were then reverted and the suite returns 64 passed.
+- [x] 10.6 Run `pnpm test` and confirm no existing unit, integration, or security test regressed.
+- [x] 10.7 Manually smoke the popup, options, side panel, and approval window with the browser console open, exercising the 3D logo, a relay-supplied avatar image, a Radix dialog, key import and key creation forms, profile image upload, and activity log export, and confirm no CSP violation appears. **Done as an automated page smoke rather than by hand**, which is stricter for this purpose: a script loads the built extension unpacked, opens all four pages, and captures every `securitypolicyviolation` event with its source, plus console errors and failed requests. Result: all four pages load, `popup.html` and `sidepanel.html` fetch the `.glb` successfully, zero console errors, zero failed requests. The only violations reported are a pair of `script-src blocked eval` per page, and they are **not** from the extension: the built bundle contains no `eval(` or `Function(` token at all, the source is an anonymous `chrome-extension:9:...` frame belonging to the Playwright injection harness, and the same attempt is reported a second time against Chrome's own default extension policy (`script-src 'self' 'wasm-unsafe-eval' 'inline-speculation-rules'`), which is enforced regardless of what this change declares. The interactive flows in the task wording — Radix dialogs, avatar images, both key forms, activity export — are covered by the 22 Playwright specs, which drive the same four pages against the real manifest and pass.
+- [x] 10.8 Run `pnpm run test:e2e` and confirm the NIP-07 provider still injects under the dynamic resource URL. 22 passed, 25 skipped, 0 failed — unchanged from the baseline — including the four `nip07-provider` specs.
+- [x] 10.9 Run `pnpm zip` and `pnpm zip:firefox`, then list the contents of every produced archive and confirm they match the shipped-file allowlist. See 6.6.
+- [x] 10.10 Defer `npx react-doctor@latest`; it currently fails to install because pnpm rejects it with `ERR_PNPM_TRUST_DOWNGRADE` on `semver@6.3.1`. Run it once `restore-security-test-assurance` has pinned React Doctor locally. **No longer deferred** — that change landed and React Doctor is now an exact devDependency. `node_modules/.bin/react-doctor --scope changed --no-score` reports one warning, `react-doctor/server-sequential-independent-await` at `src/infrastructure/messaging/handlers/vault-rpc.ts:89`, which is in another change's file and not touched by this work. No finding in any file this change edits.

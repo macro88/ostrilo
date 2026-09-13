@@ -6,6 +6,7 @@ import {
   NostrEOSECallback,
 } from "@/application/ports/relay";
 import { NostrRelayAdapter } from "./nostr-relay.adapter";
+import { RELAY_BOUNDS, sanitizeRelayUrls } from "@/domain/relay";
 
 /**
  * Relay Manager implementing INostrRelay port with multi-relay support.
@@ -16,6 +17,14 @@ import { NostrRelayAdapter } from "./nostr-relay.adapter";
  * - Merges results and deduplicates events
  * - Selects best event by created_at timestamp
  * - Publishes to all relays
+ *
+ * The manager inherits NostrRelayAdapter's verification contract: every event
+ * passed to onEvent has had its ID recomputed, its Schnorr signature verified,
+ * and its author and kind matched against the subscription filter.
+ *
+ * Relay URLs are sanitised and bounded here as well as at the settings
+ * boundary, so a stored cleartext or over-long relay list cannot open a
+ * connection even if it reaches this far.
  */
 export class RelayManager implements INostrRelay {
   private relays: NostrRelayAdapter[] = [];
@@ -30,7 +39,16 @@ export class RelayManager implements INostrRelay {
   }
 
   private setRelayAdapters(relayUrls: string[]): void {
-    this.relays = relayUrls.map((url) => new NostrRelayAdapter(url));
+    const accepted = sanitizeRelayUrls(relayUrls);
+
+    if (accepted.length < relayUrls.length) {
+      console.warn(
+        `Ignored ${relayUrls.length - accepted.length} relay URL(s): only up to ` +
+          `${RELAY_BOUNDS.MAX_CONFIGURED_RELAYS} wss:// relays are accepted`
+      );
+    }
+
+    this.relays = accepted.map((url) => new NostrRelayAdapter(url));
   }
 
   /**
@@ -114,6 +132,52 @@ export class RelayManager implements INostrRelay {
     return results
       .map((result) => (result.status === "fulfilled" ? result.value : ""))
       .join(",");
+  }
+
+  /**
+   * Subscribe on exactly one configured relay.
+   *
+   * Background profile hydration uses this to keep a relay from learning the
+   * user's whole identity set: each managed pubkey is asked about on its one
+   * assigned relay rather than broadcast to every configured relay.
+   *
+   * The returned subscription ID keeps the composite comma-separated shape, with
+   * an empty slot for every relay that was not asked, so `close` still lines the
+   * IDs up with the relays positionally.
+   */
+  async subscribeOn(
+    relayUrl: string,
+    filter: NostrFilter,
+    onEvent: NostrEventCallback,
+    onEOSE?: NostrEOSECallback
+  ): Promise<string> {
+    const index = this.relays.findIndex(
+      (relay) => relay.getRelayUrl() === relayUrl
+    );
+
+    if (index === -1) {
+      onEOSE?.();
+      return this.relays.map(() => "").join(",");
+    }
+
+    const subIds = this.relays.map(() => "");
+
+    try {
+      subIds[index] = await this.relays[index].subscribe(
+        filter,
+        onEvent,
+        onEOSE
+      );
+    } catch (error) {
+      console.warn(
+        `Relay subscription failed on ${relayUrl}: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`
+      );
+      onEOSE?.();
+    }
+
+    return subIds.join(",");
   }
 
   /**

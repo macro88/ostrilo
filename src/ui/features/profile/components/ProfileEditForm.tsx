@@ -11,6 +11,12 @@ interface ProfileEditFormProps {
   onChange: (field: keyof ProfileMetadata, value: string) => void;
   onCancel: () => void;
   onSave: () => void;
+  /**
+   * HTTPS endpoint that receives uploaded images. Undefined means no image host
+   * is configured, which is the default: the upload control is then unavailable
+   * and the user pastes a URL instead.
+   */
+  uploadEndpoint?: string;
 }
 
 export function ProfileEditForm({
@@ -20,6 +26,7 @@ export function ProfileEditForm({
   onChange,
   onCancel,
   onSave,
+  uploadEndpoint,
 }: ProfileEditFormProps) {
   return (
     <div className="screen-shell">
@@ -68,6 +75,10 @@ export function ProfileEditForm({
           </p>
         </div>
 
+        {/*
+          No preview: loading an entered image URL inside an extension page is
+          the same leak the display surface removed.
+        */}
         <ImageUploadField
           id="picture"
           label="Profile Picture URL"
@@ -75,6 +86,7 @@ export function ProfileEditForm({
           onChange={(value) => onChange("picture", value)}
           disabled={isSaving}
           placeholder="https://example.com/avatar.jpg"
+          uploadEndpoint={uploadEndpoint}
         />
 
         <div>

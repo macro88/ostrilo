@@ -1,3 +1,4 @@
+import { describeViolation } from "@/domain/utils/password-policy";
 import { useReducer, useRef } from "react";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import { useOnboarding } from "../hooks/useOnboarding";
@@ -136,11 +137,18 @@ export function OnboardingImportKey({
     }
 
     try {
+      // The verdict comes from the background, which has the blocklist, so
+      // `acceptable` is authoritative. This used to be `strength.score < 3`,
+      // re-implementing half of the domain predicate and dropping its length
+      // term - which is why "Aa1!" was accepted as a vault password.
       const strength = await evaluatePasswordStrength(state.password);
-      if (strength.score < 3) {
+      if (!strength.acceptable) {
         dispatch({
           type: "setPasswordError",
-          value: "Password does not meet minimum requirements",
+          value:
+            strength.violations.length > 0
+              ? describeViolation(strength.violations[0])
+              : "Password does not meet the policy.",
         });
         return false;
       }

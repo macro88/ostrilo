@@ -26,21 +26,29 @@ import {
 
 describe("Domain Utils - Validation", () => {
   describe("evaluatePasswordStrength", () => {
-    it("evaluates strong passwords", () => {
-      const strong = "MyStrongPassword123!";
-      const result = evaluatePasswordStrength(strong);
-      expect(result.score).toBeGreaterThan(2);
-      expect(result.meetsMinimum).toBe(true);
-      expect(result.requirements.every((r) => r.passes)).toBe(true);
+    // `meetsMinimum` is gone on purpose. It was the one correct predicate in
+    // the codebase and nothing used it; the UI re-implemented half of it as
+    // `score < 3`, which `Aa1!` satisfies. The replacement verdict cannot be
+    // `acceptable` without the blocklist, so a local evaluation can report
+    // violations but can never green-light a password.
+    it("reports a long passphrase as having no structural violations", () => {
+      const result = evaluatePasswordStrength("unmark thicket parcel");
+      expect(result.violations).toEqual(["blocklist_unavailable"]);
+      expect(result.blocklistChecked).toBe(false);
+      expect(result.acceptable).toBe(false);
     });
 
     it("identifies weak passwords", () => {
-      const weak = "weak";
-      const result = evaluatePasswordStrength(weak);
-      expect(result.score).toBeLessThan(2);
-      expect(result.meetsMinimum).toBe(false);
-      expect(result.requirements.length).toBeGreaterThan(0);
+      const result = evaluatePasswordStrength("weak");
+      expect(result.score).toBe(0);
+      expect(result.violations).toContain("too_short");
       expect(result.requirements.some((r) => !r.passes)).toBe(true);
+    });
+
+    it("rejects Aa1!, which the old score-only gate accepted", () => {
+      const result = evaluatePasswordStrength("Aa1!");
+      expect(result.violations).toContain("too_short");
+      expect(result.acceptable).toBe(false);
     });
   });
 
@@ -83,12 +91,27 @@ describe("Domain Utils - Validation", () => {
   });
 
   describe("isValidRelayUrl", () => {
-    it("validates WebSocket relay URLs", () => {
+    it("accepts only secure WebSocket relay URLs", () => {
       expect(isValidRelayUrl("wss://relay.example.com")).toBe(true);
-      expect(isValidRelayUrl("ws://localhost:8080")).toBe(true);
+      expect(isValidRelayUrl("wss://relay.example.com/v1")).toBe(true);
+      expect(isValidRelayUrl("wss://localhost:8080")).toBe(true);
+
+      // Cleartext is refused everywhere, including localhost: there is no
+      // development relay workflow, and an exemption would be a permanent hole.
+      expect(isValidRelayUrl("ws://relay.example.com")).toBe(false);
+      expect(isValidRelayUrl("ws://localhost:8080")).toBe(false);
 
       expect(isValidRelayUrl("https://example.com")).toBe(false);
+      expect(isValidRelayUrl("http://example.com")).toBe(false);
+      expect(isValidRelayUrl("javascript:alert(1)")).toBe(false);
       expect(isValidRelayUrl("invalid")).toBe(false);
+      expect(isValidRelayUrl("")).toBe(false);
+    });
+
+    it("rejects embedded credentials and empty hostnames", () => {
+      expect(isValidRelayUrl("wss://user:pass@relay.example.com")).toBe(false);
+      expect(isValidRelayUrl("wss://user@relay.example.com")).toBe(false);
+      expect(isValidRelayUrl("wss://")).toBe(false);
     });
   });
 

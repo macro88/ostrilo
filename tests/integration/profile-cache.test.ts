@@ -25,11 +25,12 @@ describe("Profile Cache Isolation", () => {
   let service: ProfileService;
 
   beforeEach(() => {
-    const mockStorage = new MockStorage();
+    // Distinct areas: the profile cache must not share storage with the
+    // encrypted key vault, and aliased mocks cannot show that.
     storage = {
-      local: mockStorage,
-      sync: mockStorage,
-      session: mockStorage,
+      local: new MockStorage(),
+      sync: new MockStorage(),
+      session: new MockStorage(),
     };
 
     relay = {
@@ -77,7 +78,7 @@ describe("Profile Cache Isolation", () => {
     await service.getProfile(pubkeyB);
 
     // Verify storage
-    const cache = await storage.local.get<any>("profileCache");
+    const cache = await storage.session.get<any>("profileCache");
     expect(cache).toBeDefined();
     expect(cache[pubkeyA]).toBeDefined();
     expect(cache[pubkeyB]).toBeDefined();
