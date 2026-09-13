@@ -107,7 +107,7 @@ function signEvent(
 }
 
 function clone(event: Nip01Event): Nip01Event {
-  return JSON.parse(JSON.stringify(event)) as Nip01Event;
+  return structuredClone(event);
 }
 
 async function connectedAdapter(url = RELAY_URL) {

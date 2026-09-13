@@ -98,7 +98,7 @@ const VICTIM_PUBKEY = GENUINE.pubkey;
  */
 function forgedProfileEvent(): Nip01Event {
   const forged: Nip01Event = {
-    ...JSON.parse(JSON.stringify(GENUINE)),
+    ...structuredClone(GENUINE),
     content: JSON.stringify({
       name: "Ostrilo Support",
       display_name: "Ostrilo Support",
@@ -221,7 +221,7 @@ describe("Forged relay profile events", () => {
   });
 
   it("discards an event for a pubkey the extension did not ask about", async () => {
-    const other = JSON.parse(JSON.stringify(GENUINE)) as Nip01Event;
+    const other = structuredClone(GENUINE);
     other.pubkey = "b".repeat(64);
 
     const { result } = await fetchWithRelayAnswer(other);

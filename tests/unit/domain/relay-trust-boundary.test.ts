@@ -29,7 +29,7 @@ const genuineProfileEvent = vectors.find(
 )!.event;
 
 function clone(event: Nip01Event): Nip01Event {
-  return JSON.parse(JSON.stringify(event)) as Nip01Event;
+  return structuredClone(event);
 }
 
 describe("relay bounds", () => {

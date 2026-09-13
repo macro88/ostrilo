@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RelayUrlListSchema } from "@/domain/relay/url";
 import {
   PASSWORD_POLICY,
   checkPassword,
@@ -65,13 +66,34 @@ export const AppSettingsPatchSchema = z
     // default on read. See AUTO_LOCK_BOUNDS in @/domain/types.
     autoLockMinutes: z.number().int().min(1).max(60).optional(),
     maxActivityEntries: z.number().int().min(10).max(500).optional(),
-    relays: z.array(z.url()).optional(),
+    // `z.url()` accepted `http:`, `ws:`, credentials in the authority, and
+    // an unbounded list. Those were dropped at USE time by isValidRelayUrl,
+    // so nothing connected to them - but they persisted, and settings
+    // displayed them back to the user as if they were configured.
+    relays: RelayUrlListSchema.optional(),
     selectedKeyId: z.uuid().optional(),
     mediumAllowKinds: z.array(EventKindSchema).optional(), // Valid Nostr kind range
     // Minimum 1: a zero TTL used to mean "until lock", which with auto-lock
     // disabled is an unbounded grant of the broadest authority the product
     // offers. No settings write may reintroduce one.
     sessionTTLMinutes: z.number().int().min(1).max(60).optional(), // 1 to 60 min
+    // https: only, and an empty string clears it. Anything else - http:,
+    // data:, javascript: - is refused here as well as at use time.
+    uploadEndpoint: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .max(512)
+          .refine((value) => {
+            try {
+              return new URL(value).protocol === "https:";
+            } catch {
+              return false;
+            }
+          }, { message: "Upload endpoint must be an https:// URL" }),
+      ])
+      .optional(),
     onboardingCompleted: z.boolean().optional(),
     onboardingCompletedAt: z.number().int().nonnegative().optional(),
     // Note: origins array updates should go through policy.setOrigin, not settings.update

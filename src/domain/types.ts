@@ -152,6 +152,13 @@ export interface AppSettingsV1 {
   mediumAllowKinds: number[]; // shipped default for medium trust
   /** Session-grant lifetime. Bounded by DEFAULT/MAX_SESSION_TTL_MINUTES. */
   sessionTTLMinutes: number;
+  /**
+   * Where profile image uploads are sent. Undefined by default, which is
+   * the point: the field used to be a hardcoded `nostr.build` endpoint, so
+   * editing a profile picture uploaded it to a third party the user had
+   * never been asked about. No destination means no outbound request.
+   */
+  uploadEndpoint?: string;
   onboardingCompleted?: boolean; // track if user completed onboarding
   onboardingCompletedAt?: number; // epoch seconds when onboarding was completed
 }

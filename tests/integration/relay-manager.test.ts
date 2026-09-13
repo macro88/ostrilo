@@ -114,4 +114,121 @@ describe("RelayManager", () => {
     expect(oldRelay.disconnect).toHaveBeenCalledTimes(1);
     expect(manager.getRelayUrls()).toEqual(["wss://relay.example"]);
   });
+
+  it("refuses to open a connection to a cleartext or malformed relay URL", () => {
+    // Defence in depth. The settings schema and the domain validator reject
+    // these first; the manager must not open a socket if one slips through.
+    const manager = new RelayManager([
+      "wss://relay.example",
+      "ws://legacy.example",
+      "http://relay.example",
+      "wss://user:pass@relay.example",
+      "not-a-url",
+    ]);
+
+    expect(manager.getRelayUrls()).toEqual(["wss://relay.example"]);
+  });
+
+  it("bounds the number of configured relays", () => {
+    const manager = new RelayManager(
+      Array.from({ length: 25 }, (_, i) => `wss://relay-${i}.example`)
+    );
+
+    expect(manager.getRelayCount()).toBe(10);
+  });
+
+  it("de-duplicates repeated relay URLs", () => {
+    const manager = new RelayManager([
+      "wss://relay.example",
+      "wss://relay.example",
+      "  wss://relay.example  ",
+    ]);
+
+    expect(manager.getRelayUrls()).toEqual(["wss://relay.example"]);
+  });
+
+  describe("subscribeOn", () => {
+    function managerWithRelays(urls: string[]) {
+      const manager = new RelayManager([]);
+      const relays = urls.map((url) => {
+        const relay = createRelay({ subId: `sub-${url}` });
+        relay.getRelayUrl = vi.fn(() => url);
+        return relay;
+      });
+      (manager as any).relays = relays;
+      return { manager, relays };
+    }
+
+    it("subscribes on exactly one relay and leaves the others untouched", async () => {
+      const { manager, relays } = managerWithRelays([
+        "wss://relay-a.example",
+        "wss://relay-b.example",
+        "wss://relay-c.example",
+      ]);
+
+      const subId = await manager.subscribeOn(
+        "wss://relay-b.example",
+        { kinds: [0], authors: ["a".repeat(64)], limit: 1 },
+        vi.fn(),
+        vi.fn()
+      );
+
+      expect(relays[0].subscribe).not.toHaveBeenCalled();
+      expect(relays[1].subscribe).toHaveBeenCalledTimes(1);
+      expect(relays[2].subscribe).not.toHaveBeenCalled();
+
+      // Positional composite ID, so close() still lines IDs up with relays.
+      expect(subId).toBe(",sub-wss://relay-b.example,");
+    });
+
+    it("closes only the relay that was subscribed", async () => {
+      const { manager, relays } = managerWithRelays([
+        "wss://relay-a.example",
+        "wss://relay-b.example",
+      ]);
+
+      const subId = await manager.subscribeOn(
+        "wss://relay-b.example",
+        { kinds: [0] },
+        vi.fn()
+      );
+      await manager.close(subId);
+
+      expect(relays[0].close).not.toHaveBeenCalled();
+      expect(relays[1].close).toHaveBeenCalledWith("sub-wss://relay-b.example");
+    });
+
+    it("signals EOSE when the named relay is not configured", async () => {
+      const { manager, relays } = managerWithRelays(["wss://relay-a.example"]);
+      const onEOSE = vi.fn();
+
+      await manager.subscribeOn(
+        "wss://relay-unknown.example",
+        { kinds: [0] },
+        vi.fn(),
+        onEOSE
+      );
+
+      expect(relays[0].subscribe).not.toHaveBeenCalled();
+      expect(onEOSE).toHaveBeenCalledTimes(1);
+    });
+
+    it("signals EOSE when the named relay fails to subscribe", async () => {
+      const manager = new RelayManager([]);
+      const failing = createRelay({ error: new Error("unreachable") });
+      failing.getRelayUrl = vi.fn(() => "wss://relay-a.example");
+      (manager as any).relays = [failing];
+
+      const onEOSE = vi.fn();
+      const subId = await manager.subscribeOn(
+        "wss://relay-a.example",
+        { kinds: [0] },
+        vi.fn(),
+        onEOSE
+      );
+
+      expect(onEOSE).toHaveBeenCalledTimes(1);
+      expect(subId).toBe("");
+    });
+  });
 });

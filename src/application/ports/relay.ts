@@ -56,6 +56,28 @@ export type NostrEOSECallback = () => void;
  * - Publish events to the relay
  * - Close subscriptions
  * - Disconnect from relay
+ *
+ * ## What an implementation must guarantee
+ *
+ * A relay is an UNTRUSTED remote party. It chooses what to send, how much,
+ * and how often, and nothing about the connection makes its claims true.
+ * Callers of this port must be able to treat an event they receive as
+ * genuine without re-checking it, so an implementation MUST guarantee, for
+ * every call to `onEvent`:
+ *
+ *  - the event parsed as a well-formed NIP-01 event within the declared
+ *    size bounds;
+ *  - its `id` was RECOMPUTED from the canonical serialization and matches;
+ *  - its `sig` verified as a BIP-340 signature over that id by its own
+ *    `pubkey`;
+ *  - it matches the filter the subscription was opened with - a relay does
+ *    not get to answer a question it was not asked.
+ *
+ * An implementation MUST NOT surface an event that fails any of these, and
+ * MUST bound how many events one subscription can deliver.
+ *
+ * See `src/infrastructure/relay/nostr-relay.adapter.ts` for the shipped
+ * implementation and `docs/relay-trust-boundary.md` for the reasoning.
  */
 export interface INostrRelay {
   /**
