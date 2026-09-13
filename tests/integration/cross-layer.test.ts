@@ -92,9 +92,14 @@ describe("Cross-Layer Integration Tests", () => {
       // Create a key
       const keyRecord = await keyVault.generateKey(password, "Selection Test");
       
-      // Initially unlocked (no lock state in session storage)
+      // With no lock state in session storage the vault reports LOCKED.
+      // This assertion used to expect false, encoding the fail-open bug as
+      // intended behaviour: `!!state?.isLocked` returns false when there is
+      // no state at all, which is the situation after every browser restart.
+      // nostr.getPublicKey checks only this gate, so a never-unlocked vault
+      // disclosed the user's Nostr identity to any page.
       const initialState = await keyVault.getLockState();
-      expect(initialState.isLocked).toBe(false);
+      expect(initialState.isLocked).toBe(true);
 
       // Explicitly lock vault first
       await keyVault.lock();

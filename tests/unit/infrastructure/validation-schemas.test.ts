@@ -285,6 +285,71 @@ describe("Validation Schemas", () => {
       expect(result.success).toBe(false);
     });
 
+    it("refuses any relay the extension will not connect to", () => {
+      // `z.array(z.url())` accepted every one of these. They were dropped at
+      // connect time, so nothing was dialled - but they persisted in
+      // settings and were displayed back as configured relays.
+      for (const relay of [
+        "ws://relay.example",
+        "http://relay.example",
+        "https://relay.example",
+        "wss://user:pass@relay.example",
+        "javascript:alert(1)",
+        "not-a-url",
+        "wss://",
+      ]) {
+        expect(
+          AppSettingsPatchSchema.safeParse({ relays: [relay] }).success,
+          `SECURITY REGRESSION: ${relay} was accepted into stored settings`
+        ).toBe(false);
+      }
+
+      expect(
+        AppSettingsPatchSchema.safeParse({
+          relays: ["wss://relay.example", "wss://relay.other"],
+        }).success
+      ).toBe(true);
+    });
+
+    it("bounds the relay list, so no write can fan an identity out further", () => {
+      const many = Array.from(
+        { length: 11 },
+        (_, i) => `wss://relay-${i}.example`
+      );
+      expect(
+        AppSettingsPatchSchema.safeParse({ relays: many }).success,
+        "SECURITY REGRESSION: an unbounded relay list was accepted"
+      ).toBe(false);
+      expect(
+        AppSettingsPatchSchema.safeParse({ relays: many.slice(0, 10) }).success
+      ).toBe(true);
+    });
+
+    it("refuses an upload endpoint that is not https:", () => {
+      for (const endpoint of [
+        "http://uploads.example",
+        "javascript:alert(1)",
+        "data:text/plain,x",
+        "not-a-url",
+      ]) {
+        expect(
+          AppSettingsPatchSchema.safeParse({ uploadEndpoint: endpoint })
+            .success,
+          `SECURITY REGRESSION: ${endpoint} was accepted as an upload target`
+        ).toBe(false);
+      }
+      expect(
+        AppSettingsPatchSchema.safeParse({
+          uploadEndpoint: "https://uploads.example/api",
+        }).success
+      ).toBe(true);
+      // Empty clears it, which is the shipped default: no destination,
+      // no outbound request.
+      expect(
+        AppSettingsPatchSchema.safeParse({ uploadEndpoint: "" }).success
+      ).toBe(true);
+    });
+
     it("bounds autoLockMinutes to 1..60", () => {
       // There is no "never" and no multi-hour timeout. 0 used to be
       // accepted and read as "do not auto-lock"; 1440 allowed a timeout

@@ -1,4 +1,5 @@
 import type { StorageSuite } from "@/application/ports/storage";
+import { sanitizeRelayUrls } from "@/domain/relay/url";
 import {
   AUTO_LOCK_BOUNDS,
   DEFAULT_RELAY_URLS,
@@ -76,6 +77,23 @@ export class SettingsService {
         changed = true;
       }
 
+      // Migration for lists written before `wss:` was required everywhere.
+      // A stored `ws://` or credentialed URL was already refused at connect
+      // time, so nothing ever dialled it - but it persisted and Settings
+      // displayed it back as though it were configured. Dropping it here
+      // makes the stored list and the connected list the same list.
+      const sanitized = sanitizeRelayUrls(next.relays);
+      if (
+        sanitized.length !== (next.relays?.length ?? 0) ||
+        sanitized.some((relay, i) => relay !== next.relays?.[i])
+      ) {
+        // Never leave the user with no relays at all: an empty list means
+        // no profile metadata anywhere, which reads as the product being
+        // broken rather than as a security decision.
+        next.relays = sanitized.length > 0 ? sanitized : [...DEFAULT_RELAY_URLS];
+        changed = true;
+      }
+
       if (changed) {
         await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
         return next;
@@ -91,9 +109,10 @@ export class SettingsService {
       theme: (existing?.theme ?? d.theme) as Theme,
       sidePanel: existing?.sidePanel ?? d.sidePanel,
       autoLockMinutes: normalizeAutoLockMinutes(existing?.autoLockMinutes),
-      relays: Array.isArray(existing?.relays)
-        ? (existing!.relays as string[])
-        : d.relays,
+      relays: (() => {
+        const sanitized = sanitizeRelayUrls(existing?.relays);
+        return sanitized.length > 0 ? sanitized : d.relays;
+      })(),
       origins: Array.isArray(existing?.origins)
         ? (existing!.origins as any)
         : d.origins,

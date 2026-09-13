@@ -1,4 +1,5 @@
 import { browser } from "wxt/browser";
+import { sanitizeRelayUrls } from "@/domain/relay/url";
 import { normalizeAutoLockMinutes } from "@/domain/types";
 import { createStorageSuite } from "@/infrastructure/storage/adapters";
 import {
@@ -34,7 +35,6 @@ import {
   ProfileRpcHandler,
 } from "@/infrastructure/messaging/handlers";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
-import { isValidRelayUrl } from "@/domain/utils/validation";
 
 type RelaySettings = { relays?: unknown };
 
@@ -46,24 +46,17 @@ const APPROVAL_BADGE_COLOR = "#5f50a0";
 let approvalWindowId: number | null = null;
 let approvalWindowOperation: Promise<number | undefined> | null = null;
 
+/**
+ * Delegates to the shared sanitizer rather than keeping a second copy.
+ *
+ * This function used to filter on `isValidRelayUrl` alone, with no count
+ * bound, so a settings write could name any number of relays and every one
+ * of them would learn every managed pubkey. `sanitizeRelayUrls` trims,
+ * de-duplicates, rejects anything that is not a bare `wss:` URL, and bounds
+ * the result. Kept as defence in depth: RelayManager sanitizes again.
+ */
 function normalizeRelayUrls(relays: unknown): string[] {
-  if (!Array.isArray(relays)) {
-    return [];
-  }
-
-  const validRelayUrls = new Set<string>();
-  for (const relay of relays) {
-    if (typeof relay !== "string") {
-      continue;
-    }
-
-    const normalizedRelay = relay.trim();
-    if (isValidRelayUrl(normalizedRelay)) {
-      validRelayUrls.add(normalizedRelay);
-    }
-  }
-
-  return Array.from(validRelayUrls);
+  return sanitizeRelayUrls(relays);
 }
 
 /**
