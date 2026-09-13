@@ -10,13 +10,13 @@ Scans React codebases for security, performance, correctness, and architecture i
 
 ## After making React code changes:
 
-Run `npx react-doctor@latest --verbose --diff` and check the score did not regress.
+Run `pnpm exec react-doctor --verbose --diff` and check the score did not regress.
 
 If the score dropped, fix the regressions before committing.
 
 ## For general cleanup or code improvement:
 
-Run `npx react-doctor@latest --verbose` (without `--diff`) to scan the full codebase. Fix issues by severity — errors first, then warnings.
+Run `pnpm exec react-doctor --verbose` (without `--diff`) to scan the full codebase. Fix issues by severity — errors first, then warnings.
 
 ## /doctor — full local triage workflow
 
@@ -34,12 +34,12 @@ Pair it with the matching per-rule prompts at `https://www.react.doctor/prompts/
 
 ## Configuring or explaining rules
 
-When the user wants to understand a rule, disagrees with one, or wants to disable / tune which rules run (not fix code), read [references/explain.md](references/explain.md) and follow it. Start with `npx react-doctor@latest rules explain <rule>`, then apply the narrowest control via `npx react-doctor@latest rules disable|set|category|ignore-tag …`, which edits your `doctor.config.*` (or `package.json#reactDoctor`).
+When the user wants to understand a rule, disagrees with one, or wants to disable / tune which rules run (not fix code), read [references/explain.md](references/explain.md) and follow it. Start with `pnpm exec react-doctor rules explain <rule>`, then apply the narrowest control via `pnpm exec react-doctor rules disable|set|category|ignore-tag …`, which edits your `doctor.config.*` (or `package.json#reactDoctor`).
 
 ## Command
 
 ```bash
-npx react-doctor@latest --verbose --diff
+pnpm exec react-doctor --verbose --diff
 ```
 
 | Flag        | Purpose                                       |

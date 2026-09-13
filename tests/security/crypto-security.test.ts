@@ -47,34 +47,12 @@ describe("Security Testing", () => {
   });
 
   describe("Cryptographic Security", () => {
-    it("generates cryptographically secure private keys", async () => {
-      const password = "test-password-123";
-      
-      // Generate multiple keys and verify they are different
-      const key1 = await keyVault.generateKey(password, "Key 1");
-      const key2 = await keyVault.generateKey(password, "Key 2");
-      const key3 = await keyVault.generateKey(password, "Key 3");
-
-      // Verify all keys have different IDs (derived from public keys)
-      expect(key1.id).not.toBe(key2.id);
-      expect(key1.id).not.toBe(key3.id);
-      expect(key2.id).not.toBe(key3.id);
-
-      // Verify all keys have different public keys
-      expect(key1.pubkey).not.toBe(key2.pubkey);
-      expect(key1.pubkey).not.toBe(key3.pubkey);
-      expect(key2.pubkey).not.toBe(key3.pubkey);
-
-      // Verify public key format (64 hex characters = 32 bytes)
-      expect(key1.pubkey).toMatch(/^[0-9a-f]{64}$/);
-      expect(key2.pubkey).toMatch(/^[0-9a-f]{64}$/);
-      expect(key3.pubkey).toMatch(/^[0-9a-f]{64}$/);
-
-      // Verify public key length (should be 64 characters for 32 bytes)
-      expect(key1.pubkey.length).toBe(64);
-      expect(key2.pubkey.length).toBe(64);
-      expect(key3.pubkey.length).toBe(64);
-    });
+    // The case that used to live here, "generates cryptographically secure
+    // private keys", generated three keys and asserted only that they differed
+    // and were 64 hex characters. A monotonic counter returning 1, 2, 3 passes
+    // that. Real entropy coverage - PBKDF2 known-answer tests, a
+    // crypto.getRandomValues source assertion with a no-fallback negative, and
+    // a bounded statistical smoke check - lives in tests/security/entropy.test.ts.
 
     it("uses unique salts and IVs for encryption", async () => {
       const password = "encryption-test-456";

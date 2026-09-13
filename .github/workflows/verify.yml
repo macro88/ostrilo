@@ -1,0 +1,87 @@
+# Verification gate: typecheck, the unit/integration/security suites, both
+# extension builds, and a dependency audit.
+#
+# E2E is deliberately NOT here. The Playwright suite builds the extension,
+# starts a fixture server and drives a persistent Chromium extension context
+# with workers: 1 and retries: 2. A flaky required check teaches contributors
+# to re-run until green, which recreates false assurance in a new place. E2E
+# runs on its own schedule in e2e.yml.
+#
+# These jobs are intended to become required status checks on the default
+# branch. See docs/ci-verification.md for the branch-protection configuration.
+
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A workflow with write access is itself an attack surface in a wallet-class
+# repository. Nothing here needs to write.
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # Honors the `packageManager` field in package.json rather than
+      # installing an arbitrary pnpm version.
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # --frozen-lockfile also runs the supply-chain policy check declared in
+      # pnpm-workspace.yaml (minimumReleaseAge, trustPolicy: no-downgrade).
+      # A lockfile carrying a trust-downgraded package fails the build here.
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run compile
+
+      # One Vitest invocation collects tests/unit, tests/integration and
+      # tests/security; vitest.config.ts excludes only tests/e2e.
+      - run: pnpm run test
+
+  build:
+    name: Extension builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: pnpm run build:firefox
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Threshold: fail on high and critical. Rationale and any accepted
+      # exceptions are recorded in docs/ci-verification.md. Moderate and below
+      # are reported but do not block, because a signer's dependency tree
+      # includes build tooling whose moderate advisories rarely reach the
+      # shipped extension.
+      - run: pnpm audit --audit-level high

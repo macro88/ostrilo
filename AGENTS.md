@@ -9,4 +9,19 @@ All UI work must follow `docs/design/DESIGN_RULES.md`. Do not reintroduce gradie
 
 ## React Doctor Verification
 
-After code edits, run `npx react-doctor@latest` and keep fixing findings until React Doctor reports `No issues found!` and a `100 / 100` score. Do not consider edited work complete, ready to hand off, or ready to commit with a lower score unless the user explicitly overrides this rule for that turn.
+After code edits, run the pinned local tool with `pnpm run doctor` (which invokes `node_modules/.bin/react-doctor`). Address the findings in the files you changed. Do not disable or suppress a rule to lower the count; fix the cause or explain why the finding does not apply.
+
+Report the score. Do not gate on it. A numeric target is only stable against a fixed rule set, and a blocking target creates pressure to silence rules rather than fix causes.
+
+Never invoke React Doctor with `npx`, `pnpm dlx`, or an `@latest` specifier. That fetches an unpinned dependency tree over the network and executes it on a machine that holds this project's signing keys. If the pinned binary is missing, run `pnpm install --frozen-lockfile`; if the tool still cannot run, say so with the exact command and the verbatim error rather than treating a skipped run as a pass.
+
+## Blocking Verification
+
+These stay blocking, and are not relaxed by the paragraph above:
+
+- `pnpm run compile`
+- `pnpm run test` (unit, integration and security suites)
+- `pnpm run build` and `pnpm run build:firefox`
+- the dependency audit
+
+A code-quality score protects maintainability; the security suite protects the user's keys. Do not treat them as equivalent gates.

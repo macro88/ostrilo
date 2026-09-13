@@ -1,0 +1,56 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "//": "Renovate is preferred over Dependabot here because it honours a minimum release age, which can be aligned with minimumReleaseAge: 1440 in pnpm-workspace.yaml. Dependabot would propose same-day releases that the package manager then refuses, which is noisy and confusing. See docs/ci-verification.md.",
+  "minimumReleaseAge": "1 day",
+  "internalChecksFilter": "strict",
+  "dependencyDashboard": true,
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"]
+  },
+  "packageRules": [
+    {
+      "//": "Cryptographic dependencies get their own reviewable PR, never grouped and never automerged. A provenance check is required before adopting any of these; record the decision in the PR.",
+      "matchPackageNames": [
+        "@noble/curves",
+        "@noble/hashes",
+        "@scure/base"
+      ],
+      "groupName": null,
+      "automerge": false,
+      "minimumReleaseAge": "7 days",
+      "labels": ["dependencies", "security-review-required"],
+      "prPriority": 10
+    },
+    {
+      "//": "Extension runtime and build toolchain: separate PR, no automerge. A wxt or react change can alter what ships to users.",
+      "matchPackageNames": ["wxt", "react", "react-dom"],
+      "groupName": null,
+      "automerge": false,
+      "minimumReleaseAge": "7 days",
+      "labels": ["dependencies", "security-review-required"]
+    },
+    {
+      "//": "Routine dev-tooling minor and patch updates can be grouped to keep review volume sane. Still gated by the required verification workflow.",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "dev dependencies (non-major)",
+      "automerge": false
+    },
+    {
+      "//": "React Doctor is pinned to an exact version on purpose: a score is only stable against a fixed rule set. Renovate may propose bumps, but they are reviewed like any other tool change.",
+      "matchPackageNames": ["react-doctor"],
+      "groupName": null,
+      "automerge": false,
+      "labels": ["dependencies", "tooling"]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": ["dependencies", "security"],
+    "minimumReleaseAge": null,
+    "prPriority": 20
+  }
+}

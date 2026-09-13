@@ -1,0 +1,6 @@
+# Vendored vectors are byte-exact and their SHA-256 is recorded in
+# provenance.json. Never let Git normalise line endings here: the BIP-340 file
+# is vendored with its upstream CRLF endings, and converting them would change
+# the hash and fail every known-answer test in tests/security/.
+bip340-schnorr.csv -text
+nip01-events.json -text

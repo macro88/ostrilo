@@ -6,114 +6,123 @@ Ostrilo uses a comprehensive testing strategy with multiple layers of validation
 
 ## Test Coverage Status
 
-**Total Tests: 73 passing across 8 test files**
+The numbers below are what the runners actually collected on 2026-09-13, at the
+end of the security-test-assurance work. They are a snapshot, not a contract:
+suites are being added continuously, so re-run the commands rather than
+trusting a figure in a document.
 
-- **Unit Tests**: 50 tests covering application, domain, infrastructure, and UI layers
-- **Integration Tests**: 9 tests validating cross-layer service interactions
-- **Security Tests**: 14 tests ensuring cryptographic security and attack resistance
-- **E2E Tests**: Available via Playwright for browser extension testing
+```bash
+pnpm test                     # Vitest: unit + integration + security
+npx playwright test --list    # Playwright: E2E inventory, without running it
+```
+
+**Vitest: 555 tests across 41 files, about 3 seconds wall clock**
+
+| Suite               | Files | Tests |
+| ------------------- | ----: | ----: |
+| `tests/unit`        |    28 |   386 |
+| `tests/integration` |     7 |    36 |
+| `tests/security`    |     6 |   133 |
+
+**Playwright: 47 tests across 14 spec files**, run separately via
+`pnpm run test:e2e`. Vitest excludes `tests/e2e/**`, so the two totals never
+overlap.
+
+An earlier version of this document claimed "73 passing across 8 test files".
+That figure was never reproducible from the runners and had drifted far from
+reality; the commands above are now the source of truth.
 
 ## Test Structure
 
 ```
 tests/
-├── unit/                    # Unit tests (50 tests)
-│   ├── application/         # Service layer tests
-│   │   ├── keyvault.service.test.ts      # Key management
-│   │   ├── policy.service.test.ts        # Policy management
-│   │   └── policy.evaluate.test.ts       # Policy evaluation
-│   ├── domain/              # Domain logic tests
-│   │   └── domain-utils.test.ts          # Utility functions
-│   ├── infrastructure/      # Infrastructure tests
-│   │   └── adapters.test.ts              # Crypto adapters
-│   └── ui/                  # UI component tests
-│       └── hooks/
-│           └── useOnboarding.test.ts     # React hooks
-├── integration/             # Integration tests (9 tests)
-│   └── cross-layer.test.ts              # Service integration
-├── security/                # Security tests (14 tests)
-│   └── crypto-security.test.ts          # Cryptographic security
-└── e2e/                     # End-to-end tests (Playwright)
-    ├── onboarding-create.spec.ts
-    ├── onboarding-import.spec.ts
-    └── settings-origin-policy.spec.ts
+├── unit/                    # 28 files, 386 tests
+│   ├── application/         # Services: key vault, policy, approvals, profile
+│   ├── domain/              # Crypto utilities, NIP-01 events, validation
+│   ├── infrastructure/      # Adapters, RPC handlers, schema validation
+│   └── ui/                  # Components, hooks, theme, accessibility
+├── integration/             # 7 files, 36 tests - cross-layer workflows
+├── security/                # 6 files, 133 tests - see below
+└── e2e/                     # 14 spec files, 47 tests (Playwright)
 ```
 
 ## Test Categories
 
-### Unit Tests (50 tests)
+### Unit Tests (28 files, 386 tests)
 
-**Application Layer (17 tests)**
+Application, domain, infrastructure, and UI layers. Service tests wire real
+implementations to an in-memory storage adapter rather than mocking the service
+under test.
 
-- KeyVaultService: Key generation, encryption, signing operations
-- PolicyService: Policy management and storage
-- Policy Evaluation: Security policy decision logic
+### Integration Tests (7 files, 36 tests)
 
-**Domain Layer (24 tests)**
+Cross-layer workflows: key vault with settings, policy with key vault, the RPC
+request path end to end, relay management, and the activity log.
 
-- Validation utilities
-- Encoding/decoding functions
-- Cryptographic utility functions
-- Data type transformations
+### Security Tests (6 files, 133 tests)
 
-**Infrastructure Layer (3 tests)**
+The governing rule for this directory: **a security test must be able to fail
+for the right reason**. A test may never mock the unit whose behavior it
+claims to verify, and an assertion must observe an effect rather than an
+invocation. `expect(zeroizeSpy).toHaveBeenCalled()` is satisfied by a `zeroize`
+that does nothing; reading the bytes is not.
 
-- WebCrypto adapters (AES-GCM, PBKDF2)
-- Noble cryptography integration
-- Storage adapters
+**`entropy.test.ts` (20 tests)** - key generation entropy, in three parts of
+deliberately different strength, each labelled as such in the file:
 
-**UI Layer (4 tests)**
+- _Known-answer tests._ PBKDF2-HMAC-SHA256 at the shipped parameters
+  (c = 100,000, dkLen = 32) against expected values computed once with OpenSSL,
+  an implementation independent of the code under test. These are real proofs
+  of correctness and carry most of the value.
+- _Source assertions._ A spy on `crypto.getRandomValues` proves the private key
+  is exactly the bytes the platform returned, and that generation throws rather
+  than falling back to any other source when the CSPRNG is unavailable. This is
+  what catches a swapped RNG.
+- _A statistical smoke check, explicitly bounded._ 4,000 keys drawn from
+  `generatePrivateKey()` (128,000 bytes, 1,024,000 bits), a two-sided 5-sigma
+  monobit band of 512,000 +/- 2,530, and a two-sided byte-frequency chi-square
+  band of [157, 385] at 255 degrees of freedom. Combined false-failure
+  probability about 1.1e-6. The file states plainly that this cannot prove
+  randomness quality: it detects gross breakage only - a constant byte, a short
+  repeating pattern, a stuck bit, or an over-uniform source such as a counter.
+  Companion tests feed each of those failure modes in and assert the check goes
+  red. A lone statistical failure is re-run once before being investigated.
 
-- React hooks for onboarding flow
-- State management hooks
-- Component interaction patterns
+The case this replaced, "generates cryptographically secure private keys",
+generated three keys and asserted only that they differed and were 64 hex
+characters. A counter returning 1, 2, 3 passes that.
 
-### Integration Tests (9 tests)
+**`test-seam-safety.test.ts` (10 tests)** - locks down the fact that the test
+harness cannot weaken production crypto. It asserts that `vitest.setup.ts`
+writes `globalThis.crypto` only inside its missing-subtle guard (the guard
+condition is lifted out of the file and evaluated against sentinel globals, so
+the shipped guard is what runs), that the harness installs nothing but Node's
+WebCrypto, that no deterministic, seeded or `Math.random`-backed generator
+appears, and - by scanning every file under `src/` - that production code
+cannot import `vitest.setup.ts`, anything under `tests/`, or a test-only crypto
+shim.
 
-**Service Integration**
+**`memory-zeroization.test.ts` (13 tests)** - zeroization verified by retaining
+the underlying byte storage of each sensitive buffer and reading it after the
+operation, on success and failure paths alike.
 
-- KeyVault + Settings coordination
-- Policy + KeyVault interactions
-- Cross-layer data consistency
-- Storage layer integration
-- Error handling across services
+**`crypto-security.test.ts` (13 tests)** - salt and IV uniqueness, signature
+behavior across keys and messages, password handling, lock-state behavior,
+input validation, and encryption at rest.
 
-**Workflow Testing**
+**`policy-invariants.test.ts` (7 tests)** - named regression tests for the
+consent and trust policy guards, each with a failure message naming the
+protection that was removed.
 
-- Complete user workflows
-- Service state management
-- Memory and session isolation
+**`bip340-vectors.test.ts` (70 tests)** - the official BIP-340 Schnorr vector
+file from `bitcoin/bips`, run verbatim through Ostrilo's own verification and
+signing paths. Known-answer tests from outside this codebase are the only kind
+that can catch a wrong-but-consistent implementation.
 
-### Security Tests (14 tests)
+### E2E Tests (14 spec files, 47 tests)
 
-**Cryptographic Security (5 tests)**
-
-- Private key generation entropy
-- Unique salt and IV usage
-- Signature randomness (non-deterministic)
-- Multi-key signature differentiation
-- Message differentiation
-
-**Password Security (3 tests)**
-
-- Password validation requirements
-- Salt-based protection against rainbow tables
-- Weak password handling
-
-**Memory Security (2 tests)**
-
-- Sensitive data clearing on lock
-- Session isolation between unlocks
-
-**Input Validation (2 tests)**
-
-- Hash format validation for signing
-- Edge case handling in key operations
-
-**Storage Security (2 tests)**
-
-- Encryption at rest verification
-- Session storage security
+Playwright drives the built extension in a persistent Chromium context. E2E is
+deliberately not a required merge gate; see `openspec/` for the rationale.
 
 ## Running Tests
 
@@ -186,7 +195,7 @@ comparison while behavioral assertions keep the test deterministic.
 
 - Test timeout: 10 seconds (for crypto operations)
 - Thread pool: 1-4 threads
-- Isolated tests: disabled for speed
+- Isolated tests: enabled (`isolate: true`), to avoid worker-thread bleed
 - Custom path aliases for clean imports
 
 **Coverage Configuration:**
@@ -290,18 +299,28 @@ describe("Service Integration", () => {
 
 **Cryptographic Testing:**
 
+Uniqueness and format assertions are not security tests - a counter satisfies
+both. Assert the source of the material instead, without mocking the function
+under test:
+
 ```typescript
 describe("Crypto Security", () => {
-  it("should generate unique cryptographic material", async () => {
-    const key1 = await generateKey();
-    const key2 = await generateKey();
+  it("takes the private key from the platform CSPRNG", () => {
+    const platform = globalThis.crypto.getRandomValues.bind(globalThis.crypto);
+    const draws: Uint8Array[] = [];
+    vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation(
+      ((array) => {
+        const filled = platform(array);
+        draws.push(new Uint8Array(filled).slice());
+        return filled;
+      }) as typeof globalThis.crypto.getRandomValues
+    );
 
-    // Verify uniqueness
-    expect(key1.id).not.toBe(key2.id);
-    expect(key1.pubkey).not.toBe(key2.pubkey);
+    const key = generatePrivateKey();
 
-    // Verify proper format
-    expect(key1.pubkey).toMatch(/^[0-9a-f]{64}$/);
+    expect(draws).toHaveLength(1);
+    expect(draws[0]).toHaveLength(32);
+    expect(Array.from(key)).toEqual(Array.from(draws[0]));
   });
 });
 ```

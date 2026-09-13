@@ -70,11 +70,16 @@ Ostrilo v2 aims to become the **world's best Nostr signing extension** by delive
 
 The original release dates are now historical planning targets. The status markers in this document describe the current codebase, not the original plan.
 
+**On memory zeroization (SEC-001), stated precisely.** Byte buffers holding key material are overwritten in `finally` blocks and that is now verified by reading the bytes back, not by counting calls to `zeroize`. Three things remain outside what any JavaScript implementation can guarantee, and the requirement should not be read as covering them: string secrets such as the master password are immutable and cannot be erased; `crypto.subtle.importKey` copies key bytes into an opaque `CryptoKey` that script cannot clear; and dropping a reference is permission for the garbage collector to erase, not erasure. The testable property for strings is narrower - no unnecessary copy is created and nothing retains the value - and that is what `tests/security/memory-zeroization.test.ts` asserts.
+
 **Implemented in the current codebase:**
 
 - NIP-07 core provider: `window.nostr.getPublicKey()` and `window.nostr.signEvent()` are injected at document start and route through content/background messaging.
 - Background-only key operations, encrypted local key storage, multi-key management, active-key selector, add/import/rename/delete flows, and guarded last-key deletion.
 - Per-origin trust policy evaluation, medium-trust event kind defaults, explicit per-kind rules, session grants, remembered allow/deny decisions from approval prompts, managed approval queue/window, event de-duplication, batch approval actions, and Activity-page pending approval access.
+- Verification automation: `verify.yml` runs typecheck, the unit/integration/security suites, both extension builds and a dependency audit on every pull request; `e2e.yml` runs Playwright nightly, on demand, and on a `run-e2e` label. Previously the only workflow was a React code-quality linter, so no test result affected whether a change could merge. See `docs/ci-verification.md`.
+- Supply-chain gates: `pnpm install --frozen-lockfile` everywhere (which also runs the `minimumReleaseAge` / `trustPolicy: no-downgrade` policy in `pnpm-workspace.yaml`), React Doctor pinned as an exact devDependency rather than fetched with `npx ... @latest`, and reviewed `overrides` replacing packages that lost provenance attestation instead of relaxing the policy.
+- Memory zeroization is verified against real buffer contents rather than mock call counts. The adapter no longer clones key material into unreachable `ArrayBuffer` copies, and `unlock()` no longer creates a second copy of the password to zeroize. See the honest-limits note below.
 - Trust policy hardening has centralized protected-kind definitions for Short Text Notes and Zap Requests; domain policy evaluation and the `nostr.signEvent` RPC handler now force protected kinds through approval before session grants, explicit allow rules, Medium Trust, or High Trust can auto-sign them, and Medium Trust settings/UI filter protected kinds out of auto-allow controls.
 - Persistent activity log with real signing decisions, origin/kind filters, pagination, clear action, configurable retention up to 500 entries, and local JSON export.
 - Profile metadata management for NIP-01 kind:0 profile fetch/cache/display/edit/publish, relay settings, multi-relay querying, and relay publish support.
@@ -123,7 +128,7 @@ Security is the foundation of trust in a signing extension. Users entrust Ostril
 | SEC-014 | Secure Wipe on Extension Removal | M | ⬜ | v2.0 | 1 | "Create a proposal to implement secure data wipe on extension uninstall, ensuring all keys and sensitive data are cryptographically erased from storage" |
 | SEC-015 | Key Derivation Hardening (Argon2id) | M | ⬜ | v2.0 | 1 | "Create a proposal to upgrade key derivation from PBKDF2 to Argon2id with tunable parameters (memory-hard, GPU-resistant) for stronger password-based encryption" |
 | SEC-016 | Sandboxed Crypto Operations | S | ⬜ | v2.1 | 1 | "Create a proposal to isolate cryptographic operations in dedicated Web Workers or separate contexts to minimize attack surface and prevent side-channel attacks" |
-| SEC-017 | Supply Chain Security Verification | M | ⬜ | v2.0 | 1 | "Create a proposal to implement dependency verification with lock file integrity checks, automated security audits (npm audit), and reproducible builds" |
+| SEC-017 | Supply Chain Security Verification | M | 🔄 | v2.0 | 1 | "Create a proposal to implement dependency verification with lock file integrity checks, automated security audits (npm audit), and reproducible builds" |
 | SEC-018 | Deterministic Event Signing Detection | S | ⬜ | v2.0 | 1 | "Create a proposal to detect and warn users about requests for deterministic signatures (replay attacks) versus standard randomized Schnorr signatures" |
 
 ---
