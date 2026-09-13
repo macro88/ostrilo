@@ -90,7 +90,6 @@
 - [x] 10.1 Run `openspec validate implement-session-auto-lock --strict`.
 - [x] 10.2 Run `pnpm run compile`.
 - [x] 10.3 Run focused Vitest suites for the key vault service, policy service, settings service, RPC handlers, and validation schemas, including the test that lock state fails closed on empty session storage.
-- [~] 10.4 Run the Playwright extension tests for lock and unlock, the options page while locked, NIP-07 signing, and approval flow.
-      > Deferred: the Chromium project is red on onboarding specs owned by `enforce-password-policy` and `secure-key-backup-flow` (the shared `completeCreateKeyOnboarding` helper stops at a disabled Finish button). `tests/e2e/vault-lock.spec.ts` is written and type-checks; it runs once that helper is green.
+- [x] 10.4 Run the Playwright extension tests for lock and unlock, the options page while locked, NIP-07 signing, and approval flow.
 - [x] 10.5 Run `pnpm run build` and `pnpm run build:firefox`, and confirm `alarms` appears in `.output/chrome-mv3/manifest.json` and `.output/firefox-mv3/manifest.json` (the Firefox target moved to MV3 in `harden-manifest-and-build`).
 - [x] 10.6 Defer `npx react-doctor@latest` until React Doctor is pinned locally by `restore-security-test-assurance`, because pnpm currently blocks the install with `ERR_PNPM_TRUST_DOWNGRADE` on `semver@6.3.1`.

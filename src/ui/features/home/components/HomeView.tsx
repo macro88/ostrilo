@@ -1,4 +1,5 @@
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { formatOrigin } from "@/domain/display/origin";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import { Button } from "@/components/ui/button";
 import { Pubkey } from "@/components/common/pubkey";
@@ -117,7 +118,12 @@ export function HomeView() {
                     {getKindName(entry.kind).toLowerCase()}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {formatDomain(entry.origin)}
+                    {/* Full origin, scheme included. The activity log is
+                        where a user checks what happened, and "example.com"
+                        does not say whether it was the real one. */}
+                    <span className="font-mono">
+                      {formatOrigin(entry.origin).display}
+                    </span>
                   </p>
                 </div>
                 <time className="font-mono text-xs text-muted-foreground">
@@ -153,14 +159,6 @@ function HomeRow({
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
     </div>
   );
-}
-
-function formatDomain(origin: string): string {
-  try {
-    return new URL(origin).hostname;
-  } catch {
-    return origin;
-  }
 }
 
 function formatRelativeTime(timestamp: number): string {

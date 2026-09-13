@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { formatOrigin } from "@/domain/display/origin";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalPrompt } from "@/ui/features/approval/components/ApprovalPrompt";
 import type { PendingRequest } from "@/domain/types";
@@ -85,7 +86,7 @@ export function ActivityPendingApprovals({
                         {getKindName(request.event.kind)}
                       </p>
                       <p className="text-muted-foreground truncate">
-                        {new URL(request.origin).hostname}
+                        {formatOrigin(request.origin).display}
                       </p>
                     </div>
                     <Badge variant="outline" className="text-xs shrink-0">

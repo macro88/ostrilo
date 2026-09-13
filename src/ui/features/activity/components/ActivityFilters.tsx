@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { formatOrigin } from "@/domain/display/origin";
 import {
   Select,
   SelectContent,
@@ -41,7 +42,7 @@ export function ActivityFilters({
           <SelectItem value="all">All Origins</SelectItem>
           {origins.map((origin) => (
             <SelectItem key={origin} value={origin}>
-              {new URL(origin).hostname}
+              {formatOrigin(origin).display}
             </SelectItem>
           ))}
         </SelectContent>

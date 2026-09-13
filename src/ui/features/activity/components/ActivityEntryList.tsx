@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { formatOrigin } from "@/domain/display/origin";
 import { getKindName } from "@/domain/types";
 import type { ActivityLogEntry } from "@/domain/types";
 import { Activity, CheckCircle, Loader2, XCircle } from "lucide-react";
@@ -76,7 +77,7 @@ export function ActivityEntryList({
                 </h3>
 
                 <p className="text-xs text-muted-foreground truncate mb-1">
-                  {new URL(entry.origin).hostname}
+                  {formatOrigin(entry.origin).display}
                 </p>
 
                 {entry.contentPreview && (

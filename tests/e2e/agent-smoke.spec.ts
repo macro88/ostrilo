@@ -3,7 +3,7 @@ import type { Page } from "./fixtures/extension";
 import { captureStepScreenshot } from "./fixtures/screenshots";
 
 const PASSWORD = "Marigold-Trellis-Pebble-2026!";
-const DAPP_ORIGIN = "http://127.0.0.1:8765";
+const DAPP_ORIGIN = "https://localhost:8765";
 const DAPP_URL = `${DAPP_ORIGIN}/test-page.html`;
 
 type RpcResponse<T = unknown> =
@@ -136,11 +136,15 @@ test.describe("Agent extension smoke", () => {
     await expect(popup.getByText("Active Key")).toBeVisible();
     await captureStepScreenshot(popup, testInfo, "09-settings-active-key");
 
+    // `allow` is a standing permission to sign without prompting, so it is
+    // password-gated in the background. The password rides with the request;
+    // a caller that omits it is refused, which is the point of the gate.
     await sendExtensionRpc(popup, {
       type: "policy.setKindRule",
       origin: DAPP_ORIGIN,
       kind: 7,
       mode: "allow",
+      password: PASSWORD,
     });
 
     const dapp = await extensionContext.newPage();
@@ -174,7 +178,7 @@ test.describe("Agent extension smoke", () => {
     await expect(popup.getByText("Reaction")).toBeVisible({
       timeout: 10_000,
     });
-    await expect(popup.getByText("127.0.0.1")).toBeVisible();
+    await expect(popup.getByText("localhost:8765").first()).toBeVisible();
     await captureStepScreenshot(popup, testInfo, "12-activity-signed-event");
   });
 });

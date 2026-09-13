@@ -40,7 +40,7 @@ test.describe("NIP-07 Provider", () => {
 
     // Navigate to an HTTP page (content script only runs on http/https)
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected (give it time for the content script)
     await waitForNostrInjection(page);
@@ -86,7 +86,7 @@ test.describe("NIP-07 Provider", () => {
 
     // Navigate to an HTTP page
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected
     await waitForNostrInjection(page);
@@ -129,7 +129,7 @@ test.describe("NIP-07 Provider", () => {
 
     // Navigate to an HTTP page - extension starts in locked state by default
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected
     await waitForNostrInjection(page);
@@ -170,7 +170,7 @@ test.describe("NIP-07 Provider", () => {
 
     // Navigate to an HTTP page
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected
     await waitForNostrInjection(page);
@@ -189,8 +189,12 @@ test.describe("NIP-07 Provider", () => {
     expect(nostrStructure.exists).toBe(true);
     expect(nostrStructure.hasGetPublicKey).toBe(true);
     expect(nostrStructure.hasSignEvent).toBe(true);
-    expect(nostrStructure.hasNip04).toBe(true);
-    expect(nostrStructure.hasNip44).toBe(true);
+    // Deliberately absent. They were objects whose every method threw, so
+    // NIP-07 feature detection - the whole point of which is
+    // `if (window.nostr.nip44)` - returned true and then failed at call
+    // time. An honest absence is a working feature check.
+    expect(nostrStructure.hasNip04).toBe(false);
+    expect(nostrStructure.hasNip44).toBe(false);
   });
 
   test("window.nostr is injected early before DOMContentLoaded", async ({
@@ -203,7 +207,7 @@ test.describe("NIP-07 Provider", () => {
     const page = await extensionContext.newPage();
     
     // Navigate to a page and check if window.nostr is available early
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
     
     // Wait for content script injection
     await waitForNostrInjection(page);
@@ -222,7 +226,7 @@ test.describe("NIP-07 Provider", () => {
 
     // Navigate to an HTTP page
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected
     await waitForNostrInjection(page);
@@ -258,5 +262,147 @@ test.describe("NIP-07 Provider", () => {
     // Should return an error for missing fields
     expect(missingFieldsError).toBeDefined();
     expect(typeof missingFieldsError).toBe('string');
+  });
+});
+
+test.describe("provider trust boundary", () => {
+  test("is not injected into a plaintext page", async ({
+    extensionContext,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    // The content script matches https://*/* only. On a plaintext page any
+    // on-path attacker controls the document, so the approval dialog would be
+    // showing an origin the attacker is speaking as. No amount of care in the
+    // dialog fixes that; the provider simply is not there.
+    const page = await extensionContext.newPage();
+    const response = await page.goto("http://localhost:8765/test-page.html", {
+      waitUntil: "domcontentloaded",
+    }).catch(() => null);
+
+    // The fixture server is HTTPS-only, so a plaintext request fails to load.
+    // Either way the assertion below is the one that matters.
+    void response;
+    const hasNostr = await page
+      .evaluate(() => typeof (window as any).nostr !== "undefined")
+      .catch(() => false);
+
+    expect(
+      hasNostr,
+      "SECURITY REGRESSION: the provider was injected into a plaintext page"
+    ).toBe(false);
+  });
+
+  test("window.nostr cannot be replaced or reconfigured", async ({
+    extensionContext,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const page = await extensionContext.newPage();
+    await page.goto("https://localhost:8765/test-page.html");
+    await page.waitForFunction(() => typeof window.nostr !== "undefined", {
+      timeout: 5000,
+    });
+
+    const result = await page.evaluate(() => {
+      const descriptor = Object.getOwnPropertyDescriptor(window, "nostr");
+      let replaced = false;
+      try {
+        (window as any).nostr = { getPublicKey: async () => "hijacked" };
+        replaced = (window as any).nostr.getPublicKey !== undefined &&
+          String((window as any).nostr.getPublicKey).includes("hijacked");
+      } catch {
+        replaced = false;
+      }
+      let redefined = false;
+      try {
+        Object.defineProperty(window, "nostr", { value: { hijacked: true } });
+        redefined = (window as any).nostr.hijacked === true;
+      } catch {
+        redefined = false;
+      }
+      let methodSwapped = false;
+      try {
+        (window.nostr as any).signEvent = async () => ({ sig: "forged" });
+        methodSwapped =
+          String((window.nostr as any).signEvent).includes("forged");
+      } catch {
+        methodSwapped = false;
+      }
+      return {
+        writable: descriptor?.writable,
+        configurable: descriptor?.configurable,
+        replaced,
+        redefined,
+        methodSwapped,
+      };
+    });
+
+    expect(result.writable).toBe(false);
+    expect(result.configurable).toBe(false);
+    expect(
+      result.replaced,
+      "SECURITY REGRESSION: a page script replaced window.nostr wholesale"
+    ).toBe(false);
+    expect(result.redefined).toBe(false);
+    expect(
+      result.methodSwapped,
+      "SECURITY REGRESSION: a page script swapped signEvent and would sit between the page and the signer"
+    ).toBe(false);
+  });
+
+  test("advertises only the capabilities it has", async ({
+    extensionContext,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const page = await extensionContext.newPage();
+    await page.goto("https://localhost:8765/test-page.html");
+    await page.waitForFunction(() => typeof window.nostr !== "undefined", {
+      timeout: 5000,
+    });
+
+    const surface = await page.evaluate(() => ({
+      getPublicKey: typeof window.nostr!.getPublicKey,
+      signEvent: typeof window.nostr!.signEvent,
+      nip04: (window.nostr as any).nip04,
+      nip44: (window.nostr as any).nip44,
+    }));
+
+    expect(surface.getPublicKey).toBe("function");
+    expect(surface.signEvent).toBe("function");
+    // These were advertised as objects whose every method threw, so NIP-07
+    // feature detection returned true and then failed at call time.
+    expect(surface.nip04).toBeUndefined();
+    expect(surface.nip44).toBeUndefined();
+  });
+
+  test("leaves no injected script element in the page DOM", async ({
+    extensionContext,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const page = await extensionContext.newPage();
+    await page.goto("https://localhost:8765/test-page.html");
+    await page.waitForFunction(() => typeof window.nostr !== "undefined", {
+      timeout: 5000,
+    });
+
+    // The element used to be left behind, where any script could find it by
+    // src and learn both that Ostrilo is installed and its extension id.
+    const extensionScripts = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("script"))
+        .map((s) => s.getAttribute("src") ?? "")
+        .filter((src) => src.includes("extension://"))
+    );
+
+    expect(
+      extensionScripts,
+      "SECURITY REGRESSION: the injected script element is a stable fingerprinting probe"
+    ).toEqual([]);
   });
 });

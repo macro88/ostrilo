@@ -42,9 +42,14 @@ export const test = base.extend<ExtensionFixtures>({
       channel: "chromium",
       headless: !isHeaded,
       viewport: { width: 390, height: 700 },
+      // The fixture server uses a throwaway self-signed certificate for
+      // localhost, because the content script matches https:// only. This
+      // browser instance is a test artifact and trusts nothing else.
+      ignoreHTTPSErrors: true,
       args: [
         `--disable-extensions-except=${extensionPath}`,
         `--load-extension=${extensionPath}`,
+        "--ignore-certificate-errors",
       ],
     });
 

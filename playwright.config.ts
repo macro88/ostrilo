@@ -1,4 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
+import { ensureDevCertificate } from "./tests/e2e/fixtures/make-dev-cert";
+
+// The NIP-07 content script matches https:// only, so the fixture page must
+// be served over TLS or window.nostr is never injected and every provider
+// test fails for a reason unrelated to what it is testing. The certificate
+// is throwaway, regenerated into test-results/ and trusted by nothing
+// outside the test browser.
+const { cert, key } = ensureDevCertificate();
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -24,8 +32,9 @@ export default defineConfig({
 
   /* Configure web server for E2E tests */
   webServer: {
-    command: "pnpm exec http-server tests/e2e/fixtures -a 127.0.0.1 -p 8765",
-    port: 8765,
+    command: `pnpm exec http-server tests/e2e/fixtures -a 127.0.0.1 -p 8765 -S -C "${cert}" -K "${key}"`,
+    url: "https://localhost:8765/test-page.html",
+    ignoreHTTPSErrors: true,
     reuseExistingServer: !process.env.CI,
   },
 
@@ -34,7 +43,11 @@ export default defineConfig({
     {
       name: "chromium-extension",
       testMatch: /.*\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"], browserName: "chromium" },
+      use: {
+        ...devices["Desktop Chrome"],
+        browserName: "chromium",
+        ignoreHTTPSErrors: true,
+      },
     },
   ],
 });

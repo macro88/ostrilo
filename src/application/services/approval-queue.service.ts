@@ -6,7 +6,57 @@ import {
 } from "@/domain/types";
 
 /** Default timeout for approval requests (60 seconds) */
-const DEFAULT_TIMEOUT_MS = 60_000;
+/**
+ * How long a request waits for the user, in ms.
+ *
+ * Exported because the injected provider needs the SAME number. The page
+ * side hard-coded 30 seconds while this side ran for 60, so a user who
+ * approved at 45 seconds produced a real signature over a real event that
+ * the page had already rejected and thrown away. The signature existed;
+ * nobody received it.
+ */
+export const APPROVAL_TIMEOUT_MS = 60_000;
+
+/**
+ * Extra time the page-side backstop waits beyond the extension deadline.
+ *
+ * The extension-side deadline is authoritative. This one only exists so a
+ * page is not left with a promise that never settles if the extension goes
+ * away mid-request, and it must fire strictly later than the real one.
+ */
+export const PROVIDER_TIMEOUT_GRACE_MS = 5_000;
+
+/**
+ * Flood controls.
+ *
+ * There were none. A page could enqueue approval prompts as fast as it
+ * could call `signEvent`, and each one opened or refreshed an approval
+ * window. That is denial of service against the user's own browser, and it
+ * is also the setup for approval fatigue: the reliable way to get a
+ * signature the user did not mean to give is to ask a hundred times.
+ *
+ * Per-origin, because one hostile site must not be able to exhaust the
+ * queue and lock out a legitimate one.
+ */
+export const QUEUE_LIMITS = {
+  /** New entries one origin may enqueue per rolling window. */
+  perOriginPerWindow: 10,
+  windowMs: 60_000,
+  /** Entries one origin may have waiting at once. */
+  perOriginPending: 5,
+  /** Entries any number of origins may have waiting at once. */
+  globalPending: 20,
+} as const;
+
+/** Thrown by enqueue when an origin is over a limit. */
+export class ApprovalRateLimitError extends Error {
+  constructor(public readonly reason: "rate" | "origin_full" | "queue_full") {
+    super(reason);
+    this.name = "ApprovalRateLimitError";
+  }
+}
+
+const DEFAULT_TIMEOUT_MS = APPROVAL_TIMEOUT_MS;
 
 /** Callback type for when a request is resolved or times out */
 export type RequestResolver = (
@@ -80,6 +130,74 @@ export class ApprovalQueueService {
     }
   }
 
+  /** Enqueue timestamps per origin, trimmed to the rolling window. */
+  private enqueueHistory: Map<string, number[]> = new Map();
+
+  /** Number of entries this origin currently has waiting. */
+  private pendingForOrigin(origin: string): number {
+    let count = 0;
+    for (const entry of this.queue.values()) {
+      if (entry.request.origin === origin) count++;
+    }
+    return count;
+  }
+
+  /** Throws ApprovalRateLimitError when this origin may not enqueue. */
+  private assertCapacity(origin: string): void {
+    if (this.queue.size >= QUEUE_LIMITS.globalPending) {
+      throw new ApprovalRateLimitError("queue_full");
+    }
+    if (this.pendingForOrigin(origin) >= QUEUE_LIMITS.perOriginPending) {
+      throw new ApprovalRateLimitError("origin_full");
+    }
+
+    const now = Date.now();
+    const recent = (this.enqueueHistory.get(origin) ?? []).filter(
+      (at) => now - at < QUEUE_LIMITS.windowMs
+    );
+    this.enqueueHistory.set(origin, recent);
+    if (recent.length >= QUEUE_LIMITS.perOriginPerWindow) {
+      throw new ApprovalRateLimitError("rate");
+    }
+  }
+
+  /** Charges one enqueue against this origin's rolling allowance. */
+  private recordEnqueue(origin: string): void {
+    const now = Date.now();
+    const recent = (this.enqueueHistory.get(origin) ?? []).filter(
+      (at) => now - at < QUEUE_LIMITS.windowMs
+    );
+    recent.push(now);
+    this.enqueueHistory.set(origin, recent);
+  }
+
+  /**
+   * Resolve a request the PAGE abandoned, always as a denial.
+   *
+   * The page-side deadline used to fire at 30 seconds while this queue ran
+   * for 60, so a user approving at 45 seconds produced a real signature that
+   * the page had already discarded. The deadlines are aligned now, and this
+   * is the backstop: when the page gives up, the prompt goes away too.
+   *
+   * It can only ever DENY. There is deliberately no approving counterpart -
+   * a page-reachable path that resolves an approval as allowed would be a
+   * way to sign without asking anyone.
+   *
+   * The origin is supplied by the content script, not the page, so one site
+   * cannot cancel another's prompt.
+   */
+  cancelByClientRequestId(origin: string, clientRequestId: string): boolean {
+    for (const entry of this.queue.values()) {
+      if (
+        entry.request.origin === origin &&
+        entry.request.clientRequestId === clientRequestId
+      ) {
+        return this.resolve(entry.request.id, "deny");
+      }
+    }
+    return false;
+  }
+
   /**
    * Enqueue a new approval request with automatic de-duplication.
    *
@@ -110,7 +228,8 @@ export class ApprovalQueueService {
     origin: string,
     event: UnsignedEvent,
     resolver: RequestResolver,
-    eventIdHash?: string
+    eventIdHash?: string,
+    options?: { signingPubkey?: string; clientRequestId?: string }
   ): PendingRequest {
     // Check for a duplicate from THIS origin. The key is built here, inside the
     // service, so no caller can forget to include the origin.
@@ -124,9 +243,13 @@ export class ApprovalQueueService {
           8
         )}...), reusing existing request ${existingEntry.request.id}`
       );
-      // Don't notify for duplicates - no actual queue change
+      // Don't notify for duplicates - no actual queue change, and
+      // deliberately no rate-limit charge: collapsing a double-click into
+      // one prompt must not cost the page the same as asking twice.
       return existingEntry.request;
     }
+
+    this.assertCapacity(origin);
 
     const now = Math.floor(Date.now() / 1000);
     const request: PendingRequest = {
@@ -136,7 +259,11 @@ export class ApprovalQueueService {
       eventIdHash,
       createdAt: now,
       timeoutAt: now + Math.floor(this.timeoutMs / 1000),
+      signingPubkey: options?.signingPubkey,
+      clientRequestId: options?.clientRequestId,
     };
+
+    this.recordEnqueue(origin);
 
     // Set up timeout for auto-deny
     const timeoutId = setTimeout(() => {

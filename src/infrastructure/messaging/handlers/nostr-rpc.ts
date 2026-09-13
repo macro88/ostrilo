@@ -11,13 +11,13 @@ import {
   UnsignedEventSchema,
   OriginSchema,
 } from "@/infrastructure/validation/schemas";
-import {
-  computeEventId,
-  signEventHash,
-  publicKeyToHex,
-} from "@/domain/utils/crypto";
+import { computeEventId } from "@/application/crypto/event-id";
+import { NobleSha256 } from "@/infrastructure/crypto/adapters";
 import { isProtectedKind } from "@/domain/policy/trust-definitions";
-import { ApprovalQueueService } from "@/application/services/approval-queue.service";
+import {
+  ApprovalQueueService,
+  ApprovalRateLimitError,
+} from "@/application/services/approval-queue.service";
 import { browser } from "wxt/browser";
 
 /** Approval popup dimensions */
@@ -59,6 +59,9 @@ export class NostrRpcHandler implements RpcModule {
     switch (message.type) {
       case "nostr.getPublicKey":
         return this.handleGetPublicKey(context);
+
+      case "nostr.cancelRequest":
+        return this.handleCancelRequest(message);
 
       case "nostr.signEvent":
         return this.handleSignEvent(message, context);
@@ -108,7 +111,11 @@ export class NostrRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "nostr.signEvent" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Validate event
+    // Validate the event FIRST, before the lock check, the policy
+    // evaluation, the event-id hash or any queue entry. The schema now
+    // carries size bounds, and the point of checking here is that an
+    // oversized payload never reaches computeEventId inside the service
+    // worker and never occupies a slot in the approval queue.
     const eventValidation = UnsignedEventSchema.safeParse(message.event);
     if (!eventValidation.success) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_EVENT, {
@@ -133,9 +140,9 @@ export class NostrRpcHandler implements RpcModule {
       lockState.isLocked ? "LOCKED" : "UNLOCKED"
     );
     if (lockState.isLocked) {
-      console.log(
-        "[NostrRpcHandler] Vault is locked, returning LOCKED error to trigger unlock prompt"
-      );
+      // Just the error. Nothing opens: the page-triggered unlock popup is
+      // gone, and the background raises a toolbar marker instead.
+      console.log("[NostrRpcHandler] Vault is locked, refusing to sign");
       return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
         details: "Extension is locked. Please unlock to sign events.",
         method: message.type,
@@ -221,13 +228,13 @@ export class NostrRpcHandler implements RpcModule {
 
       try {
         // Compute event ID for de-duplication
-        const eventIdHash = computeEventId(
+        const eventIdHash = computeEventId(NobleSha256, {
           pubkey,
-          event.created_at,
-          event.kind,
-          event.tags,
-          event.content
-        );
+          created_at: event.created_at,
+          kind: event.kind,
+          tags: event.tags,
+          content: event.content,
+        });
 
         console.log(
           `[NostrRpcHandler] Computed event ID hash: ${eventIdHash.substring(
@@ -241,7 +248,8 @@ export class NostrRpcHandler implements RpcModule {
           message.origin,
           event,
           pubkey,
-          eventIdHash
+          eventIdHash,
+          message.clientRequestId
         );
 
         console.log("[NostrRpcHandler] Approval decision:", decision);
@@ -278,9 +286,23 @@ export class NostrRpcHandler implements RpcModule {
         }
         // Fall through to signing if approved
       } catch (error) {
+        // A flooding origin gets a distinct, honest code. Reporting this as
+        // a generic failure would tell a well-behaved dapp to retry, which
+        // is exactly the wrong advice.
+        if (error instanceof ApprovalRateLimitError) {
+          console.warn(
+            `[NostrRpcHandler] Refused enqueue from ${message.origin}: ${error.reason}`
+          );
+          return createRpcErrorResponse(RPC_ERROR_CODES.RATE_LIMITED, {
+            details: "Too many pending approval requests",
+            method: message.type,
+          });
+        }
         console.error("[NostrRpcHandler] Approval error:", error);
         return createRpcErrorResponse(RPC_ERROR_CODES.APPROVAL_FAILED, {
-          details: error instanceof Error ? error.message : "approval failed",
+          // Fixed string: the raw message is internal and this response
+          // reaches a web page.
+          details: "Approval failed",
           method: message.type,
         });
       }
@@ -289,13 +311,13 @@ export class NostrRpcHandler implements RpcModule {
     // Policy allows (or user approved) - proceed with signing
     try {
       // Compute event ID using NIP-01 format
-      const eventId = computeEventId(
+      const eventId = computeEventId(NobleSha256, {
         pubkey,
-        event.created_at,
-        event.kind,
-        event.tags,
-        event.content
-      );
+        created_at: event.created_at,
+        kind: event.kind,
+        tags: event.tags,
+        content: event.content,
+      });
 
       // Sign the event hash with the selected key
       const signResult = await context.vault.sign(eventId, selectedKey.id);
@@ -373,11 +395,31 @@ export class NostrRpcHandler implements RpcModule {
    * @param eventIdHash - Computed event ID hash for de-duplication
    * @returns Promise resolving to the user's decision or "timeout" if timed out
    */
+  /**
+   * Withdraw a request the page abandoned. Always a denial.
+   *
+   * There is no approving counterpart and there must not be: a page-
+   * reachable path that resolved an approval as allowed would be a way to
+   * sign without asking anyone. The origin comes from the content script,
+   * not from the page, so one site cannot cancel another's prompt.
+   */
+  private async handleCancelRequest(
+    message: Extract<RpcRequest, { type: "nostr.cancelRequest" }>
+  ): Promise<RpcResponse> {
+    const cancelled =
+      this.approvalQueue?.cancelByClientRequestId(
+        message.origin,
+        message.clientRequestId
+      ) ?? false;
+    return { ok: true, data: { cancelled } };
+  }
+
   private async requestApproval(
     origin: string,
     event: UnsignedEvent,
     pubkey: string,
-    eventIdHash: string
+    eventIdHash: string,
+    clientRequestId?: string
   ): Promise<ApprovalDecision | "timeout"> {
     return new Promise<ApprovalDecision | "timeout">((resolve, reject) => {
       // Enqueue the request with event ID hash for de-duplication
@@ -400,7 +442,11 @@ export class NostrRpcHandler implements RpcModule {
             resolve(decision);
           }
         },
-        eventIdHash
+        eventIdHash,
+        // The key that will actually sign, bound to the request here, so the
+        // dialog cannot show a different one if the user switches keys while
+        // the prompt is open.
+        { signingPubkey: pubkey, clientRequestId }
       );
 
       console.log(

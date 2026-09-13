@@ -68,7 +68,22 @@ export type RpcRequest =
   | { type: "crypto.parsePrivateKey"; keyInput: string }
   // NIP-07 Nostr operations
   | { type: "nostr.getPublicKey" }
-  | { type: "nostr.signEvent"; event: UnsignedEvent; origin: string }
+  | {
+      type: "nostr.signEvent";
+      event: UnsignedEvent;
+      origin: string;
+      /** Page-side correlation id, so an abandoned request can be cancelled. */
+      clientRequestId?: string;
+    }
+  /**
+   * Withdraw a request the page has given up on. Resolves it as DENIED and
+   * never as approved - there is no page-reachable path to an approval.
+   */
+  | {
+      type: "nostr.cancelRequest";
+      origin: string;
+      clientRequestId: string;
+    }
   // Approval queue operations
   | { type: "approval.getNext" }
   | { type: "approval.getAll" }

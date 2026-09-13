@@ -18,6 +18,16 @@ export interface ServiceContext {
   activityLog: ActivityLogService;
   profile: ProfileService;
   unlockThrottle: UnlockThrottleService;
+  /**
+   * Called when a request from a WEB PAGE is refused because the vault is
+   * locked, so the background can raise a toolbar marker.
+   *
+   * This is the replacement for the page-triggered unlock popup that used to
+   * live in the content script: the user learns a site wanted something, on
+   * their own toolbar, at a moment of their choosing. The page cannot drive
+   * it beyond causing the marker to appear once.
+   */
+  onLockedPageRequest?: (method: string) => void;
 }
 
 /**
@@ -337,6 +347,9 @@ export function createRpcMessageListener(
         const lockState = await context.vault.getLockState();
         if (lockState.isLocked && gated) {
           console.log("[RPC] Refused while locked:", message.type);
+          if (RpcRouter.isPageReachable(namespace)) {
+            context.onLockedPageRequest?.(message.type);
+          }
           sendResponse(
             createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
               method: message.type,

@@ -1,8 +1,12 @@
 import { test, expect, Page } from "./fixtures/extension";
 
-const PASSWORD = "Ostrilo-Approval-Queue-Password-2026!";
-const DAPP_ORIGIN = "http://127.0.0.1:8765";
-const ALT_DAPP_ORIGIN = "http://localhost:8765";
+const PASSWORD = "Lantern-Thicket-Cobalt-2026!";
+const DAPP_ORIGIN = "https://localhost:8765";
+// A genuinely different origin, on the same server and the same throwaway
+// certificate (its SAN covers both names). The de-duplication tests exist to
+// prove that two origins asking for a byte-identical event get two separate
+// approvals, so these two constants must not collapse to one value.
+const ALT_DAPP_ORIGIN = "https://127.0.0.1:8765";
 const DAPP_URL = `${DAPP_ORIGIN}/test-page.html`;
 const ALT_DAPP_URL = `${ALT_DAPP_ORIGIN}/test-page.html`;
 
@@ -168,6 +172,42 @@ async function waitForPageClosed(page: Page) {
   }
 }
 
+/**
+ * Approves every queued request, one at a time.
+ *
+ * "Approve all from site" is gone. Approving in bulk is approving without
+ * looking, and the reliable way to get a signature a user did not mean to
+ * give is to ask many times and offer one button that answers all of them.
+ * Bulk DENY remains, so a user buried in prompts still has a way out.
+ *
+ * The detail pane also no longer re-binds to the next queued request after a
+ * resolution, so each approval means: pick from the list, wait out the
+ * approve cooldown, approve.
+ */
+async function approveEachRequest(approvalPage: Page, count: number) {
+  for (let i = 0; i < count; i++) {
+    const item = approvalPage.getByTestId("approval-request-item").first();
+    await item.click();
+    const approve = approvalPage.getByRole("button", {
+      name: "Approve & sign",
+    });
+    // The approve action is disabled for 500ms whenever the pane binds to a
+    // request it was not previously showing.
+    await expect(approve).toBeEnabled({ timeout: 5_000 });
+    await approve.click();
+
+    const remaining = count - i - 1;
+    if (remaining === 0) {
+      // The window closes once the queue empties, so there is no locator
+      // left to count. The caller asserts on the page closing instead.
+      break;
+    }
+    await expect(
+      approvalPage.getByTestId("approval-request-item")
+    ).toHaveCount(remaining, { timeout: 10_000 });
+  }
+}
+
 test.describe("Approval queue UX", () => {
   test.beforeEach(async ({ browserName }) => {
     test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
@@ -195,13 +235,18 @@ test.describe("Approval queue UX", () => {
       5
     );
     expect(approvalPages(extensionContext)).toHaveLength(1);
+
+    // Nothing is selected on arrival. The pane used to auto-bind to
+    // requests[0] and to re-bind to the next one after every resolution, so
+    // the approve button the user had just clicked reappeared under their
+    // cursor bound to a DIFFERENT event.
+    await expect(approvalPage.getByTestId("approval-detail")).toHaveCount(0);
+    await approvalPage.getByTestId("approval-request-item").first().click();
     await expect(approvalPage.getByTestId("approval-detail")).toContainText(
       "Concurrent approval request 1"
     );
 
-    await approvalPage
-      .getByRole("button", { name: /Approve all from site/i })
-      .click();
+    await approveEachRequest(approvalPage, 5);
 
     const results = await readSignResults(dapp);
     expect(results).toHaveLength(5);
@@ -238,9 +283,7 @@ test.describe("Approval queue UX", () => {
     await expect(approvalPage.getByTestId("approval-request-item")).toHaveCount(
       1
     );
-    await approvalPage
-      .getByRole("button", { name: "Approve & sign" })
-      .click();
+    await approveEachRequest(approvalPage, 1);
 
     const results = await readSignResults(dapp);
     expect(results).toHaveLength(2);
@@ -286,11 +329,15 @@ test.describe("Approval queue UX", () => {
       5
     );
 
+    // Deny all from ORIGIN A, leaving origin B untouched. The test is about
+    // batch actions being scoped to one origin; bulk approve no longer
+    // exists, so the scoped action under test is the denial.
     const originAGroup = approvalPage
       .getByTestId("approval-origin-group")
-      .filter({ hasText: "127.0.0.1" });
+      .filter({ hasText: "localhost:8765" })
+      .first();
     await originAGroup
-      .getByRole("button", { name: /Approve all from site/i })
+      .getByRole("button", { name: /Deny all from site/i })
       .click();
 
     await expect(approvalPage.getByTestId("approval-request-item")).toHaveCount(
@@ -302,13 +349,17 @@ test.describe("Approval queue UX", () => {
         .filter({ hasText: "Origin B request 1" })
     ).toBeVisible();
 
-    await approvalPage.getByRole("button", { name: /Deny all/i }).first().click();
+    // Now approve what is left, which is origin B only.
+    await approveEachRequest(approvalPage, 2);
 
     const originAResults = await readSignResults(dapp);
-    expect(originAResults.every((result) => result.ok)).toBe(true);
+    expect(
+      originAResults.every((result) => !result.ok),
+      "denying one origin must resolve only that origin's requests"
+    ).toBe(true);
 
     const originBResults = await readSignResults(altDapp);
-    expect(originBResults.every((result) => !result.ok)).toBe(true);
+    expect(originBResults.every((result) => result.ok)).toBe(true);
 
     await waitForPageClosed(approvalPage);
   });
@@ -342,6 +393,7 @@ test.describe("Approval queue UX", () => {
     await expect(approvalPage.getByTestId("approval-request-item")).toContainText(
       "Full detail payload"
     );
+    await approvalPage.getByTestId("approval-request-item").first().click();
     await expect(approvalPage.getByTestId("approval-detail")).toContainText(
       longContent
     );
@@ -369,6 +421,9 @@ test.describe("Approval queue UX", () => {
       .click();
 
     approvalPage = await waitForApprovalPage(extensionContext, extensionId);
+    // Reopening lands on the queue list, not on a pre-selected request:
+    // the pane binds only to what the user picks.
+    await approvalPage.getByTestId("approval-request-item").first().click();
     await expect(approvalPage.getByTestId("approval-detail")).toContainText(
       longContent
     );
@@ -394,5 +449,67 @@ test.describe("Approval queue UX", () => {
     const results = await readSignResults(dapp);
     expect(results).toHaveLength(1);
     expect(results[0].ok).toBe(false);
+  });
+});
+
+test.describe("approval flood controls", () => {
+  test("refuses a flooding origin with rate_limited and offers no bulk approve", async ({
+    openPopup,
+    extensionContext,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const popup = await openPopup();
+    await configureUnlockedSigner(popup);
+
+    const dapp = await extensionContext.newPage();
+    await openDapp(dapp);
+
+    // Fire more requests than the origin is allowed, without awaiting any of
+    // them - which is exactly what a hostile page does.
+    const outcomes = await dapp.evaluate(async () => {
+      const attempts = Array.from({ length: 12 }, (_, i) =>
+        window
+          .nostr!.signEvent({
+            kind: 1,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [],
+            content: `flood ${i}`,
+          })
+          .then(() => "signed")
+          .catch((err: unknown) =>
+            err instanceof Error ? err.message : String(err)
+          )
+      );
+      // Give the extension a moment to refuse the ones over the limit.
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      return Promise.race([
+        Promise.all(attempts),
+        new Promise<string[]>((resolve) =>
+          setTimeout(() => resolve([]), 5000)
+        ),
+      ]);
+    });
+
+    // Whatever else happened, nothing was signed without a prompt, and at
+    // least one attempt was refused outright.
+    expect(
+      outcomes.filter((o) => o === "signed"),
+      "SECURITY REGRESSION: a flood produced signatures with no approval"
+    ).toHaveLength(0);
+
+    // Bulk approve is gone; bulk deny remains, because refusing without
+    // looking is always safe and a user buried in prompts needs a way out.
+    const approvalPages = extensionContext
+      .pages()
+      .filter((p) => p.url().includes("approval"));
+    for (const approval of approvalPages) {
+      const body = (await approval.textContent("body")) ?? "";
+      expect(
+        body,
+        "SECURITY REGRESSION: bulk approve is back"
+      ).not.toContain("Approve all from site");
+    }
   });
 });

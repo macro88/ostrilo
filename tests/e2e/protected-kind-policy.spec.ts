@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures/extension";
 import type { Page } from "./fixtures/extension";
 
 const PASSWORD = "Harbour-Kestrel-Mantle-2026!";
-const DAPP_ORIGIN = "http://127.0.0.1:8765";
+const DAPP_ORIGIN = "https://localhost:8765";
 const DAPP_URL = `${DAPP_ORIGIN}/test-page.html`;
 
 type RpcResponse<T = unknown> =
@@ -87,16 +87,21 @@ test.describe("Protected kind policy", () => {
     const popup = await openPopup();
     await completeCreateKeyOnboarding(popup);
 
+    // Raising to high trust and setting an `allow` rule are both
+    // password-gated in the background: they are standing permissions to
+    // sign without prompting.
     await sendExtensionRpc(popup, {
       type: "policy.setOrigin",
       origin: DAPP_ORIGIN,
       patch: { trustLevel: "high" },
+      password: PASSWORD,
     });
     await sendExtensionRpc(popup, {
       type: "policy.setKindRule",
       origin: DAPP_ORIGIN,
       kind: 1,
       mode: "allow",
+      password: PASSWORD,
     });
 
     const dapp = await extensionContext.newPage();
