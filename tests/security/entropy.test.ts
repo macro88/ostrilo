@@ -32,15 +32,14 @@
 
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { schnorr } from "@noble/curves/secp256k1.js";
-import {
-  generatePrivateKey,
-  deriveKeyFromPassword,
-} from "@/domain/utils/crypto";
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import {
   WebCryptoAesGcm,
   VaultKdf,
   NobleSchnorr,
+  NobleSha256,
+  ScureBech32,
+  deriveLegacyKeyReadOnly,
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
 import type { SecretBytes } from "@/application/ports/crypto";
@@ -92,8 +91,9 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 /**
- * PBKDF2-HMAC-SHA256, c = 100,000, dkLen = 32 - the parameters both
- * `VaultKdf.deriveKey` and `deriveKeyFromPassword` hard-code.
+ * PBKDF2-HMAC-SHA256, c = 100,000, dkLen = 32 - the parameters the legacy
+ * on-disk format was written with, and the ones `deriveLegacyKeyReadOnly`
+ * still has to reproduce exactly in order to open such a record.
  *
  * Each expected value was computed once with OpenSSL, not with the function
  * under test. Reproduce with:
@@ -145,8 +145,8 @@ describe("Entropy - Part A: PBKDF2 known-answer tests", () => {
       expect(toHex(derived)).toBe(vector.expectedHex);
     });
 
-    it(`deriveKeyFromPassword reproduces the OpenSSL value: ${vector.name}`, async () => {
-      const derived = await deriveKeyFromPassword(
+    it(`deriveLegacyKeyReadOnly reproduces the OpenSSL value: ${vector.name}`, async () => {
+      const derived = await deriveLegacyKeyReadOnly(
         vector.password,
         fromHex(vector.saltHex)
       );
@@ -155,15 +155,21 @@ describe("Entropy - Part A: PBKDF2 known-answer tests", () => {
     });
   }
 
-  it("the two derivation paths agree byte for byte", async () => {
+  it("the write path and the legacy read path agree byte for byte", async () => {
+    // The one place two KDF implementations still coexist, deliberately:
+    // `VaultKdf` writes new material and `deriveLegacyKeyReadOnly` opens
+    // records written before the versioned format. They must agree for the
+    // parameters the legacy format used, or a pre-existing vault stops
+    // opening. A third implementation used to sit in `domain/utils/crypto.ts`
+    // with no caller at all; it is gone.
     const salt = fromHex(PBKDF2_VECTORS[0].saltHex);
     const viaPort = await VaultKdf.deriveKey("shared-password", {
       alg: "pbkdf2-sha256",
       c: 100_000,
       salt: Array.from(salt),
     });
-    const viaDomain = await deriveKeyFromPassword("shared-password", salt);
-    expect(toHex(viaPort)).toBe(toHex(viaDomain));
+    const viaLegacy = await deriveLegacyKeyReadOnly("shared-password", salt);
+    expect(toHex(viaPort)).toBe(toHex(viaLegacy));
   });
 });
 
@@ -216,35 +222,25 @@ function cryptoWithoutGetRandomValues(): Crypto {
 }
 
 describe("Entropy - Part B: key material comes from the platform CSPRNG", () => {
-  it("generatePrivateKey requests exactly 32 bytes and returns them unmodified", () => {
-    const draws = observePlatformCsprng();
-
-    const key = generatePrivateKey();
-
-    expect(draws).toHaveLength(1);
-    expect(draws[0].requestedBytes).toBe(32);
-    expect(key).toHaveLength(32);
-    // The key IS the platform's bytes. A post-processing step, a counter, or
-    // a second source would break this equality.
-    expect(toHex(key)).toBe(toHex(draws[0].returnedBytes));
-  });
-
-  it("generatePrivateKey never touches Math.random", () => {
-    const mathRandom = vi.spyOn(Math, "random");
-    generatePrivateKey();
-    expect(mathRandom).not.toHaveBeenCalled();
-  });
-
   it("KeyVaultService.generateKey draws its private key from the 32-byte CSPRNG request", async () => {
     const vault = new KeyVaultService(
       createMemoryStorage(),
       WebCryptoAesGcm,
       VaultKdf,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     const draws = observePlatformCsprng();
+    const mathRandom = vi.spyOn(Math, "random");
 
     const record = await vault.generateKey("entropy-source-password", "src");
+
+    // Folded in from two tests that exercised `generatePrivateKey`, a second
+    // generator in `domain/utils/crypto.ts` that nothing in `src/` called.
+    // Asserting a dead function never reaches `Math.random` says nothing
+    // about the generator that actually mints the user's key.
+    expect(mathRandom).not.toHaveBeenCalled();
 
     // Every draw in this path goes through the one platform entry point: the
     // 32-byte private key, the 16-byte PBKDF2 salt and the 12-byte AES-GCM IV
@@ -279,28 +275,15 @@ describe("Entropy - Part B: key material comes from the platform CSPRNG", () => 
     ).toBe(expectedPubkey);
   });
 
-  it("generatePrivateKey throws when crypto.getRandomValues is missing, with no fallback", () => {
-    vi.stubGlobal("crypto", cryptoWithoutGetRandomValues());
-    const mathRandom = vi.spyOn(Math, "random");
-
-    expect(() => generatePrivateKey()).toThrow(
-      /crypto\.getRandomValues must be defined/
-    );
-    expect(mathRandom).not.toHaveBeenCalled();
-  });
-
-  it("generatePrivateKey throws when globalThis.crypto is absent entirely", () => {
-    vi.stubGlobal("crypto", undefined);
-    expect(() => generatePrivateKey()).toThrow();
-  });
-
   it("KeyVaultService.generateKey rejects when crypto.getRandomValues is missing, and stores nothing", async () => {
     const storage = createMemoryStorage();
     const vault = new KeyVaultService(
       storage,
       WebCryptoAesGcm,
       VaultKdf,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     vi.stubGlobal("crypto", cryptoWithoutGetRandomValues());
     const mathRandom = vi.spyOn(Math, "random");
@@ -322,7 +305,7 @@ describe("Entropy - Part B: key material comes from the platform CSPRNG", () => 
 /*
  * SAMPLE SIZE AND THRESHOLDS - the arithmetic, once, here.
  *
- *   keys                4,000 drawn from generatePrivateKey()
+ *   keys                4,000 drawn from drawPrivateKeyBytes()
  *   bytes               4,000 x 32          = 128,000
  *   bits                128,000 x 8         = 1,024,000
  *
@@ -351,8 +334,8 @@ describe("Entropy - Part B: key material comes from the platform CSPRNG", () => 
  * Operational rule: a lone statistical failure is re-run once before it is
  * investigated as a defect. Two failures in a row are not chance.
  *
- * The draw goes through generatePrivateKey() only, never through
- * KeyVaultService.generateKey, whose 100,000-iteration PBKDF2 would make a
+ * The draw goes through `drawPrivateKeyBytes()` below, never through
+ * KeyVaultService.generateKey, whose memory-hard KDF would make a
  * 4,000-iteration loop unusable. Measured cost of the draw: ~5 ms.
  */
 const KEYS_IN_SAMPLE = 4_000;
@@ -425,17 +408,30 @@ function entropySmokeCheck(bytes: Uint8Array): EntropySmokeResult {
   return { onesCount, onesDelta, chiSquare, failures };
 }
 
-function drawSampleFromGeneratePrivateKey(): Uint8Array<ArrayBuffer> {
+/**
+ * One 32-byte private-key draw, the same expression
+ * `KeyVaultService.randomBytes` uses: `crypto.getRandomValues` over a fresh
+ * 32-byte array, with no post-processing and no second source.
+ *
+ * Deliberately NOT `vault.generateKey`: Part C needs 4,000 draws and that
+ * path costs a memory-hard KDF run each time. What Part C tests is the
+ * platform source; Part B is what ties the vault's own generator to it.
+ */
+function drawPrivateKeyBytes(): Uint8Array<ArrayBuffer> {
+  return crypto.getRandomValues(new Uint8Array(32));
+}
+
+function drawSample(): Uint8Array<ArrayBuffer> {
   const sample = new Uint8Array(SAMPLE_BYTES);
   for (let i = 0; i < KEYS_IN_SAMPLE; i++) {
-    sample.set(generatePrivateKey(), i * 32);
+    sample.set(drawPrivateKeyBytes(), i * 32);
   }
   return sample;
 }
 
 /**
  * Replaces the platform CSPRNG with a deliberately broken filler, then draws
- * the sample through the real `generatePrivateKey()`. Nothing about the code
+ * the sample through the real `drawPrivateKeyBytes()`. Nothing about the code
  * under test is mocked - only the platform source beneath it.
  */
 function drawWithBrokenSource(
@@ -459,18 +455,18 @@ function drawWithBrokenSource(
     }
     return array;
   }) as typeof globalThis.crypto.getRandomValues);
-  return drawSampleFromGeneratePrivateKey();
+  return drawSample();
 }
 
 describe("Entropy - Part C: statistical smoke check", () => {
-  it("real generatePrivateKey output passes the monobit and chi-square bands", () => {
+  it("real CSPRNG output passes the monobit and chi-square bands", () => {
     // 4,000 keys = 128,000 bytes = 1,024,000 bits.
     // Monobit band 512,000 +/- 2,530 (5 sigma, false-failure p = 5.7e-7).
     // Chi-square band [157, 385] at df = 255 (false-failure p = 4.9e-7).
     // Combined false-failure probability ~1.1e-6, roughly 1 in 1,000,000.
     // This is a smoke check for gross breakage. It does NOT prove randomness
     // quality, and no reader should treat a pass as evidence that it does.
-    const result = entropySmokeCheck(drawSampleFromGeneratePrivateKey());
+    const result = entropySmokeCheck(drawSample());
     expect(result.failures).toEqual([]);
   });
 
@@ -492,14 +488,14 @@ describe("Entropy - Part C: statistical smoke check", () => {
   it("rejects a stuck bit", () => {
     // Real entropy with the high bit of every byte forced to zero: the byte
     // histogram alone is badly skewed and the one-bit count collapses.
-    const sample = drawSampleFromGeneratePrivateKey();
+    const sample = drawSample();
     for (let i = 0; i < sample.length; i++) sample[i] &= 0x7f;
     const result = entropySmokeCheck(sample);
     expect(result.failures.length).toBeGreaterThan(0);
     expect(result.failures.join(" ")).toMatch(/monobit/);
   });
 
-  it("rejects a byte-wise monotonic counter drawn through generatePrivateKey", () => {
+  it("rejects a byte-wise monotonic counter drawn through the CSPRNG", () => {
     // The adversarial case for this check: a counter that cycles 0..255 has
     // exactly 50% one bits and a perfectly flat histogram. Only the lower
     // chi-square bound catches it.
@@ -514,7 +510,7 @@ describe("Entropy - Part C: statistical smoke check", () => {
     expect(result.failures.join(" ")).toMatch(/too flat to be random/);
   });
 
-  it("rejects a big-endian 32-byte counter drawn through generatePrivateKey", () => {
+  it("rejects a big-endian 32-byte counter drawn through the CSPRNG", () => {
     const sample = drawWithBrokenSource((array, callIndex) => {
       array.fill(0);
       let value = callIndex + 1;

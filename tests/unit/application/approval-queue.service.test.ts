@@ -309,7 +309,7 @@ describe("ApprovalQueueService", () => {
       expect(queue.count()).toBe(2);
     });
 
-    it("allows duplicate event from different origin to share queue entry", () => {
+    it("gives two origins requesting an identical event two separate entries", () => {
       const resolver1 = vi.fn();
       const resolver2 = vi.fn();
       const eventIdHash = "same-event-hash";
@@ -327,9 +327,67 @@ describe("ApprovalQueueService", () => {
         eventIdHash
       );
 
-      // Should reuse same request even from different origin
+      // An approval prompt is a statement about one site. Sharing the entry
+      // means a click the user believed applied to origin1 also releases a
+      // signature to origin2.
+      expect(request2.id).not.toBe(request1.id);
+      expect(request1.origin).toBe("https://origin1.com");
+      expect(request2.origin).toBe("https://origin2.com");
+      expect(queue.count()).toBe(2);
+    });
+
+    it("resolving one origin's approval does not resolve another origin's", () => {
+      const resolver1 = vi.fn();
+      const resolver2 = vi.fn();
+      const eventIdHash = "same-event-hash";
+
+      const request1 = queue.enqueue(
+        "https://origin1.com",
+        mockEvent,
+        resolver1,
+        eventIdHash
+      );
+      const request2 = queue.enqueue(
+        "https://origin2.com",
+        mockEvent,
+        resolver2,
+        eventIdHash
+      );
+
+      queue.resolve(request1.id, "allow");
+
+      expect(resolver1).toHaveBeenCalledWith("allow", "allow");
+      expect(resolver2).not.toHaveBeenCalled();
+      expect(queue.getById(request2.id)).toBeDefined();
+      expect(queue.count()).toBe(1);
+    });
+
+    it("still collapses one origin repeating the same request into one entry", () => {
+      const resolver1 = vi.fn();
+      const resolver2 = vi.fn();
+      const eventIdHash = "same-event-hash";
+
+      const request1 = queue.enqueue(
+        "https://origin1.com",
+        mockEvent,
+        resolver1,
+        eventIdHash
+      );
+      const request2 = queue.enqueue(
+        "https://origin1.com",
+        mockEvent,
+        resolver2,
+        eventIdHash
+      );
+
+      // A double-clicked button must not produce two prompts, but both pending
+      // promises still need a result.
       expect(request2.id).toBe(request1.id);
       expect(queue.count()).toBe(1);
+
+      queue.resolve(request1.id, "allow_once");
+      expect(resolver1).toHaveBeenCalledWith("allow", "allow_once");
+      expect(resolver2).toHaveBeenCalledWith("allow", "allow_once");
     });
 
     it("times out every caller attached to a duplicate event ID hash", () => {
@@ -343,7 +401,7 @@ describe("ApprovalQueueService", () => {
         resolver1,
         eventIdHash
       );
-      queue.enqueue("https://origin2.com", mockEvent, resolver2, eventIdHash);
+      queue.enqueue("https://origin1.com", mockEvent, resolver2, eventIdHash);
 
       vi.advanceTimersByTime(1000);
 
@@ -412,6 +470,40 @@ describe("ApprovalQueueService", () => {
       expect(allPending[0].id).toBe(request1.id);
       expect(allPending[1].id).toBe(request2.id);
       expect(allPending[2].id).toBe(request3.id);
+    });
+
+    it("keys the de-duplication map per origin, not globally", () => {
+      const resolver = vi.fn();
+      const eventIdHash = "shared-hash";
+
+      queue.enqueue("https://a.example", mockEvent, resolver, eventIdHash);
+      queue.enqueue("https://b.example", mockEvent, resolver, eventIdHash);
+
+      // Both entries are tracked; the map is not collapsing them by hash.
+      expect(queue.getQueuedEventIds()).toEqual([eventIdHash, eventIdHash]);
+      expect(queue.count()).toBe(2);
+    });
+
+    it("frees the origin-scoped key after resolution", () => {
+      const resolver = vi.fn();
+      const eventIdHash = "reused-hash";
+
+      const first = queue.enqueue(
+        "https://a.example",
+        mockEvent,
+        resolver,
+        eventIdHash
+      );
+      queue.resolve(first.id, "allow_once");
+
+      const second = queue.enqueue(
+        "https://a.example",
+        mockEvent,
+        vi.fn(),
+        eventIdHash
+      );
+      expect(second.id).not.toBe(first.id);
+      expect(queue.count()).toBe(1);
     });
 
     it("getQueuedEventIds returns tracked event hashes", () => {

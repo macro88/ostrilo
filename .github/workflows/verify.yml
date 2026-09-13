@@ -49,8 +49,15 @@ jobs:
 
       - run: pnpm run compile
 
+      # One rule: cryptographic libraries stay in src/infrastructure/crypto/.
+      # Not a style-lint gate. Its companion - exactly one implementation per
+      # primitive - is a Vitest case, because lint cannot see a second adapter
+      # added inside the directory where the import is legitimate.
+      - run: pnpm run lint
+
       # One Vitest invocation collects tests/unit, tests/integration and
-      # tests/security; vitest.config.ts excludes only tests/e2e.
+      # tests/security; vitest.config.ts excludes only tests/e2e. That
+      # includes tests/security/crypto-single-implementation.test.ts.
       - run: pnpm run test
 
   build:

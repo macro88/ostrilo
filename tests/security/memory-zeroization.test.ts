@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { KeyVaultService } from "@/application/services/key-vault.service";
-import { WebCryptoAesGcm } from "@/infrastructure/crypto/adapters";
+import {
+  WebCryptoAesGcm,
+  NobleSha256,
+  ScureBech32,
+} from "@/infrastructure/crypto/adapters";
 import type { SecretBytes } from "@/application/ports/crypto";
 
 /**
@@ -190,7 +194,11 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
       suite as never,
       fakeAead(aeadOpts) as never,
       fakeKdf() as never,
-      fakeSchnorr as never
+      fakeSchnorr as never,
+      // Real hash and bech32: neither touches secret material, so a fake
+      // would only hide which buffers the service actually handles.
+      NobleSha256,
+      ScureBech32
     );
     return { svc, maps, suite };
   }
@@ -308,7 +316,9 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
             throw new Error("derivation blew up");
           },
           sign: () => new Uint8Array(64),
-        } as never
+        } as never,
+        NobleSha256,
+        ScureBech32
       );
 
       const generated: ReturnType<typeof retain>[] = [];

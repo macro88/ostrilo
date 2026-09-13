@@ -9,6 +9,8 @@ import {
   WebCryptoAesGcm,
   VaultKdf,
   NobleSchnorr,
+  NobleSha256,
+  ScureBech32,
 } from "@/infrastructure/crypto/adapters";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import { AUTO_LOCK_BOUNDS } from "@/domain/types";
@@ -77,7 +79,9 @@ describe("high-risk actions require a verified password", () => {
       storage,
       WebCryptoAesGcm,
       fastKdf as never,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     settings = new SettingsService(storage);
     policy = new PolicyService(storage);

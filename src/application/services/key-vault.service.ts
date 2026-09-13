@@ -1,6 +1,8 @@
 import type { StorageSuite } from "@/application/ports/storage";
 import type {
+  Bech32Codec,
   CryptoAead,
+  CryptoHash,
   CryptoKdf,
   Schnorr,
   SecretBytes,
@@ -21,8 +23,11 @@ import {
 } from "@/domain/types";
 import { verifierAad, dekAad, skAad } from "@/domain/crypto/aad";
 import { deriveLegacyKeyReadOnly } from "@/infrastructure/crypto/adapters";
-import { bech32 } from "@scure/base";
-import { zeroize, computeEventId, signEventHash } from "@/domain/utils/crypto";
+import { computeEventId } from "@/application/crypto/event-id";
+import { parsePrivateKey } from "@/application/crypto/private-key";
+import { CRYPTO_CONSTANTS } from "@/domain/crypto/constants";
+import { bytesToHex, hexToBytes, isValidHex } from "@/domain/utils/hex";
+import { zeroize } from "@/domain/utils/memory";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
 
 const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
@@ -51,7 +56,9 @@ export class KeyVaultService {
     private storage: StorageSuite,
     private aead: CryptoAead,
     private kdf: CryptoKdf,
-    private schnorr: Schnorr
+    private schnorr: Schnorr,
+    private hash: CryptoHash,
+    private bech32: Bech32Codec
   ) {}
 
   async getSettings(): Promise<AppSettingsV1 | undefined> {
@@ -66,34 +73,6 @@ export class KeyVaultService {
 
   private async saveKeys(records: KeyRecord[]): Promise<void> {
     await this.storage.local.set<KeyRecord[]>(ENCRYPTED_KEYS_STORAGE, records);
-  }
-
-  private toHex(u8: Uint8Array): string {
-    return Array.from(u8)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
-
-  private parsePrivateKey(input: string): SecretBytes {
-    const trimmed = input.trim();
-    const isHex =
-      /^[0-9a-fA-F]{64}$/.test(trimmed) || /^0x[0-9a-fA-F]{64}$/.test(trimmed);
-    if (isHex) {
-      const hex = trimmed.startsWith("0x") ? trimmed.slice(2) : trimmed;
-      const out = new Uint8Array(32);
-      for (let i = 0; i < 32; i++)
-        out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-      return out;
-    }
-    // bech32 nsec
-    if (trimmed.startsWith("nsec")) {
-      const decoded = bech32.decode(trimmed as `${string}1${string}`);
-      if (decoded.prefix !== "nsec") throw new Error("invalid_nsec_prefix");
-      const bytes = new Uint8Array(bech32.fromWords(decoded.words));
-      if (bytes.length !== 32) throw new Error("invalid_nsec_length");
-      return bytes;
-    }
-    throw new Error("invalid_private_key_format");
   }
 
   // ==========================================================================
@@ -308,7 +287,7 @@ export class KeyVaultService {
   ): Promise<boolean> {
     try {
       const pub = await this.schnorr.getPublicKey(sk);
-      return this.toHex(pub) === pubkeyHex;
+      return bytesToHex(pub) === pubkeyHex;
     } catch {
       return false;
     }
@@ -357,7 +336,7 @@ export class KeyVaultService {
     try {
       const pub = await this.schnorr.getPublicKey(sk);
       const id = crypto.randomUUID();
-      const pubkey = this.toHex(pub);
+      const pubkey = bytesToHex(pub);
       const sealed = await this.sealPrivateKey(sk, kek, kdf, id, pubkey);
       const record: KeyRecord = {
         id,
@@ -402,10 +381,10 @@ export class KeyVaultService {
     }
 
     const { kek, kdf } = await this.kekForWrite(password);
-    const sk = this.parsePrivateKey(input);
+    const sk = parsePrivateKey(this.bech32, input) as SecretBytes;
     try {
       const pub = await this.schnorr.getPublicKey(sk);
-      const pubHex = this.toHex(pub);
+      const pubHex = bytesToHex(pub);
       const existing = (await this.listKeys()).find((k) => k.pubkey === pubHex);
       if (existing) throw new Error("key_already_exists");
       const id = crypto.randomUUID();
@@ -667,6 +646,8 @@ export class KeyVaultService {
         lastActivity: Date.now(),
       } as any);
 
+      await this.notifyUnlocked();
+
       return { selectedKeyId, unlockedKeyIds, damagedKeyIds };
     } finally {
       if (kek) zeroize(kek);
@@ -744,6 +725,24 @@ export class KeyVaultService {
 
   onLock(listener: () => void | Promise<void>): void {
     this.lockListeners.push(listener);
+  }
+
+  /** Notified after a successful unlock. Symmetric with onLock. */
+  private unlockListeners: Array<() => void | Promise<void>> = [];
+
+  onUnlock(listener: () => void | Promise<void>): void {
+    this.unlockListeners.push(listener);
+  }
+
+  private async notifyUnlocked(): Promise<void> {
+    const results = await Promise.allSettled(
+      this.unlockListeners.map((listener) => listener())
+    );
+    for (const result of results) {
+      if (result.status === "rejected") {
+        console.error("[Vault] unlock listener failed:", result.reason);
+      }
+    }
   }
 
   async lock(): Promise<void> {
@@ -884,20 +883,25 @@ export class KeyVaultService {
     return { keyId: id, sk };
   }
 
+  /**
+   * The single Schnorr call site in this class.
+   *
+   * `hashHex` is validated as 64 characters of hex BEFORE it is decoded. The
+   * previous decode was `hashHex.match(/.{1,2}/g).map(b => parseInt(b, 16))`,
+   * which never checked the characters: a non-hex pair became `NaN`, which
+   * stores as `0` in a `Uint8Array`, so a corrupt hash was signed as a
+   * partially-zeroed one. The length check that followed caught truncation
+   * and nothing else.
+   */
   async sign(
     hashHex: string,
     keyId?: string
   ): Promise<{ sigHex: string; keyId: string }> {
-    const bytes = new Uint8Array(
-      hashHex.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) ?? []
-    );
-    if (bytes.length !== 32) throw new Error("hash_must_be_32_bytes");
+    if (!isValidHex(hashHex, 32)) throw new Error("hash_must_be_32_bytes");
+    const bytes = hexToBytes(hashHex);
     const { keyId: id, sk } = this.ensureUnlockedKey(keyId);
     const sig = await this.schnorr.sign(bytes, sk);
-    const sigHex = Array.from(sig)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-    return { sigHex, keyId: id };
+    return { sigHex: bytesToHex(sig), keyId: id };
   }
 
   /**
@@ -926,24 +930,18 @@ export class KeyVaultService {
     content: string;
     sig: string;
   }> {
-    const { sk } = this.ensureUnlockedKey(keyId);
+    const eventId = computeEventId(this.hash, unsignedEvent);
 
-    // Compute event ID per NIP-01
-    const eventId = computeEventId(
-      unsignedEvent.pubkey,
-      unsignedEvent.created_at,
-      unsignedEvent.kind,
-      unsignedEvent.tags,
-      unsignedEvent.content
-    );
-
-    // Sign the event ID
-    const sig = signEventHash(eventId, sk);
+    // Through `this.sign`, not a second Schnorr call. This method used to
+    // call `signEventHash`, which reached `@noble/curves` directly from the
+    // domain layer, so the same class signed two different ways and only one
+    // of them went through the injected port a test could substitute.
+    const { sigHex } = await this.sign(eventId, keyId);
 
     return {
       id: eventId,
       ...unsignedEvent,
-      sig,
+      sig: sigHex,
     };
   }
 
@@ -1046,9 +1044,11 @@ export class KeyVaultService {
         throw new Error("pubkey_mismatch");
       }
 
-      const words = bech32.toWords(sk);
-      const nsec = bech32.encode("nsec", words);
-      const hex = this.toHex(sk);
+      const nsec = this.bech32.encode(
+        CRYPTO_CONSTANTS.NOSTR_PRIVATE_KEY_PREFIX,
+        sk
+      );
+      const hex = bytesToHex(sk);
       return { nsec, hex };
     } catch (error) {
       if (error instanceof Error && error.message === "pubkey_mismatch") throw error;

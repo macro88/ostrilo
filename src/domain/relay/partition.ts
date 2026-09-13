@@ -10,6 +10,8 @@
  * predictable, which stops relays colluding on a known assignment.
  */
 
+import { bytesToHex } from "@/domain/utils/hex";
+
 /** Length of the per-install partition salt, in hex characters. */
 const SALT_HEX_CHARS = 32;
 
@@ -19,9 +21,7 @@ const SALT_HEX_CHARS = 32;
 export function createPartitionSalt(): string {
   const bytes = new Uint8Array(SALT_HEX_CHARS / 2);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return bytesToHex(bytes);
 }
 
 /**

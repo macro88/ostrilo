@@ -4,6 +4,8 @@ import {
   WebCryptoAesGcm,
   VaultKdf,
   NobleSchnorr,
+  NobleSha256,
+  ScureBech32,
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
 import { AUTO_LOCK_BOUNDS } from "@/domain/types";
@@ -76,7 +78,9 @@ describe("lock state fails closed", () => {
       suite,
       WebCryptoAesGcm,
       fastKdf as never,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
   });
 
@@ -113,7 +117,9 @@ describe("lock state fails closed", () => {
       throwing,
       WebCryptoAesGcm,
       fastKdf as never,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     expect((await v.getLockState()).isLocked).toBe(true);
   });
@@ -131,7 +137,9 @@ describe("lock state fails closed", () => {
       suite,
       WebCryptoAesGcm,
       fastKdf as never,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     expect(
       (await restarted.getLockState()).isLocked,
@@ -172,7 +180,9 @@ describe("auto-lock deadline", () => {
       suite,
       WebCryptoAesGcm,
       fastKdf as never,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     await vault.generateKey(PASSWORD, "k1");
   });
@@ -295,7 +305,9 @@ describe("no secret survives worker termination", () => {
       suite,
       WebCryptoAesGcm,
       fastKdf as never,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     await vault.generateKey(PASSWORD, "k1");
     await vault.unlock(PASSWORD);
@@ -334,7 +346,9 @@ describe("a locked vault reports locked, not denied", () => {
       suite,
       WebCryptoAesGcm,
       fastKdf as never,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     const { VAULT_LOCKED_ERRORS } = await import(
       "@/infrastructure/messaging/handlers/nostr-rpc"

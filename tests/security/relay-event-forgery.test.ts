@@ -3,7 +3,7 @@ import { ProfileService } from "@/application/services/profile.service";
 import { RelayManager } from "@/infrastructure/relay/relay-manager";
 import type { StoragePort, StorageSuite } from "@/application/ports/storage";
 import type { KeyVaultService } from "@/application/services/key-vault.service";
-import { computeEventId } from "@/domain/utils/crypto";
+import { NostrEventCrypto } from "@/infrastructure/crypto/adapters";
 import { loadNip01Vectors, type Nip01Event } from "../vectors/load";
 
 /**
@@ -106,13 +106,7 @@ function forgedProfileEvent(): Nip01Event {
       about: "Send your seed phrase here to recover your account",
     }),
   };
-  forged.id = computeEventId(
-    forged.pubkey,
-    forged.created_at,
-    forged.kind,
-    forged.tags,
-    forged.content
-  );
+  forged.id = NostrEventCrypto.computeEventId(forged);
   return forged;
 }
 

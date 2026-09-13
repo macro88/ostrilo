@@ -53,4 +53,41 @@ export interface CryptoKdf {
 export interface Schnorr {
   getPublicKey(sk: Uint8Array): Promise<Uint8Array> | Uint8Array;
   sign(hash32: Uint8Array, sk: Uint8Array): Promise<Uint8Array> | Uint8Array;
+  /**
+   * BIP-340 verification. Synchronous, unlike `sign` and `getPublicKey`,
+   * because the relay trust boundary verifies inside a synchronous WebSocket
+   * message handler: making it async would let a later frame's callback run
+   * before an earlier frame had been accepted or discarded, and the
+   * per-subscription event cap is counted in that handler.
+   */
+  verify(
+    signature: Uint8Array,
+    hash32: Uint8Array,
+    publicKey: Uint8Array
+  ): boolean;
+}
+
+/**
+ * SHA-256, the only hash Nostr event ids use.
+ *
+ * This port exists so NIP-01 event id computation can live in the
+ * application layer without importing `@noble/hashes`. Synchronous because
+ * `crypto.subtle.digest` is not, and an async event id would make
+ * `verifyParsedRelayEvent` async - see `verify` above.
+ */
+export interface CryptoHash {
+  sha256(data: Uint8Array): Uint8Array;
+}
+
+/**
+ * bech32 for `npub` and `nsec`.
+ *
+ * Exists so private-key parsing and public-key display can stop importing
+ * `@scure/base` from the domain, application and UI layers. The three direct
+ * importers disagreed on the encode length limit - one passed none, one
+ * passed 5000 - which is exactly the drift a single port removes.
+ */
+export interface Bech32Codec {
+  encode(prefix: string, bytes: Uint8Array): string;
+  decode(encoded: string): { prefix: string; bytes: Uint8Array };
 }

@@ -1,5 +1,32 @@
-import { computeEventId, verifyEventSignature } from "../utils/crypto";
 import { RelayEventSchema, type RelayEvent } from "./schemas";
+
+/**
+ * The two cryptographic operations relay verification needs.
+ *
+ * Declared structurally, like {@link RelayFilterExpectation} above it, so the
+ * domain layer keeps no dependency on the application ports and imports no
+ * cryptographic library. The caller supplies the single implementations:
+ * `computeEventId` from `src/application/crypto/event-id.ts` bound to a hash
+ * adapter, and `verifyEventSignature` from the same module bound to the
+ * Schnorr adapter.
+ *
+ * This is a required parameter rather than a default, because a default
+ * would be a second place that decides how an event id is computed.
+ */
+export interface RelayEventCrypto {
+  computeEventId(event: {
+    pubkey: string;
+    created_at: number;
+    kind: number;
+    tags: string[][];
+    content: string;
+  }): string;
+  verifyEventSignature(
+    eventIdHex: string,
+    signatureHex: string,
+    pubkeyHex: string
+  ): boolean;
+}
 
 /**
  * Why a relay event was refused. Callers log the reason; they never log the
@@ -63,6 +90,7 @@ export function matchesFilter(
  * the caller is a WebSocket message handler whose stack has nowhere to unwind.
  */
 export function verifyRelayEvent(
+  crypto: RelayEventCrypto,
   payload: unknown,
   filter?: RelayFilterExpectation
 ): RelayEventVerification {
@@ -71,7 +99,7 @@ export function verifyRelayEvent(
     return { ok: false, reason: "schema" };
   }
 
-  return verifyParsedRelayEvent(parsed.data, filter);
+  return verifyParsedRelayEvent(crypto, parsed.data, filter);
 }
 
 /**
@@ -80,6 +108,7 @@ export function verifyRelayEvent(
  * pay to parse it twice.
  */
 export function verifyParsedRelayEvent(
+  crypto: RelayEventCrypto,
   event: RelayEvent,
   filter?: RelayFilterExpectation
 ): RelayEventVerification {
@@ -93,13 +122,7 @@ export function verifyParsedRelayEvent(
 
   let recomputedId: string;
   try {
-    recomputedId = computeEventId(
-      event.pubkey,
-      event.created_at,
-      event.kind,
-      event.tags,
-      event.content
-    );
+    recomputedId = crypto.computeEventId(event);
   } catch {
     return { ok: false, reason: "id-mismatch" };
   }
@@ -108,7 +131,7 @@ export function verifyParsedRelayEvent(
     return { ok: false, reason: "id-mismatch" };
   }
 
-  if (!verifyEventSignature(event.id, event.sig, event.pubkey)) {
+  if (!crypto.verifyEventSignature(event.id, event.sig, event.pubkey)) {
     return { ok: false, reason: "bad-signature" };
   }
 

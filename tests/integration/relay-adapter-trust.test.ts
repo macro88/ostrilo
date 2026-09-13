@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { schnorr } from "@noble/curves/secp256k1.js";
 import { NostrRelayAdapter } from "@/infrastructure/relay/nostr-relay.adapter";
 import { RELAY_BOUNDS } from "@/domain/relay";
-import { computeEventId, signEventHash } from "@/domain/utils/crypto";
+import { NostrEventCrypto } from "@/infrastructure/crypto/adapters";
+import { bytesToHex, hexToBytes } from "@/domain/utils/hex";
 import { loadNip01Vectors, type Nip01Event } from "../vectors/load";
 
 /**
@@ -84,24 +85,19 @@ const genuineProfileEvent = vectors.find((v) => v.event.kind === 0)!.event;
 
 /** A local key used only to mint additional validly signed events. */
 const TEST_SECRET_KEY = new Uint8Array(32).fill(7);
-const TEST_PUBKEY = Array.from(schnorr.getPublicKey(TEST_SECRET_KEY))
-  .map((b) => b.toString(16).padStart(2, "0"))
-  .join("");
+const TEST_PUBKEY = bytesToHex(schnorr.getPublicKey(TEST_SECRET_KEY));
 
 function signEvent(
   fields: Pick<Nip01Event, "created_at" | "kind" | "tags" | "content">
 ): Nip01Event {
-  const id = computeEventId(
-    TEST_PUBKEY,
-    fields.created_at,
-    fields.kind,
-    fields.tags,
-    fields.content
-  );
+  const id = NostrEventCrypto.computeEventId({
+    pubkey: TEST_PUBKEY,
+    ...fields,
+  });
   return {
     id,
     pubkey: TEST_PUBKEY,
-    sig: signEventHash(id, TEST_SECRET_KEY),
+    sig: bytesToHex(schnorr.sign(hexToBytes(id), TEST_SECRET_KEY)),
     ...fields,
   };
 }
@@ -299,13 +295,7 @@ describe("NostrRelayAdapter trust boundary", () => {
         name: "attacker",
         picture: "https://evil.example.com/beacon.png",
       });
-      forged.id = computeEventId(
-        forged.pubkey,
-        forged.created_at,
-        forged.kind,
-        forged.tags,
-        forged.content
-      );
+      forged.id = NostrEventCrypto.computeEventId(forged);
       socket.deliverMessage(["EVENT", subId, forged]);
 
       expect(events).toHaveLength(0);

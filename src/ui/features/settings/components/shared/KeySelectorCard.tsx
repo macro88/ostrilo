@@ -10,6 +10,12 @@ export interface KeyRecord {
   label: string;
   publicKeyBech32: string;
   publicKeyHex: string;
+  /**
+   * The stored record's public key could not be read, so there is no npub.
+   * Optional so existing callers that never had the field keep compiling;
+   * the list treats absent as readable.
+   */
+  isUnreadable?: boolean;
 }
 
 export interface KeyProfile {
@@ -159,9 +165,23 @@ export function KeySelectorCard({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {truncatedNpub}
-                  </p>
+                  {key.isUnreadable ? (
+                    /*
+                      A record whose stored public key is not valid hex is
+                      named as unreadable rather than shown as an npub. The
+                      decoder this replaced substituted zero bytes for
+                      unparseable characters, so a corrupt record rendered a
+                      real, well-formed npub for a key nobody holds - which
+                      the user would read as their own identity.
+                    */
+                    <p className="text-xs text-destructive">
+                      Unreadable record: stored public key is not valid
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {truncatedNpub}
+                    </p>
+                  )}
                 </>
               )}
             </div>

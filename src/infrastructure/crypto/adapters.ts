@@ -2,8 +2,15 @@ import { schnorr } from "@noble/curves/secp256k1.js";
 import { argon2idAsync } from "@noble/hashes/argon2.js";
 import { pbkdf2 } from "@noble/hashes/pbkdf2.js";
 import { sha256 } from "@noble/hashes/sha2.js";
+import { bech32 } from "@scure/base";
+import {
+  computeEventId,
+  verifyEventSignature,
+} from "@/application/crypto/event-id";
 import type {
+  Bech32Codec,
   CryptoAead,
+  CryptoHash,
   CryptoKdf,
   Schnorr,
   SecretBytes,
@@ -142,12 +149,98 @@ export async function deriveLegacyKeyReadOnly(
   }) as SecretBytes;
 }
 
-export const NobleSchnorr: Schnorr = {
+/**
+ * Declared with `satisfies` rather than a type annotation so each method keeps
+ * its concrete return type. The port allows `sign` and `getPublicKey` to be
+ * async; this adapter's are not, and callers that need a synchronous result -
+ * the relay trust boundary - depend on that being visible in the type.
+ */
+export const NobleSchnorr = {
   getPublicKey(sk: Uint8Array): Uint8Array {
-    // returns x-only compressed pubkey (33 bytes -> we can slice in callers)
+    // x-only, 32 bytes. BIP-340 keys carry no parity byte, which is why
+    // nothing downstream slices a prefix off this.
     return schnorr.getPublicKey(sk);
   },
   sign(hash32: Uint8Array, sk: Uint8Array): Uint8Array {
     return schnorr.sign(hash32, sk);
+  },
+  verify(
+    signature: Uint8Array,
+    hash32: Uint8Array,
+    publicKey: Uint8Array
+  ): boolean {
+    // Returns false rather than throwing. A malformed signature or a point
+    // not on the curve is a failed verification, and every caller is a trust
+    // boundary deciding whether to accept untrusted input - not a place that
+    // can usefully distinguish 'invalid' from 'wrong'.
+    try {
+      return schnorr.verify(signature, hash32, publicKey);
+    } catch {
+      return false;
+    }
+  },
+} satisfies Schnorr;
+
+export const NobleSha256 = {
+  sha256(data: Uint8Array): Uint8Array {
+    return sha256(data);
+  },
+} satisfies CryptoHash;
+
+/**
+ * The single bech32 length limit.
+ *
+ * Two implementations disagreed here: `encoding.ts` passed no limit, taking
+ * @scure's BIP-173 default of 90, and `crypto.ts` passed 5000. Both produced
+ * identical output, because an npub or nsec is 63 characters, so collapsing
+ * to one limit changes no value the extension has ever encoded. 90 is the
+ * standard bound and the one both decode paths already used; a string longer
+ * than that is not a Nostr key.
+ */
+const BECH32_LIMIT = 90;
+
+export const ScureBech32 = {
+  encode(prefix: string, bytes: Uint8Array): string {
+    return bech32.encode(prefix, bech32.toWords(bytes), BECH32_LIMIT);
+  },
+  decode(encoded: string): { prefix: string; bytes: Uint8Array } {
+    const { prefix, words } = bech32.decode(
+      encoded as `${string}1${string}`,
+      BECH32_LIMIT
+    );
+    return { prefix, bytes: new Uint8Array(bech32.fromWords(words)) };
+  },
+} satisfies Bech32Codec;
+
+
+/**
+ * The event id and signature operations, bound to the adapters above.
+ *
+ * `verifyParsedRelayEvent` needs both and must not choose either for itself:
+ * a domain module that picked its own hash would be a second event id
+ * implementation, which is the defect this change removes. Bound once here,
+ * so every relay frame and every test verifies through the same pair.
+ */
+export const NostrEventCrypto = {
+  computeEventId(event: {
+    pubkey: string;
+    created_at: number;
+    kind: number;
+    tags: string[][];
+    content: string;
+  }): string {
+    return computeEventId(NobleSha256, event);
+  },
+  verifyEventSignature(
+    eventIdHex: string,
+    signatureHex: string,
+    pubkeyHex: string
+  ): boolean {
+    return verifyEventSignature(
+      NobleSchnorr,
+      eventIdHex,
+      signatureHex,
+      pubkeyHex
+    );
   },
 };

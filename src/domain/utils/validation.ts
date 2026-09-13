@@ -3,7 +3,7 @@
  * Pure functions with no external dependencies
  */
 
-import { CRYPTO_CONSTANTS } from "../crypto/interfaces";
+import { CRYPTO_CONSTANTS } from "../crypto/constants";
 
 /**
  * Password strength, re-pointed at the single policy module.

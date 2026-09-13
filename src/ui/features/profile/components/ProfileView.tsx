@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useProfile } from "@/ui/hooks/useProfile";
 import type { ProfileMetadata } from "@/domain/profile/types";
-import { hexToNpub } from "@/domain/utils/crypto";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { User } from "lucide-react";
 import { ProfileEditForm } from "./ProfileEditForm";
@@ -34,7 +33,12 @@ export function ProfileView() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const npub = selectedPubkey ? hexToNpub(selectedPubkey) : "";
+  // Supplied already encoded by the background. `hexToNpub` used to do this
+  // here: it decoded hex with a non-null assertion, caught every error, and
+  // returned the raw hex string as a 'fallback', so a caller could not tell a
+  // successful encode from a failed one and the page silently showed a hex
+  // key where an npub was requested.
+  const npub = selectedUnlockedKey?.publicKeyBech32 ?? "";
 
   const handleRefresh = async () => {
     await refresh();

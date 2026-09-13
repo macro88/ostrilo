@@ -4,6 +4,8 @@ import {
   WebCryptoAesGcm,
   VaultKdf,
   NobleSchnorr,
+  NobleSha256,
+  ScureBech32,
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
 import type { KeyRecord } from "@/domain/types";
@@ -79,7 +81,9 @@ describe("KeyVaultService", () => {
       storage,
       WebCryptoAesGcm,
       VaultKdf,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
   });
 

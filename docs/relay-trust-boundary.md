@@ -38,7 +38,12 @@ a flooding relay cannot buy expensive curve operations with cheap bytes:
    a question about one author with data about another.
 5. **Event ID.** Recomputed from the event's own fields and compared to `id`.
 6. **Signature.** Verified with `verifyEventSignature` from
-   `src/domain/utils/crypto.ts`.
+   `src/application/crypto/event-id.ts`, bound to the `Schnorr` adapter.
+
+Steps 5 and 6 are supplied to `verifyParsedRelayEvent` as a `RelayEventCrypto`
+parameter rather than imported by it, so the domain layer needs no
+cryptographic library and there is still exactly one event id implementation.
+`src/infrastructure/crypto/adapters.ts` binds it once as `NostrEventCrypto`.
 
 Only then is `onEvent` called. That is the port's contract:
 `INostrRelay.onEvent` is only ever invoked with a verified event matching the

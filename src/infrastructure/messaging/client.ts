@@ -151,7 +151,9 @@ export async function lockVault() {
 }
 
 export async function listKeys() {
-  return rpc<import("@/domain/types").KeyRecord[]>({ type: "keys.list" });
+  return rpc<
+    import("@/infrastructure/messaging/handlers/vault-rpc").KeyListEntry[]
+  >({ type: "keys.list" });
 }
 
 export async function generateKey(password: string, label?: string) {

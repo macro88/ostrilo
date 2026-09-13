@@ -5,6 +5,8 @@ import {
   WebCryptoAesGcm,
   VaultKdf,
   NobleSchnorr,
+  NobleSha256,
+  ScureBech32,
 } from "@/infrastructure/crypto/adapters";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import type { StorageSuite } from "@/application/ports/storage";
@@ -70,7 +72,9 @@ describe("password policy at the RPC boundary", () => {
       storage,
       WebCryptoAesGcm,
       fastKdf as never,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
     handler = new VaultRpcHandler();
     context = {

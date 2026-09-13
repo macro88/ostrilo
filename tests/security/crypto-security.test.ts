@@ -4,6 +4,8 @@ import {
   WebCryptoAesGcm,
   VaultKdf,
   NobleSchnorr,
+  NobleSha256,
+  ScureBech32,
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
 
@@ -42,7 +44,9 @@ describe("Security Testing", () => {
       storage,
       WebCryptoAesGcm,
       VaultKdf,
-      NobleSchnorr
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
     );
   });
 
@@ -180,7 +184,9 @@ describe("Security Testing", () => {
           createMemoryStorage(),
           WebCryptoAesGcm,
           VaultKdf,
-          NobleSchnorr
+          NobleSchnorr,
+          NobleSha256,
+          ScureBech32
         );
 
       // Very short password should work

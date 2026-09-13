@@ -15,7 +15,7 @@ import {
   sanitizeRelayUrls,
   verifyRelayEvent,
 } from "@/domain/relay";
-import { computeEventId } from "@/domain/utils/crypto";
+import { NostrEventCrypto } from "@/infrastructure/crypto/adapters";
 import { loadNip01Vectors, type Nip01Event } from "../../vectors/load";
 
 /**
@@ -168,7 +168,7 @@ describe("relay event schema", () => {
 
 describe("verifyRelayEvent", () => {
   it("accepts a genuine event that matches the subscription filter", () => {
-    const result = verifyRelayEvent(genuineProfileEvent, {
+    const result = verifyRelayEvent(NostrEventCrypto, genuineProfileEvent, {
       kinds: [0],
       authors: [genuineProfileEvent.pubkey],
     });
@@ -176,7 +176,7 @@ describe("verifyRelayEvent", () => {
   });
 
   it("rejects an event whose author was not requested", () => {
-    const result = verifyRelayEvent(genuineProfileEvent, {
+    const result = verifyRelayEvent(NostrEventCrypto, genuineProfileEvent, {
       kinds: [0],
       authors: ["b".repeat(64)],
     });
@@ -184,7 +184,7 @@ describe("verifyRelayEvent", () => {
   });
 
   it("rejects an event whose kind was not requested", () => {
-    const result = verifyRelayEvent(genuineProfileEvent, {
+    const result = verifyRelayEvent(NostrEventCrypto, genuineProfileEvent, {
       kinds: [1],
       authors: [genuineProfileEvent.pubkey],
     });
@@ -194,7 +194,7 @@ describe("verifyRelayEvent", () => {
   it("rejects an event whose ID does not match its own contents", () => {
     const tampered = clone(genuineProfileEvent);
     tampered.content = JSON.stringify({ name: "attacker" });
-    const result = verifyRelayEvent(tampered);
+    const result = verifyRelayEvent(NostrEventCrypto, tampered);
     expect(result).toEqual({ ok: false, reason: "id-mismatch" });
   });
 
@@ -205,22 +205,16 @@ describe("verifyRelayEvent", () => {
       name: "attacker",
       picture: "https://evil.example.com/track.png",
     });
-    forged.id = computeEventId(
-      forged.pubkey,
-      forged.created_at,
-      forged.kind,
-      forged.tags,
-      forged.content
-    );
+    forged.id = NostrEventCrypto.computeEventId(forged);
 
-    const result = verifyRelayEvent(forged);
+    const result = verifyRelayEvent(NostrEventCrypto, forged);
     expect(result).toEqual({ ok: false, reason: "bad-signature" });
   });
 
   it("rejects malformed payloads without throwing", () => {
-    expect(verifyRelayEvent(null)).toEqual({ ok: false, reason: "schema" });
-    expect(verifyRelayEvent("text")).toEqual({ ok: false, reason: "schema" });
-    expect(verifyRelayEvent([])).toEqual({ ok: false, reason: "schema" });
+    expect(verifyRelayEvent(NostrEventCrypto, null)).toEqual({ ok: false, reason: "schema" });
+    expect(verifyRelayEvent(NostrEventCrypto, "text")).toEqual({ ok: false, reason: "schema" });
+    expect(verifyRelayEvent(NostrEventCrypto, [])).toEqual({ ok: false, reason: "schema" });
   });
 });
 
