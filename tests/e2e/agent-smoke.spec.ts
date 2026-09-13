@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures/extension";
 import type { Page } from "./fixtures/extension";
 import { captureStepScreenshot } from "./fixtures/screenshots";
 
-const PASSWORD = "Ostrilo-Agent-Smoke-Password-2026!";
+const PASSWORD = "Marigold-Trellis-Pebble-2026!";
 const DAPP_ORIGIN = "http://127.0.0.1:8765";
 const DAPP_URL = `${DAPP_ORIGIN}/test-page.html`;
 
@@ -88,17 +88,32 @@ async function completeCreateKeyOnboarding(
   await page.getByRole("button", { name: "Reveal Private Key" }).click();
   const privateKeyInput = page.getByLabel("Private Key (nsec format)");
   await expect(privateKeyInput).toBeVisible();
-  await expect(privateKeyInput).toHaveValue(/^nsec1/);
+  // Masked means masked: the nsec is not in the DOM until it is asked for.
+  await expect(privateKeyInput).not.toHaveValue(/^nsec1/);
   await captureStepScreenshot(page, testInfo, "04-backup-key-revealed-masked");
 
+  await page.getByRole("button", { name: "Show private key" }).click();
+  await expect(privateKeyInput).toHaveValue(/^nsec1/);
+  const nsec = await privateKeyInput.inputValue();
+  await captureStepScreenshot(page, testInfo, "05-backup-key-revealed");
+
+  // The acknowledgement is a statement of understanding; verification is the
+  // gate. Both are exercised here because both are on the screenshot path.
   await page
     .getByRole("checkbox", { name: "Confirm private key backup" })
     .check();
+  await page
+    .getByLabel("Last 8 characters of your nsec")
+    .fill(nsec.slice(-8));
+  await page.getByRole("button", { name: "Check", exact: true }).click();
+  await expect(page.getByText("Backup verified")).toBeVisible();
+  await captureStepScreenshot(page, testInfo, "06-backup-verified");
+
   await page.getByRole("button", { name: "Finish" }).click();
 
   await expect(page.getByRole("heading", { level: 2, name: "Agent Smoke Key" }))
     .toBeVisible({ timeout: 15_000 });
-  await captureStepScreenshot(page, testInfo, "05-popup-home");
+  await captureStepScreenshot(page, testInfo, "07-popup-home");
 }
 
 test.describe("Agent extension smoke", () => {
@@ -114,12 +129,12 @@ test.describe("Agent extension smoke", () => {
     await expect(popup.getByRole("heading", { name: "Recent Activity" }))
       .toBeVisible();
     await expect(popup.getByText("No activity yet")).toBeVisible();
-    await captureStepScreenshot(popup, testInfo, "06-activity-empty-state");
+    await captureStepScreenshot(popup, testInfo, "08-activity-empty-state");
 
     await popup.getByRole("button", { name: "Settings" }).click();
     await expect(popup.getByRole("heading", { name: "Settings" })).toBeVisible();
     await expect(popup.getByText("Active Key")).toBeVisible();
-    await captureStepScreenshot(popup, testInfo, "07-settings-active-key");
+    await captureStepScreenshot(popup, testInfo, "09-settings-active-key");
 
     await sendExtensionRpc(popup, {
       type: "policy.setKindRule",
@@ -132,7 +147,7 @@ test.describe("Agent extension smoke", () => {
     await dapp.setViewportSize({ width: 900, height: 700 });
     await dapp.goto(DAPP_URL);
     await expect(dapp.locator("#status")).toHaveText("window.nostr available");
-    await captureStepScreenshot(dapp, testInfo, "08-dapp-nostr-injected");
+    await captureStepScreenshot(dapp, testInfo, "10-dapp-nostr-injected");
 
     const pubkey = await dapp.evaluate(() => window.testGetPublicKey());
     expect(pubkey).toMatch(/^[0-9a-f]{64}$/);
@@ -153,13 +168,13 @@ test.describe("Agent extension smoke", () => {
     await expect(dapp.locator("#signed-event")).toContainText(
       "Signed by Ostrilo Playwright smoke test"
     );
-    await captureStepScreenshot(dapp, testInfo, "09-dapp-signed-event");
+    await captureStepScreenshot(dapp, testInfo, "11-dapp-signed-event");
 
     await popup.getByRole("button", { name: "Activity" }).click();
     await expect(popup.getByText("Reaction")).toBeVisible({
       timeout: 10_000,
     });
     await expect(popup.getByText("127.0.0.1")).toBeVisible();
-    await captureStepScreenshot(popup, testInfo, "10-activity-signed-event");
+    await captureStepScreenshot(popup, testInfo, "12-activity-signed-event");
   });
 });

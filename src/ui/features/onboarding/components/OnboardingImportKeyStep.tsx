@@ -1,5 +1,6 @@
-import type { RefObject } from "react";
+import type { CSSProperties, RefObject } from "react";
 import { Button } from "@/components/ui/button";
+import { NO_AUTOFILL_PROPS } from "@/components/ui/password-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -20,10 +21,18 @@ interface OnboardingImportKeyStepProps {
   importError: string;
   isLoading: boolean;
   privateKeyRef: RefObject<HTMLInputElement | null>;
+  /** Name of a selected Ostrilo encrypted backup, or "" when none is pending. */
+  backupFileName: string;
+  backupPassphrase: string;
+  backupError: string;
+  backupBusy: boolean;
   onBack: () => void;
   onKeyNameChange: (value: string) => void;
   onTogglePrivateKey: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onBackupPassphraseChange: (value: string) => void;
+  onUnlockBackup: () => void;
+  onCancelBackup: () => void;
   onContinue: () => void;
 }
 
@@ -33,10 +42,17 @@ export function OnboardingImportKeyStep({
   importError,
   isLoading,
   privateKeyRef,
+  backupFileName,
+  backupPassphrase,
+  backupError,
+  backupBusy,
   onBack,
   onKeyNameChange,
   onTogglePrivateKey,
   onFileUpload,
+  onBackupPassphraseChange,
+  onUnlockBackup,
+  onCancelBackup,
   onContinue,
 }: OnboardingImportKeyStepProps) {
   return (
@@ -57,6 +73,7 @@ export function OnboardingImportKeyStep({
             placeholder="My Imported Key"
             value={keyName}
             onChange={(e) => onKeyNameChange(e.target.value)}
+            {...NO_AUTOFILL_PROPS}
           />
         </div>
 
@@ -66,12 +83,26 @@ export function OnboardingImportKeyStep({
             Private Key (nsec)
           </Label>
           <div className="relative">
+            {/* No `type="password"`: that attribute is what browser password
+                managers key off, so using it to mask an nsec is close to a
+                guarantee of capture. Masked with `-webkit-text-security`
+                instead, matching the backup step. */}
             <Input
               id="privateKey"
               ref={privateKeyRef}
-              type={showPrivateKey ? "text" : "password"}
+              type="text"
               placeholder="nsec1..."
-              className={importError ? "border-destructive pr-16" : "pr-16"}
+              style={
+                {
+                  WebkitTextSecurity: showPrivateKey ? "none" : "disc",
+                } as CSSProperties
+              }
+              className={
+                importError
+                  ? "border-destructive pr-16 font-mono"
+                  : "pr-16 font-mono"
+              }
+              {...NO_AUTOFILL_PROPS}
             />
             <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
               <button
@@ -115,13 +146,57 @@ export function OnboardingImportKeyStep({
           </div>
         </div>
 
+        {backupFileName && (
+          <div className="ink-card space-y-2 p-3">
+            <div className="text-sm font-medium">
+              Encrypted backup: {backupFileName}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Enter the passphrase you chose when you saved this file. It is not
+              your master password, and Ostrilo cannot recover it.
+            </p>
+            <Label htmlFor="importBackupPassphrase">Backup passphrase</Label>
+            <Input
+              id="importBackupPassphrase"
+              type="password"
+              value={backupPassphrase}
+              onChange={(e) => onBackupPassphraseChange(e.target.value)}
+              {...NO_AUTOFILL_PROPS}
+            />
+            {backupError && (
+              <div className="seal-chip seal-chip-danger flex" role="alert">
+                <AlertTriangle className="h-4 w-4" />
+                {backupError}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={onCancelBackup}
+                disabled={backupBusy}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={onUnlockBackup}
+                disabled={backupBusy || backupPassphrase.length === 0}
+                className="flex-1"
+              >
+                {backupBusy ? "Opening" : "Open backup"}
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-[10px] bg-muted/60 p-3">
           <div className="text-sm">
             <div className="font-medium mb-1">Supported formats:</div>
             <ul className="text-xs text-muted-foreground space-y-1">
               <li>nsec1... (bech32 format)</li>
               <li>Hex private key (64 characters)</li>
-              <li>Exported JSON key file</li>
+              <li>Ostrilo encrypted backup (.json)</li>
             </ul>
           </div>
         </div>
