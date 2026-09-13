@@ -1,3 +1,8 @@
+import {
+  APPROVAL_TIMEOUT_MS,
+  PROVIDER_TIMEOUT_GRACE_MS,
+} from "@/application/services/approval-queue.service";
+
 /**
  * NIP-07 window.nostr provider injection script
  * This script runs in the MAIN world (page context) to expose window.nostr API
@@ -7,15 +12,39 @@
  * 2. This script sends a message to content script via window.postMessage
  * 3. Content script relays to background via browser.runtime.sendMessage
  * 4. Background processes and returns result through same chain
+ *
+ * This script runs in the PAGE's realm, alongside whatever the page loaded. It
+ * therefore cannot trust anything it reaches through a global after page script
+ * has run: a page can replace `window.postMessage`, `JSON.stringify` or
+ * `Promise` and observe or rewrite everything that passes through. The
+ * intrinsics are captured once, at document_start, before page script executes.
+ *
+ * None of that protects the user's KEY - the key never enters this realm. It
+ * protects the integrity of the request the user is shown in the approval
+ * dialog, and it stops a page silently intercepting another script's signature.
  */
 
 export default defineUnlistedScript(() => {
+  // Intrinsics captured at injection time, before page script can run.
+  const postMessage = window.postMessage.bind(window);
+  const addEventListener = window.addEventListener.bind(window);
+  const setTimeout = window.setTimeout.bind(window);
+  const clearTimeout = window.clearTimeout.bind(window);
+  const randomUUID = crypto.randomUUID.bind(crypto);
+  const NativePromise = Promise;
+  const pageOrigin = window.location.origin;
+
   // Message types for communication with content script
   interface NostrRequestMessage {
     type: "OSTRILO_NOSTR_REQUEST";
     id: string;
     method: "getPublicKey" | "signEvent";
     params?: unknown;
+  }
+
+  interface NostrCancelMessage {
+    type: "OSTRILO_NOSTR_CANCEL";
+    id: string;
   }
 
   interface NostrResponseMessage {
@@ -34,26 +63,44 @@ export default defineUnlistedScript(() => {
     }
   >();
 
-  // Generate unique request ID
-  function generateRequestId(): string {
-    return `ostrilo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
+  /**
+   * The page-side backstop deadline.
+   *
+   * The extension-side approval deadline is authoritative. This one fires
+   * strictly later, and only exists so a page is not left with a promise that
+   * never settles if the extension goes away mid-request.
+   *
+   * It used to be a hard-coded 30 seconds against an extension-side 60. A user
+   * who approved at 45 seconds produced a real signature over a real event
+   * that this side had already rejected and discarded. The signature existed;
+   * nobody received it.
+   */
+  const PROVIDER_DEADLINE_MS = APPROVAL_TIMEOUT_MS + PROVIDER_TIMEOUT_GRACE_MS;
 
   // Send request to content script and wait for response
   function sendRequest(
     method: "getPublicKey" | "signEvent",
     params?: unknown
   ): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-      const id = generateRequestId();
+    return new NativePromise((resolve, reject) => {
+      // Unguessable. The old ids were `ostrilo_<Date.now()>_<Math.random()>`,
+      // which another script in the same page could predict closely enough to
+      // post a forged OSTRILO_NOSTR_RESPONSE and resolve someone else's
+      // signEvent with a value of its choosing.
+      const id = randomUUID();
 
-      // Set timeout for request (30 seconds for signing which may need user approval)
       const timeout = setTimeout(() => {
-        pendingRequests.delete(id);
-        reject(new Error("Request timeout"));
-      }, 30000);
+        if (!pendingRequests.delete(id)) return;
+        // Tell the extension to withdraw the prompt. Without this, the user is
+        // still looking at a dialog for a request nobody is waiting for, and
+        // approving it produces a signature that goes nowhere.
+        postMessage(
+          { type: "OSTRILO_NOSTR_CANCEL", id } as NostrCancelMessage,
+          pageOrigin
+        );
+        reject(new Error("timeout"));
+      }, PROVIDER_DEADLINE_MS);
 
-      // Wrap resolve/reject to clear timeout
       const wrappedResolve = (value: unknown) => {
         clearTimeout(timeout);
         resolve(value);
@@ -68,7 +115,6 @@ export default defineUnlistedScript(() => {
         reject: wrappedReject,
       });
 
-      // Send message to content script
       const message: NostrRequestMessage = {
         type: "OSTRILO_NOSTR_REQUEST",
         id,
@@ -76,46 +122,39 @@ export default defineUnlistedScript(() => {
         params,
       };
 
-      window.postMessage(message, "*");
+      postMessage(message, pageOrigin);
     });
   }
 
   // Listen for responses from content script
-  window.addEventListener("message", (event) => {
-    // Only accept messages from same window
+  addEventListener("message", (event: MessageEvent) => {
     if (event.source !== window) return;
+    if (event.origin !== pageOrigin) return;
 
     const data = event.data as NostrResponseMessage;
     if (data?.type !== "OSTRILO_NOSTR_RESPONSE") return;
 
+    // A request id that is not pending has already settled - by response, by
+    // deadline, or because it was never ours. A late or duplicate response for
+    // it is dropped rather than resolving anything a second time.
     const pending = pendingRequests.get(data.id);
     if (!pending) return;
 
     pendingRequests.delete(data.id);
 
     if (data.error) {
-      // Provide helpful error messages for common cases
-      if (data.error.includes("locked")) {
-        console.warn(
-          "[Ostrilo] Extension is locked. Please click the Ostrilo icon and unlock with your password."
-        );
-        pending.reject(
-          new Error(
-            "Ostrilo extension is locked. Please unlock to sign events."
-          )
-        );
-      } else if (data.error === "denied") {
-        console.warn("[Ostrilo] Request was denied by policy or user");
-        pending.reject(new Error(data.error));
-      } else {
-        pending.reject(new Error(data.error));
-      }
+      pending.reject(new Error(data.error));
     } else {
       pending.resolve(data.result);
     }
   });
 
   // NIP-07 window.nostr implementation
+  //
+  // `nip04` and `nip44` are deliberately absent. They were advertised as
+  // capabilities whose every method threw, so NIP-07 feature detection - the
+  // whole point of which is `if (window.nostr.nip44)` - returned true and then
+  // failed at call time. An honest absence is a working feature check.
   const nostr = {
     /**
      * Get the public key of the currently selected identity
@@ -159,29 +198,35 @@ export default defineUnlistedScript(() => {
       };
       return result.event;
     },
-
-    // NIP-04 placeholder - to be implemented in future
-    nip04: {
-      async encrypt(_pubkey: string, _plaintext: string): Promise<string> {
-        throw new Error("NIP-04 encryption not yet implemented");
-      },
-      async decrypt(_pubkey: string, _ciphertext: string): Promise<string> {
-        throw new Error("NIP-04 decryption not yet implemented");
-      },
-    },
-
-    // NIP-44 placeholder - to be implemented in future
-    nip44: {
-      async encrypt(_pubkey: string, _plaintext: string): Promise<string> {
-        throw new Error("NIP-44 encryption not yet implemented");
-      },
-      async decrypt(_pubkey: string, _ciphertext: string): Promise<string> {
-        throw new Error("NIP-44 decryption not yet implemented");
-      },
-    },
   };
 
-  (window as any).nostr = nostr;
+  // Never overwrite an existing provider: another signer may have got here
+  // first, and silently replacing it would hijack the user's chosen extension.
+  if ("nostr" in window) {
+    console.warn(
+      "[Ostrilo] window.nostr already defined; leaving the existing provider in place."
+    );
+    return;
+  }
 
-  console.log("[Ostrilo] NIP-07 window.nostr provider injected");
+  Object.freeze(nostr.getPublicKey);
+  Object.freeze(nostr.signEvent);
+  Object.freeze(nostr);
+
+  try {
+    // Non-writable and non-configurable. A plain assignment left `window.nostr`
+    // as an ordinary writable property, so any script that ran afterwards could
+    // replace `signEvent` with its own and sit between the page and the user's
+    // signer - reading every event before it was signed, or substituting one.
+    Object.defineProperty(window, "nostr", {
+      value: nostr,
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    });
+  } catch {
+    // Already non-configurable, defined by something else between the `in`
+    // check and here. Leave it alone rather than throwing into the page.
+    console.warn("[Ostrilo] Could not define window.nostr.");
+  }
 });

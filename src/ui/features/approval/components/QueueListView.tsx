@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { formatOrigin } from "@/domain/display/origin";
+import { escapeInvisible } from "@/domain/display/safe-text";
 import { Button } from "@/components/ui/button";
 import type { PendingRequest } from "@/domain/types";
 import { getKindName } from "@/domain/types";
@@ -62,7 +64,7 @@ export function QueueListView({
     } else {
       acc.push({
         origin: request.origin,
-        domain: formatDomain(request.origin),
+        domain: formatOrigin(request.origin).display,
         requests: [request],
       });
     }
@@ -86,16 +88,6 @@ export function QueueListView({
       }
       return next;
     });
-  };
-
-  const handleBatchApprove = (origin: string) => {
-    const group = groups.find((g) => g.origin === origin);
-    if (group && onBatchAction) {
-      onBatchAction(
-        "approve",
-        group.requests.map((r) => r.id)
-      );
-    }
   };
 
   const handleBatchDeny = (origin: string) => {
@@ -191,18 +183,16 @@ export function QueueListView({
               </button>
 
               {/* Origin Batch Actions */}
+              {/* Bulk APPROVE is deliberately absent.
+
+                  Approving in bulk is approving without looking, and the way
+                  to get a signature a user did not mean to give is to ask
+                  many times and offer one button that answers all of them.
+                  Bulk DENY stays: refusing without looking is always safe,
+                  and a user buried in prompts needs a way out that is not
+                  "approve everything". */}
               {isExpanded && onBatchAction && group.requests.length > 1 && (
                 <div className="flex gap-2 border-y border-border bg-muted/30 px-3 py-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleBatchApprove(group.origin)}
-                    disabled={disabled}
-                    className="flex-1 gap-1"
-                  >
-                    <Check className="w-3 h-3" />
-                    Approve all from site
-                  </Button>
                   <Button
                     variant="destructive"
                     size="sm"
@@ -254,11 +244,11 @@ function RequestItem({
   const kindName = getKindName(request.event.kind);
   const timeRemaining = Math.max(0, request.timeoutAt - nowSeconds);
 
-  // Truncate content to 50 chars
+  // Escaped before truncation, so a bidi override in the first fifty
+  // characters cannot reverse the preview the user skims.
+  const safePreview = escapeInvisible(request.event.content).text;
   const contentPreview =
-    request.event.content.length > 50
-      ? request.event.content.slice(0, 50) + "..."
-      : request.event.content;
+    safePreview.length > 50 ? safePreview.slice(0, 50) + "..." : safePreview;
 
   return (
     <button
@@ -308,15 +298,6 @@ function RequestItem({
 }
 
 // Helper functions
-
-function formatDomain(origin: string): string {
-  try {
-    const url = new URL(origin);
-    return url.hostname;
-  } catch {
-    return origin;
-  }
-}
 
 function formatTimestamp(timestamp: number): string {
   const date = new Date(timestamp * 1000);

@@ -213,23 +213,104 @@ const HexString32Schema = z
   .string()
   .regex(/^[0-9a-f]{64}$/, "Must be 64-character lowercase hex string");
 
-/** Tag array - array of strings */
-const TagSchema = z.array(z.string());
+/**
+ * Size bounds on an event a web page asks to have signed.
+ *
+ * `content` and `tags` had NO bound at all. A page could hand the service
+ * worker a hundred-megabyte string, which `computeEventId` would then
+ * serialize and SHA-256 inside the worker, and which the approval dialog
+ * would render into a clipped panel with no indication of how much was
+ * being hidden. The user approves what they can see.
+ *
+ * Measured in UTF-8 BYTES, not string length: `"𝄞".length` is 2 but it
+ * occupies 4 bytes, so a length bound is off by up to 4x on the content
+ * that is most likely to be adversarial.
+ *
+ * The numbers are generous against real Nostr usage - a long-form article
+ * is a few kilobytes, a large contact list a few thousand tags - and the
+ * schema tests pin typical note, reaction, profile, relay-list and contact-
+ * list events as still valid.
+ */
+export const MAX_EVENT_CONTENT_BYTES = 65_536;
+export const MAX_EVENT_TAGS = 5_000;
+export const MAX_TAG_ELEMENTS = 100;
+export const MAX_TAG_ELEMENT_BYTES = 1_024;
+export const MAX_EVENT_SERIALIZED_BYTES = 1_048_576;
+
+/** UTF-8 byte length, which is what the wire and the hash actually see. */
+export function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+/** Tag array - array of strings, bounded per element and in count. */
+const TagSchema = z
+  .array(
+    z.string().refine((v) => utf8ByteLength(v) <= MAX_TAG_ELEMENT_BYTES, {
+      message: `Tag element exceeds ${MAX_TAG_ELEMENT_BYTES} bytes`,
+    })
+  )
+  .max(MAX_TAG_ELEMENTS, {
+    message: `Tag has more than ${MAX_TAG_ELEMENTS} elements`,
+  });
 
 /** Tags array - array of tag arrays */
-const TagsSchema = z.array(TagSchema);
+const TagsSchema = z.array(TagSchema).max(MAX_EVENT_TAGS, {
+  message: `Event has more than ${MAX_EVENT_TAGS} tags`,
+});
+
+/**
+ * True when every code unit in `value` is part of a valid UTF-16 pair.
+ *
+ * An unpaired surrogate - `\uD800` with no low surrogate after it - is not
+ * representable in UTF-8. Two things go wrong if one reaches the signer.
+ * `JSON.stringify` escapes it as `\ud800` in the NIP-01 pre-image, where the
+ * spec asks for it raw, so a strict verifier recomputes a different event id
+ * and rejects the event. And `TextEncoder` maps it to `U+FFFD`, so the bytes
+ * that get hashed are not the bytes the page sent.
+ *
+ * Rejected rather than normalized. Replacing it with `U+FFFD` here would mean
+ * the extension silently altering the content the user is about to sign,
+ * which is precisely the property the approval prompt exists to guarantee.
+ */
+function isWellFormedText(value: string): boolean {
+  return value.isWellFormed();
+}
 
 /**
  * NIP-01 Unsigned Event Schema
  * Validates events received from dapps before signing
  */
-export const UnsignedEventSchema = z.object({
-  kind: EventKindSchema,
-  content: z.string(),
-  tags: TagsSchema,
-  created_at: z.number().int().positive(),
-  pubkey: HexString32Schema.optional(),
-});
+export const UnsignedEventSchema = z
+  .object({
+    kind: EventKindSchema,
+    content: z
+      .string()
+      .refine((v) => utf8ByteLength(v) <= MAX_EVENT_CONTENT_BYTES, {
+        message: `Content exceeds ${MAX_EVENT_CONTENT_BYTES} bytes`,
+      }),
+    tags: TagsSchema,
+    created_at: z.number().int().positive(),
+    pubkey: HexString32Schema.optional(),
+  })
+  // Per-field bounds alone are not enough: 5,000 tags of 100 elements of
+  // 1,024 bytes each is half a gigabyte and every individual bound holds.
+  .refine(
+    (event) => utf8ByteLength(JSON.stringify(event)) <= MAX_EVENT_SERIALIZED_BYTES,
+    { message: `Event exceeds ${MAX_EVENT_SERIALIZED_BYTES} serialized bytes` }
+  )
+  // Checked here, at the boundary, rather than inside the serializer: this is
+  // the gate every nostr.signEvent request already passes through, so an
+  // unpaired surrogate cannot reach event id computation from any call site.
+  // A correctly paired surrogate - every emoji above the BMP - is unaffected.
+  .refine(
+    (event) =>
+      isWellFormedText(event.content) &&
+      event.tags.every((tag) => tag.every(isWellFormedText)),
+    {
+      message:
+        "Event content or tags contain an unpaired surrogate code unit",
+    }
+  );
 
 // Infer types from schemas
 export type UnsignedEventInput = z.infer<typeof UnsignedEventSchema>;

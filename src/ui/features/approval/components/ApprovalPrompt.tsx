@@ -62,9 +62,15 @@ function approvalPromptReducer(
         ...state,
         requests: action.requests,
         selectedKey: action.selectedKey,
+        // Deliberately NOT auto-selecting requests[0] when the previous
+        // selection is gone. The detail pane used to instantly re-bind to
+        // the next queued request, so the approve button the user had just
+        // clicked reappeared under their cursor bound to a DIFFERENT event.
+        // One more click and they have approved something they never read.
+        // The user goes back to the list and chooses.
         selectedRequestId: selectedStillPending
           ? state.selectedRequestId
-          : action.requests[0]?.id ?? null,
+          : null,
         showCompactDetail: selectedStillPending ? state.showCompactDetail : false,
         isLoading: false,
         error: null,
@@ -277,9 +283,11 @@ export function ApprovalPrompt() {
     );
   }
 
-  const selectedRequest =
-    state.requests.find((r) => r.id === state.selectedRequestId) ??
-    state.requests[0];
+  // No fallback to requests[0]: the pane shows what the user chose, or
+  // nothing. See the loadSuccess case above.
+  const selectedRequest = state.requests.find(
+    (r) => r.id === state.selectedRequestId
+  );
   const countdown = selectedRequest
     ? Math.max(0, selectedRequest.timeoutAt - state.nowSeconds)
     : 0;

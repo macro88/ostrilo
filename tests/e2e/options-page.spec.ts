@@ -60,12 +60,30 @@ async function openOptionsFromRuntime(page: Page) {
   );
 }
 
+const PASSWORD = "Cobalt-Mantle-Trellis-2026!";
+
+/**
+ * The options page is lock-gated now: with no keys it shows onboarding
+ * guidance, and with a locked vault it shows the lock screen. Neither state
+ * renders the tabs, so every test here has to create and unlock a vault
+ * before the page under test exists at all.
+ */
+async function createAndUnlock(page: Page) {
+  await sendExtensionRpc(page, {
+    type: "vault.generate",
+    password: PASSWORD,
+    label: "Options E2E Key",
+  });
+  await sendExtensionRpc(page, { type: "vault.unlock", password: PASSWORD });
+}
+
 test.describe("Options page", () => {
   test("opens from extension runtime and supports tab deep links", async ({
     openPopup,
     extensionContext,
   }) => {
     const popup = await openPopup();
+    await createAndUnlock(popup);
     const optionsPromise = extensionContext.waitForEvent("page");
 
     await openOptionsFromRuntime(popup);
@@ -132,6 +150,7 @@ test.describe("Options page", () => {
     openOptions,
   }) => {
     const popup = await openPopup();
+    await createAndUnlock(popup);
     const options = await openOptions();
 
     await options.getByRole("combobox", { name: "Theme" }).click();

@@ -28,8 +28,42 @@
 - Requires the `alarms` permission. An MV3 service worker is evicted after
   ~30s idle and `setTimeout` does not survive that, so alarms are the only
   way auto-lock can fire at all.
-### Other
+- **The NIP-07 provider is no longer injected into `http://` pages.**
+  BREAKING for dapps served over plaintext. On such a page an on-path
+  attacker controls the document and can drive `window.nostr` as the origin
+  the user trusts, which no approval dialog can detect. See
+  `docs/local-https-development.md` for local development.
+- `window.nostr` is defined non-writable and non-configurable, and the
+  provider object and its methods are frozen, so a page script cannot
+  replace `signEvent` and sit between the page and the signer.
+- `nip04` and `nip44` are removed from the advertised surface. They were
+  objects whose every method threw, so feature detection returned true and
+  then failed at call time. **BREAKING** for anything feature-detecting them.
+- Page-triggered unlock is removed. Any page could make the genuine master-
+  password prompt appear on demand, unthrottled. A locked vault now answers
+  `locked` and raises a toolbar marker the page cannot drive. **BREAKING**
+  for the `openUnlockPrompt` runtime message.
+- Event `content` and `tags` are bounded, measured in UTF-8 bytes, with a
+  total serialized-event ceiling. Oversized payloads are refused with
+  `invalid_event` before anything is hashed or queued.
+- The approval dialog shows the full origin including scheme, flags a
+  non-HTTPS origin, reports true payload byte lengths, and renders bidi and
+  zero-width characters as visible escapes with a count. The signed bytes
+  are never altered.
+- "Signing as" is read from the key bound to the request at enqueue time,
+  not from whichever key the approval UI had selected when it loaded.
+- The approval queue is rate-limited per origin (10 per minute, 5 pending)
+  and capped globally at 20. A flooding origin gets `rate_limited`.
+- "Approve all from site" is removed; bulk deny remains. The detail pane no
+  longer re-binds to the next queued request after a resolution, and approve
+  is disabled for 500ms whenever it binds to a new request. **BREAKING** for
+  the batch-approve affordance.
+- The page-side and extension-side approval deadlines are aligned from one
+  constant, and a page that gives up withdraws its request, so no signature
+  is produced for a request nobody is waiting for. **BREAKING** for dapps
+  depending on the old 30-second rejection.
 
+### Other
 - Added the browser extension options page for advanced settings, with tabs for General, Keys & Identities, Security, Permissions, Activity Log, Relays, and Advanced settings.
 - Kept popup Settings focused on quick controls: active key, theme, auto-lock, and the Advanced Settings action.
 - Added options page hardening around activity log export, relay URL validation, keyboard tab navigation, and local cross-context settings sync coverage.

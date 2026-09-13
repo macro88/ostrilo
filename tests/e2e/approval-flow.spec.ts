@@ -48,7 +48,7 @@ test.describe("Approval Flow", () => {
   }) => {
     // Navigate to an HTTP page
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     // Wait for window.nostr to be injected
     await waitForNostrInjection(page);
@@ -100,7 +100,7 @@ test.describe("Approval Flow", () => {
     // The test documents the expected behavior.
 
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     await waitForNostrInjection(page);
 
@@ -145,7 +145,7 @@ test.describe("Approval Flow", () => {
     extensionId,
   }) => {
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     await waitForNostrInjection(page);
 
@@ -191,7 +191,7 @@ test.describe("Approval Flow", () => {
     // Full testing requires vault unlock and policy configuration automation.
 
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     await waitForNostrInjection(page);
 
@@ -226,7 +226,7 @@ test.describe("Approval Flow", () => {
     // Full testing would require mocking timers or using a shorter timeout.
 
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     await waitForNostrInjection(page);
 
@@ -282,7 +282,7 @@ test.describe("Approval Flow", () => {
     extensionId,
   }) => {
     const page = await extensionContext.newPage();
-    await page.goto("http://localhost:8765/test-page.html");
+    await page.goto("https://localhost:8765/test-page.html");
 
     await waitForNostrInjection(page);
 

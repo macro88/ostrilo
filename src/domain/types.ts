@@ -526,6 +526,24 @@ export interface PendingRequest {
   createdAt: number;
   /** Unix timestamp when the request will auto-deny (seconds) */
   timeoutAt: number;
+  /**
+   * The public key this request will be signed with, in hex, captured when
+   * the request was enqueued.
+   *
+   * The approval dialog used to render "Signing as" from whichever key the
+   * UI had selected when it loaded. Switching the active key while a prompt
+   * was open therefore changed the displayed identity without changing the
+   * one that would sign - the dialog told the user something false about the
+   * thing they were about to authorize.
+   */
+  signingPubkey?: string;
+  /**
+   * The page-side correlation id, when the request came from a web page.
+   *
+   * Lets the content script cancel a request the page has abandoned. Only
+   * ever used to DENY: see cancelByClientRequestId.
+   */
+  clientRequestId?: string;
 }
 
 // ============================================

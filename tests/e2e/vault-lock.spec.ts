@@ -18,7 +18,7 @@ import type { Page } from "./fixtures/extension";
  */
 
 const PASSWORD = "Lantern-Thicket-Cobalt-2026!";
-const DAPP_URL = "http://127.0.0.1:8765/test-page.html";
+const DAPP_URL = "https://localhost:8765/test-page.html";
 
 type RpcResponse<T = unknown> =
   | { ok: true; data: T }

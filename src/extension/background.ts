@@ -6,6 +6,8 @@ import {
   WebCryptoAesGcm,
   VaultKdf,
   NobleSchnorr,
+  NobleSha256,
+  ScureBech32,
 } from "@/infrastructure/crypto/adapters";
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import { PolicyService } from "@/application/services/policy.service";
@@ -60,7 +62,23 @@ function normalizeRelayUrls(relays: unknown): string[] {
 }
 
 /**
+ * Set when a signing request was refused because the vault is locked.
+ *
+ * This is the replacement for the page-triggered unlock popup: the user
+ * finds out that a site wanted something, on their own toolbar, at a moment
+ * of their choosing. Cleared on unlock.
+ */
+let lockedRequestPending = false;
+
+/** Amber, per docs/design/DESIGN_RULES.md: a warning, not a success. */
+const LOCKED_BADGE_COLOR = "#94682E";
+
+/**
  * Update the browser action badge to mirror the current approval queue depth.
+ *
+ * Precedence: a pending approval outranks a refused-while-locked request.
+ * An approval is a decision the user has to make now; the locked marker is
+ * only a notice that something was turned away.
  */
 async function updateApprovalBadge(count: number): Promise<void> {
   if (count > 0) {
@@ -76,10 +94,31 @@ async function updateApprovalBadge(count: number): Promise<void> {
     return;
   }
 
+  if (lockedRequestPending) {
+    await Promise.all([
+      browser.action.setBadgeText({ text: "!" }),
+      browser.action.setBadgeBackgroundColor({ color: LOCKED_BADGE_COLOR }),
+      browser.action.setTitle({
+        title: "Ostrilo - a site asked to sign while the vault was locked",
+      }),
+    ]);
+    return;
+  }
+
   await Promise.all([
     browser.action.setBadgeText({ text: "" }),
     browser.action.setTitle({ title: "Ostrilo Signer" }),
   ]);
+}
+
+/** Raise or clear the refused-while-locked marker. */
+async function setLockedRequestPending(
+  pending: boolean,
+  count: number
+): Promise<void> {
+  if (lockedRequestPending === pending) return;
+  lockedRequestPending = pending;
+  await updateApprovalBadge(count);
 }
 
 /**
@@ -205,7 +244,9 @@ export default defineBackground(() => {
     storage,
     WebCryptoAesGcm,
     VaultKdf,
-    NobleSchnorr
+    NobleSchnorr,
+    NobleSha256,
+    ScureBech32
   );
   const policy = new PolicyService(storage);
   const settings = new SettingsService(storage);
@@ -250,6 +291,9 @@ export default defineBackground(() => {
     activityLog,
     profile,
     unlockThrottle,
+    onLockedPageRequest: () => {
+      void setLockedRequestPending(true, approvalQueue.count());
+    },
   };
 
   // Create approval queue service
@@ -262,6 +306,12 @@ export default defineBackground(() => {
   // later unlock signed an event the user had already walked away from.
   // `clear()` resolves every pending entry as a denial, so the calling page
   // gets an answer rather than a hang.
+  // A site asked to sign while the vault was locked. The page cannot open a
+  // password prompt any more; this is how the user finds out.
+  vault.onUnlock(() => {
+    void setLockedRequestPending(false, approvalQueue.count());
+  });
+
   vault.onLock(() => {
     approvalQueue.clear();
     void updateApprovalBadge(0);
@@ -328,29 +378,15 @@ export default defineBackground(() => {
     createRpcMessageListener(router, serviceContext)
   );
 
-  // Handle unlock prompt requests
-  browser.runtime.onMessage.addListener((message) => {
-    if (message.type === "openUnlockPrompt") {
-      console.log("[Background] Opening unlock prompt...");
-      // Open the extension popup to prompt unlock
-      browser.action.openPopup().catch((err) => {
-        console.warn("[Background] Failed to open popup:", err);
-        // Fallback: open in new tab or window
-        browser.windows
-          .create({
-            url: browser.runtime.getURL("/popup.html"),
-            type: "popup",
-            width: 400,
-            height: 600,
-          })
-          .catch((err2) =>
-            console.error("[Background] Failed to open popup window:", err2)
-          );
-      });
-      return true; // Keep message channel open
-    }
-  });
-
+  // The `openUnlockPrompt` listener is deliberately gone.
+  //
+  // It opened the genuine password popup on request, and the request came
+  // from the content script on behalf of any web page. So any page could
+  // make the real master-password prompt appear, as often as it liked, with
+  // no throttle - a nuisance, and a way to train the user to type their
+  // master password at prompts they did not initiate. A locked vault now
+  // answers `locked` and signals through the toolbar badge, which the page
+  // cannot drive.
   browser.runtime.onMessage.addListener((message) => {
     if (message?.__command === "ostrilo.openApprovalWindow") {
       return focusOrCreateApprovalWindow(settings, approvalQueue)

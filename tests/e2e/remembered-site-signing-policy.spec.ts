@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures/extension";
 import type { Page } from "./fixtures/extension";
 
 const PASSWORD = "Juniper-Bramble-Saffron-2026!";
-const DAPP_ORIGIN = "http://127.0.0.1:8765";
+const DAPP_ORIGIN = "https://localhost:8765";
 const DAPP_URL = `${DAPP_ORIGIN}/test-page.html`;
 
 type RpcResponse<T = unknown> =
@@ -201,7 +201,9 @@ test.describe("Remembered site signing policy", () => {
     await expect(
       options.getByRole("heading", { name: "Permissions" })
     ).toBeVisible();
-    await expect(options.getByText(DAPP_ORIGIN)).toBeVisible();
+    // `.first()` because the trust-level control carries an sr-only legend
+    // that also names the origin, so a bare text match is ambiguous.
+    await expect(options.getByText(DAPP_ORIGIN).first()).toBeVisible();
 
     const relayListRule = options.getByTestId("origin-policy-kind-10002");
     await expect(relayListRule).toContainText("Relay List");

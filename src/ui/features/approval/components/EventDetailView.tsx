@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useApprovalDisplay } from "./useApprovalDisplay";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { PendingRequest, ApprovalAction, KeyRecord } from "@/domain/types";
@@ -53,6 +54,7 @@ export function EventDetailView({
 }: EventDetailViewProps) {
   const [rememberChoice, setRememberChoice] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
+
   const kindName = getKindName(request.event.kind);
   const isProtectedEventKind = isProtectedKind(request.event.kind);
   const rememberInputId = `remember-${request.id}`;
@@ -60,13 +62,19 @@ export function EventDetailView({
   const rememberLabel = isProtectedEventKind
     ? "Remember a denial for this site and event kind"
     : "Remember this decision for this site and event kind";
+  const {
+    origin,
+    content: safeContentText,
+    hiddenCharacters,
+    contentBytes,
+    tagBytes,
+    signingPubkey,
+    approveReady,
+  } = useApprovalDisplay(request, signingKey?.pubkey);
+  const domain = origin.display;
   const rememberDescription = isProtectedEventKind
     ? "This kind always requires approval before signing. Approving signs only this request."
-    : `Future ${kindName.toLowerCase()} requests from ${formatDomain(
-        request.origin
-      )} will use this choice.`;
-  const domain = formatDomain(request.origin);
-  const signingPubkey = signingKey?.pubkey ?? "";
+    : `Future ${kindName.toLowerCase()} requests from ${domain} will use this choice.`;
   const rawEnvelope = {
     ...request.event,
     pubkey: signingPubkey || undefined,
@@ -119,12 +127,19 @@ export function EventDetailView({
             className="h-12 w-12 text-xl"
           />
           <div className="min-w-0">
-            <h2 className="truncate text-xl font-bold">{domain}</h2>
+            <h2 className="break-all font-mono text-lg font-bold">
+              {domain}
+            </h2>
             <p className="text-sm font-semibold text-muted-foreground">
               Wants you to sign {kindName.toLowerCase()}.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <span className="seal-chip seal-chip-accent">Review required</span>
+              {origin.insecure && (
+                <span className="seal-chip seal-chip-warning">
+                  Not a secure connection
+                </span>
+              )}
               <span className="seal-chip seal-chip-warning font-mono">
                 Expires {formatCountdown(countdown)}
               </span>
@@ -167,7 +182,7 @@ export function EventDetailView({
         <section className="space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Content
+              Content · <span className="font-mono">{contentBytes}</span> bytes
             </h3>
             <Button
               variant="ghost"
@@ -180,11 +195,29 @@ export function EventDetailView({
               Copy
             </Button>
           </div>
-          <div className="code-panel min-h-20">
+          {hiddenCharacters > 0 && (
+            <p
+              className="seal-chip seal-chip-warning w-full justify-start text-left"
+              role="status"
+            >
+              {hiddenCharacters} hidden or direction-control
+              {hiddenCharacters === 1 ? " character is" : " characters are"}{" "}
+              present and shown escaped below. They are part of what you would
+              be signing.
+            </p>
+          )}
+          {/* Scrolls rather than clips, with the end of the content marked,
+              so nothing can be hidden below an invisible fold. */}
+          <div className="code-panel min-h-20 max-h-64 overflow-auto">
             {request.event.content ? (
-              <pre className="whitespace-pre-wrap break-all text-xs">
-                {request.event.content}
-              </pre>
+              <>
+                <pre className="whitespace-pre-wrap break-all text-xs">
+                  {safeContentText}
+                </pre>
+                <p className="mt-2 border-t border-border pt-1 font-mono text-[10px] text-muted-foreground">
+                  end of content · {contentBytes} bytes
+                </p>
+              </>
             ) : (
               <span className="text-xs text-muted-foreground">(empty)</span>
             )}
@@ -194,7 +227,8 @@ export function EventDetailView({
         <section className="space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Tags · {request.event.tags.length}
+              Tags · <span className="font-mono">{request.event.tags.length}</span> ·{" "}
+              <span className="font-mono">{tagBytes}</span> bytes
             </h3>
             <Button
               variant="ghost"
@@ -248,11 +282,11 @@ export function EventDetailView({
           </Button>
           <Button
             onClick={handleApprove}
-            disabled={isResolving}
+            disabled={isResolving || !approveReady}
             className="h-12"
           >
             <Check className="h-4 w-4" />
-            Approve & sign
+            Approve &amp; sign
           </Button>
         </div>
 
@@ -382,15 +416,6 @@ function syntaxHighlightJson(json: string): ReactNode[] {
   }
 
   return nodes;
-}
-
-function formatDomain(origin: string): string {
-  try {
-    const url = new URL(origin);
-    return url.hostname;
-  } catch {
-    return origin;
-  }
 }
 
 function formatTimestamp(timestamp: number): string {

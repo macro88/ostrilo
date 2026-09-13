@@ -78,8 +78,11 @@ const REQUIRED_PERMISSIONS = ["storage", "windows"];
  * `src/extension/content.ts`. `harden-provider-trust-boundary` owns whether
  * plaintext `http://` origins keep the provider; narrowing the surface means a
  * deliberate edit to this literal, which is the point.
+ *
+ * Narrowed to `https:` only: a plaintext page is one an on-path attacker can
+ * rewrite, so the provider is not offered there at all.
  */
-const PROVIDER_MATCHES = ["http://*/*", "https://*/*"];
+const PROVIDER_MATCHES = ["https://*/*"];
 
 /**
  * Scaffold and template strings that must never reach a generated manifest.

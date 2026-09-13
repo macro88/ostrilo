@@ -44,8 +44,13 @@ const EXTENSION_PAGES_CSP = [
  * owns whether plaintext `http://` origins keep the provider; this change only
  * keeps the two lists — and `tests/security/manifest-assertions.test.ts` —
  * in agreement.
+ *
+ * Narrowed to `https:` only by `harden-provider-trust-boundary`: on a
+ * plaintext page an on-path attacker controls the document and can drive
+ * `window.nostr` as the origin the user trusts, which no approval dialog can
+ * detect. See `docs/local-https-development.md`.
  */
-const PROVIDER_MATCHES = ["http://*/*", "https://*/*"];
+const PROVIDER_MATCHES = ["https://*/*"];
 
 /**
  * Files a Mozilla reviewer needs in order to reproduce the submitted build.

@@ -111,6 +111,22 @@ The original release dates are now historical planning targets. The status marke
 
 **Partially implemented or narrower than the PRD wording:**
 
+- The NIP-07 provider trust boundary is shipped: HTTPS-only injection, a
+  non-writable and non-configurable `window.nostr` over a frozen provider,
+  no page-drivable extension UI, an extension-owned request lifecycle with
+  one shared deadline and a cancellation path that can only deny, truthful
+  capability advertisement (`nip04`/`nip44` removed rather than stubbed), and
+  no injected script element left in the page. Approval display integrity is
+  shipped: full origin with scheme, a non-HTTPS flag, true UTF-8 byte lengths
+  for content and tags, bidi and zero-width characters rendered as visible
+  escapes with a count, and the signing key bound to the request rather than
+  read from the UI selection. Flood controls are shipped: 10 enqueues per
+  origin per minute, 5 pending per origin, 20 globally, with `rate_limited`
+  as a distinct code; bulk approve is gone, the detail pane no longer
+  re-binds after a resolution, and approve carries a 500ms cooldown on bind.
+  NIP-44 is not implemented and NIP-04 will not be; removing their stubs is
+  what makes feature detection honest rather than a regression.
+
 - Session auto-lock is implemented as a FLAT lock, not the gradual restriction
   SEC-012 describes. What shipped: a lock state that fails closed (absent,
   malformed or unreadable state reports locked, as does an "unlocked" record
