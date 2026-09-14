@@ -114,7 +114,11 @@ async function handlePageMessage(event: MessageEvent): Promise<void> {
         // `window.location.origin` in this isolated world. Never from
         // `data`/`event.data`: the page owns that object and would simply
         // name whichever origin it wanted to be treated as.
-        rpcRequest = { type: "nostr.getPublicKey", origin };
+        rpcRequest = {
+          type: "nostr.getPublicKey",
+          origin,
+          clientRequestId: data.id,
+        };
         break;
 
       case "signEvent":

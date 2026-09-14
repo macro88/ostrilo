@@ -135,6 +135,18 @@ export interface OriginPolicy {
   trustLevel: TrustLevel;
   rules: NostrEventKindAuthorisation; // explicit overrides
   sessionGrantAll?: boolean; // ephemeral; cleared on lock/TTL
+  /**
+   * Whether this origin may read the user's public key via
+   * `nostr.getPublicKey`.
+   *
+   * ABSENT MEANS NO DECISION HAS BEEN RECORDED, which is the prompting state -
+   * NOT consent. Nothing grants this by migration: a stored policy record is
+   * written whenever a signing decision is made, including a refusal, and
+   * `low` is the level assigned by default when a record is created as a side
+   * effect. So an existing record is evidence of a signing decision and of
+   * nothing else. Every origin prompts once on next use.
+   */
+  identityDisclosure?: Authorisation;
   updatedAt: number;
 }
 
@@ -467,6 +479,16 @@ export type EvalReason =
   | "fallback"
   | "medium_allow"
   | "session_grant"
+  /**
+   * The origin has an explicit remembered refusal to disclose the public key.
+   *
+   * A signature returns the public key inside the signed event, so a standing
+   * allow would hand over the identity the user just refused - while Settings
+   * displayed the refusal. Downgraded to `ask`, never to `deny`: refusing to
+   * hand over an identity for the asking is not the same as saying the site may
+   * never sign anything.
+   */
+  | "identity_disclosure_denied"
   | "default_ask";
 
 // Validation types for domain operations
@@ -553,8 +575,26 @@ export interface PendingRequest {
   id: string;
   /** Origin of the requesting dapp (e.g., "https://primal.net") */
   origin: string;
-  /** The unsigned event to be signed */
-  event: UnsignedEvent;
+  /**
+   * What the origin is asking for.
+   *
+   * Required, and set explicitly at every construction site, so a consumer
+   * cannot reach `event` without first having decided what kind of request it
+   * is holding. The spelling matches `ActivityLogEntry.operation` exactly: an
+   * earlier design used `get_public_key` on one side and
+   * `identity_disclosure` on the other, which would have put two different
+   * strings on either side of the audit boundary.
+   */
+  operation: "sign_event" | "identity_disclosure";
+  /**
+   * The unsigned event to be signed.
+   *
+   * ABSENT for an identity disclosure, which signs nothing. Narrow on
+   * `operation` before reading this - `approval.resolve` used to dereference
+   * `request.event.kind` unconditionally, which throws for an eventless
+   * request.
+   */
+  event?: UnsignedEvent;
   /** Optional computed NIP-01 event ID hash used for de-duplication */
   eventIdHash?: string;
   /** Unix timestamp when the request was created (seconds) */
@@ -579,6 +619,38 @@ export interface PendingRequest {
    * ever used to DENY: see cancelByClientRequestId.
    */
   clientRequestId?: string;
+}
+
+/**
+ * A request that has an event to sign.
+ *
+ * Every view that reads `request.event` should take this, not `PendingRequest`.
+ * The point is that the narrowing happens ONCE, where the request is routed,
+ * rather than as an optional chain at each of the ~20 places the event is read
+ * - an optional chain there would render a blank field instead of failing, and
+ * a blank field in an approval prompt is worse than a crash.
+ */
+export type SigningRequest = PendingRequest & {
+  operation: "sign_event";
+  event: UnsignedEvent;
+};
+
+/** A request to disclose the user's public key. It signs nothing. */
+export type DisclosureRequest = PendingRequest & {
+  operation: "identity_disclosure";
+  event?: undefined;
+};
+
+export function isSigningRequest(
+  request: PendingRequest
+): request is SigningRequest {
+  return request.operation === "sign_event" && request.event !== undefined;
+}
+
+export function isDisclosureRequest(
+  request: PendingRequest
+): request is DisclosureRequest {
+  return request.operation === "identity_disclosure";
 }
 
 // ============================================

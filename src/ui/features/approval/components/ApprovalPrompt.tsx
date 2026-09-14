@@ -7,9 +7,12 @@ import {
   listKeys,
 } from "@/infrastructure/messaging/client";
 import type { PendingRequest, ApprovalAction, KeyRecord } from "@/domain/types";
+import { isDisclosureRequest, isSigningRequest } from "@/domain/types";
 import { AlertTriangle } from "lucide-react";
 import { QueueListView } from "./QueueListView";
 import { EventDetailView } from "./EventDetailView";
+import { DisclosureDetailView } from "./DisclosureDetailView";
+import { ApprovalErrorBoundary } from "./ApprovalErrorBoundary";
 import { browser } from "wxt/browser";
 import { Logo } from "@/ui/components/logo/Logo";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
@@ -309,7 +312,7 @@ export function ApprovalPrompt() {
       />
 
       {selectedRequest ? (
-        <EventDetailView
+        <DetailPane
           request={selectedRequest}
           signingKey={state.selectedKey}
           countdown={countdown}
@@ -328,4 +331,52 @@ export function ApprovalPrompt() {
       )}
     </div>
   );
+}
+
+interface DetailPaneProps {
+  request: PendingRequest;
+  signingKey: KeyRecord | null;
+  countdown: number;
+  onResolve: (action: ApprovalAction) => void;
+  onBack: () => void;
+  showBackButton: boolean;
+  isResolving: boolean;
+  className: string;
+}
+
+/**
+ * Routes one queued request to the view that can render it.
+ *
+ * Wrapped in a boundary because a request that throws while rendering used to
+ * blank the entire window - taking the Deny control for every OTHER queued
+ * request with it. The fallback still offers Deny: a user who cannot read a
+ * request must still be able to refuse it.
+ */
+function DetailPane({ request, ...rest }: DetailPaneProps) {
+  return (
+    <ApprovalErrorBoundary
+      resetKey={request.id}
+      onDeny={() => rest.onResolve("deny")}
+      onBack={rest.onBack}
+    >
+      {isDisclosureRequest(request) ? (
+        <DisclosureDetailView request={request} {...rest} />
+      ) : isSigningRequest(request) ? (
+        <EventDetailView request={request} {...rest} />
+      ) : (
+        // A signing request with no event: not reachable through the enqueue
+        // API, but the type permits it, and rendering nothing silently would be
+        // worse than routing it to the refusal surface.
+        <ApprovalRenderFailure />
+      )}
+    </ApprovalErrorBoundary>
+  );
+}
+
+/**
+ * Thrown to trip the boundary rather than returned, so an unrepresentable
+ * request reaches exactly one refusal surface instead of two.
+ */
+function ApprovalRenderFailure(): never {
+  throw new Error("Request has no renderable payload");
 }

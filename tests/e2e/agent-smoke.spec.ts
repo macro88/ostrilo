@@ -147,6 +147,16 @@ test.describe("Agent extension smoke", () => {
       password: PASSWORD,
     });
 
+    // Identity disclosure is consented in setup. Without this the
+    // `testGetPublicKey()` below does not FAIL - it queues an approval prompt
+    // and blocks for APPROVAL_TIMEOUT_MS (60s), which reads as flakiness
+    // rather than as a missing grant.
+    await sendExtensionRpc(popup, {
+      type: "policy.setOrigin",
+      origin: DAPP_ORIGIN,
+      patch: { identityDisclosure: "allow" },
+    });
+
     const dapp = await extensionContext.newPage();
     await dapp.setViewportSize({ width: 900, height: 700 });
     await dapp.goto(DAPP_URL);

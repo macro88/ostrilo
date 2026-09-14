@@ -53,6 +53,8 @@ const REASON_COPY: Record<EvalReason, string> = {
   session_grant: "an active session grant",
   medium_allow: "this site's trust level",
   protected: "this kind always requires approval",
+  identity_disclosure_denied:
+    "you refused to share your public key with this site",
   fallback: "the default for a site with no trust level",
   default_ask: "the default for a site with no trust level",
 };
@@ -84,6 +86,11 @@ interface OriginPolicyTableProps {
    */
   sessionGrants?: Array<{ origin: string; expiresAt: number }>;
   onSetPerKindRule?: (origin: string, kind: number, rule: string) => void;
+  /**
+   * Revokes a recorded identity-disclosure decision, so the next
+   * `getPublicKey` from that origin prompts again.
+   */
+  onRevokeDisclosure?: (origin: string) => void;
 }
 
 export function OriginPolicyTable({
@@ -94,6 +101,7 @@ export function OriginPolicyTable({
   onToggleSession,
   sessionGrants,
   onSetPerKindRule,
+  onRevokeDisclosure,
 }: OriginPolicyTableProps) {
   if (origins.length === 0) {
     return (
@@ -177,6 +185,32 @@ export function OriginPolicyTable({
               <p>{TRUST_LEVEL_COPY[normaliseLevel(o.trustLevel)]}</p>
             </div>
           )}
+          <div
+            className="mt-3 space-y-2 text-xs text-muted-foreground"
+            data-testid={`origin-disclosure-${o.origin}`}
+          >
+            <p className="font-semibold">Your public key</p>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2">
+              <p className="text-sm font-semibold text-foreground">
+                {o.identityDisclosure === "allow"
+                  ? "This site can read your public key"
+                  : o.identityDisclosure === "deny"
+                    ? "This site is refused your public key"
+                    : "You will be asked next time this site wants it"}
+              </p>
+              {onRevokeDisclosure &&
+                (o.identityDisclosure === "allow" ||
+                  o.identityDisclosure === "deny") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onRevokeDisclosure(o.origin)}
+                >
+                  Revoke
+                </Button>
+              )}
+            </div>
+          </div>
           {onSetPerKindRule && (
             <div className="mt-3 space-y-2 text-xs text-muted-foreground">
               <p className="font-semibold">Quick rules</p>

@@ -3,7 +3,7 @@ import { formatOrigin } from "@/domain/display/origin";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalPrompt } from "@/ui/features/approval/components/ApprovalPrompt";
 import type { PendingRequest } from "@/domain/types";
-import { getKindName } from "@/domain/types";
+import { getKindName, isSigningRequest } from "@/domain/types";
 import { Bell, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 
 interface ActivityPendingApprovalsProps {
@@ -83,14 +83,18 @@ export function ActivityPendingApprovals({
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground truncate">
-                        {getKindName(request.event.kind)}
+                        {isSigningRequest(request)
+                          ? getKindName(request.event.kind)
+                          : "Identity disclosure"}
                       </p>
                       <p className="text-muted-foreground truncate">
                         {formatOrigin(request.origin).display}
                       </p>
                     </div>
                     <Badge variant="outline" className="text-xs shrink-0">
-                      Kind {request.event.kind}
+                      {isSigningRequest(request)
+                        ? `Kind ${request.event.kind}`
+                        : "Public key"}
                     </Badge>
                   </div>
                 </div>

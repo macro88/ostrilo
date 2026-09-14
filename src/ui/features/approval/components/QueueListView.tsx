@@ -3,7 +3,7 @@ import { formatOrigin } from "@/domain/display/origin";
 import { escapeInvisible } from "@/domain/display/safe-text";
 import { Button } from "@/components/ui/button";
 import type { PendingRequest } from "@/domain/types";
-import { getKindName } from "@/domain/types";
+import { getKindName, isSigningRequest } from "@/domain/types";
 import {
   Globe,
   Clock,
@@ -243,12 +243,17 @@ function RequestItem({
   nowSeconds,
   onSelect,
 }: RequestItemProps) {
-  const kindName = getKindName(request.event.kind);
+  // A disclosure request signs nothing, so it has no kind and no content.
+  // Reading `request.event` here without narrowing is what used to throw and
+  // blank the whole window, taking the Deny control for every OTHER queued
+  // request with it.
+  const event = isSigningRequest(request) ? request.event : undefined;
+  const kindName = event ? getKindName(event.kind) : "Identity disclosure";
   const timeRemaining = Math.max(0, request.timeoutAt - nowSeconds);
 
   // Escaped before truncation, so a bidi override in the first fifty
   // characters cannot reverse the preview the user skims.
-  const safePreview = escapeInvisible(request.event.content).text;
+  const safePreview = event ? escapeInvisible(event.content).text : "";
   const contentPreview =
     safePreview.length > 50 ? safePreview.slice(0, 50) + "..." : safePreview;
 
@@ -269,7 +274,7 @@ function RequestItem({
           {/* Kind Badge */}
           <div className="flex items-center gap-2">
             <span className="seal-chip seal-chip-accent font-mono">
-              kind:{request.event.kind}
+              {event ? `kind:${event.kind}` : "identity"}
             </span>
             <span className="text-xs font-medium text-muted-foreground">
               {kindName}
@@ -277,7 +282,7 @@ function RequestItem({
           </div>
 
           {/* Content Preview */}
-          {request.event.content && (
+          {event?.content && (
             <p className="text-xs text-muted-foreground font-mono truncate">
               {contentPreview}
             </p>

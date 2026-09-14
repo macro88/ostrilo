@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useApprovalDisplay } from "./useApprovalDisplay";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import type { PendingRequest, ApprovalAction, KeyRecord } from "@/domain/types";
+import type { SigningRequest, ApprovalAction, KeyRecord } from "@/domain/types";
 import { getKindName } from "@/domain/types";
 import { isProtectedKind } from "@/domain/policy/trust-definitions";
 import {
@@ -22,7 +22,7 @@ function copyToClipboard(text: string) {
 
 export interface EventDetailViewProps {
   /** The pending request to display */
-  request: PendingRequest;
+  request: SigningRequest;
   /** The key that will sign this event */
   signingKey: KeyRecord | null;
   /** Countdown timer in seconds */

@@ -150,6 +150,33 @@ The original release dates are now historical planning targets. The status marke
   and are tracked as SYNC-004 for v2.2: they change key *generation*, not key
   *backup*, and folding them in would have delayed removing a plaintext key file
   that shipped.
+- SEC-024 ships in two phases, both landed. Phase 1 binds the page origin to
+  `nostr.getPublicKey`, validates it in the background before any key is read,
+  rate limits per origin, writes an activity-log entry for every outcome, and
+  lists in Settings → Permissions which origins have read the public key —
+  including origins with no stored policy record, which is the category a
+  policy-driven table can never show. Phase 2 adds the per-origin consent gate,
+  a disclosure-specific refusal code distinct from `denied`, remembered allow
+  and deny, revocation, and an error boundary around the approval window.
+  **No origin is grandfathered**, including origins with an explicit allow rule
+  or `high` trust: every origin prompts once on next use. Approving a signature
+  records disclosure consent, since the signed event contains the public key.
+  
+  The scope is bounded, and the bounds are the part most likely to be misread
+  as covered:
+  - The public key is **not made secret**. It is published on relays and this
+    extension publishes it there itself. The gate is about linkage.
+  - It does **not** cover a third-party script running inside a consented
+    page's realm. The content script is top-frame only (`content.ts:50`,
+    `all_frames` unset), so such a script inherits that page's grant. This is
+    the residual most likely to be assumed away; it is not solved.
+  - For any origin the user signs for, protection ends at the first approved
+    signature: the signature returns the public key, and a remembered per-kind
+    allow makes every later one silent. The gate protects the window before
+    that, and origins that never ask to sign at all.
+  - The rate limiter is held in memory, so an evicted MV3 worker loses its
+    counters. It bounds a fast polling loop, which is the attack; it does not
+    bound a caller patient enough to wait out an eviction.
 - SEC-003 advances but does not complete. The create-key flow holds the revealed
   key only in a `useRef`, writes it into the DOM imperatively and wipes it on
   unmount, and clears the master password from reducer state on every exit path.
@@ -210,7 +237,7 @@ Security is the foundation of trust in a signing extension. Users entrust Ostril
 | SEC-021 | Remote Media and Outbound Egress Policy | M | ✅ | v2.0 | 1 | "Restrict remote-supplied URLs to an https:-only allowlist at the validation boundary; stop privileged extension pages loading relay-chosen images so a hostile relay cannot collect the user's IP address on every render; make the avatar upload destination configured, disclosed and empty by default, and validate the URL the upload service returns before it enters profile metadata. The CSP that backs this policy is declared by harden-manifest-and-build." |
 | SEC-022 | Consent Scope Integrity and Trust Allowlists | M | ✅ | v2.0 | 1 | "A stored consent decision grants exactly the authority the user chose: a remembered allow or deny never fabricates a trust level for a new origin record, trust levels resolve from an explicit per-level allowlist of signable kinds rather than 'everything not protected', the protected set covers irreversible and credential-equivalent kinds (1, 5, 9734, 22242, 27235), non-integer event kinds are rejected at the RPC boundary and refused by every kind-keyed domain helper, and origin records carrying an extension-assigned `medium` trust level are migrated down while their explicit rules are preserved." |
 | SEC-023 | Bounded Session Grants | M | ✅ | v2.0 | 1 | "A grant-everything session always carries an absolute expiry: the shipped default TTL is non-zero, a stored TTL of 0 reads as that default rather than as 'never expires', settings validation refuses a zero TTL, evaluation ignores an expired or legacy zero-expiry grant, and live grant state is readable for the settings surface instead of the vestigial persisted `sessionGrantAll` flag." |
-| SEC-024 | Identity Disclosure Consent for getPublicKey | M | 🔄 | v2.0 | 1 | "Gate `nostr.getPublicKey` behind per-origin consent: the content script sends the page origin, the background validates it before reading key material, first use prompts, the grant is remembered and revocable in Settings, and every disclosure is written to the activity log. Today every http/https page and every third-party script on it can read and correlate the user's npub silently." |
+| SEC-024 | Identity Disclosure Consent for getPublicKey | M | ✅ | v2.0 | 1 | "Gate `nostr.getPublicKey` behind per-origin consent: the content script sends the page origin, the background validates it before reading key material, first use prompts, the grant is remembered and revocable in Settings, and every disclosure is written to the activity log. Today every http/https page and every third-party script on it can read and correlate the user's npub silently." |
 
 ---
 

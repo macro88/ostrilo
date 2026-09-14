@@ -21,6 +21,17 @@ export const RPC_ERROR_CODES = {
   /** Policy or user explicitly denied the operation */
   DENIED: "denied",
 
+  /**
+   * The user refused to disclose their public key to this origin.
+   *
+   * Distinct from DENIED so a client can tell a refused IDENTITY request from a
+   * refused SIGNATURE. They mean different things to a dapp: a refused
+   * signature is about one event and retrying with a different one is
+   * reasonable; a refused disclosure is about the site itself, and retrying is
+   * the behaviour the remembered denial exists to stop.
+   */
+  DISCLOSURE_REFUSED: "disclosure_refused",
+
   /** User approval required but approval queue not configured */
   NEEDS_APPROVAL: "needs_approval",
 
@@ -125,6 +136,7 @@ export const RPC_NUMERIC_ERROR_CODES: Record<RpcErrorCode, number> = {
   [RPC_ERROR_CODES.LOCKED]: -32001,
   [RPC_ERROR_CODES.NEEDS_APPROVAL]: -32002,
   [RPC_ERROR_CODES.DENIED]: -32003,
+  [RPC_ERROR_CODES.DISCLOSURE_REFUSED]: -32006,
   [RPC_ERROR_CODES.TIMEOUT]: -32004,
   [RPC_ERROR_CODES.NO_KEY_SELECTED]: -32011,
   [RPC_ERROR_CODES.KEY_ALREADY_EXISTS]: -32012,
@@ -138,6 +150,8 @@ export const RPC_NUMERIC_ERROR_CODES: Record<RpcErrorCode, number> = {
 export const RPC_ERROR_MESSAGES: Record<RpcErrorCode, string> = {
   [RPC_ERROR_CODES.LOCKED]: "Vault is locked",
   [RPC_ERROR_CODES.DENIED]: "Operation denied",
+  [RPC_ERROR_CODES.DISCLOSURE_REFUSED]:
+    "Identity disclosure refused for this site",
   [RPC_ERROR_CODES.NEEDS_APPROVAL]: "Approval required",
   [RPC_ERROR_CODES.INVALID_EVENT]: "Invalid event",
   [RPC_ERROR_CODES.INVALID_ORIGIN]: "Invalid origin",
