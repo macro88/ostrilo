@@ -14,6 +14,7 @@ import { PolicyService } from "@/application/services/policy.service";
 import { SettingsService } from "@/application/services/settings.service";
 import { ActivityLogService } from "@/application/services/activity-log.service";
 import { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
+import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
 import { ProfileService } from "@/application/services/profile.service";
 import { RelayManager } from "@/infrastructure/relay";
 import {
@@ -284,6 +285,11 @@ export default defineBackground(() => {
   // service-worker termination, so a timer-based lockout would evaporate.
   const unlockThrottle = new UnlockThrottleService(storage.local);
 
+  // In memory, unlike the unlock throttle: the attack it bounds is a fast
+  // polling loop, and a page polling fast enough to matter keeps this worker
+  // alive. See the module comment.
+  const disclosureRateLimit = new DisclosureRateLimitService();
+
   const serviceContext = {
     vault,
     policy,
@@ -291,6 +297,7 @@ export default defineBackground(() => {
     activityLog,
     profile,
     unlockThrottle,
+    disclosureRateLimit,
     onLockedPageRequest: () => {
       void setLockedRequestPending(true, approvalQueue.count());
     },

@@ -100,8 +100,10 @@ describe("Cross-Layer Integration Tests", () => {
       // This assertion used to expect false, encoding the fail-open bug as
       // intended behaviour: `!!state?.isLocked` returns false when there is
       // no state at all, which is the situation after every browser restart.
-      // nostr.getPublicKey checks only this gate, so a never-unlocked vault
-      // disclosed the user's Nostr identity to any page.
+      // At the time, nostr.getPublicKey checked only this gate, so a
+      // never-unlocked vault disclosed the user's Nostr identity to any page.
+      // The method now also validates the origin and rate limits per origin;
+      // the lock gate remains the first thing it answers to.
       const initialState = await keyVault.getLockState();
       expect(initialState.isLocked).toBe(true);
 

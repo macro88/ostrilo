@@ -2,7 +2,10 @@ import { Shield } from "lucide-react";
 import type { TrustLevel } from "@/domain/types";
 import { useCallback, useEffect, useState } from "react";
 import { policyGetSessionGrants } from "@/infrastructure/messaging/client";
-import { OriginPolicyTable } from "@/ui/features/settings/components/shared";
+import {
+  OriginPolicyTable,
+  DisclosureHistory,
+} from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
 import { EmptyState } from "@/ui/components/common/EmptyState";
@@ -150,6 +153,10 @@ export function PermissionsTab() {
           onSetPerKindRule={handleSetPerKindRule}
         />
       )}
+
+      <div className="border-t border-border pt-6">
+        <DisclosureHistory />
+      </div>
 
       <ReauthDialog {...reauth.dialogProps} />
     </div>

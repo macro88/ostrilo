@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { formatOrigin } from "@/domain/display/origin";
-import { getKindName } from "@/domain/types";
+import { describeActivityEntry } from "@/domain/types";
 import type { ActivityLogEntry } from "@/domain/types";
 import { Activity, CheckCircle, Loader2, XCircle } from "lucide-react";
 
@@ -73,7 +73,7 @@ export function ActivityEntryList({
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <h3 className="font-medium text-sm mb-1 truncate">
-                  {getKindName(entry.kind)}
+                  {describeActivityEntry(entry)}
                 </h3>
 
                 <p className="text-xs text-muted-foreground truncate mb-1">

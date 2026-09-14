@@ -379,6 +379,41 @@ export function getKindName(kind: number): string {
   return `Kind ${kind}`;
 }
 
+/**
+ * The title for one activity row.
+ *
+ * An identity disclosure signs nothing and has no kind, so it must not be
+ * rendered through `getKindName` - that would print "Kind undefined" and the
+ * user would have no way to tell a disclosure from a signature. The
+ * distinction has to reach the UI, not only the stored record.
+ */
+export function describeActivityEntry(
+  entry: Pick<ActivityLogEntry, "operation" | "kind">
+): string {
+  if (entry.operation === "identity_disclosure") {
+    return "Identity disclosure";
+  }
+  return entry.kind === undefined ? "Unknown request" : getKindName(entry.kind);
+}
+
+/**
+ * One activity row phrased as a completed action, for the compact home list.
+ *
+ * "Signed identity disclosure" would be wrong in both halves, so the verb and
+ * the object are chosen together rather than concatenated by the caller.
+ */
+export function describeActivityAction(
+  entry: Pick<ActivityLogEntry, "operation" | "kind" | "decision">
+): string {
+  if (entry.operation === "identity_disclosure") {
+    return entry.decision === "allow"
+      ? "Shared your public key"
+      : "Refused to share your public key";
+  }
+  const kind = describeActivityEntry(entry).toLowerCase();
+  return entry.decision === "allow" ? `Signed ${kind}` : `Denied ${kind}`;
+}
+
 // Common Nostr event kinds for UI (curated subset for settings)
 export const COMMON_EVENT_KINDS = {
   0: "Profile Metadata",
@@ -561,8 +596,33 @@ export interface ActivityLogEntry {
   timestamp: number;
   /** Origin of the dApp (e.g., "https://primal.net") */
   origin: string;
-  /** Nostr event kind number */
-  kind: number;
+  /**
+   * Nostr event kind number.
+   *
+   * Absent for an identity disclosure, which signs nothing and therefore has
+   * no kind. A kind filter excludes those entries, which is correct.
+   */
+  kind?: number;
+  /**
+   * What the origin asked for.
+   *
+   * Absent means `"sign_event"`, so history written before identity disclosure
+   * was logged stays readable without a migration.
+   *
+   * The spelling is `"identity_disclosure"` on BOTH this type and
+   * `PendingRequest`. An earlier design used `"get_public_key"` on one side and
+   * `"identity_disclosure"` on the other, which would have put two different
+   * strings on either side of the audit boundary.
+   */
+  operation?: "sign_event" | "identity_disclosure";
+  /**
+   * Why the request ended as it did.
+   *
+   * A closed union, never free text: an activity log is read by people and
+   * must not become a channel for whatever a handler happened to have in a
+   * string. Absent when the decision speaks for itself.
+   */
+  reason?: "user" | "policy" | "remembered" | "timeout" | "rate_limited";
   /** User decision: "allow" | "deny" */
   decision: "allow" | "deny";
   /** Content preview (first 100 chars, sanitized) */

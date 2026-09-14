@@ -1,41 +1,41 @@
 ## 1. Confirm The Current Behaviour Before Changing It
 
-- [ ] 1.1 Verify by hand that an https page can read the npub with no prompt while the vault is unlocked, and record the observation. `tests/e2e/fixtures/test-page.html:30` already exposes `window.testGetPublicKey`.
-- [ ] 1.2 Verify that nothing rate-limits the call: confirm no throttle exists in `src/infrastructure/messaging/rpc-router.ts` or in `handleGetPublicKey` (`nostr-rpc.ts:80-105`).
-- [ ] 1.3 Confirm the origin is genuinely unavailable to the handler today: `rpc.ts:70` has no fields, `content.ts:113` omits the origin it computed at `:106`, and `nostr-rpc.ts:60-61` drops the message.
-- [ ] 1.4 Write down the four places whose comments claim the call checks only the lock gate, so they are corrected rather than left to mislead: `tests/security/auto-lock.test.ts:21`, `tests/integration/cross-layer.test.ts:103`, `tests/e2e/vault-lock.spec.ts:11`, `src/application/services/key-vault.service.ts:797-798`.
+- [x] 1.1 Verify by hand that an https page can read the npub with no prompt while the vault is unlocked, and record the observation. `tests/e2e/fixtures/test-page.html:30` already exposes `window.testGetPublicKey`.
+- [x] 1.2 Verify that nothing rate-limits the call: confirm no throttle exists in `src/infrastructure/messaging/rpc-router.ts` or in `handleGetPublicKey` (`nostr-rpc.ts:80-105`).
+- [x] 1.3 Confirm the origin is genuinely unavailable to the handler today: `rpc.ts:70` has no fields, `content.ts:113` omits the origin it computed at `:106`, and `nostr-rpc.ts:60-61` drops the message.
+- [x] 1.4 Write down the four places whose comments claim the call checks only the lock gate, so they are corrected rather than left to mislead: `tests/security/auto-lock.test.ts:21`, `tests/integration/cross-layer.test.ts:103`, `tests/e2e/vault-lock.spec.ts:11`, `src/application/services/key-vault.service.ts:797-798`.
 
 ## 2. Phase 1 — Origin Binding
 
-- [ ] 2.1 Add `origin: string` to the `nostr.getPublicKey` variant of `RpcRequest` in `src/infrastructure/messaging/rpc.ts:70`.
-- [ ] 2.2 Populate it in `src/extension/content.ts:113` from the `origin` already computed at `:106`. Never read it from `event.data` — the page controls that object.
-- [ ] 2.3 Pass `message` to the handler at `src/infrastructure/messaging/handlers/nostr-rpc.ts:60-61`, which currently calls `this.handleGetPublicKey(context)`.
-- [ ] 2.4 Validate the origin with `OriginSchema.safeParse` as the first step of the handler, matching `handleSignEvent` at `nostr-rpc.ts:128`. Return `invalid_origin` on a missing or malformed origin.
-- [ ] 2.5 Keep the handler's own locked check immediately after origin validation, so a locked vault still returns `locked` and never prompts. Note the router's lock gate already runs before any handler (`rpc-router.ts:343-358`), so in practice a locked vault never reaches this code at all; the in-handler check is defence in depth.
-- [ ] 2.6 Update the injected provider and content-script response path only if a new error code requires it; otherwise leave the bridge untouched.
+- [x] 2.1 Add `origin: string` to the `nostr.getPublicKey` variant of `RpcRequest` in `src/infrastructure/messaging/rpc.ts:70`.
+- [x] 2.2 Populate it in `src/extension/content.ts:113` from the `origin` already computed at `:106`. Never read it from `event.data` — the page controls that object.
+- [x] 2.3 Pass `message` to the handler at `src/infrastructure/messaging/handlers/nostr-rpc.ts:60-61`, which currently calls `this.handleGetPublicKey(context)`.
+- [x] 2.4 Validate the origin with `OriginSchema.safeParse` as the first step of the handler, matching `handleSignEvent` at `nostr-rpc.ts:128`. Return `invalid_origin` on a missing or malformed origin.
+- [x] 2.5 Keep the handler's own locked check immediately after origin validation, so a locked vault still returns `locked` and never prompts. Note the router's lock gate already runs before any handler (`rpc-router.ts:343-358`), so in practice a locked vault never reaches this code at all; the in-handler check is defence in depth.
+- [x] 2.6 Update the injected provider and content-script response path only if a new error code requires it; otherwise leave the bridge untouched.
 
 ## 3. Phase 1 — Audit
 
-- [ ] 3.1 Add `operation?: "sign_event" | "identity_disclosure"` to `ActivityLogEntry` in `src/domain/types.ts`. Absent means `sign_event`, so stored history stays readable.
-- [ ] 3.2 Write an activity-log entry for every `getPublicKey` outcome — allowed, refused, rate-limited — including auto-allowed reads once Phase 2 lands.
-- [ ] 3.3 Ensure the entry is distinguishable from a signing entry in the activity UI, not only in the stored record.
-- [ ] 3.4 Confirm no log entry contains the public key itself in a field intended for free text, and that the origin is recorded verbatim.
-- [ ] 3.5 Surface per-origin disclosure history in the permissions surface, so the user can see which origins have read their public key before any gate exists.
+- [x] 3.1 Add `operation?: "sign_event" | "identity_disclosure"` to `ActivityLogEntry` in `src/domain/types.ts`. Absent means `sign_event`, so stored history stays readable.
+- [x] 3.2 Write an activity-log entry for every `getPublicKey` outcome — allowed, refused, rate-limited — including auto-allowed reads once Phase 2 lands.
+- [x] 3.3 Ensure the entry is distinguishable from a signing entry in the activity UI, not only in the stored record.
+- [x] 3.4 Confirm no log entry contains the public key itself in a field intended for free text, and that the origin is recorded verbatim.
+- [x] 3.5 Surface per-origin disclosure history in the permissions surface, so the user can see which origins have read their public key before any gate exists.
 
 ## 4. Phase 1 — Rate Limiting
 
-- [ ] 4.1 Add a per-origin rate limit to `nostr.getPublicKey`. Model it on `QUEUE_LIMITS` in `src/application/services/approval-queue.service.ts:41-49` but keep it independent of approval-queue capacity.
-- [ ] 4.2 Return `rate_limited` when the allowance is exhausted, and queue no approval request.
-- [ ] 4.3 Prove the limit is per origin: an exhausted origin must not affect a different origin.
-- [ ] 4.4 Prove the allowance recovers when the window elapses.
-- [ ] 4.5 Confirm a disclosure flood from one origin cannot displace a pending signing request from another origin.
+- [x] 4.1 Add a per-origin rate limit to `nostr.getPublicKey`. Model it on `QUEUE_LIMITS` in `src/application/services/approval-queue.service.ts:41-49` but keep it independent of approval-queue capacity.
+- [x] 4.2 Return `rate_limited` when the allowance is exhausted, and queue no approval request.
+- [x] 4.3 Prove the limit is per origin: an exhausted origin must not affect a different origin.
+- [x] 4.4 Prove the allowance recovers when the window elapses.
+- [x] 4.5 Confirm a disclosure flood from one origin cannot displace a pending signing request from another origin.
 
 ## 5. Phase 1 — Verification And Ship Gate
 
-- [ ] 5.1 Confirm no dapp behaviour changed **except the new rate limit**: every existing `getPublicKey` call that succeeded before still succeeds at a normal call rate, and only a caller exceeding the per-origin allowance sees `rate_limited`. Section 4 deliberately introduces that one change; the ship gate must not assert it away.
-- [ ] 5.2 Run the full Vitest and Playwright suites and confirm no regression. Phase 1 must be green on its own before Phase 2 starts.
-- [ ] 5.3 Correct the four stale comments from task 1.4.
-- [ ] 5.4 Commit Phase 1 separately, so it is revertable without touching Phase 2.
+- [x] 5.1 Confirm no dapp behaviour changed **except the new rate limit**: every existing `getPublicKey` call that succeeded before still succeeds at a normal call rate, and only a caller exceeding the per-origin allowance sees `rate_limited`. Section 4 deliberately introduces that one change; the ship gate must not assert it away.
+- [x] 5.2 Run the full Vitest and Playwright suites and confirm no regression. Phase 1 must be green on its own before Phase 2 starts.
+- [x] 5.3 Correct the four stale comments from task 1.4.
+- [x] 5.4 Commit Phase 1 separately, so it is revertable without touching Phase 2.
 
 ## 6. Phase 2 — Domain Types And Schema
 

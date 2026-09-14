@@ -58,7 +58,7 @@ export class NostrRpcHandler implements RpcModule {
   ): Promise<RpcResponse> {
     switch (message.type) {
       case "nostr.getPublicKey":
-        return this.handleGetPublicKey(context);
+        return this.handleGetPublicKey(message, context);
 
       case "nostr.cancelRequest":
         return this.handleCancelRequest(message);
@@ -75,16 +75,61 @@ export class NostrRpcHandler implements RpcModule {
   }
 
   /**
-   * Handle nostr.getPublicKey - returns hex public key of selected key
+   * Handle nostr.getPublicKey - returns hex public key of selected key.
+   *
+   * This used to take only `context`: the message type carried no fields and
+   * the dispatcher dropped it, so the handler could not know who was asking
+   * even if it had wanted to. It answered any https page, silently, as often
+   * as it was called.
+   *
+   * The order below is fixed and must stay fixed:
+   *
+   *   origin validation -> locked -> rate limit -> selected key
+   *
+   * Origin first, because everything after it is per-origin and a request with
+   * no usable origin cannot be rate limited, logged or consented to. The rate
+   * limit is charged BEFORE the key is read, so a polling origin cannot spend
+   * the vault's work on every call.
    */
   private async handleGetPublicKey(
+    message: Extract<RpcRequest, { type: "nostr.getPublicKey" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Check if vault is unlocked
+    // Validate origin, matching handleSignEvent. Note OriginSchema accepts
+    // http: as well as https: - the https guarantee comes from the content
+    // script's match pattern, not from here.
+    const originValidation = OriginSchema.safeParse(message.origin);
+    if (!originValidation.success) {
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
+        details: originValidation.error.issues[0]?.message,
+        method: message.type,
+      });
+    }
+    const origin = message.origin;
+
+    // Defence in depth. The router's lock gate already refuses this method
+    // while locked, because it is absent from LOCKED_REACHABLE_METHODS, so in
+    // practice a locked vault never reaches here. Keeping the check means the
+    // handler is still correct if that allowlist ever changes.
     const lockState = await context.vault.getLockState();
     if (lockState.isLocked) {
       return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
-        method: "nostr.getPublicKey",
+        method: message.type,
+      });
+    }
+
+    // Charged before the key is read, and never when the origin is over its
+    // allowance. A refusal here queues nothing and prompts nobody.
+    if (!context.disclosureRateLimit.tryConsume(origin)) {
+      await context.activityLog.addEntry({
+        origin,
+        operation: "identity_disclosure",
+        decision: "deny",
+        reason: "rate_limited",
+      });
+      return createRpcErrorResponse(RPC_ERROR_CODES.RATE_LIMITED, {
+        details: "Too many identity requests from this site.",
+        method: message.type,
       });
     }
 
@@ -94,9 +139,18 @@ export class NostrRpcHandler implements RpcModule {
 
     if (!selectedKey) {
       return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
-        method: "nostr.getPublicKey",
+        method: message.type,
       });
     }
+
+    // The origin is recorded verbatim. The public key is NOT written into any
+    // free-text field: `keyId` is the record identifier, not the key.
+    await context.activityLog.addEntry({
+      origin,
+      operation: "identity_disclosure",
+      decision: "allow",
+      keyId: selectedKey.id,
+    });
 
     return {
       ok: true,

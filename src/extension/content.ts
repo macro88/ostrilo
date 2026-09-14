@@ -110,7 +110,11 @@ async function handlePageMessage(event: MessageEvent): Promise<void> {
 
     switch (data.method) {
       case "getPublicKey":
-        rpcRequest = { type: "nostr.getPublicKey" };
+        // The SAME origin `signEvent` uses, computed above from
+        // `window.location.origin` in this isolated world. Never from
+        // `data`/`event.data`: the page owns that object and would simply
+        // name whichever origin it wanted to be treated as.
+        rpcRequest = { type: "nostr.getPublicKey", origin };
         break;
 
       case "signEvent":

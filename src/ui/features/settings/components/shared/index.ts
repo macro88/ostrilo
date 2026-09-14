@@ -5,5 +5,6 @@ export { RelayList } from "./RelayList";
 export { ActivityLogConfig } from "./ActivityLogConfig";
 export { MediumKindToggles } from "./MediumKindToggles";
 export { OriginPolicyTable } from "./OriginPolicyTable";
+export { DisclosureHistory } from "./DisclosureHistory";
 export { KeySelectorCard } from "./KeySelectorCard";
 export type { KeyRecord, KeyProfile } from "./KeySelectorCard";

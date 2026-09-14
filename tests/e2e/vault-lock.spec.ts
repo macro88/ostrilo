@@ -8,7 +8,9 @@ import type { Page } from "./fixtures/extension";
  *
  *  1. `getLockState` returned `!!state?.isLocked`, so a vault with no stored
  *     lock state - every browser restart, before anything is unlocked -
- *     reported itself UNLOCKED. `nostr.getPublicKey` checks only that gate.
+ *     reported itself UNLOCKED. `nostr.getPublicKey` checked only that gate
+ *     at the time; it now also validates the origin and rate limits per
+ *     origin.
  *  2. `autoLockMinutes` was cosmetic. It drove two sliders and a header label
  *     and nothing enforced it: no alarm, no idle listener, no timer calling
  *     lock(). The README advertised the feature anyway.

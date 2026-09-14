@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
 import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
 import {
   ApprovalQueueService,
@@ -54,6 +55,7 @@ function makeContext(overrides: Partial<Record<string, unknown>> = {}) {
       sign: async () => ({ sigHex: "cd".repeat(32) }),
     },
     policy: { evaluate: async () => ({ mode: "ask" as const }) },
+    disclosureRateLimit: new DisclosureRateLimitService(),
     activityLog: { addEntry: async () => {} },
     ...overrides,
   } as unknown as ServiceContext;
@@ -207,8 +209,12 @@ describe("a locked vault opens nothing", () => {
 
   it("refuses getPublicKey the same way", async () => {
     const handler = new NostrRpcHandler();
+    // With a VALID origin, so this exercises the lock refusal rather than the
+    // origin validation that now runs ahead of it. In production the router's
+    // lock gate answers first anyway - getPublicKey is absent from
+    // LOCKED_REACHABLE_METHODS - and this calls the handler directly.
     const res = await handler.handleRequest(
-      { type: "nostr.getPublicKey" } as never,
+      { type: "nostr.getPublicKey", origin: "https://example.com" } as never,
       makeContext({
         vault: {
           getLockState: async () => ({ isLocked: true }),
