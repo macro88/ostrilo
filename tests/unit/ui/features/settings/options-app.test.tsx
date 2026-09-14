@@ -19,6 +19,7 @@ vi.mock("@/ui/hooks/useTheme", () => ({
 const keyManagerState = {
   isLocked: false,
   isLoading: false,
+  isInitialising: false,
   hasKeys: true,
 };
 
@@ -90,6 +91,7 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/options.html");
   keyManagerState.isLocked = false;
   keyManagerState.isLoading = false;
+  keyManagerState.isInitialising = false;
   keyManagerState.hasKeys = true;
 });
 
@@ -202,5 +204,31 @@ describe("OptionsApp lock gating", () => {
       container.querySelectorAll('[role="tab"]')
     ).find((tab) => tab.getAttribute("aria-selected") === "true");
     expect(selected?.textContent).toContain("Relays");
+  });
+});
+
+describe("OptionsGate loading behaviour", () => {
+  it("keeps the lock screen mounted while an unlock is in flight", () => {
+    // The gate used to hide the whole tree on `isLoading`, which is also true
+    // for the duration of an unlock. The lock screen was therefore unmounted
+    // the moment the user pressed Unlock and remounted afterwards with fresh
+    // state, discarding the failure message it had just been given. Only the
+    // e2e suite could see it; this is the cheap guard.
+    keyManagerState.isLocked = true;
+    keyManagerState.isLoading = true;
+    keyManagerState.isInitialising = false;
+
+    const container = render(<OptionsApp />);
+
+    expect(container.textContent).toContain("Lock screen");
+  });
+
+  it("renders nothing until the first lock-state read resolves", () => {
+    keyManagerState.isInitialising = true;
+
+    const container = render(<OptionsApp />);
+
+    expect(container.textContent).not.toContain("Lock screen");
+    expect(container.textContent).not.toContain("Create a key");
   });
 });

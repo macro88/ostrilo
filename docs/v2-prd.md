@@ -153,11 +153,21 @@ The original release dates are now historical planning targets. The status marke
 - SEC-003 advances but does not complete. The create-key flow holds the revealed
   key only in a `useRef`, writes it into the DOM imperatively and wipes it on
   unmount, and clears the master password from reducer state on every exit path.
-  What did NOT ship: `LockScreen` still holds its password in `useState`, and the
-  dedicated `keyflow.html` / `welcome.html` documents described in
-  `openspec/changes/secure-key-backup-flow/design.md` (Decision 5, Steps B and C)
+  `harden-password-entry-surfaces` finishes the input-hygiene half: the key import
+  flow now clears its password on success, on failure and on unmount; every secret
+  input in `src/ui` carries the autofill and spell-check opt-outs from one shared
+  declaration; and the password input element's own value is cleared on the
+  surfaces whose document outlives the attempt.
+  A correction to the previous note here, which said `LockScreen` "still holds its
+  password in `useState`" as an outstanding defect: it does hold a controlled value,
+  and that is permitted. `secure-key-backup-flow`'s `Ephemeral Input State` allows a
+  bounded controlled value where live validation needs one, the field is cleared on
+  every attempt, and moving it to a `useRef` would change nothing about what a script
+  in the same realm can read.
+  What did NOT ship: the dedicated `keyflow.html` / `welcome.html` documents described
+  in `openspec/changes/secure-key-backup-flow/design.md` (Decision 5, Steps B and C)
   are not built, so the popup still hosts onboarding, unlock and the whole main app
-  in one realm.
+  in one realm. That realm split is the remaining half, and the row stays 🔄.
 - Activity filtering covers origin and event kind; it does not yet include full-text search, date-range filtering, result filtering, or saved presets.
 - Accessibility has meaningful keyboard/ARIA coverage for key management and Radix-based controls, but no repo-wide WCAG 2.1 AA audit has been completed.
 - Relay/profile infrastructure exists, but NIP-specific protocol flows such as NIP-04, NIP-44, NIP-42, NIP-57 validation, NIP-65 publish workflows, and NIP-05 DNS verification remain unimplemented.

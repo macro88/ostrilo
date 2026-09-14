@@ -1,18 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useKeyManager } from "../hooks/useKeyManager";
-import {
-  Lock,
-  Unlock,
-  Eye,
-  EyeOff,
-  AlertTriangle,
-  Fingerprint,
-  Shield,
-  Key,
-} from "lucide-react";
+import { UNLOCK_FAILED, type UnlockResult } from "@/ui/state/KeyManagerContext";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
+import { useEphemeralInputTeardown } from "../hooks/useEphemeralInputTeardown";
+import { Lock, Unlock, AlertTriangle, Fingerprint, Shield, Key } from "lucide-react";
 import { Logo } from "@/ui/components/logo/Logo";
 import { SealMark } from "@/components/common/SealMark";
 
@@ -21,15 +14,69 @@ interface LockScreenProps {
   title?: string;
 }
 
+/**
+ * Copy for every failure `vault.unlock` can return, chosen here rather than
+ * taken from the background.
+ *
+ * The list is derived from the whole of `handleUnlock`
+ * (`src/infrastructure/messaging/handlers/vault-rpc.ts:127-195`): a password
+ * that fails `PasswordSchema`, the throttle, an incorrect password, a vault
+ * that does not exist, and a vault whose format or KDF parameters cannot be
+ * read. Anything the background adds later arrives as an unrecognised code and
+ * gets the generic message below - a new background error cannot put unexpected
+ * text on this screen.
+ *
+ * Note that `INVALID_PASSWORD` covers two different causes: the schema-shape
+ * failure at `vault-rpc.ts:134` and a genuinely incorrect password at `:164`.
+ * The code alone does not tell them apart, which is why its `details` is shown.
+ */
+const UNLOCK_FAILURE_COPY: Record<string, string> = {
+  [RPC_ERROR_CODES.INVALID_PASSWORD]: "Incorrect password.",
+  [RPC_ERROR_CODES.RATE_LIMITED]:
+    "Too many failed attempts. Unlocking is paused for a moment.",
+  [RPC_ERROR_CODES.NO_KEY_SELECTED]:
+    "No vault exists yet. Create or import a key before unlocking.",
+  [RPC_ERROR_CODES.VAULT_UNREADABLE]:
+    "This vault could not be opened. It was written by a different version of Ostrilo, or its stored encryption parameters are not acceptable. Update the extension; do not re-create your vault.",
+  [UNLOCK_FAILED]: "Could not reach the vault. Try again.",
+};
+
+/**
+ * The codes whose `details` the background populates with a countdown the UI
+ * cannot compute for itself, so the detail is worth more than the local copy.
+ *
+ * Only these render it. The residual to keep in mind: for these two codes the
+ * detail string is rendered verbatim, so editing it in the background reaches
+ * this screen without passing through the UI.
+ */
+const CODES_CARRYING_A_COUNTDOWN: string[] = [
+  RPC_ERROR_CODES.INVALID_PASSWORD,
+  RPC_ERROR_CODES.RATE_LIMITED,
+];
+
+const GENERIC_UNLOCK_FAILURE = "Could not unlock the vault. Try again.";
+
+export function describeUnlockFailure(
+  result: Extract<UnlockResult, { ok: false }>
+): string {
+  const copy = UNLOCK_FAILURE_COPY[result.code];
+  if (!copy) return GENERIC_UNLOCK_FAILURE;
+  if (result.detail && CODES_CARRYING_A_COUNTDOWN.includes(result.code)) {
+    return result.detail;
+  }
+  return copy;
+}
+
 export function LockScreen({
   onUnlock,
   title = "Ostrilo is Locked",
 }: LockScreenProps) {
   const { unlock, isLoading, hasKeys } = useKeyManager();
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [attemptCount, setAttemptCount] = useState(0);
+  const passwordFieldRef = useRef<HTMLInputElement>(null);
+
+  useEphemeralInputTeardown(passwordFieldRef);
 
   // Derive biometric availability synchronously
   const biometricAvailable =
@@ -37,37 +84,35 @@ export function LockScreen({
     typeof (navigator as any).credentials !== "undefined" &&
     typeof (navigator as any).credentials.create === "function";
 
-  const handleUnlock = async () => {
+  const handleUnlock = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+
+    if (isLoading) return;
+
     if (!password.trim()) {
       setError("Password is required");
       return;
     }
 
-    try {
-      setError("");
-      await unlock(password);
-      setPassword(""); // Clear password from memory
+    setError("");
+    const result = await unlock(password);
+    // Dropped on both branches. A JS string cannot be wiped, but it must not
+    // outlive the attempt in component state.
+    setPassword("");
+
+    if (result.ok) {
       onUnlock?.();
-    } catch (error) {
-      setAttemptCount((prev) => prev + 1);
-      setError(error instanceof Error ? error.message : "Incorrect password");
-      setPassword(""); // Clear password on error
+      return;
     }
+
+    // `onUnlock` used to run here too, because `unlock` returned a boolean that
+    // nobody read and its `catch` was unreachable.
+    setError(describeUnlockFailure(result));
   };
 
   const handleBiometricUnlock = async () => {
-    try {
-      console.log("Biometric unlock requested (not implemented yet)");
-      setError("Biometric unlock is not yet implemented");
-    } catch (error) {
-      setError("Biometric authentication failed");
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !isLoading) {
-      handleUnlock();
-    }
+    console.log("Biometric unlock requested (not implemented yet)");
+    setError("Biometric unlock is not yet implemented");
   };
 
   return (
@@ -95,65 +140,51 @@ export function LockScreen({
       )}
 
       <div className="ink-card w-full max-w-sm space-y-4 p-4">
-        <div className="space-y-2 text-left">
-          <Label htmlFor="password" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            Master Password
-          </Label>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPassword ? "text" : "password"}
+        {/* One guard for both the Enter key and the button. `onKeyPress` was
+            deprecated in React 19 and only the Enter path ever reached the
+            empty-password check, because the button is disabled when the field
+            is blank. */}
+        <form onSubmit={handleUnlock} className="space-y-4">
+          <div className="text-left">
+            <PasswordInput
+              label="Master Password"
               placeholder="Enter your password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onChange={setPassword}
               disabled={isLoading}
-              className={error ? "border-destructive" : ""}
+              idPrefix="unlock"
               autoFocus
+              inputRef={passwordFieldRef}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-              disabled={isLoading}
-              aria-label={showPassword ? "Hide password" : "Show password"}
+          </div>
+
+          {/* Error message */}
+          {error && (
+            <div
+              className="seal-chip seal-chip-danger flex text-left"
+              role="alert"
             >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Error message */}
-        {error && (
-          <div className="seal-chip seal-chip-danger flex text-left">
-            <AlertTriangle className="h-4 w-4" />
-            {error}
-            {attemptCount > 2 && (
-              <span className="text-xs">({attemptCount} attempts)</span>
-            )}
-          </div>
-        )}
-
-        {/* Unlock button */}
-        <Button
-          onClick={handleUnlock}
-          disabled={isLoading || !password.trim()}
-          className="h-11 w-full"
-        >
-          {isLoading ? (
-            "Unlocking..."
-          ) : (
-            <>
-              <Unlock className="mr-2 h-4 w-4" />
-              Unlock
-            </>
+              <AlertTriangle className="h-4 w-4" />
+              {error}
+            </div>
           )}
-        </Button>
+
+          {/* Unlock button */}
+          <Button
+            type="submit"
+            disabled={isLoading || !password.trim()}
+            className="h-11 w-full"
+          >
+            {isLoading ? (
+              "Unlocking..."
+            ) : (
+              <>
+                <Unlock className="mr-2 h-4 w-4" />
+                Unlock
+              </>
+            )}
+          </Button>
+        </form>
 
         {/* Biometric unlock */}
         {biometricAvailable && (
@@ -188,16 +219,11 @@ export function LockScreen({
         Your keys stay encrypted in this browser
       </div>
 
-      {/* Attempt warning */}
-      {attemptCount > 3 && (
-        <div className="max-w-sm rounded-[10px] bg-[var(--ink-amber-soft)] p-4 text-[var(--ink-amber)]">
-          <div className="flex items-center gap-2 text-sm">
-            <AlertTriangle className="h-4 w-4" />
-            Multiple failed attempts detected. Ensure you're using the correct
-            password.
-          </div>
-        </div>
-      )}
+      {/* There is deliberately no attempt counter here. One used to live in
+          component state, which meant closing and reopening the popup reset it
+          and a caller driving the message bus never saw it at all. Rate
+          limiting is the background's, in `unlock-throttle.service.ts`, and the
+          wait it imposes is reported through the error above. */}
     </div>
   );
 }

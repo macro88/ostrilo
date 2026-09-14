@@ -1,5 +1,5 @@
 import { describeViolation } from "@/domain/utils/password-policy";
-import { useCallback, useReducer, useRef } from "react";
+import { useCallback, useLayoutEffect, useReducer, useRef } from "react";
 import { useEncryptedBackupImport } from "../backup/useEncryptedBackupImport";
 import type { KeyBackupPayload } from "../backup/key-backup-envelope";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
@@ -21,7 +21,7 @@ interface OnboardingImportKeyProps {
 
 type ImportStep = "import" | "password" | "success";
 
-interface ImportKeyState {
+export interface ImportKeyState {
   currentStep: ImportStep;
   keyName: string;
   showPrivateKey: boolean;
@@ -32,7 +32,7 @@ interface ImportKeyState {
   hasParsedKey: boolean;
 }
 
-type ImportKeyAction =
+export type ImportKeyAction =
   | { type: "setStep"; value: ImportStep }
   | { type: "setKeyName"; value: string }
   | { type: "togglePrivateKey" }
@@ -40,11 +40,20 @@ type ImportKeyAction =
   | { type: "setPassword"; value: string }
   | { type: "setConfirmPassword"; value: string }
   | { type: "setPasswordError"; value: string }
-  | { type: "setHasParsedKey"; value: boolean };
+  | { type: "setHasParsedKey"; value: boolean }
+
+  /**
+   * Drops the master password and its confirmation from reducer state.
+   *
+   * Mirrors `clearSensitiveState` in `OnboardingCreateKey.tsx:125-135`. This
+   * flow had no such action at all, so the success step rendered with both
+   * values still held, for as long as the document lived.
+   */
+  | { type: "clearSensitiveState" };
 
 const importSteps: ImportStep[] = ["import", "password", "success"];
 
-const initialImportKeyState: ImportKeyState = {
+export const initialImportKeyState: ImportKeyState = {
   currentStep: "import",
   keyName: "",
   showPrivateKey: false,
@@ -55,7 +64,7 @@ const initialImportKeyState: ImportKeyState = {
   hasParsedKey: false,
 };
 
-function importKeyReducer(
+export function importKeyReducer(
   state: ImportKeyState,
   action: ImportKeyAction
 ): ImportKeyState {
@@ -76,7 +85,75 @@ function importKeyReducer(
       return { ...state, passwordError: action.value };
     case "setHasParsedKey":
       return { ...state, hasParsedKey: action.value };
+    case "clearSensitiveState":
+      return { ...state, password: "", confirmPassword: "" };
   }
+}
+
+interface ImportFileDeps {
+  privateKeyInput: HTMLInputElement | null;
+  /** Returns true when the file was an encrypted Ostrilo backup and was held. */
+  offerFile: (content: string, fileName: string) => boolean;
+  keyName: string;
+  dispatch: (action: ImportKeyAction) => void;
+}
+
+/**
+ * Routes a selected file into the private-key input.
+ *
+ * Lives outside the component because it needs none of its state, only the
+ * four things named above.
+ */
+function readSelectedKeyFile(
+  event: React.ChangeEvent<HTMLInputElement>,
+  deps: ImportFileDeps
+) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const fileName = file.name;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const content = e.target?.result as string;
+
+      // An Ostrilo encrypted backup is not readable without its passphrase, so
+      // it cannot be dropped straight into the key field the way the old
+      // plaintext export could. Hold the ciphertext and ask.
+      if (deps.offerFile(content, fileName)) {
+        deps.dispatch({ type: "setImportError", value: "" });
+        return;
+      }
+
+      try {
+        const keyData = JSON.parse(content);
+        // Reads the plaintext export this build no longer writes. Files that
+        // already exist on disk still have to be importable; the requirement is
+        // that nothing produces another one.
+        if (keyData.privateKey) {
+          if (deps.privateKeyInput) {
+            deps.privateKeyInput.value = keyData.privateKey;
+          }
+          if (keyData.name && !deps.keyName) {
+            deps.dispatch({ type: "setKeyName", value: keyData.name });
+          }
+        } else if (deps.privateKeyInput) {
+          deps.privateKeyInput.value = content.trim();
+        }
+      } catch {
+        // Not JSON, treat as raw key
+        if (deps.privateKeyInput) {
+          deps.privateKeyInput.value = content.trim();
+        }
+      }
+    } catch {
+      deps.dispatch({ type: "setImportError", value: "Failed to read file" });
+    }
+  };
+  reader.readAsText(file);
+
+  // Clear the input so the same file can be selected again
+  event.target.value = "";
 }
 
 export function OnboardingImportKey({
@@ -96,6 +173,32 @@ export function OnboardingImportKey({
   // Holds only whether the input validated. The private key bytes are never
   // sent to the UI: crypto.parsePrivateKey returns a verdict.
   const parsedKeyRef = useRef<boolean>(false);
+
+  /**
+   * The single teardown, matching `dropKeyMaterial` in
+   * `OnboardingCreateKey.tsx:157-162`. The file previously had no `useEffect`
+   * at all, so leaving the flow mid-way left the password in reducer state and
+   * the nsec in both the input element and a ref.
+   *
+   * What this does: it overwrites a DOM property and drops two references. It
+   * does not erase the strings - a JavaScript string is immutable, and the
+   * engine keeps whatever copies it made.
+   */
+  const dropSensitiveState = useCallback(() => {
+    // Refs first. On the unmount path the dispatch below is discarded by React,
+    // and these are what would otherwise still be reachable.
+    if (privateKeyRef.current) {
+      privateKeyRef.current.value = "";
+    }
+    privateKeyValueRef.current = null;
+    parsedKeyRef.current = false;
+    dispatch({ type: "clearSensitiveState" });
+  }, []);
+
+  // A layout effect, not a passive one: React detaches `privateKeyRef` before
+  // passive cleanups run, so a passive teardown would find it already null and
+  // leave the nsec in the input element.
+  useLayoutEffect(() => dropSensitiveState, [dropSensitiveState]);
 
   /**
    * A key recovered from an encrypted backup lands in the same input a typed
@@ -206,69 +309,23 @@ export function OnboardingImportKey({
       await rpcImportKey(keyInput, state.password, state.keyName.trim());
       await unlockVault(state.password);
 
-      // Clear the private key from the input for security
-      if (privateKeyRef.current) {
-        privateKeyRef.current.value = "";
-      }
-      privateKeyValueRef.current = null;
-      parsedKeyRef.current = false;
+      // Before the success step renders, not after: the component stays mounted
+      // behind it, and it used to stay mounted holding the master password.
+      dropSensitiveState();
       dispatch({ type: "setHasParsedKey", value: false });
       dispatch({ type: "setStep", value: "success" });
     } catch (error) {
+      // The password goes, the key does not: `dropSensitiveState` would also
+      // drop `privateKeyValueRef`, and `handleSetPassword` bails with "Private
+      // key is no longer available" without it - so a failed import could not
+      // be retried from this step. The user retypes the password, as they do
+      // after a failed unlock.
+      dispatch({ type: "clearSensitiveState" });
       dispatch({
         type: "setPasswordError",
         value: error instanceof Error ? error.message : "Failed to import key",
       });
     }
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const fileName = file.name;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const content = e.target?.result as string;
-
-        // An Ostrilo encrypted backup is not readable without its passphrase,
-        // so it cannot be dropped straight into the key field the way the old
-        // plaintext export could. Hold the ciphertext and ask.
-        if (backupImport.offerFile(content, fileName)) {
-          dispatch({ type: "setImportError", value: "" });
-          return;
-        }
-
-        try {
-          const keyData = JSON.parse(content);
-          // Reads the plaintext export this build no longer writes. Files that
-          // already exist on disk still have to be importable; the requirement
-          // is that nothing produces another one.
-          if (keyData.privateKey) {
-            if (privateKeyRef.current) {
-              privateKeyRef.current.value = keyData.privateKey;
-            }
-            if (keyData.name && !state.keyName) {
-              dispatch({ type: "setKeyName", value: keyData.name });
-            }
-          } else if (privateKeyRef.current) {
-            privateKeyRef.current.value = content.trim();
-          }
-        } catch {
-          // Not JSON, treat as raw key
-          if (privateKeyRef.current) {
-            privateKeyRef.current.value = content.trim();
-          }
-        }
-      } catch {
-        dispatch({ type: "setImportError", value: "Failed to read file" });
-      }
-    };
-    reader.readAsText(file);
-
-    // Clear the input so the same file can be selected again
-    event.target.value = "";
   };
 
   const handleComplete = async () => {
@@ -324,7 +381,14 @@ export function OnboardingImportKey({
               dispatch({ type: "setKeyName", value })
             }
             onTogglePrivateKey={() => dispatch({ type: "togglePrivateKey" })}
-            onFileUpload={handleFileUpload}
+            onFileUpload={(event) =>
+              readSelectedKeyFile(event, {
+                privateKeyInput: privateKeyRef.current,
+                offerFile: backupImport.offerFile,
+                keyName: state.keyName,
+                dispatch,
+              })
+            }
             onBackupPassphraseChange={backupImport.setPassphrase}
             onUnlockBackup={() => void backupImport.unlock()}
             onCancelBackup={backupImport.cancel}

@@ -58,9 +58,15 @@ function getHashTab() {
  * message directly.
  */
 function OptionsGate({ children }: { children: React.ReactNode }) {
-  const { isLocked, isLoading, hasKeys } = useKeyManagerContext();
+  const { isLocked, isInitialising, hasKeys } = useKeyManagerContext();
 
-  if (isLoading) return null;
+  // `isInitialising`, NOT `isLoading`. `isLoading` is also true for the
+  // duration of an unlock attempt, so gating on it unmounted the lock screen
+  // the moment the user pressed Unlock and remounted it afterwards with fresh
+  // state - discarding the failure message the screen had just been given.
+  // This gate only exists to avoid flashing the wrong branch before the first
+  // lock-state read resolves.
+  if (isInitialising) return null;
 
   // No vault yet: nothing to lock, and nothing to show.
   if (!hasKeys) {

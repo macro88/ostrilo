@@ -21,6 +21,7 @@ import {
   generateKey as rpcGenerateKey,
   importKey as rpcImportKey,
   selectKey as rpcSelectKey,
+  RpcClientError,
 } from "@/infrastructure/messaging/client";
 import type { KeyListEntry } from "@/infrastructure/messaging/handlers/vault-rpc";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
@@ -34,6 +35,32 @@ import { browser } from "wxt/browser";
  * keeps the MV3 service worker alive.
  */
 const LOCK_POLL_MS = 5_000;
+
+/**
+ * The code returned when an unlock fails for a reason the background did not
+ * express as a structured RPC error.
+ *
+ * `client.ts` throws a plain `Error` for four transport-level conditions -
+ * `no_response` (`:69`), `invalid_response_type` (`:73`), the legacy string
+ * error path (`:86`) and `transport_error` (`:101`). Their `message` is a
+ * machine string, sometimes with a browser-supplied suffix appended, so none of
+ * them is fit to show a user. They collapse to this one code, and the UI picks
+ * its own words for it.
+ */
+export const UNLOCK_FAILED = "unlock_failed";
+
+/**
+ * The outcome of an unlock attempt.
+ *
+ * `unlock` used to return `boolean`, and every caller ignored it - which is how
+ * the lock screen came to run its success path after a wrong password. A result
+ * object does not make discarding the outcome a compile error (`await
+ * unlock(p); onUnlock?.()` still type-checks), but it does mean that any code
+ * which reads a reason must first narrow on `ok`.
+ */
+export type UnlockResult =
+  | { ok: true }
+  | { ok: false; code: string; detail?: string };
 
 // Secure UI-only types - no plaintext private keys
 export interface UIKeyInfo {
@@ -85,13 +112,22 @@ interface KeyManagerContextType {
   // State
   isLocked: boolean;
   isLoading: boolean;
+  /**
+   * True until the first lock-state and key-list read resolves.
+   *
+   * Distinct from `isLoading`, which is also true during an unlock, a lock, a
+   * key import and a refresh. A surface that hides its whole tree on
+   * `isLoading` unmounts the lock screen mid-attempt and destroys the error it
+   * was about to show - see `OptionsGate`.
+   */
+  isInitialising: boolean;
   selectedKeyInfo?: UIKeyInfo;
   keys: UIKeyInfo[];
   hasKeys: boolean;
 
   // Actions (all via RPC)
   lock: () => Promise<void>;
-  unlock: (password: string) => Promise<boolean>;
+  unlock: (password: string) => Promise<UnlockResult>;
   generateKey: (password: string, label?: string) => Promise<string>;
   importKey: (
     keyInput: string,
@@ -122,6 +158,7 @@ interface KeyManagerProviderProps {
 
 export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialising, setIsInitialising] = useState(true);
   const [lockState, setLockState] = useState<UILockState>({
     isLocked: true,
     lastActivity: Date.now(),
@@ -152,6 +189,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
         console.error("Failed to load key manager state:", error);
       } finally {
         setIsLoading(false);
+        setIsInitialising(false);
       }
     };
 
@@ -240,7 +278,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     }
   }, []);
 
-  const unlock = useCallback(async (password: string): Promise<boolean> => {
+  const unlock = useCallback(async (password: string): Promise<UnlockResult> => {
     try {
       setIsLoading(true);
       const result = await unlockVault(password);
@@ -250,10 +288,24 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
         selectedKeyId: result.selectedKeyId ?? prev.selectedKeyId,
         lastActivity: Date.now(),
       }));
-      return true;
+      return { ok: true };
     } catch (error) {
-      console.error("Unlock failed:", error);
-      return false;
+      // `RpcClientError.message` is the machine string `rpc:<method>:<code>`
+      // built at `client.ts:17`, not prose - rendering it would show the user
+      // `rpc:vault.unlock:invalid_password`. The reason lives in the structured
+      // payload, and unwrapping it here keeps the client's error shape out of
+      // the components.
+      if (error instanceof RpcClientError) {
+        console.error("Unlock failed:", error.errorCode);
+        return {
+          ok: false,
+          code: error.errorCode,
+          detail: error.rpcError.data.details,
+        };
+      }
+      // Anything else is one of the transport paths: machine strings only.
+      console.error("Unlock failed:", UNLOCK_FAILED);
+      return { ok: false, code: UNLOCK_FAILED };
     } finally {
       setIsLoading(false);
     }
@@ -328,6 +380,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
       // State
       isLocked: lockState.isLocked,
       isLoading,
+      isInitialising,
       selectedKeyInfo,
       keys,
       hasKeys: keys.length > 0,
@@ -343,6 +396,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     [
       lockState.isLocked,
       isLoading,
+      isInitialising,
       selectedKeyInfo,
       keys,
       lock,

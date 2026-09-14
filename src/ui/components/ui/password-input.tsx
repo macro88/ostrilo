@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Ref } from "react";
 import { evaluatePasswordStrength } from "@/infrastructure/messaging/client";
 import type { PasswordVerdict as PasswordStrength } from "@/domain/utils/password-policy";
 import { Input } from "@/components/ui/input";
@@ -59,6 +59,20 @@ interface PasswordInputProps {
   idPrefix?: string;
   confirmLabel?: string;
   confirmPlaceholder?: string;
+  /**
+   * Off by default, so every existing caller is unchanged. The lock screen is
+   * the one surface where the field is the only thing on the page worth
+   * touching, and focusing it there is not a security decision.
+   */
+  autoFocus?: boolean;
+  /**
+   * A handle on the password `<input>` itself.
+   *
+   * The component owns the element, so without this a caller has nothing to
+   * clear when the surface's document outlives the attempt - clearing the
+   * controlled value leaves the DOM node's own `value` behind.
+   */
+  inputRef?: Ref<HTMLInputElement>;
 }
 
 function getStrengthColor(score: number) {
@@ -235,6 +249,8 @@ export function PasswordInput({
   idPrefix = "",
   confirmLabel = "Confirm Password",
   confirmPlaceholder = "Confirm your password",
+  autoFocus = false,
+  inputRef,
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -262,11 +278,13 @@ export function PasswordInput({
         <div className="relative">
           <Input
             id={passwordId}
+            ref={inputRef}
             type={showPassword ? "text" : "password"}
             placeholder={placeholder}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
+            autoFocus={autoFocus}
             className={error ? "border-destructive" : ""}
             {...NO_AUTOFILL_PROPS}
           />
