@@ -102,6 +102,19 @@ Cost: source edit to screenshot about 8 s; spec-only edit 4–5 s, because the b
 skipped when nothing under `src/` is newer than the output manifest. The skip is disabled
 under CI.
 
+### Seeding must end with a reload
+
+`seedUnlockedVault` sends its RPC from the popup page, but the popup's React tree does not
+re-read vault state on its own. Immediately after seeding, `state.getLock` reports
+`isLocked: false` while the popup still renders "Ostrilo is Locked" with a disabled Unlock
+button. The existing specs never notice, because they assert on RPC results and dApp
+behaviour rather than on rendered popup UI (`tests/e2e/vault-lock.spec.ts:58-78` seeds and
+does not reload).
+
+The loop screenshots the popup, so the helper reloads the page as its last step and waits
+for the home heading. Without it the first screenshot of every session is a lock screen,
+and the obvious conclusion — onboarding is broken — is wrong.
+
 ### Seeing what happened
 
 **Screenshots.** `captureStepScreenshot` writes into
