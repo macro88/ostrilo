@@ -6,7 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactNode } from "react";
 import { EventDetailView } from "@/ui/features/approval/components/EventDetailView";
-import type { ApprovalAction, PendingRequest } from "@/domain/types";
+import type { ApprovalAction, SigningRequest } from "@/domain/types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -45,10 +45,11 @@ function click(element: Element) {
   });
 }
 
-function makeRequest(kind: number): PendingRequest {
+function makeRequest(kind: number): SigningRequest {
   return {
     id: `request-${kind}`,
     origin: "https://primal.net",
+    operation: "sign_event",
     event: {
       kind,
       content: "test content",
@@ -153,9 +154,12 @@ describe("EventDetailView remembered policy copy", () => {
 });
 
 describe("what the dialog shows is what gets signed", () => {
-  function renderWith(overrides: Partial<PendingRequest["event"]>, origin?: string) {
+  function renderWith(
+    overrides: Partial<SigningRequest["event"]>,
+    origin?: string
+  ) {
     const base = makeRequest(1);
-    const request: PendingRequest = {
+    const request: SigningRequest = {
       ...base,
       origin: origin ?? base.origin,
       event: { ...base.event, ...overrides },

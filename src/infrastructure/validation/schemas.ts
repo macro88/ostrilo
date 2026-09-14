@@ -51,6 +51,7 @@ export const OriginPolicyPatchSchema = z
     trustLevel: TrustLevelSchema.optional(),
     rules: NostrEventKindAuthorisationSchema.optional(),
     sessionGrantAll: z.boolean().optional(),
+    identityDisclosure: AuthorisationSchema.optional(),
     updatedAt: z.number().int().nonnegative().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {

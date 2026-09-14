@@ -26,9 +26,30 @@ const PUBKEY =
 
 let logged: Array<Omit<ActivityLogEntry, "id" | "timestamp">>;
 let rateLimit: DisclosureRateLimitService;
+let recorded: Map<string, "allow" | "deny">;
 let now: number;
 
-function makeContext(overrides: Record<string, unknown> = {}): ServiceContext {
+/**
+ * `consent` seeds the RECORDED decision for `https://example.com` and friends.
+ * Tests about origin binding, rate limiting and logging pass `"allow"` so the
+ * consent gate does not stand between them and what they are measuring; the
+ * gate has its own block below.
+ */
+function makeContext(
+  overrides: Record<string, unknown> = {},
+  consent?: "allow" | "deny"
+): ServiceContext {
+  if (consent) {
+    for (const origin of [
+      "https://example.com",
+      "https://poll.example",
+      "https://greedy.example",
+      "https://polite.example",
+      "https://flood.example",
+    ]) {
+      recorded.set(origin, consent);
+    }
+  }
   return {
     vault: {
       getLockState: async () => ({ isLocked: false }),
@@ -36,7 +57,16 @@ function makeContext(overrides: Record<string, unknown> = {}): ServiceContext {
         { id: "k1", pubkey: PUBKEY, isSelected: true, label: "k1" },
       ],
     },
-    policy: { evaluate: async () => ({ mode: "ask" as const }) },
+    policy: {
+      evaluate: async () => ({ mode: "ask" as const }),
+      getIdentityDisclosure: async (origin: string) => recorded.get(origin),
+      setIdentityDisclosure: async (
+        origin: string,
+        mode: "allow" | "deny"
+      ) => {
+        recorded.set(origin, mode);
+      },
+    },
     activityLog: {
       addEntry: async (entry: Omit<ActivityLogEntry, "id" | "timestamp">) => {
         logged.push(entry);
@@ -47,11 +77,16 @@ function makeContext(overrides: Record<string, unknown> = {}): ServiceContext {
   } as unknown as ServiceContext;
 }
 
+/** A context whose origins have already consented. */
+const consented = (overrides: Record<string, unknown> = {}) =>
+  makeContext(overrides, "allow");
+
 const ask = (origin: unknown) =>
   ({ type: "nostr.getPublicKey", origin }) as never;
 
 beforeEach(() => {
   logged = [];
+  recorded = new Map();
   now = 1_735_689_600_000;
   rateLimit = new DisclosureRateLimitService(() => now);
 });
@@ -98,7 +133,7 @@ describe("the public key request carries the page origin", () => {
 
     const res = await handler.handleRequest(
       ask("https://example.com"),
-      makeContext()
+      consented()
     );
 
     expect(res.ok).toBe(true);
@@ -142,7 +177,7 @@ describe("the lock gate answers before anything per-origin", () => {
     // the user's own next unlock will need.
     const afterUnlock = await handler.handleRequest(
       ask("https://example.com"),
-      makeContext()
+      consented()
     );
     expect(afterUnlock.ok).toBe(true);
   });
@@ -151,7 +186,7 @@ describe("the lock gate answers before anything per-origin", () => {
 describe("a polling origin is refused", () => {
   it("refuses once the allowance is exhausted", async () => {
     const handler = new NostrRpcHandler();
-    const context = makeContext();
+    const context = consented();
 
     for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow; i++) {
       const ok = await handler.handleRequest(ask("https://poll.example"), context);
@@ -178,7 +213,7 @@ describe("a polling origin is refused", () => {
     const listKeys = vi.fn().mockResolvedValue([
       { id: "k1", pubkey: PUBKEY, isSelected: true, label: "k1" },
     ]);
-    const context = makeContext({
+    const context = consented({
       vault: { getLockState: async () => ({ isLocked: false }), listKeys },
     });
 
@@ -195,7 +230,7 @@ describe("a polling origin is refused", () => {
 
   it("bounds one origin without affecting another", async () => {
     const handler = new NostrRpcHandler();
-    const context = makeContext();
+    const context = consented();
 
     for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow + 1; i++) {
       await handler.handleRequest(ask("https://greedy.example"), context);
@@ -211,7 +246,7 @@ describe("a polling origin is refused", () => {
 
   it("lets the allowance recover when the window elapses", async () => {
     const handler = new NostrRpcHandler();
-    const context = makeContext();
+    const context = consented();
 
     for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow + 1; i++) {
       await handler.handleRequest(ask("https://poll.example"), context);
@@ -231,7 +266,7 @@ describe("every outcome reaches the activity log", () => {
   it("records an allowed disclosure against its origin", async () => {
     const handler = new NostrRpcHandler();
 
-    await handler.handleRequest(ask("https://example.com"), makeContext());
+    await handler.handleRequest(ask("https://example.com"), consented());
 
     expect(logged).toHaveLength(1);
     expect(logged[0]).toMatchObject({
@@ -243,7 +278,7 @@ describe("every outcome reaches the activity log", () => {
 
   it("records a rate-limited refusal, and says why", async () => {
     const handler = new NostrRpcHandler();
-    const context = makeContext();
+    const context = consented();
 
     for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow + 1; i++) {
       await handler.handleRequest(ask("https://poll.example"), context);
@@ -261,7 +296,7 @@ describe("every outcome reaches the activity log", () => {
   it("is distinguishable from a signing entry", async () => {
     const handler = new NostrRpcHandler();
 
-    await handler.handleRequest(ask("https://example.com"), makeContext());
+    await handler.handleRequest(ask("https://example.com"), consented());
 
     // A signing entry carries a kind and no operation; a disclosure carries an
     // operation and no kind. Reading the log must not require guessing.
@@ -272,7 +307,7 @@ describe("every outcome reaches the activity log", () => {
   it("never writes the public key into a free-text field", async () => {
     const handler = new NostrRpcHandler();
 
-    await handler.handleRequest(ask("https://example.com"), makeContext());
+    await handler.handleRequest(ask("https://example.com"), consented());
 
     expect(logged[0].contentPreview).toBeUndefined();
     expect(
@@ -289,7 +324,7 @@ describe("a disclosure flood cannot crowd out a signature", () => {
   it("enqueues no approval request for any disclosure outcome", async () => {
     const enqueue = vi.fn();
     const handler = new NostrRpcHandler({ enqueue } as never, async () => 1);
-    const context = makeContext();
+    const context = consented();
 
     for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow + 5; i++) {
       await handler.handleRequest(ask("https://flood.example"), context);
@@ -304,7 +339,7 @@ describe("a disclosure flood cannot crowd out a signature", () => {
 
   it("keeps its counters out of the approval queue's", async () => {
     const handler = new NostrRpcHandler();
-    const context = makeContext();
+    const context = consented();
 
     for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow + 1; i++) {
       await handler.handleRequest(ask("https://flood.example"), context);
@@ -315,4 +350,237 @@ describe("a disclosure flood cannot crowd out a signature", () => {
     expect(rateLimit.isAllowed("https://flood.example")).toBe(false);
     expect(rateLimit.isAllowed("https://other.example")).toBe(true);
   });
+});
+
+describe("public key disclosure requires per-origin consent", () => {
+  /** A queue stub whose prompt answers with `decision`. */
+  function queueAnswering(
+    decision: "allow" | "deny",
+    options: { timedOut?: boolean } = {}
+  ) {
+    const enqueued: Array<{ origin: string }> = [];
+    return {
+      enqueued,
+      queue: {
+        enqueueDisclosure: (
+          origin: string,
+          resolver: (d: string, a: string) => void
+        ) => {
+          enqueued.push({ origin });
+          const request = { id: `req-${enqueued.length}`, origin };
+          queueMicrotask(() => resolver(decision, decision));
+          return request;
+        },
+        wasTimeout: () => options.timedOut ?? false,
+        resolve: () => true,
+      },
+    };
+  }
+
+  it("prompts an origin with no recorded decision", async () => {
+    const { queue, enqueued } = queueAnswering("allow");
+    const handler = new NostrRpcHandler(queue as never, async () => 1);
+
+    const res = await handler.handleRequest(
+      ask("https://unknown.example"),
+      makeContext()
+    );
+
+    expect(enqueued).toEqual([{ origin: "https://unknown.example" }]);
+    expect(res.ok).toBe(true);
+  });
+
+  it("returns the key once the user approves", async () => {
+    const { queue } = queueAnswering("allow");
+    const handler = new NostrRpcHandler(queue as never, async () => 1);
+
+    const res = await handler.handleRequest(
+      ask("https://unknown.example"),
+      makeContext()
+    );
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data).toEqual({ pubkey: PUBKEY });
+  });
+
+  it("refuses with a disclosure-specific code, not `denied`", async () => {
+    const { queue } = queueAnswering("deny");
+    const handler = new NostrRpcHandler(queue as never, async () => 1);
+
+    const res = await handler.handleRequest(
+      ask("https://unknown.example"),
+      makeContext()
+    );
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      // A client must be able to tell a refused IDENTITY from a refused
+      // SIGNATURE: retrying makes sense for one and not the other.
+      expect(res.error.data.errorCode).toBe(
+        RPC_ERROR_CODES.DISCLOSURE_REFUSED
+      );
+      expect(res.error.data.errorCode).not.toBe(RPC_ERROR_CODES.DENIED);
+    }
+    expect(JSON.stringify(res)).not.toContain(PUBKEY);
+  });
+
+  it("returns timeout when the prompt expires", async () => {
+    const { queue } = queueAnswering("deny", { timedOut: true });
+    const handler = new NostrRpcHandler(queue as never, async () => 1);
+
+    const res = await handler.handleRequest(
+      ask("https://unknown.example"),
+      makeContext()
+    );
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.TIMEOUT);
+    expect(JSON.stringify(res)).not.toContain(PUBKEY);
+  });
+
+  it("never answers an unconsented origin without a decision", async () => {
+    // No approval queue configured at all: the gate must fail closed rather
+    // than fall through to the key.
+    const handler = new NostrRpcHandler();
+
+    const res = await handler.handleRequest(
+      ask("https://tracker.example"),
+      makeContext()
+    );
+
+    expect(res.ok).toBe(false);
+    expect(
+      JSON.stringify(res),
+      "SECURITY REGRESSION: an unconsented origin read the public key silently"
+    ).not.toContain(PUBKEY);
+  });
+
+  it("answers a remembered allow without prompting", async () => {
+    const { queue, enqueued } = queueAnswering("deny");
+    const handler = new NostrRpcHandler(queue as never, async () => 1);
+    recorded.set("https://known.example", "allow");
+
+    const res = await handler.handleRequest(
+      ask("https://known.example"),
+      makeContext()
+    );
+
+    expect(res.ok).toBe(true);
+    expect(enqueued).toHaveLength(0);
+  });
+
+  it("logs an auto-allowed read from a remembered grant", async () => {
+    const handler = new NostrRpcHandler();
+    recorded.set("https://known.example", "allow");
+
+    await handler.handleRequest(ask("https://known.example"), makeContext());
+
+    // The point of the log is that the user sees EVERY read, not only the ones
+    // they were asked about.
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({
+      origin: "https://known.example",
+      operation: "identity_disclosure",
+      decision: "allow",
+      reason: "remembered",
+    });
+  });
+
+  it("refuses a remembered deny without opening a window", async () => {
+    const { queue, enqueued } = queueAnswering("allow");
+    const openWindow = vi.fn(async () => 1);
+    const handler = new NostrRpcHandler(queue as never, openWindow);
+    recorded.set("https://refused.example", "deny");
+
+    const res = await handler.handleRequest(
+      ask("https://refused.example"),
+      makeContext()
+    );
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.data.errorCode).toBe(
+        RPC_ERROR_CODES.DISCLOSURE_REFUSED
+      );
+    }
+    // Without the remembered denial, any https origin could re-summon a focused
+    // OS window on every page load.
+    expect(enqueued).toHaveLength(0);
+    expect(openWindow).not.toHaveBeenCalled();
+  });
+
+  it("cannot be made to re-summon the prompt by reloading", async () => {
+    const { queue, enqueued } = queueAnswering("allow");
+    const openWindow = vi.fn(async () => 1);
+    const handler = new NostrRpcHandler(queue as never, openWindow);
+    recorded.set("https://refused.example", "deny");
+    const context = makeContext();
+
+    for (let i = 0; i < 20; i++) {
+      await handler.handleRequest(ask("https://refused.example"), context);
+    }
+
+    expect(enqueued).toHaveLength(0);
+    expect(openWindow).not.toHaveBeenCalled();
+  });
+
+  it("scopes a grant to one origin", async () => {
+    const { queue, enqueued } = queueAnswering("allow");
+    const handler = new NostrRpcHandler(queue as never, async () => 1);
+    recorded.set("https://known.example", "allow");
+
+    await handler.handleRequest(ask("https://other.example"), makeContext());
+
+    expect(enqueued).toEqual([{ origin: "https://other.example" }]);
+  });
+
+  it("grants nothing by migration, whatever the stored record says", async () => {
+    const { queue, enqueued } = queueAnswering("allow");
+    const handler = new NostrRpcHandler(queue as never, async () => 1);
+    const context = makeContext();
+
+    // An origin with a stored policy record of any shape — including one
+    // written BY A REMEMBERED DENIAL, which looks identical to one written by
+    // an approval. `identityDisclosure` is absent, and absent is not consent.
+    await handler.handleRequest(ask("https://legacy.example"), context);
+
+    expect(enqueued).toEqual([{ origin: "https://legacy.example" }]);
+  });
+});
+
+describe("a locked vault never reaches the consent gate", () => {
+  it("neither prompts nor persists a decision", async () => {
+    const { queue, enqueued } = queueStub();
+    const handler = new NostrRpcHandler(queue as never, async () => 1);
+
+    const res = await handler.handleRequest(
+      ask("https://example.com"),
+      makeContext({
+        vault: {
+          getLockState: async () => ({ isLocked: true }),
+          listKeys: async () => [],
+        },
+      })
+    );
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.LOCKED);
+    expect(enqueued).toHaveLength(0);
+    expect(recorded.size).toBe(0);
+  });
+
+  function queueStub() {
+    const enqueued: string[] = [];
+    return {
+      enqueued,
+      queue: {
+        enqueueDisclosure: (origin: string) => {
+          enqueued.push(origin);
+          return { id: "x", origin };
+        },
+        wasTimeout: () => false,
+        resolve: () => true,
+      },
+    };
+  }
 });

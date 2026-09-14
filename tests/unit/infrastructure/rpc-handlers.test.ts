@@ -43,6 +43,8 @@ describe("RPC Router and Handlers", () => {
       },
       policy: {
         evaluate: vi.fn().mockResolvedValue({ allowed: true }),
+        getIdentityDisclosure: vi.fn().mockResolvedValue("allow"),
+        setIdentityDisclosure: vi.fn().mockResolvedValue(undefined),
         setOriginPolicy: vi.fn().mockResolvedValue(undefined),
         setPerKindRule: vi.fn().mockResolvedValue(undefined),
         clearSessionGrant: vi.fn().mockResolvedValue(undefined),
@@ -382,6 +384,8 @@ describe("RPC Router and Handlers", () => {
           evaluate: vi
             .fn()
             .mockResolvedValue({ mode: "allow", reason: "explicit_allow" }),
+          getIdentityDisclosure: vi.fn().mockResolvedValue("allow"),
+          setIdentityDisclosure: vi.fn().mockResolvedValue(undefined),
           setOriginPolicy: vi.fn().mockResolvedValue(undefined),
           setPerKindRule: vi.fn().mockResolvedValue(undefined),
           clearSessionGrant: vi.fn().mockResolvedValue(undefined),
@@ -620,7 +624,8 @@ describe("RPC Router and Handlers", () => {
         expect(nostrMockContext.vault.sign).not.toHaveBeenCalled();
 
         const request = approvalQueue.getNextPending();
-        expect(request?.event.kind).toBe(1);
+        expect(request?.operation).toBe("sign_event");
+        expect(request?.event?.kind).toBe(1);
         approvalQueue.resolve(request!.id, "allow_once");
 
         const result = await resultPromise;
@@ -751,6 +756,7 @@ describe("RPC Router and Handlers", () => {
         const mockRequest = {
           id: "test-id",
           origin: "https://example.com",
+          operation: "sign_event" as const,
           event: { kind: 1, content: "test", tags: [], created_at: 123 },
           createdAt: 123,
           timeoutAt: 183,
@@ -793,6 +799,7 @@ describe("RPC Router and Handlers", () => {
         const mockRequest = {
           id: requestId,
           origin: "https://example.com",
+          operation: "sign_event" as const,
           event: { kind: 1, content: "test", tags: [], created_at: 123 },
           createdAt: 123,
           timeoutAt: 183,
@@ -833,6 +840,7 @@ describe("RPC Router and Handlers", () => {
         const mockRequest = {
           id: requestId,
           origin: "https://example.com",
+          operation: "sign_event" as const,
           event: { kind: 1, content: "test", tags: [], created_at: 123 },
           createdAt: 123,
           timeoutAt: 183,
@@ -860,6 +868,7 @@ describe("RPC Router and Handlers", () => {
         const mockRequest = {
           id: requestId,
           origin: "https://example.com",
+          operation: "sign_event" as const,
           event: { kind: 10002, content: "test", tags: [], created_at: 123 },
           createdAt: 123,
           timeoutAt: 183,
@@ -887,6 +896,7 @@ describe("RPC Router and Handlers", () => {
         const mockRequest = {
           id: requestId,
           origin: "https://example.com",
+          operation: "sign_event" as const,
           event: { kind: 10002, content: "test", tags: [], created_at: 123 },
           createdAt: 123,
           timeoutAt: 183,
@@ -912,6 +922,7 @@ describe("RPC Router and Handlers", () => {
           const mockRequest = {
             id: requestId,
             origin: "https://example.com",
+            operation: "sign_event" as const,
             event: { kind, content: "test", tags: [], created_at: 123 },
             createdAt: 123,
             timeoutAt: 183,

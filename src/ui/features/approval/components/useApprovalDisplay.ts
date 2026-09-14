@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { PendingRequest } from "@/domain/types";
+import type { SigningRequest } from "@/domain/types";
 import { formatOrigin, type FormattedOrigin } from "@/domain/display/origin";
 import {
   escapeInvisible,
@@ -43,7 +43,7 @@ export interface ApprovalDisplay {
  * asked for, which is a worse failure than a misleading display.
  */
 export function useApprovalDisplay(
-  request: PendingRequest,
+  request: SigningRequest,
   fallbackPubkey?: string
 ): ApprovalDisplay {
   const derived = useMemo(() => {

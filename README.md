@@ -80,6 +80,28 @@ The options page groups settings into General, Keys & Identities, Security, Perm
 - **Firefox**: Full support with dedicated build
 - **Safari**: WebKit compatibility
 
+## NIP-07 Provider
+
+Ostrilo injects a NIP-07 `window.nostr` provider into `https://` top-level pages. It implements the two mandatory methods and nothing else — `getRelays`, `nip04.*` and `nip44.*` are deliberately absent rather than advertised and throwing, so feature detection tells the truth.
+
+```js
+const pubkey = await window.nostr.getPublicKey(); // requires consent
+const signed = await window.nostr.signEvent(event); // requires approval
+```
+
+### `getPublicKey` requires consent
+
+**This is a breaking change for dApps.** `getPublicKey` used to answer any page while the vault was unlocked. It now:
+
+- requires a **per-origin consent decision**. An origin with no decision on record prompts the user, once. No existing origin is grandfathered — including origins the user has already granted an explicit allow rule or `high` trust.
+- rejects with **`disclosure_refused`** if the user refuses, which is distinct from the `denied` returned for a refused signature. A remembered refusal is answered without a prompt, so retrying on a loop achieves nothing.
+- is **rate limited per origin**. A page that polls sees `rate_limited`.
+- writes an **activity-log entry** for every outcome, visible in Settings → Permissions.
+
+Approving a signing request also records disclosure consent for that origin, because a signed event contains the public key — so a dApp the user already signs with will not be asked twice.
+
+**What this does not do.** Your public key is not a secret: it is published on relays, and this extension publishes it there itself. The gate is about *linkage* — which sites can tie your browsing to that identity — not secrecy. It protects the window before your first approved signature, and it protects origins that never ask for one. It does **not** isolate a third-party script running inside a page you have consented to: the content script is top-frame only, so such a script inherits that page's grant.
+
 ## Documentation
 
 - [Development Standards](./docs/development-standards.md) - Required architecture, security, UI, and verification rules

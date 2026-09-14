@@ -143,12 +143,101 @@ export class NostrRpcHandler implements RpcModule {
       });
     }
 
+    // Recorded consent. UNDEFINED IS NOT CONSENT - it is the prompting state.
+    // Nothing infers consent from a stored policy record, a trust level or a
+    // per-kind rule: such a record is written whenever a signing decision is
+    // made, INCLUDING a refusal, and `low` is the level assigned by default
+    // when one is created as a side effect. So its existence is evidence of a
+    // signing decision and of nothing else. No origin is grandfathered.
+    const recorded = await context.policy.getIdentityDisclosure(origin);
+
+    if (recorded === "deny") {
+      // Answered without a prompt. Without this, any https origin could
+      // re-summon a focused OS window on every page load - the abuse shape this
+      // codebase removed once already when it deleted `openUnlockPrompt`.
+      await context.activityLog.addEntry({
+        origin,
+        operation: "identity_disclosure",
+        decision: "deny",
+        reason: "remembered",
+      });
+      return createRpcErrorResponse(RPC_ERROR_CODES.DISCLOSURE_REFUSED, {
+        details: "This site is not allowed to read your public key.",
+        method: message.type,
+      });
+    }
+
+    if (recorded !== "allow") {
+      if (!this.approvalQueue) {
+        return createRpcErrorResponse(RPC_ERROR_CODES.NEEDS_APPROVAL, {
+          method: message.type,
+        });
+      }
+
+      let decision: ApprovalDecision | "timeout";
+      try {
+        decision = await this.requestDisclosureApproval(
+          origin,
+          selectedKey.pubkey,
+          message.clientRequestId
+        );
+      } catch (error) {
+        // A flooding origin gets a distinct, honest code, matching signEvent.
+        if (error instanceof ApprovalRateLimitError) {
+          await context.activityLog.addEntry({
+            origin,
+            operation: "identity_disclosure",
+            decision: "deny",
+            reason: "rate_limited",
+          });
+          return createRpcErrorResponse(RPC_ERROR_CODES.RATE_LIMITED, {
+            details: "Too many pending requests from this site.",
+            method: message.type,
+          });
+        }
+        return createRpcErrorResponse(RPC_ERROR_CODES.APPROVAL_FAILED, {
+          details: "Could not ask for approval",
+          method: message.type,
+        });
+      }
+
+      if (decision === "timeout") {
+        await context.activityLog.addEntry({
+          origin,
+          operation: "identity_disclosure",
+          decision: "deny",
+          reason: "timeout",
+        });
+        return createRpcErrorResponse(RPC_ERROR_CODES.TIMEOUT, {
+          details: "Approval request timed out",
+          method: message.type,
+        });
+      }
+
+      if (decision !== "allow") {
+        await context.activityLog.addEntry({
+          origin,
+          operation: "identity_disclosure",
+          decision: "deny",
+          reason: "user",
+        });
+        return createRpcErrorResponse(RPC_ERROR_CODES.DISCLOSURE_REFUSED, {
+          details: "You refused to share your public key with this site.",
+          method: message.type,
+        });
+      }
+    }
+
     // The origin is recorded verbatim. The public key is NOT written into any
-    // free-text field: `keyId` is the record identifier, not the key.
+    // free-text field: `keyId` is the record identifier, not the key. An
+    // auto-allowed read from a remembered grant is logged exactly like a
+    // freshly approved one - the point of the log is that the user can see
+    // every read, not only the ones they were asked about.
     await context.activityLog.addEntry({
       origin,
       operation: "identity_disclosure",
       decision: "allow",
+      reason: recorded === "allow" ? "remembered" : "user",
       keyId: selectedKey.id,
     });
 
@@ -156,6 +245,43 @@ export class NostrRpcHandler implements RpcModule {
       ok: true,
       data: { pubkey: selectedKey.pubkey },
     };
+  }
+
+  /**
+   * Queue a prompt asking whether this origin may read the public key.
+   *
+   * De-duplicates on `(origin, "identity_disclosure")` inside the queue, so a
+   * page calling `getPublicKey` in a loop produces ONE prompt whose answer fans
+   * out to every waiting caller - not one prompt per call.
+   */
+  private async requestDisclosureApproval(
+    origin: string,
+    pubkey: string,
+    clientRequestId?: string
+  ): Promise<ApprovalDecision | "timeout"> {
+    return new Promise<ApprovalDecision | "timeout">((resolve, reject) => {
+      const pendingRequest = this.approvalQueue!.enqueueDisclosure(
+        origin,
+        (decision: ApprovalDecision, _action: ApprovalAction) => {
+          if (
+            decision === "deny" &&
+            this.approvalQueue!.wasTimeout(pendingRequest.id)
+          ) {
+            resolve("timeout");
+          } else {
+            resolve(decision);
+          }
+        },
+        { signingPubkey: pubkey, clientRequestId }
+      );
+
+      this.openApprovalPopup(pendingRequest.id).catch((err) => {
+        // Popup failed: deny. A disclosure that cannot be asked about must not
+        // be granted.
+        this.approvalQueue!.resolve(pendingRequest.id, "deny");
+        reject(new Error(`Failed to open approval popup: ${err.message}`));
+      });
+    });
   }
 
   /**

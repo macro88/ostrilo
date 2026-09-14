@@ -62,6 +62,16 @@ async function createAndUnlock(page: Page) {
     label: "Lock E2E Key",
   });
   await rpcOk(page, { type: "vault.unlock", password: PASSWORD });
+  // These tests call `window.nostr.getPublicKey()` on an unlocked vault to
+  // assert what a LOCKED one refuses. Identity disclosure now needs consent, so
+  // without this grant those calls do not fail - they queue a prompt and block
+  // for APPROVAL_TIMEOUT_MS (60s). A hang, not an assertion failure, is the
+  // failure mode, which is easy to misread as flakiness.
+  await rpcOk(page, {
+    type: "policy.setOrigin",
+    origin: "https://localhost:8765",
+    patch: { identityDisclosure: "allow" },
+  });
   await rpcOk(page, {
     type: "settings.update",
     patch: { onboardingCompleted: true, onboardingCompletedAt: Date.now() },

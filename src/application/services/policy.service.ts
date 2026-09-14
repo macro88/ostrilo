@@ -61,7 +61,7 @@ export class PolicyService {
     const patchedPolicies = policies.map((p: OriginPolicy) =>
       p.origin === input.origin ? { ...p, sessionGrantAll: hasGrant } : p
     );
-    return evaluatePolicy({
+    const result = evaluatePolicy({
       origin: input.origin,
       kind: input.kind,
       unlocked,
@@ -69,6 +69,33 @@ export class PolicyService {
       policies: patchedPolicies,
       sessionGrants
     });
+
+    // An explicit remembered DISCLOSURE DENY forces signing back to `ask`.
+    //
+    // A successful signature returns the public key to the origin inside the
+    // signed event, so a remembered per-kind `allow` would silently hand over
+    // the identity on every later signature while Settings displayed "identity
+    // disclosure: deny". That is the same class of defect as the write-only
+    // `sessionGrantAll` switch this consent work exists to remove: a decision
+    // the product shows the user but does not enforce.
+    //
+    // It downgrades to `ask`, never to `deny`. The user refused to hand over
+    // their identity for the asking; they did not say the site may never sign
+    // anything. Asking is the honest middle.
+    if (result.mode === "allow") {
+      const policy = policies.find(
+        (p: OriginPolicy) => p.origin === input.origin
+      );
+      if (policy?.identityDisclosure === "deny") {
+        return {
+          ...result,
+          mode: "ask",
+          reason: "identity_disclosure_denied",
+        };
+      }
+    }
+
+    return result;
   }
 
   private async getSettings(): Promise<any> {
@@ -121,6 +148,57 @@ export class PolicyService {
       (o: OriginPolicy) => o.origin !== origin
     );
     await this.putSettings({ ...settings, origins });
+  }
+
+  /**
+   * Record whether an origin may read the user's public key.
+   *
+   * Per ORIGIN, not per kind - an identity disclosure signs nothing, so there
+   * is no kind to key it on. Like `setPerKindRule`, creating a record here
+   * grants `low` trust and nothing else: a remembered decision must never also
+   * hand the origin a trust level it was not given.
+   */
+  async setIdentityDisclosure(
+    origin: string,
+    mode: Authorisation
+  ): Promise<void> {
+    const settings = await this.getSettings();
+    const origins: OriginPolicy[] = settings.origins ?? [];
+    const idx = origins.findIndex((o) => o.origin === origin);
+    const now = Math.floor(Date.now() / 1000);
+    if (idx >= 0) {
+      origins[idx] = {
+        ...origins[idx],
+        identityDisclosure: mode,
+        updatedAt: now,
+      };
+    } else {
+      origins.push({
+        origin,
+        trustLevel: "low",
+        rules: {},
+        identityDisclosure: mode,
+        updatedAt: now,
+      });
+    }
+    await this.putSettings({ ...settings, origins });
+  }
+
+  /**
+   * The recorded disclosure decision for an origin, or undefined when none has
+   * been recorded.
+   *
+   * UNDEFINED IS NOT CONSENT. It is the prompting state. Nothing infers consent
+   * from a stored policy record, a trust level or a per-kind rule: a record is
+   * written whenever a signing decision is made, INCLUDING a refusal, so its
+   * existence is evidence of a decision about signing and of nothing else.
+   */
+  async getIdentityDisclosure(
+    origin: string
+  ): Promise<Authorisation | undefined> {
+    const settings = await this.getSettings();
+    const origins: OriginPolicy[] = settings.origins ?? [];
+    return origins.find((o) => o.origin === origin)?.identityDisclosure;
   }
 
   async setPerKindRule(

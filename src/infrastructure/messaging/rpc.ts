@@ -67,7 +67,7 @@ export type RpcRequest =
   | { type: "crypto.evaluatePassword"; password: string; label?: string }
   | { type: "crypto.parsePrivateKey"; keyInput: string }
   // NIP-07 Nostr operations
-  | { type: "nostr.getPublicKey"; origin: string }
+  | { type: "nostr.getPublicKey"; origin: string; clientRequestId?: string }
   | {
       type: "nostr.signEvent";
       event: UnsignedEvent;

@@ -20,6 +20,7 @@ export function PermissionsTab() {
     removeOriginPolicy,
     setPerKindRule,
     updateOriginTrustLevel,
+    revokeIdentityDisclosure,
   } = useAppSettings();
   const reauth = useReauth();
 
@@ -151,6 +152,7 @@ export function PermissionsTab() {
           onRemove={removeOriginPolicy}
           onToggleSession={handleToggleSession}
           onSetPerKindRule={handleSetPerKindRule}
+          onRevokeDisclosure={revokeIdentityDisclosure}
         />
       )}
 

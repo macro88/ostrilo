@@ -4,6 +4,46 @@
 
 ### Security
 
+- **BREAKING for dApps: `window.nostr.getPublicKey()` now requires your
+  consent, per site.** It previously answered any https page silently, as
+  often as it was asked, while the vault was unlocked. A site with no decision
+  on record now prompts you once; refusing rejects the call with
+  `disclosure_refused`, which is a different code from the `denied` returned
+  for a refused signature.
+- **Every site will ask once after this update, including ones you already
+  trust.** Nothing is grandfathered — not an explicit allow rule, not `high`
+  trust. A stored record for a site is written whenever you make a signing
+  decision about it, *including when you refuse*, so it is not evidence that
+  you agreed to hand over your identity. Approving a signature does record
+  disclosure consent, because a signed event contains your public key, so the
+  sites you actually use converge without a second prompt.
+- Your public key is **not a secret** — it is published on relays, and Ostrilo
+  publishes it there itself. This is about *linkage*: which sites can tie your
+  browsing to that identity. The gate protects the window before your first
+  approved signature, and it protects sites that never ask for one. It does
+  not isolate a third-party script inside a page you have consented to.
+- `getPublicKey` is now rate limited per site. A page that polls in a loop —
+  previously able to capture your key the moment you unlocked, with the
+  auto-lock timeout no defence against it — now gets `rate_limited`.
+- Every identity request is recorded in the activity log, and Settings →
+  Permissions now lists which sites have read your public key. That list
+  includes sites with no stored policy, which is the point: a script that only
+  ever reads your identity and never asks to sign never appeared anywhere
+  before.
+- You can revoke a site's identity access in Settings → Permissions, and it
+  will be asked again next time.
+- Refusing identity disclosure for a site now forces its signing requests back
+  to asking, overriding any remembered per-kind allow. Otherwise Settings would
+  show a refusal the product did not enforce, since every signature hands over
+  the public key anyway.
+- The approval window has an error boundary. A request that could not be
+  rendered used to blank the whole window, which removed the Deny control for
+  every other queued request too.
+- Fixed: resolving an approval for a request with no event returned
+  `approval_failed` and left it queued until its 60-second auto-deny — but only
+  for the Allow and Deny-and-remember buttons. The same request resolved fine
+  through Allow-once and plain Deny, so it appeared to work or hang depending
+  on which button was pressed.
 - **A failed unlock now tells you why.** Entering the wrong password at the lock
   screen used to clear the field and say nothing: the error was swallowed
   between the background and the screen, so every failure looked identical to a

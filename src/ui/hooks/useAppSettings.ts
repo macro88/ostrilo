@@ -209,6 +209,26 @@ export function useAppSettings() {
     [updateOriginPolicy]
   );
 
+  /**
+   * Revokes a recorded identity-disclosure decision.
+   *
+   * Not password-gated. Revoking only ever ADDS friction - the origin goes back
+   * to being asked - and a user withdrawing access should not have to find
+   * their password first, the same reasoning that leaves lowering trust and
+   * turning off a session grant free.
+   */
+  const revokeIdentityDisclosure = useCallback(
+    (origin: string) => {
+      // `"ask"`, NOT `undefined`. Zod strips an explicitly-undefined optional
+      // key, so the patch would reach the background as `{}` and the stored
+      // decision would survive untouched - a Revoke button that looks like it
+      // worked and did nothing. Both `"ask"` and absent mean "prompt next
+      // time"; this one is representable in a patch.
+      return updateOriginPolicy(origin, { identityDisclosure: "ask" });
+    },
+    [updateOriginPolicy]
+  );
+
   // Per-kind rule helper
   const setPerKindRule = useCallback(
     (
@@ -283,6 +303,7 @@ export function useAppSettings() {
     updateOriginTrustLevel,
     setPerKindRule,
     setSessionGrant,
+    revokeIdentityDisclosure,
 
     // Reset
     resetSettings,

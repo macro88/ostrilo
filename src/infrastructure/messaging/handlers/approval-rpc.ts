@@ -8,6 +8,10 @@ import type {
   ServiceContext,
 } from "@/infrastructure/messaging/rpc-router";
 import type { ApprovalAction } from "@/domain/types";
+import {
+  isDisclosureRequest,
+  isSigningRequest,
+} from "@/domain/types";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 import { ApprovalResolveRequestSchema } from "@/infrastructure/validation/schemas";
 import { isProtectedKind } from "@/domain/policy/trust-definitions";
@@ -127,25 +131,62 @@ export class ApprovalRpcHandler implements RpcModule {
         });
       }
 
-      // Persist remembered decisions before resolving so the request only
-      // succeeds when the requested durable policy update succeeds.
-      if (
-        validation.data.action === "allow" &&
-        !isProtectedKind(request.event.kind)
-      ) {
-        await context.policy.setPerKindRule(
-          request.origin,
-          request.event.kind,
-          "allow"
-        );
-      }
+      // BRANCH ON THE DISCRIMINATOR FIRST.
+      //
+      // This block used to dereference `request.event.kind` unconditionally.
+      // For a request with no event that throws inside the surrounding `try`,
+      // returns APPROVAL_FAILED, and leaves the entry queued until the
+      // 60-second auto-deny - so the user's click appears to do nothing. Worse,
+      // it did so only for `allow` and `deny_remember`: `allow_once` and plain
+      // `deny` short-circuit past both reads and resolve normally, so the SAME
+      // request succeeded or hung depending on which button was pressed.
+      //
+      // An optional chain would not fix it. `isProtectedKind` fails open on a
+      // non-integer (`trust-definitions.ts:81-86`), so an undefined kind takes
+      // the allow branch and writes a `rules[undefined]` key through
+      // `policy.service.ts:140`.
+      if (isDisclosureRequest(request)) {
+        // A remembered disclosure decision is per ORIGIN, not per kind: there
+        // is no kind. No per-kind rule is written here, ever.
+        if (validation.data.action === "allow") {
+          await context.policy.setIdentityDisclosure(request.origin, "allow");
+        }
+        if (validation.data.action === "deny_remember") {
+          await context.policy.setIdentityDisclosure(request.origin, "deny");
+        }
+      } else if (isSigningRequest(request)) {
+        // Persist remembered decisions before resolving so the request only
+        // succeeds when the requested durable policy update succeeds.
+        if (
+          validation.data.action === "allow" &&
+          !isProtectedKind(request.event.kind)
+        ) {
+          await context.policy.setPerKindRule(
+            request.origin,
+            request.event.kind,
+            "allow"
+          );
+        }
 
-      if (validation.data.action === "deny_remember") {
-        await context.policy.setPerKindRule(
-          request.origin,
-          request.event.kind,
-          "deny"
-        );
+        if (validation.data.action === "deny_remember") {
+          await context.policy.setPerKindRule(
+            request.origin,
+            request.event.kind,
+            "deny"
+          );
+        }
+
+        // A signature hands the public key to the origin inside the signed
+        // event, so approving one IS disclosure. Recording it here keeps
+        // Settings from displaying a decision the product does not enforce,
+        // and stops the user being asked twice for something they have
+        // already granted in the stronger direction.
+        if (
+          validation.data.action === "allow" ||
+          validation.data.action === "allow_once"
+        ) {
+          await context.policy.setIdentityDisclosure(request.origin, "allow");
+        }
       }
 
       // Resolve the request

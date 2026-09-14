@@ -255,6 +255,7 @@ export class ApprovalQueueService {
     const request: PendingRequest = {
       id: crypto.randomUUID(),
       origin,
+      operation: "sign_event",
       event,
       eventIdHash,
       createdAt: now,
@@ -285,6 +286,66 @@ export class ApprovalQueueService {
     }
 
     // Notify listeners that queue has changed
+    this.notifyChange();
+
+    return request;
+  }
+
+  /**
+   * Enqueue a request to disclose the user's public key to an origin.
+   *
+   * De-duplicates on `(origin, "identity_disclosure")` rather than on an event
+   * hash - there is no event to hash. One pending disclosure prompt per origin
+   * is the correct semantics anyway: a page calling `getPublicKey` in a loop
+   * must produce one prompt, not one per call.
+   *
+   * `assertCapacity` and the rolling per-origin allowance still apply, so a
+   * flooding origin is refused here exactly as a flooding signer is. Because
+   * the dedupe key collapses repeats from one origin into a single entry,
+   * repeated disclosure requests from that origin cannot displace a pending
+   * signing request from another.
+   */
+  enqueueDisclosure(
+    origin: string,
+    resolver: RequestResolver,
+    options?: { signingPubkey?: string; clientRequestId?: string }
+  ): PendingRequest {
+    const dedupeKey = makeDedupeKey(origin, "identity_disclosure");
+    const existingEntry = this.eventIdMap.get(dedupeKey);
+    if (existingEntry) {
+      existingEntry.resolvers.push(resolver);
+      // No rate-limit charge and no notification: this is the same prompt.
+      return existingEntry.request;
+    }
+
+    this.assertCapacity(origin);
+
+    const now = Math.floor(Date.now() / 1000);
+    const request: PendingRequest = {
+      id: crypto.randomUUID(),
+      origin,
+      operation: "identity_disclosure",
+      createdAt: now,
+      timeoutAt: now + Math.floor(this.timeoutMs / 1000),
+      signingPubkey: options?.signingPubkey,
+      clientRequestId: options?.clientRequestId,
+    };
+
+    this.recordEnqueue(origin);
+
+    const timeoutId = setTimeout(() => {
+      this.handleTimeout(request.id);
+    }, this.timeoutMs);
+
+    const entry: QueueEntry = {
+      request,
+      resolvers: [resolver],
+      timeoutId,
+      dedupeKey,
+    };
+    this.queue.set(request.id, entry);
+    this.eventIdMap.set(dedupeKey, entry);
+
     this.notifyChange();
 
     return request;
@@ -428,8 +489,13 @@ export class ApprovalQueueService {
    */
   getQueuedEventIds(): string[] {
     // The map is keyed by (origin, hash); diagnostics still want the hashes.
-    return Array.from(this.eventIdMap.values()).map(
-      (entry) => entry.eventIdHash!
-    );
+    //
+    // The `!` here used to emit `undefined` into the array for any entry
+    // that is keyed but carries no hash - which is every disclosure request,
+    // since those dedupe on (origin, "identity_disclosure") and have no event
+    // to hash. Filtered rather than asserted.
+    return Array.from(this.eventIdMap.values())
+      .map((entry) => entry.eventIdHash)
+      .filter((hash): hash is string => hash !== undefined);
   }
 }

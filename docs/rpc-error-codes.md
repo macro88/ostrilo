@@ -90,6 +90,44 @@ try {
 
 ---
 
+#### `disclosure_refused`
+
+**When to Use**: The user refused to disclose their public key to the calling origin, or has a remembered refusal on record for it.
+
+Deliberately distinct from `denied`. The two mean different things to a dApp: a refused *signature* is about one event, and retrying with a different one is reasonable; a refused *identity* is about the site itself, and retrying is exactly the behaviour the remembered refusal exists to stop.
+
+**Examples**:
+- User clicks "Deny" on an identity-disclosure prompt
+- The origin has a remembered disclosure denial, so no prompt is shown at all
+
+**Handler Usage**:
+```typescript
+if (recorded === "deny") {
+  return createRpcErrorResponse(RPC_ERROR_CODES.DISCLOSURE_REFUSED, {
+    details: "This site is not allowed to read your public key.",
+    method: message.type,
+  });
+}
+```
+
+**dApp Integration**:
+```javascript
+try {
+  const pubkey = await window.nostr.getPublicKey();
+} catch (error) {
+  if (error.message.includes('disclosure_refused')) {
+    // The user has said no to THIS SITE. Do not retry on a loop, and do not
+    // re-ask on every page load: a remembered refusal is answered without a
+    // prompt, so retrying only burns the origin's rate allowance.
+    showIdentityRefusedMessage();
+  }
+}
+```
+
+**Note**: `getPublicKey` is also rate limited per origin. A caller that polls will see `rate_limited` rather than a public key.
+
+---
+
 #### `needs_approval`
 
 **When to Use**: User approval is required for the operation, but the approval queue is not configured or available.
