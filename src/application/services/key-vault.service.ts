@@ -794,8 +794,10 @@ export class KeyVaultService {
    * returns false - unlocked - whenever session storage holds no lock state at
    * all. That is the situation after every browser restart, before anything has
    * been unlocked, so a vault that had never been opened reported itself open.
-   * `nostr.getPublicKey` checks only this gate, so the user's Nostr identity
-   * leaked to any page from a vault they had never unlocked.
+   * At the time, `nostr.getPublicKey` checked only this gate, so the user's
+   * Nostr identity leaked to any page from a vault they had never unlocked.
+   * The method now validates the calling origin and is rate limited per
+   * origin as well; this gate is still what it answers to first.
    *
    * Three ways to be locked, all of which now report locked:
    *   1. No stored state, malformed state, or a read that throws.

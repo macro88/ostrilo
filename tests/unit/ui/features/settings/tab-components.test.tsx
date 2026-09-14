@@ -97,6 +97,9 @@ vi.mock("@/components/navigation/open-in-selector", () => ({
 }));
 
 vi.mock("@/ui/features/settings/components/shared", () => ({
+  // Reads the activity log over RPC; the Permissions tests are about the
+  // policy table, not the disclosure history, which has its own test.
+  DisclosureHistory: () => <section>Disclosure history</section>,
   ThemeSelector: ({
     value,
     onChange,

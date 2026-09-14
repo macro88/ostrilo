@@ -18,8 +18,11 @@ import { AUTO_LOCK_BOUNDS } from "@/domain/types";
  *  1. `getLockState` was `isLocked: !!state?.isLocked`. With no stored state -
  *     the situation after every browser restart, before anything is unlocked -
  *     `!!undefined` is false, so the vault reported itself UNLOCKED.
- *     `nostr.getPublicKey` checks only this gate, so a never-opened vault
- *     disclosed the user's Nostr identity to any page.
+ *     At the time, `nostr.getPublicKey` checked only this gate, so a
+ *     never-opened vault disclosed the user's Nostr identity to any page.
+ *     That is no longer the whole story: the method now also validates the
+ *     calling origin, is rate limited per origin, and writes an activity-log
+ *     entry for every outcome.
  *  2. `autoLockMinutes` was cosmetic. It defaulted to 15, drove two sliders and
  *     rendered "Unlocked - 15m" in the header, and nothing enforced it: no
  *     chrome.alarms usage anywhere, no browser.idle, no timer calling lock().

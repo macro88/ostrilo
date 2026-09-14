@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Pubkey } from "@/components/common/pubkey";
 import { SealMark } from "@/components/common/SealMark";
 import { useActivityLog } from "@/ui/features/activity/hooks/useActivityLog";
-import { getKindName } from "@/domain/types";
+import { describeActivityAction } from "@/domain/types";
 import {
   Activity,
   Check,
@@ -114,8 +114,7 @@ export function HomeView() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">
-                    {entry.decision === "allow" ? "Signed" : "Denied"}{" "}
-                    {getKindName(entry.kind).toLowerCase()}
+                    {describeActivityAction(entry)}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {/* Full origin, scheme included. The activity log is

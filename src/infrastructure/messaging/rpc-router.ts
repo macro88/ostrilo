@@ -7,6 +7,7 @@ import type { SettingsService } from "@/application/services/settings.service";
 import type { ActivityLogService } from "@/application/services/activity-log.service";
 import type { ProfileService } from "@/application/services/profile.service";
 import type { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
+import type { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
 
 /**
  * Service context passed to RPC handlers containing all application services
@@ -18,6 +19,7 @@ export interface ServiceContext {
   activityLog: ActivityLogService;
   profile: ProfileService;
   unlockThrottle: UnlockThrottleService;
+  disclosureRateLimit: DisclosureRateLimitService;
   /**
    * Called when a request from a WEB PAGE is refused because the vault is
    * locked, so the background can raise a toolbar marker.

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
 import { RpcRouter } from "@/infrastructure/messaging/rpc-router";
 import { VaultRpcHandler } from "@/infrastructure/messaging/handlers/vault-rpc";
 import { PolicyRpcHandler } from "@/infrastructure/messaging/handlers/policy-rpc";
@@ -22,6 +23,7 @@ describe("RPC Router and Handlers", () => {
 
     // Create mock service context
     mockContext = {
+      disclosureRateLimit: new DisclosureRateLimitService(),
       unlockThrottle: {
         check: vi.fn().mockResolvedValue(0),
         recordFailure: vi.fn().mockResolvedValue(0),
@@ -354,6 +356,7 @@ describe("RPC Router and Handlers", () => {
 
       // Create mock context specific to Nostr handler tests
       nostrMockContext = {
+        disclosureRateLimit: new DisclosureRateLimitService(),
         vault: {
           unlock: vi.fn().mockResolvedValue({ selectedKeyId: "test-key" }),
           lock: vi.fn().mockResolvedValue(undefined),
@@ -402,7 +405,10 @@ describe("RPC Router and Handlers", () => {
 
     describe("nostr.getPublicKey", () => {
       it("should return pubkey when vault is unlocked and key is selected", async () => {
-        const message = { type: "nostr.getPublicKey" } as const;
+        const message = {
+          type: "nostr.getPublicKey",
+          origin: "https://example.com",
+        } as const;
         const result = await handler.handleRequest(message, nostrMockContext);
 
         expect(result.ok).toBe(true);
@@ -419,7 +425,10 @@ describe("RPC Router and Handlers", () => {
           .fn()
           .mockResolvedValue({ isLocked: true });
 
-        const message = { type: "nostr.getPublicKey" } as const;
+        const message = {
+          type: "nostr.getPublicKey",
+          origin: "https://example.com",
+        } as const;
         const result = await handler.handleRequest(message, nostrMockContext);
 
         expect(result.ok).toBe(false);
@@ -435,7 +444,10 @@ describe("RPC Router and Handlers", () => {
             { id: "key-1", pubkey: "abc123", isSelected: false },
           ]);
 
-        const message = { type: "nostr.getPublicKey" } as const;
+        const message = {
+          type: "nostr.getPublicKey",
+          origin: "https://example.com",
+        } as const;
         const result = await handler.handleRequest(message, nostrMockContext);
 
         expect(result.ok).toBe(false);
