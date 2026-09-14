@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NO_AUTOFILL_PROPS } from "@/components/ui/password-input";
 import { parsePrivateKey } from "@/infrastructure/messaging/client";
 import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
 import { ArrowLeft, Loader2, Eye, EyeOff } from "lucide-react";
@@ -81,6 +82,7 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
           type="password"
           placeholder="Enter your vault password"
           disabled={isImporting}
+          {...NO_AUTOFILL_PROPS}
         />
         <p className="text-xs text-muted-foreground">
           Re-enter your password to encrypt the imported key
@@ -96,9 +98,9 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
             type={showPrivateKey ? "text" : "password"}
             placeholder="nsec1... or hex format"
             disabled={isImporting}
-            autoComplete="off"
             autoFocus
             className="pr-10"
+            {...NO_AUTOFILL_PROPS}
           />
           <button
             type="button"

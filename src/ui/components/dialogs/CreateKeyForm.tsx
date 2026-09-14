@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NO_AUTOFILL_PROPS } from "@/components/ui/password-input";
 import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
@@ -66,6 +67,7 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
           placeholder="Enter your vault password"
           disabled={isGenerating}
           autoFocus
+          {...NO_AUTOFILL_PROPS}
         />
         <p className="text-xs text-muted-foreground">
           Re-enter your password to encrypt the new key

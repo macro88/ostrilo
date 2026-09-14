@@ -249,3 +249,49 @@ test.describe("options page while locked", () => {
     ).toBe(false);
   });
 });
+
+test.describe("unlock feedback", () => {
+  test("a wrong password says so and leaves the vault locked", async ({
+    openPopup,
+    openOptions,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const popup = await openPopup();
+    await createAndUnlock(popup);
+    await rpcOk(popup, { type: "vault.lock" });
+
+    const options = await openOptions();
+    const field = options.getByLabel(/master password/i).first();
+    await expect(field).toBeVisible({ timeout: 15_000 });
+
+    await field.fill("not-the-password");
+    await options.getByRole("button", { name: "Unlock" }).click();
+
+    // The defect this covers: the failure was swallowed, so the field cleared
+    // and nothing was said. "Still locked" is NOT evidence either way - the
+    // lock screen stayed put even while the bug was live.
+    await expect(options.getByRole("alert")).toContainText(/incorrect/i, {
+      timeout: 15_000,
+    });
+
+    const body = (await options.textContent("body")) ?? "";
+    expect(
+      body,
+      "SECURITY REGRESSION: the entered password was rendered back to the page"
+    ).not.toContain("not-the-password");
+
+    const stillLocked = await rpcOk<{ isLocked: boolean }>(popup, {
+      type: "state.getLock",
+    });
+    expect(stillLocked.isLocked).toBe(true);
+
+    // And the right password still works, so the gate is a gate and not a wall.
+    await field.fill(PASSWORD);
+    await options.getByRole("button", { name: "Unlock" }).click();
+    await expect(
+      options.getByRole("heading", { name: "Ostrilo Settings" })
+    ).toBeVisible({ timeout: 15_000 });
+  });
+});

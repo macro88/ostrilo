@@ -4,6 +4,36 @@
 
 ### Security
 
+- **A failed unlock now tells you why.** Entering the wrong password at the lock
+  screen used to clear the field and say nothing: the error was swallowed
+  between the background and the screen, so every failure looked identical to a
+  slow success. The screen now reports the reason the background gave — an
+  incorrect password, a vault that does not exist yet, a vault written by a
+  different version of Ostrilo, and how long you must wait when repeated failed
+  attempts have paused unlocking.
+- This is a behaviour change if you had learned to read the blank password field
+  as failure. A blank field no longer means anything on its own; the message
+  does.
+- The same swallowed error meant the lock screen ran its success callback after a
+  failed attempt. Both call sites happen to do nothing today, so no unlock was
+  ever bypassed — but the next caller to give that callback real behaviour would
+  have inherited a bypass.
+- The attempt counter on the lock screen is gone. It was component state, so
+  closing and reopening the popup reset it, and it imposed no delay. Rate
+  limiting is enforced in the background, where it is not resettable and cannot
+  be skipped by sending the message directly.
+- The key import flow now clears the master password and its confirmation when
+  the import succeeds, when it fails, and when the flow is left — matching the
+  key creation flow. It previously rendered its success screen with both still
+  held.
+- Every password and private-key input is now withheld from browser autofill,
+  third-party password managers and spell-check from one shared declaration.
+  Three inputs were missing some or all of these attributes. These are advisory
+  attributes and vendor conventions, not enforcement.
+- On the options page and side panel, whose documents outlive an unlock attempt,
+  the password input element's own value is cleared when the page is hidden and
+  when the screen goes away. This drops the extension's reference to what you
+  typed; it does not erase the string, which JavaScript cannot do.
 - **The extension now lands locked after this update, and after every
   browser restart.** Lock state previously read `!!state?.isLocked`, which
   is `false` when no state is stored — the situation on every restart — so
