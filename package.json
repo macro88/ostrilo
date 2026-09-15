@@ -30,6 +30,11 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "OSTRILO_E2E_HEADED=1 playwright test --project=chromium-extension --debug",
     "test:e2e:smoke": "playwright test tests/e2e/agent-smoke.spec.ts --project=chromium-extension",
+    "agent:build": "wxt build -m agent",
+    "agent:loop": "node -e \"fs.rmSync('test-results/agent',{recursive:true,force:true})\" && OSTRILO_E2E_BUILD_MODE=agent OSTRILO_E2E_HEADED=1 OSTRILO_E2E_SCREENSHOT_DIR=test-results/agent playwright test --project=agent-scratch",
+    "agent:loop:prod": "node -e \"fs.rmSync('test-results/agent',{recursive:true,force:true})\" && OSTRILO_E2E_HEADED=1 OSTRILO_E2E_SCREENSHOT_DIR=test-results/agent playwright test --project=agent-scratch",
+    "agent:screens": "OSTRILO_E2E_BUILD_MODE=agent OSTRILO_E2E_SCREENSHOT_DIR=test-results/agent playwright test --project=agent-scratch tests/e2e/agent-screens.spec.ts",
+    "agent:clean": "node -e \"fs.rmSync('test-results/agent',{recursive:true,force:true})\" && rm -f tests/e2e/*.scratch.spec.ts",
     "doctor": "react-doctor"
   },
   "dependencies": {

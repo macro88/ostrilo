@@ -43,10 +43,27 @@ export default defineConfig({
     {
       name: "chromium-extension",
       testMatch: /.*\.spec\.ts/,
+      testIgnore: [/.*\.scratch\.spec\.ts/, /agent-screens\.spec\.ts/],
       use: {
         ...devices["Desktop Chrome"],
         browserName: "chromium",
         ignoreHTTPSErrors: true,
+      },
+    },
+    {
+      // The disposable lane for agent-driven exploration. See docs/agent-loop.md.
+      //
+      // Its own outputDir matters: both projects sharing test-results/e2e meant
+      // a scratch run purged the error-context.md and failure screenshots of
+      // the very suite failure it was written to investigate.
+      name: "agent-scratch",
+      testMatch: [/.*\.scratch\.spec\.ts/, /agent-screens\.spec\.ts/],
+      outputDir: "test-results/agent-out",
+      use: {
+        ...devices["Desktop Chrome"],
+        browserName: "chromium",
+        ignoreHTTPSErrors: true,
+        trace: "retain-on-failure",
       },
     },
   ],
