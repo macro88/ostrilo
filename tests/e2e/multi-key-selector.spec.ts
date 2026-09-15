@@ -598,3 +598,90 @@ test.describe("Settings - Key Management", () => {
     expect(await listStoredKeys(options)).toHaveLength(1);
   });
 });
+
+/**
+ * Importing a key into a vault that already exists.
+ *
+ * This is a different component from onboarding import — `ImportKeyForm`, not
+ * `OnboardingImportKey` — and it has deliberately different password
+ * semantics. Adding a key re-enters the EXISTING vault password, so
+ * `enforceNewPasswordPolicy` returns early rather than judging it
+ * (`vault-rpc.ts:92-100`). The reason is in the source: running a new-password
+ * policy here would tell a pre-existing user that their own correct password is
+ * invalid, with no change-password flow to escape through.
+ *
+ * That early return had no test. It is the kind of branch that looks like a
+ * missing check rather than a deliberate one, and so is exactly the kind that
+ * gets "fixed" into a lockout.
+ */
+test.describe("import into an existing vault", () => {
+  test.beforeEach(async ({ browserName }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+  });
+
+  test("takes the existing vault password, and refuses a wrong one", async ({
+    openPopup,
+    openOptions,
+  }) => {
+    const popup = await openPopup();
+    await seedVault(popup, "Primary Key");
+
+    const options = await openOptions();
+    await options.setViewportSize({ width: 1280, height: 900 });
+    await openKeysTab(options);
+
+    const before = await sendExtensionRpc<Array<{ id: string }>>(options, {
+      type: "keys.list",
+    });
+
+    await options.getByRole("button", { name: "Add Key", exact: true }).click();
+    await options
+      .getByRole("button", { name: "Import Existing Key" })
+      .click();
+    await expect(options.getByLabel("Vault Password")).toBeVisible();
+
+    // A known-answer vector, so the derived identity is checked against a value
+    // this codebase did not produce. NIP-19's example key.
+    const NSEC =
+      "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5";
+
+    await options.getByLabel("Private Key (nsec or hex)").fill(NSEC);
+    await options.getByLabel("Key Name").fill("Imported Key");
+    await options.getByLabel("Vault Password").fill("not-the-vault-password");
+    await options
+      .getByRole("button", { name: /Import/i })
+      .last()
+      .click();
+
+    // A wrong password cannot open the envelope, so no key is added and the
+    // dialog stays open on the password field.
+    //
+    // Asserted behaviourally rather than on the error element: ImportKeyForm
+    // renders its failure as a bare <p class="text-destructive"> with no
+    // role="alert" and no aria-live, so a screen reader is never told the
+    // import failed. Worth fixing; asserting on role="alert" here would have
+    // encoded the bug as the expectation.
+    await expect(options.getByLabel("Vault Password")).toBeVisible();
+    const afterWrong = await sendExtensionRpc<Array<{ id: string }>>(options, {
+      type: "keys.list",
+    });
+    expect(afterWrong.length).toBe(before.length);
+
+    // The correct existing password succeeds — and notably is NOT judged
+    // against the new-vault password policy.
+    await options.getByLabel("Vault Password").fill(TEST_PASSWORD);
+    await options
+      .getByRole("button", { name: /Import/i })
+      .last()
+      .click();
+
+    await expect
+      .poll(async () => {
+        const keys = await sendExtensionRpc<Array<{ id: string }>>(options, {
+          type: "keys.list",
+        });
+        return keys.length;
+      }, { timeout: 15_000 })
+      .toBe(before.length + 1);
+  });
+});
