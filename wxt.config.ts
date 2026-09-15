@@ -36,6 +36,52 @@ const EXTENSION_PAGES_CSP = [
 ].join("; ");
 
 /**
+ * The dev server's origin, added to the policy only while `wxt dev` is running.
+ *
+ * WXT relaxes `script-src` for serve mode itself, and stops there. Everything
+ * else Vite serves over the same origin stays blocked, which broke `pnpm dev`
+ * in four ways that never named their cause:
+ *
+ * - `img-src` — asset imports resolve to `http://localhost:3000/...`, so the
+ *   mascot rendered as a broken-image icon on every surface.
+ * - `style-src` — the Tailwind stylesheet is served as a `<link>`, so pages
+ *   rendered with only the inline styles Radix injects at runtime.
+ * - `connect-src` — Vite's HMR websocket never connected, so neither hot
+ *   reload nor extension auto-reload worked.
+ * - `connect-src`, again and worst — on MV3 serve builds WXT emits no
+ *   `content_scripts` key and registers the script at runtime *over that same
+ *   websocket*. With the socket blocked the provider was never registered, so
+ *   `window.nostr` did not exist under `pnpm dev` at all.
+ *
+ * This is a real widening, and it is why it is gated on the command rather than
+ * on a mode name or an env var. A serve build already runs with broader
+ * privilege than a shipped one, is gitignored, and `wxt zip` only ever builds
+ * production. `tests/security/manifest-assertions.test.ts` asserts that no
+ * built manifest carries a localhost, `http:` or `ws:` source.
+ */
+const DEV_SERVER_CSP_SOURCES: Record<string, string> = {
+  // Asset imports and the Tailwind <link> are fetched over http.
+  "img-src": "http://localhost:*",
+  "style-src": "http://localhost:*",
+  // Vite's client fetches over http; its HMR channel and WXT's reload channel
+  // are websockets. Plaintext `ws:` is acceptable here and nowhere else: the
+  // peer is a dev server on the loopback interface.
+  "connect-src": "http://localhost:* ws://localhost:*",
+};
+
+function extensionPagesCsp(command: "serve" | "build"): string {
+  if (command !== "serve") return EXTENSION_PAGES_CSP;
+
+  return EXTENSION_PAGES_CSP.split("; ")
+    .map((directive) => {
+      const name = directive.slice(0, directive.indexOf(" "));
+      const extra = DEV_SERVER_CSP_SOURCES[name];
+      return extra ? `${directive} ${extra}` : directive;
+    })
+    .join("; ");
+}
+
+/**
  * Host match patterns for the NIP-07 provider injection surface.
  *
  * This list MUST stay identical to `matches` in `src/extension/content.ts`:
@@ -92,7 +138,7 @@ export default defineConfig({
     // it, so a timer-only auto-lock silently never fires.
     permissions: ["storage", "windows", "alarms"],
     content_security_policy: {
-      extension_pages: EXTENSION_PAGES_CSP,
+      extension_pages: extensionPagesCsp(env.command),
     },
     // Make injected script accessible to the pages the content script runs on,
     // for the NIP-07 provider.
