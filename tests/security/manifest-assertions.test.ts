@@ -259,6 +259,23 @@ for (const target of TARGETS) {
         }
       );
 
+      it("never carries a dev-server source into a shipped policy", () => {
+        // The dev CSP is deliberately wider: `wxt dev` serves modules, styles,
+        // images and its HMR socket from http://localhost:3000, and the strict
+        // policy blocks all four. That relaxation is gated on `command ===
+        // "serve"` in wxt.config.ts, and this asserts the gate holds — a
+        // production build that trusted a plaintext localhost origin would let
+        // any process on the machine serve code to the signer.
+        const csp = manifest.content_security_policy as Record<string, string> | string;
+        const policy = typeof csp === "string" ? csp : csp.extension_pages;
+        for (const forbidden of ["localhost", "http://", "ws://"]) {
+          expect(
+            policy,
+            `SECURITY REGRESSION: \`${forbidden}\` appeared in the ${target.label} CSP. The dev-server relaxation must never reach a build.`
+          ).not.toContain(forbidden);
+        }
+      });
+
       it("never allows eval or WebAssembly compilation", () => {
         const csp = manifest.content_security_policy as Record<string, string> | string;
         const policy = typeof csp === "string" ? csp : csp.extension_pages;
