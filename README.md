@@ -59,7 +59,8 @@ pnpm compile
 
 ### Testing
 
-Ostrilo has comprehensive testing infrastructure with 73+ tests covering:
+Ostrilo is covered by four suites. Run `pnpm test` and `pnpm run test:e2e` for
+current counts rather than trusting a figure written here:
 
 - **Unit Tests**: Service logic, domain utilities, crypto adapters
 - **Integration Tests**: Cross-service interactions and workflows

@@ -16,17 +16,13 @@ pnpm test                     # Vitest: unit + integration + security
 npx playwright test --list    # Playwright: E2E inventory, without running it
 ```
 
-**Vitest: 555 tests across 41 files, about 3 seconds wall clock**
+Vitest covers `tests/unit`, `tests/integration` and `tests/security`. Playwright
+covers `tests/e2e`, run separately via `pnpm run test:e2e`. Vitest excludes
+`tests/e2e/**`, so the two totals never overlap.
 
-| Suite               | Files | Tests |
-| ------------------- | ----: | ----: |
-| `tests/unit`        |    28 |   386 |
-| `tests/integration` |     7 |    36 |
-| `tests/security`    |     6 |   133 |
-
-**Playwright: 47 tests across 14 spec files**, run separately via
-`pnpm run test:e2e`. Vitest excludes `tests/e2e/**`, so the two totals never
-overlap.
+Counts are deliberately absent from this document. Run the two commands above:
+they take seconds and they cannot be wrong. Every figure previously written
+here rotted, twice.
 
 An earlier version of this document claimed "73 passing across 8 test files".
 That figure was never reproducible from the runners and had drifted far from
@@ -43,7 +39,7 @@ tests/
 │   └── ui/                  # Components, hooks, theme, accessibility
 ├── integration/             # 7 files, 36 tests - cross-layer workflows
 ├── security/                # 6 files, 133 tests - see below
-└── e2e/                     # 14 spec files, 47 tests (Playwright)
+└── e2e/                     # Playwright, one spec per journey
 ```
 
 ## Test Categories
@@ -119,10 +115,18 @@ file from `bitcoin/bips`, run verbatim through Ostrilo's own verification and
 signing paths. Known-answer tests from outside this codebase are the only kind
 that can catch a wrong-but-consistent implementation.
 
-### E2E Tests (14 spec files, 47 tests)
+### E2E Tests
 
-Playwright drives the built extension in a persistent Chromium context. E2E is
-deliberately not a required merge gate; see `openspec/` for the rationale.
+Playwright drives the built extension in a persistent Chromium context, one spec
+per user journey. E2E is deliberately not a required merge gate; see `openspec/`
+for the rationale.
+
+Every spec runs headless and unattended. Nothing in the suite is skipped: a
+journey that cannot be tested gets a spec explaining why, not a `describe.skip`.
+Setup goes through `tests/e2e/fixtures/agent.ts` rather than walking onboarding
+in each file, so a spec asserts its own journey and not the setup of one.
+
+To drive the extension by hand while writing a spec, see `docs/agent-loop.md`.
 
 ## Running Tests
 
