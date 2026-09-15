@@ -7,6 +7,17 @@ All development work must conform to `docs/development-standards.md`. Before edi
 
 All UI work must follow `docs/design/DESIGN_RULES.md`. Do not reintroduce gradients, accent rails, dot-grid backgrounds, the retired Arcade Plush class names, or pink/candy palette choices.
 
+## Driving the Extension
+
+To see the extension actually run — screenshots, console and service-worker
+output, a real signing flow — use the loop in `docs/agent-loop.md`. Scratch specs
+are gitignored and CI never runs them; promote anything worth keeping into
+`tests/e2e/`.
+
+Judge UI from `pnpm run agent:loop:prod`. The agent build keeps its logs and is
+unminified, which makes it right for debugging and wrong for deciding whether
+something looks correct.
+
 ## React Doctor Verification
 
 After code edits, run the pinned local tool with `pnpm run doctor` (which invokes `node_modules/.bin/react-doctor`). Address the findings in the files you changed. Do not disable or suppress a rule to lower the count; fix the cause or explain why the finding does not apply.
