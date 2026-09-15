@@ -16,19 +16,49 @@ function slug(value: string): string {
     .slice(0, 90);
 }
 
+/**
+ * Absolute artifact directory for one test.
+ *
+ * `OSTRILO_E2E_SCREENSHOT_DIR` is resolved rather than used verbatim, because
+ * `testInfo.attach({ path })` resolves a relative path against the worker's
+ * cwd, which is not the repo root when a command is run from a subdirectory.
+ */
+export function artifactDir(testInfo: TestInfo): string {
+  const root = process.env.OSTRILO_E2E_SCREENSHOT_DIR
+    ? path.resolve(process.env.OSTRILO_E2E_SCREENSHOT_DIR)
+    : DEFAULT_SCREENSHOT_DIR;
+  return path.join(
+    root,
+    testInfo.project.name,
+    slug(testInfo.titlePath.join(" "))
+  );
+}
+
+/**
+ * This tree sits outside Playwright's `outputDir`, so Playwright never cleans
+ * it. Without this, a renamed or deleted step leaves its PNG behind forever,
+ * and anything reading the directory to review the current UI silently sees a
+ * screenshot of a flow that no longer exists.
+ *
+ * Purged once per test per run, on first write, so steps within a test still
+ * accumulate normally.
+ */
+const purged = new Set<string>();
+
+async function purgeOnce(dir: string): Promise<void> {
+  if (purged.has(dir)) return;
+  purged.add(dir);
+  await fs.rm(dir, { recursive: true, force: true });
+}
+
 export async function captureStepScreenshot(
   page: Page,
   testInfo: TestInfo,
   name: string
 ): Promise<string> {
-  const root = process.env.OSTRILO_E2E_SCREENSHOT_DIR ?? DEFAULT_SCREENSHOT_DIR;
-  const titleSlug = slug(testInfo.titlePath.join(" "));
-  const screenshotPath = path.join(
-    root,
-    testInfo.project.name,
-    titleSlug,
-    `${slug(name)}.png`
-  );
+  const dir = artifactDir(testInfo);
+  await purgeOnce(dir);
+  const screenshotPath = path.join(dir, `${slug(name)}.png`);
 
   await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
   await page.screenshot({
