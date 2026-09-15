@@ -9,6 +9,8 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
   ...props
 }: React.ComponentProps<typeof SliderPrimitive.Root>) {
   const _values = React.useMemo(
@@ -47,9 +49,22 @@ function Slider({
           )}
         />
       </SliderPrimitive.Track>
+      {/*
+        Radix puts `role="slider"` on the Thumb, not on the Root, so a label
+        left on the Root names nothing: the control a screen reader reaches
+        announces itself as "slider" with a bare number and no indication of
+        what it sets. Both settings this drives — auto-lock and session
+        lifetime — decide how long an unlocked vault stays unlocked, so an
+        unlabelled control here is a security surface nobody can read.
+
+        Named per thumb, and only when there is one thumb: a range slider's two
+        thumbs would otherwise share one name and be indistinguishable.
+      */}
       {_values.map((valueAtThumb, index) => (
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
+          aria-label={_values.length === 1 ? ariaLabel : undefined}
+          aria-labelledby={_values.length === 1 ? ariaLabelledBy : undefined}
           key={`${index}-${valueAtThumb}`}
           className="seal border-primary bg-primary ring-ring/35 block size-4 shrink-0 border transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
         />
