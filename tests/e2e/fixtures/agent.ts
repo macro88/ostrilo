@@ -103,7 +103,21 @@ export async function seedUnlockedVault(
   });
   await sendExtensionRpc(page, {
     type: "settings.update",
-    patch: { onboardingCompleted: true, onboardingCompletedAt: Date.now() },
+    patch: {
+      onboardingCompleted: true,
+      onboardingCompletedAt: Date.now(),
+      // Point the relay list somewhere that cannot answer. Without this every
+      // seeded spec opens a real WebSocket to wss://relay.primal.net the
+      // moment a key exists, because profile lookups fire on a cache miss.
+      // That makes the suite depend on a public third party being reachable,
+      // and quietly tells that relay which identities a test run created.
+      //
+      // An empty list does NOT work: SettingsService.get() replaces an empty
+      // relays array with DEFAULT_RELAY_URLS on the next read, deliberately,
+      // so the user is never left with no relays. A syntactically valid but
+      // dead wss:// URL survives sanitisation and fails instantly instead.
+      relays: ["wss://localhost:1"],
+    },
   });
 
   await page.reload();
