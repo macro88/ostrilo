@@ -31,3 +31,6 @@ coverage
 test-results/
 playwright-report/
 *.bak
+
+# Agent scratch specs are disposable; see docs/agent-loop.md
+tests/e2e/*.scratch.spec.ts
