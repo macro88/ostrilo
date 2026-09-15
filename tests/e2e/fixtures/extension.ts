@@ -6,6 +6,7 @@ import {
   expect as baseExpect,
 } from "@playwright/test";
 import type { BrowserContext, Page } from "@playwright/test";
+import { attachDiagnostics } from "./diagnostics";
 
 type ExtensionFixtures = {
   extensionContext: BrowserContext;
@@ -15,9 +16,32 @@ type ExtensionFixtures = {
   openOptions: () => Promise<Page>;
 };
 
-// Helper to resolve the built extension path (WXT output)
-const extensionPath = path.resolve(process.cwd(), ".output", "chrome-mv3");
+// WXT maps {production: "", development: "-dev"} and otherwise `-${mode}` onto
+// the output directory. `agent` therefore lands in .output/chrome-mv3-agent,
+// which `pnpm dev` can never write to — unlike `-dev`, which it shares.
+const buildMode = process.env.OSTRILO_E2E_BUILD_MODE ?? "production";
+const outputSuffix = buildMode === "production" ? "" : `-${buildMode}`;
+const extensionPath = path.resolve(
+  process.cwd(),
+  ".output",
+  `chrome-mv3${outputSuffix}`
+);
 const isHeaded = process.env.OSTRILO_E2E_HEADED === "1";
+
+/**
+ * `error-context.md` snapshots `context.pages()[0]`. A persistent context opens
+ * that page at about:blank and every fixture below used to call `newPage()`, so
+ * the snapshot was always empty. Hand the blank page to the first caller.
+ */
+async function openExtensionPage(
+  context: BrowserContext,
+  url: string
+): Promise<Page> {
+  const blank = context.pages().find((p) => p.url() === "about:blank");
+  const page = blank ?? (await context.newPage());
+  await page.goto(url);
+  return page;
+}
 
 export const test = base.extend<ExtensionFixtures>({
   // Launch a persistent Chromium context with the extension loaded
@@ -38,6 +62,22 @@ export const test = base.extend<ExtensionFixtures>({
       );
     }
 
+    // A `wxt dev` artifact has no `content_scripts` key: WXT registers the
+    // script at runtime over a websocket this repo's connect-src blocks, so
+    // window.nostr is never injected. It otherwise looks exactly like a build,
+    // and the resulting failure reads as a bug in the code under test.
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(extensionPath, "manifest.json"), "utf8")
+    );
+    if (manifest.content_scripts?.length !== 1) {
+      throw new Error(
+        `Extension at ${extensionPath} declares ${
+          manifest.content_scripts?.length ?? 0
+        } content_scripts, expected 1. This is a 'wxt dev' artifact, not a ` +
+          `build, so window.nostr will never be injected. Run: pnpm run agent:build`
+      );
+    }
+
     const context = await chromium.launchPersistentContext(userDataDir, {
       channel: "chromium",
       headless: !isHeaded,
@@ -53,9 +93,15 @@ export const test = base.extend<ExtensionFixtures>({
       ],
     });
 
+    const flush = attachDiagnostics(context, testInfo, {
+      extensionPath,
+      mode: buildMode,
+    });
+
     try {
       await use(context);
     } finally {
+      await flush().catch(() => {});
       await context.close();
     }
   },
@@ -87,11 +133,11 @@ export const test = base.extend<ExtensionFixtures>({
       await use(undefined);
       return;
     }
-    const open = async () => {
-      const page = await extensionContext.newPage();
-      await page.goto(`chrome-extension://${extensionId}/popup.html`);
-      return page;
-    };
+    const open = async () =>
+      openExtensionPage(
+        extensionContext,
+        `chrome-extension://${extensionId}/popup.html`
+      );
     await use(open);
   },
 
@@ -104,11 +150,11 @@ export const test = base.extend<ExtensionFixtures>({
       await use(undefined);
       return;
     }
-    const open = async () => {
-      const page = await extensionContext.newPage();
-      await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
-      return page;
-    };
+    const open = async () =>
+      openExtensionPage(
+        extensionContext,
+        `chrome-extension://${extensionId}/sidepanel.html`
+      );
     await use(open);
   },
 
@@ -118,11 +164,11 @@ export const test = base.extend<ExtensionFixtures>({
       await use(undefined);
       return;
     }
-    const open = async () => {
-      const page = await extensionContext.newPage();
-      await page.goto(`chrome-extension://${extensionId}/options.html`);
-      return page;
-    };
+    const open = async () =>
+      openExtensionPage(
+        extensionContext,
+        `chrome-extension://${extensionId}/options.html`
+      );
     await use(open);
   },
 });
