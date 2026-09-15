@@ -14,6 +14,7 @@ import { ActivityLogTab } from "@/ui/features/settings/components/ActivityLogTab
 import { RelaysTab } from "@/ui/features/settings/components/RelaysTab";
 import { AdvancedTab } from "@/ui/features/settings/components/AdvancedTab";
 import { Logo } from "@/ui/components/logo/Logo";
+import { extensionVersion } from "@/ui/lib/extension-version";
 import {
   Activity,
   Key,
@@ -91,6 +92,7 @@ export function OptionsApp() {
   useTheme();
 
   const [activeTab, setActiveTab] = useState(getHashTab);
+  const version = extensionVersion();
 
   // Handle URL hash navigation
   useEffect(() => {
@@ -154,9 +156,9 @@ export function OptionsApp() {
                   </p>
                 </div>
               </div>
-              <div className="seal-chip seal-chip-accent">
-                v1.0.0
-              </div>
+              {version && (
+                <div className="seal-chip seal-chip-accent">v{version}</div>
+              )}
             </div>
           </div>
         </header>

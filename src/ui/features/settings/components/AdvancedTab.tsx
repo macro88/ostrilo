@@ -2,8 +2,10 @@ import { Clock } from "lucide-react";
 import { MediumKindToggles } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { getEffectiveMediumAllowKinds } from "@/domain/policy/trust-definitions";
+import { extensionVersion } from "@/ui/lib/extension-version";
 
 export function AdvancedTab() {
+  const version = extensionVersion();
   const { settings, isLoading, updateMediumAllowKinds } = useAppSettings();
 
   if (isLoading) {
@@ -56,7 +58,7 @@ export function AdvancedTab() {
       <div className="border-t border-border pt-6 mt-6">
         <h3 className="font-medium mb-2">About</h3>
         <div className="space-y-1 text-sm text-muted-foreground">
-          <p>Version 1.0.0</p>
+          {version && <p>Version {version}</p>}
           <p>Open-source signer. Keys stay with you.</p>
           <p className="text-xs pt-2">Settings version: {settings.__version}</p>
         </div>
