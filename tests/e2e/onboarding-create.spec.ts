@@ -102,3 +102,75 @@ test.describe("Onboarding - Create Key", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 });
+
+/**
+ * Leaving the backup step must take the key with it.
+ *
+ * `handleBackToInput` clears the clipboard, drops the key material and wipes
+ * the reducer's sensitive state before returning to the form
+ * (`OnboardingCreateKey.tsx:290-295`). Three separate teardowns, none of which
+ * had a test. The risk is not abstract: the backup step is the only screen that
+ * holds a decrypted nsec in a React tree, so a Back button that left it behind
+ * would keep a private key reachable in a live document for as long as the
+ * popup stayed open.
+ */
+test.describe("leaving the backup step", () => {
+  test.beforeEach(async ({ browserName }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+  });
+
+  test("drops the revealed key and requires revealing it again", async ({
+    openPopup,
+  }) => {
+    const password = "Foghorn-Marine-Pelican-2026!";
+    const popup = await openPopup();
+    await popup.setViewportSize({ width: 390, height: 700 });
+
+    await expect(
+      popup.getByRole("heading", { name: "Welcome to Ostrilo" })
+    ).toBeVisible();
+    await popup.getByText("Create New Key", { exact: true }).click();
+    await popup.getByRole("button", { name: "Continue" }).click();
+    await popup.getByLabel("Key Name").fill("Teardown Key");
+    await popup.getByLabel("Master Password").fill(password);
+    await popup.getByLabel("Confirm Password").fill(password);
+    await popup.getByRole("button", { name: /Create Key/i }).click();
+
+    await expect(
+      popup.getByRole("heading", { name: "Backup Your Key" })
+    ).toBeVisible({ timeout: 15_000 });
+
+    await popup.getByRole("button", { name: "Reveal Private Key" }).click();
+    await popup.getByRole("button", { name: "Show private key" }).click();
+    const nsec = await popup
+      .getByLabel("Private Key (nsec format)")
+      .inputValue();
+    expect(nsec).toMatch(/^nsec1/);
+
+    // `exact`, because "Back" is a substring of "Save encrypted backup".
+    await popup.getByRole("button", { name: "Back", exact: true }).click();
+    await expect(
+      popup.getByRole("heading", { name: "Create Your Nostr Key" })
+    ).toBeVisible();
+
+    // The key is gone from the document, not merely hidden behind a mask.
+    const markup = await popup.content();
+    expect(markup).not.toContain(nsec);
+    expect(markup).not.toMatch(/nsec1[02-9ac-hj-np-z]{20,}/i);
+
+    // And the reveal gate is armed again: returning to the backup step must not
+    // hand the key straight back.
+    await popup.getByLabel("Master Password").fill(password);
+    await popup.getByLabel("Confirm Password").fill(password);
+    await popup.getByRole("button", { name: /Create Key/i }).click();
+    await expect(
+      popup.getByRole("heading", { name: "Backup Your Key" })
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      popup.getByRole("button", { name: "Reveal Private Key" })
+    ).toBeVisible();
+    await expect(
+      popup.getByLabel("Private Key (nsec format)")
+    ).toHaveCount(0);
+  });
+});
