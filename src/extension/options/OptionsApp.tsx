@@ -121,6 +121,21 @@ export function OptionsApp() {
         return;
       }
 
+      // Widgets that own the arrow keys themselves. Excluding only <input> and
+      // <textarea> was not enough: a Radix slider thumb is a `<span
+      // role="slider">`, so every arrow press on the auto-lock and session
+      // timeout sliders was swallowed by this handler and switched tab
+      // instead. Those two controls decide how long an unlocked vault stays
+      // open, and neither could be operated from the keyboard at all.
+      if (
+        e.target instanceof Element &&
+        e.target.closest(
+          '[role="slider"], [role="listbox"], [role="combobox"], [role="menu"], [role="radiogroup"], [role="spinbutton"], select, [contenteditable]'
+        )
+      ) {
+        return;
+      }
+
       const currentIndex = TAB_KEYS.indexOf(activeTab as any);
       
       if ((e.key === "ArrowRight" || e.key === "ArrowDown") && currentIndex < TAB_KEYS.length - 1) {
