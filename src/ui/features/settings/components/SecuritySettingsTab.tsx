@@ -51,6 +51,25 @@ export function SecuritySettingsTab() {
       // Cancelled.
     }
   };
+  // The reset patch rewrites both timeouts, so it carries the same gate the
+  // sliders do. It used to ask with `confirm()` and then send the patch with no
+  // password: the background refused it, nothing reset, and the only trace was
+  // a console.error that the production build compiles away.
+  const resetAll = async () => {
+    try {
+      await reauth.request(
+        {
+          action: "Reset all settings to their defaults.",
+          consequence:
+            "This clears your relay list, theme, and both timeouts. Your keys are not affected.",
+        },
+        (password) => resetSettings(password)
+      );
+    } catch {
+      // Cancelled. Settings are unchanged.
+    }
+  };
+
   const biometricAvailable =
     "credentials" in navigator && "create" in navigator.credentials;
 
@@ -121,15 +140,7 @@ export function SecuritySettingsTab() {
           <Button
             variant="destructive"
             className="w-full"
-            onClick={() => {
-              if (
-                confirm(
-                  "This will reset all settings to defaults. Are you sure?"
-                )
-              ) {
-                resetSettings();
-              }
-            }}
+            onClick={resetAll}
           >
             Reset All Settings
           </Button>

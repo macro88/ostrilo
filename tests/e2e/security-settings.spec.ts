@@ -141,6 +141,63 @@ test.describe("security settings", () => {
   });
 
   /**
+   * Reset rewrites both timeouts, so it carries the same password gate. It used
+   * to ask with `confirm()` and then send the patch bare: the background refused
+   * it, nothing reset, and the only trace was a console.error that production
+   * compiles away. A destructive button that silently does nothing is worse than
+   * one that fails loudly, because the user believes it worked.
+   */
+  test("resets settings only after the password is given", async ({
+    openPopup,
+    openOptions,
+  }) => {
+    const { options } = await openOptionsOnSecurity(openPopup, openOptions);
+
+    await sendExtensionRpc(options, {
+      type: "settings.update",
+      patch: { theme: "dark" },
+    });
+    await expect
+      .poll(async () =>
+        (await sendExtensionRpc<{ theme: string }>(options, { type: "settings.get" }))
+          .theme
+      )
+      .toBe("dark");
+
+    await options.getByRole("button", { name: "Reset All Settings" }).click();
+    await expect(
+      options.getByRole("heading", { name: "Confirm with your password" })
+    ).toBeVisible();
+
+    await options.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
+    await options.getByRole("button", { name: "Confirm" }).click();
+
+    await expect
+      .poll(async () =>
+        (await sendExtensionRpc<{ theme: string }>(options, { type: "settings.get" }))
+          .theme
+      )
+      .not.toBe("dark");
+  });
+
+  test("cancelling reset changes nothing", async ({ openPopup, openOptions }) => {
+    const { options } = await openOptionsOnSecurity(openPopup, openOptions);
+
+    await sendExtensionRpc(options, {
+      type: "settings.update",
+      patch: { theme: "dark" },
+    });
+
+    await options.getByRole("button", { name: "Reset All Settings" }).click();
+    await options.getByRole("button", { name: "Cancel" }).click();
+
+    const after = await sendExtensionRpc<{ theme: string }>(options, {
+      type: "settings.get",
+    });
+    expect(after.theme).toBe("dark");
+  });
+
+  /**
    * The two disabled actions are deliberate: a half-built "Export Private Key"
    * that appeared to work would be the worst possible bug in this product. If
    * either is ever enabled it must arrive with its own tests, and this failing

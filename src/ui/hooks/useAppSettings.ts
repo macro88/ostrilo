@@ -257,7 +257,14 @@ export function useAppSettings() {
   );
 
   // Reset settings to defaults
-  const resetSettings = useCallback(async () => {
+  /**
+   * The reset patch includes `autoLockMinutes` and `sessionTTLMinutes`, which
+   * the background password-gates in either direction. Sending it without a
+   * password is refused, so the caller must supply one — previously this sent
+   * the patch bare, the background refused it, and the button did nothing at
+   * all with no message to the user.
+   */
+  const resetSettings = useCallback(async (password?: string) => {
     try {
       // Reset only the fields that are supported by AppSettingsPatch
       const resetPatch: AppSettingsPatch = {
@@ -272,7 +279,7 @@ export function useAppSettings() {
         onboardingCompleted: DEFAULT_SETTINGS_V1.onboardingCompleted,
         onboardingCompletedAt: DEFAULT_SETTINGS_V1.onboardingCompletedAt,
       };
-      await rpcUpdateSettings(resetPatch);
+      await rpcUpdateSettings(resetPatch, password);
     } catch (error) {
       console.error("Failed to reset settings:", error);
       throw error;
