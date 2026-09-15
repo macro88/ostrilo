@@ -1,320 +1,283 @@
-import { test, expect, Page } from "./fixtures/extension";
+import { test, expect } from "./fixtures/extension";
+import type { Page } from "./fixtures/extension";
+import {
+  seedUnlockedVault,
+  sendExtensionRpc,
+  openDapp,
+  waitForApprovalPage,
+  DAPP_ORIGIN,
+  TEST_PASSWORD,
+} from "./fixtures/agent";
 
 /**
- * E2E tests for Approval Flow (add-approval-prompt)
- * 
- * Tests cover:
- * - Task 9.3: Test signEvent with `ask` policy → popup appears
- * - Task 9.4: Test click Allow → event signed and returned
- * - Task 9.5: Test click Deny → error returned to dApp
- * - Task 9.6: Test click Deny + Remember → deny rule created
- * - Task 9.7: Test timeout → auto-deny with timeout error
- * 
- * Note: These tests require a configured vault with a key and proper policy setup.
- * In the current implementation, they verify the approval system behavior when
- * properly configured.
+ * What the two buttons in the approval detail pane actually do.
+ *
+ * This file used to contain five tests that asserted nothing. They ran against
+ * a vault that was never created, so every `window.nostr.signEvent` call was
+ * refused for being locked, and each test asserted only that *something* went
+ * wrong — one of them was literally `if (result.success) { …assert… } else {
+ * expect(result.error).toBeDefined() }`, which passes either way. Their own
+ * comments admitted it: "cannot fully test approval flow without a way to
+ * unlock the vault and configure policy programmatically".
+ *
+ * That excuse expired: `seedUnlockedVault` does exactly that. The tests were
+ * worse than absent, because the file was named for the Deny journey and so the
+ * suite read as though Deny, Deny + Remember and the timeout were covered.
+ *
+ * The decisions asserted here are the ones `EventDetailView` maps from a button
+ * plus a checkbox to a resolution, and every one of them writes or withholds a
+ * standing permission:
+ *   approve            -> allow_once
+ *   approve + remember -> allow           (but allow_once for a protected kind)
+ *   deny               -> deny
+ *   deny + remember    -> deny_remember   (persists, protected kind or not)
  */
 
-test.describe("Approval Flow", () => {
-  // Skip all tests if not running on Chromium
-  // Extension E2E tests only work on Chromium due to extension loading requirements
+const REMEMBER_LABEL = "Remember this decision for this site and event kind";
+const PROTECTED_REMEMBER_LABEL = "Remember a denial for this site and event kind";
+
+type SignOutcome = { ok: true; sig: string } | { ok: false; error: string };
+
+/** Fires a signing request and leaves it in flight; the promise is read later. */
+async function beginSignRequest(
+  dapp: Page,
+  kind: number,
+  content: string
+): Promise<void> {
+  await dapp.evaluate(
+    ({ kind, content }) => {
+      const w = window as unknown as {
+        __outcome?: Promise<unknown>;
+      };
+      w.__outcome = window
+        .testSignEvent({
+          kind,
+          content,
+          tags: [],
+          created_at: Math.floor(Date.now() / 1000),
+        })
+        .then((value: { sig: string }) => ({ ok: true, sig: value.sig }))
+        .catch((error: unknown) => ({
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+    },
+    { kind, content }
+  );
+}
+
+async function readSignOutcome(dapp: Page): Promise<SignOutcome> {
+  return (await dapp.evaluate(
+    () => (window as unknown as { __outcome: Promise<SignOutcome> }).__outcome
+  )) as SignOutcome;
+}
+
+async function originPolicy(page: Page) {
+  const settings = await sendExtensionRpc<{
+    origins?: Array<{ origin: string; rules?: Record<string, string> }>;
+  }>(page, { type: "settings.get" });
+  return settings.origins?.find((o) => o.origin === DAPP_ORIGIN);
+}
+
+async function pendingCount(page: Page): Promise<number> {
+  const data = await sendExtensionRpc<{ requests: unknown[] }>(page, {
+    type: "approval.getAll",
+  });
+  return data.requests.length;
+}
+
+/** Opens the queued request's detail pane. Nothing is selected on arrival. */
+async function openFirstRequest(approvalPage: Page) {
+  await approvalPage.getByTestId("approval-request-item").first().click();
+  await expect(approvalPage.getByTestId("approval-detail")).toBeVisible();
+}
+
+test.describe("approval decisions", () => {
   test.beforeEach(async ({ browserName }) => {
     test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
   });
-  /**
-   * Helper function to wait for window.nostr to be injected
-   */
-  async function waitForNostrInjection(page: Page) {
-    await page.waitForFunction(() => typeof window.nostr !== 'undefined', {
-      timeout: 5000,
-    });
-  }
 
-  /**
-   * Helper to create an unsigned event for testing
-   */
-  function createUnsignedEvent(content: string = "Test event") {
-    return {
-      kind: 1,
-      content,
-      tags: [],
-      created_at: Math.floor(Date.now() / 1000),
-    };
-  }
-
-  test("Task 9.3: signEvent with ask policy triggers approval requirement", async ({
+  test("Deny returns a denial to the page and writes no rule", async ({
+    openPopup,
     extensionContext,
     extensionId,
   }) => {
-    // Navigate to an HTTP page
-    const page = await extensionContext.newPage();
-    await page.goto("https://localhost:8765/test-page.html");
+    const popup = await openPopup();
+    await seedUnlockedVault(popup);
+    const dapp = await openDapp(extensionContext);
 
-    // Wait for window.nostr to be injected
-    await waitForNostrInjection(page);
+    await beginSignRequest(dapp, 7, "first request");
+    const approvalPage = await waitForApprovalPage(extensionContext, extensionId);
+    await openFirstRequest(approvalPage);
+    await approvalPage.getByRole("button", { name: "Deny", exact: true }).click();
 
-    // Create an unsigned event
-    const unsignedEvent = createUnsignedEvent("Test event requiring approval");
-
-    // Call signEvent - should trigger approval requirement since vault is locked
-    // or policy is set to ask (depending on vault state)
-    const result = await page.evaluate(async (event) => {
-      try {
-        await window.nostr!.signEvent(event);
-        return { success: true, error: null };
-      } catch (err) {
-        return { 
-          success: false, 
-          error: err instanceof Error ? err.message : String(err) 
-        };
-      }
-    }, unsignedEvent);
-
-    // Should fail with vault locked, policy denied, or approval required error
-    expect(result.success).toBe(false);
-    expect(result.error).toBeDefined();
-    expect(typeof result.error).toBe('string');
-    
-    // The error should be one of the expected canonical types when approval is needed.
-    const validErrors = [
-      'locked',
-      'denied',
-      'needs_approval',
-      'approval_failed',
-      'no_key_selected'
-    ];
-    
-    const hasValidError = validErrors.some(validError => 
-      result.error?.includes(validError)
-    );
-    
-    expect(hasValidError).toBe(true);
-  });
-
-  test("Task 9.4: Approval flow - Allow action signs and returns event", async ({
-    extensionContext,
-    extensionId,
-  }) => {
-    // Note: This test verifies the structure but cannot fully test approval flow
-    // without a way to unlock the vault and configure policy programmatically.
-    // The test documents the expected behavior.
-
-    const page = await extensionContext.newPage();
-    await page.goto("https://localhost:8765/test-page.html");
-
-    await waitForNostrInjection(page);
-
-    const unsignedEvent = createUnsignedEvent("Test event for allow approval");
-
-    const result = await page.evaluate(async (event) => {
-      try {
-        const signed = await window.nostr!.signEvent(event);
-        return { 
-          success: true, 
-          error: null,
-          hasSig: !!signed.sig,
-          hasId: !!signed.id,
-          hasPubkey: !!signed.pubkey
-        };
-      } catch (err) {
-        return { 
-          success: false, 
-          error: err instanceof Error ? err.message : String(err),
-          hasSig: false,
-          hasId: false,
-          hasPubkey: false
-        };
-      }
-    }, unsignedEvent);
-
-    // In current state (vault locked), should fail
-    // When vault is unlocked and policy is "allow", should succeed
-    // This test documents the expected success structure
-    if (result.success) {
-      expect(result.hasSig).toBe(true);
-      expect(result.hasId).toBe(true);
-      expect(result.hasPubkey).toBe(true);
-    } else {
-      // Expected to fail in default state
-      expect(result.error).toBeDefined();
+    const outcome = await readSignOutcome(dapp);
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      // Specifically a refusal, not a timeout and not a locked vault. Those
+      // failures would satisfy a weaker assertion while meaning something else
+      // entirely — which is how the previous version of this file passed.
+      expect(outcome.error.toLowerCase()).toMatch(/denied|rejected/);
+      expect(outcome.error.toLowerCase()).not.toContain("timeout");
+      expect(outcome.error.toLowerCase()).not.toContain("locked");
     }
+
+    // A single denial is not a standing decision.
+    expect((await originPolicy(popup))?.rules?.["7"]).toBeUndefined();
+
+    // So the next identical request must ask again.
+    await beginSignRequest(dapp, 7, "second request");
+    await expect.poll(async () => await pendingCount(popup)).toBe(1);
   });
 
-  test("Task 9.5: Approval flow - Deny action returns error to dApp", async ({
+  test("Deny and remember auto-denies the next matching request", async ({
+    openPopup,
     extensionContext,
     extensionId,
   }) => {
-    const page = await extensionContext.newPage();
-    await page.goto("https://localhost:8765/test-page.html");
+    const popup = await openPopup();
+    await seedUnlockedVault(popup);
+    const dapp = await openDapp(extensionContext);
 
-    await waitForNostrInjection(page);
+    await beginSignRequest(dapp, 7, "remembered denial");
+    const approvalPage = await waitForApprovalPage(extensionContext, extensionId);
+    await openFirstRequest(approvalPage);
 
-    const unsignedEvent = createUnsignedEvent("Test event for deny approval");
+    await approvalPage.getByRole("checkbox", { name: REMEMBER_LABEL }).check();
+    await approvalPage.getByRole("button", { name: "Deny", exact: true }).click();
 
-    const result = await page.evaluate(async (event) => {
-      try {
-        await window.nostr!.signEvent(event);
-        return { success: true, error: null };
-      } catch (err) {
-        return { 
-          success: false, 
-          error: err instanceof Error ? err.message : String(err) 
-        };
-      }
-    }, unsignedEvent);
+    const first = await readSignOutcome(dapp);
+    expect(first.ok).toBe(false);
 
-    // Should fail (either policy denied or user denied)
-    expect(result.success).toBe(false);
-    expect(result.error).toBeDefined();
-    
-    // When user clicks Deny, error should be "denied".
-    // In current locked state, error will be different but still valid
-    const expectedErrors = [
-      'denied',
-      'locked',
-      'no_key_selected',
-      'needs_approval'
-    ];
-    
-    const hasExpectedError = expectedErrors.some(expected => 
-      result.error?.includes(expected)
-    );
-    
-    expect(hasExpectedError).toBe(true);
+    await expect
+      .poll(async () => (await originPolicy(popup))?.rules?.["7"])
+      .toBe("deny");
+
+    // The refusal half of the remembered-decision model: the second request is
+    // refused by the stored rule, so it must never reach the queue at all.
+    await beginSignRequest(dapp, 7, "should never prompt");
+    const second = await readSignOutcome(dapp);
+    expect(second.ok).toBe(false);
+    expect(await pendingCount(popup)).toBe(0);
   });
 
-  test("Task 9.6: Approval flow - Deny + Remember creates deny rule", async ({
+  /**
+   * The asymmetry that protects the most dangerous kind in the product:
+   * ticking "Remember" and approving must never write a standing allow for a
+   * protected kind, while ticking it and denying must persist.
+   *
+   * Two independent layers enforce this, and the distinction matters for what
+   * this test is worth. `EventDetailView.handleApprove` downgrades to
+   * `allow_once` for a protected kind, and `approval-rpc.ts:160-163` refuses to
+   * write the rule even if asked. So this test deliberately does NOT fail when
+   * either guard alone is removed — verified by mutating each in turn — and
+   * does fail when both are, with `rules["1"]` coming back "allow". That is the
+   * correct sensitivity for an end-to-end test of a defence-in-depth property:
+   * it tracks what a user can actually be made to suffer, not which layer
+   * happens to prevent it.
+   *
+   * The single-layer regressions are caught where they belong:
+   * `tests/unit/ui/features/approval/event-detail-view.test.tsx:142` pins the
+   * UI mapping, and the background guard has its own coverage.
+   */
+  test("remembering a protected kind persists a denial but never an approval", async ({
+    openPopup,
     extensionContext,
     extensionId,
   }) => {
-    // Note: This test documents expected behavior when "Deny + Remember" is clicked.
-    // Full testing requires vault unlock and policy configuration automation.
+    const popup = await openPopup();
+    await seedUnlockedVault(popup);
 
-    const page = await extensionContext.newPage();
-    await page.goto("https://localhost:8765/test-page.html");
-
-    await waitForNostrInjection(page);
-
-    const unsignedEvent = createUnsignedEvent("Test event for deny + remember");
-
-    // First attempt - should require approval
-    const firstResult = await page.evaluate(async (event) => {
-      try {
-        await window.nostr!.signEvent(event);
-        return { success: true, error: null };
-      } catch (err) {
-        return { 
-          success: false, 
-          error: err instanceof Error ? err.message : String(err) 
-        };
-      }
-    }, unsignedEvent);
-
-    expect(firstResult.success).toBe(false);
-    expect(firstResult.error).toBeDefined();
-
-    // After "Deny + Remember", subsequent requests should be automatically denied
-    // with denied error (tested in unit tests for policy service)
-  });
-
-  test("Task 9.7: Approval flow - Timeout results in auto-deny with timeout error", async ({
-    extensionContext,
-    extensionId,
-  }) => {
-    // Note: This test documents expected behavior when approval times out.
-    // The ApprovalQueueService has a 60-second timeout that auto-denies requests.
-    // Full testing would require mocking timers or using a shorter timeout.
-
-    const page = await extensionContext.newPage();
-    await page.goto("https://localhost:8765/test-page.html");
-
-    await waitForNostrInjection(page);
-
-    const unsignedEvent = createUnsignedEvent("Test event for timeout");
-
-    // Call signEvent - in a real approval scenario, if user doesn't respond
-    // within 60 seconds, the request should auto-deny
-    const result = await page.evaluate(async (event) => {
-      try {
-        await window.nostr!.signEvent(event);
-        return { success: true, error: null };
-      } catch (err) {
-        return { 
-          success: false, 
-          error: err instanceof Error ? err.message : String(err) 
-        };
-      }
-    }, unsignedEvent);
-
-    // In current state, will fail immediately (vault locked)
-    // With proper setup and timeout, should fail with denied after timeout
-    expect(result.success).toBe(false);
-    expect(result.error).toBeDefined();
-    
-    // Timeout behavior is tested in unit tests for ApprovalQueueService
-    // (see tests/unit/application/approval-queue.service.test.ts)
-  });
-
-  test("Approval popup structure and RPC methods are available", async ({
-    extensionContext,
-    extensionId,
-  }) => {
-    // Open approval popup directly to verify it loads correctly
-    const approvalPage = await extensionContext.newPage();
-    const approvalUrl = `chrome-extension://${extensionId}/approval.html`;
-    
-    await approvalPage.goto(approvalUrl);
-    
-    // Wait for page to load
-    await approvalPage.waitForLoadState('domcontentloaded');
-    
-    // Verify the page title or basic structure
-    const title = await approvalPage.title();
-    expect(title).toBeDefined();
-    
-    // Page should be accessible even if no pending request
-    const bodyText = await approvalPage.evaluate(() => document.body.innerText);
-    expect(bodyText).toBeDefined();
-  });
-
-  test("Approval queue handles multiple pending requests correctly", async ({
-    extensionContext,
-    extensionId,
-  }) => {
-    const page = await extensionContext.newPage();
-    await page.goto("https://localhost:8765/test-page.html");
-
-    await waitForNostrInjection(page);
-
-    // Create multiple events
-    const events = [
-      createUnsignedEvent("First pending request"),
-      createUnsignedEvent("Second pending request"),
-      createUnsignedEvent("Third pending request"),
-    ];
-
-    // Submit all events simultaneously
-    const results = await page.evaluate(async (eventsToSign) => {
-      const promises = eventsToSign.map(async (event) => {
-        try {
-          await window.nostr!.signEvent(event);
-          return { success: true, error: null };
-        } catch (err) {
-          return { 
-            success: false, 
-            error: err instanceof Error ? err.message : String(err) 
-          };
-        }
-      });
-      return Promise.all(promises);
-    }, events);
-
-    // All should fail in current locked state
-    // With proper configuration, queue should handle them one at a time
-    expect(results).toHaveLength(3);
-    results.forEach(result => {
-      expect(result.success).toBe(false);
-      expect(result.error).toBeDefined();
+    // High trust is the strongest standing permission available, so if a
+    // remembered approval could ever persist for a protected kind, it would
+    // persist here.
+    await sendExtensionRpc(popup, {
+      type: "policy.setOrigin",
+      origin: DAPP_ORIGIN,
+      patch: { trustLevel: "high" },
+      password: TEST_PASSWORD,
     });
+
+    const dapp = await openDapp(extensionContext);
+    await beginSignRequest(dapp, 1, "protected kind approval");
+    const approvalPage = await waitForApprovalPage(extensionContext, extensionId);
+    await openFirstRequest(approvalPage);
+
+    // The label itself tells the user the checkbox only binds a denial.
+    await expect(
+      approvalPage.getByRole("checkbox", { name: PROTECTED_REMEMBER_LABEL })
+    ).toBeVisible();
+
+    await approvalPage
+      .getByRole("checkbox", { name: PROTECTED_REMEMBER_LABEL })
+      .check();
+    await approvalPage
+      .getByRole("button", { name: "Approve & sign" })
+      .click();
+
+    const approved = await readSignOutcome(dapp);
+    expect(approved.ok).toBe(true);
+    if (approved.ok) expect(approved.sig).toMatch(/^[0-9a-f]{128}$/);
+
+    // Signed once, remembered never.
+    expect((await originPolicy(popup))?.rules?.["1"]).toBeUndefined();
+
+    // And proven by behaviour, not only by stored state: it asks again.
+    await beginSignRequest(dapp, 1, "protected kind, second time");
+    await expect.poll(async () => await pendingCount(popup)).toBe(1);
+  });
+
+  test("a remembered denial of a protected kind does persist", async ({
+    openPopup,
+    extensionContext,
+    extensionId,
+  }) => {
+    const popup = await openPopup();
+    await seedUnlockedVault(popup);
+    const dapp = await openDapp(extensionContext);
+
+    await beginSignRequest(dapp, 1, "protected kind denial");
+    const approvalPage = await waitForApprovalPage(extensionContext, extensionId);
+    await openFirstRequest(approvalPage);
+
+    await approvalPage
+      .getByRole("checkbox", { name: PROTECTED_REMEMBER_LABEL })
+      .check();
+    await approvalPage.getByRole("button", { name: "Deny", exact: true }).click();
+
+    const outcome = await readSignOutcome(dapp);
+    expect(outcome.ok).toBe(false);
+
+    // Refusals are always allowed to be permanent. Only approvals are
+    // constrained, which is the fail-closed direction.
+    await expect
+      .poll(async () => (await originPolicy(popup))?.rules?.["1"])
+      .toBe("deny");
+  });
+
+  test("approving without remembering does not create a rule", async ({
+    openPopup,
+    extensionContext,
+    extensionId,
+  }) => {
+    const popup = await openPopup();
+    await seedUnlockedVault(popup);
+    const dapp = await openDapp(extensionContext);
+
+    await beginSignRequest(dapp, 7, "one-off approval");
+    const approvalPage = await waitForApprovalPage(extensionContext, extensionId);
+    await openFirstRequest(approvalPage);
+    await approvalPage
+      .getByRole("button", { name: "Approve & sign" })
+      .click();
+
+    const outcome = await readSignOutcome(dapp);
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.sig).toMatch(/^[0-9a-f]{128}$/);
+
+    expect((await originPolicy(popup))?.rules?.["7"]).toBeUndefined();
+
+    await beginSignRequest(dapp, 7, "asks again");
+    await expect.poll(async () => await pendingCount(popup)).toBe(1);
   });
 });
