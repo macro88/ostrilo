@@ -33,6 +33,12 @@ export function ActivityLogConfig({
             {maxEntries} entries
           </span>
         </div>
+        {/*
+          The <Label> above is not associated with this control — Radix puts
+          `role="slider"` on the Thumb, and a bare <Label> names nothing. Without
+          this the retention control announced itself as "slider" and a number,
+          on the setting that decides how much signing history is kept.
+        */}
         <Slider
           value={[maxEntries]}
           onValueChange={handleChange}
@@ -40,6 +46,7 @@ export function ActivityLogConfig({
           min={10}
           step={10}
           className="w-full"
+          aria-label="Max entries to keep"
         />
       </div>
 
