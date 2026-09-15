@@ -70,6 +70,14 @@ async function storedTrust(page: Page): Promise<string | undefined> {
   return (await storedOrigin(page))?.trustLevel;
 }
 
+/** The explicit per-kind rule stored for this origin, if the user wrote one. */
+async function storedRule(
+  page: Page,
+  kind: number
+): Promise<string | undefined> {
+  return (await storedOrigin(page))?.rules?.[String(kind)];
+}
+
 async function liveSessionGrants(page: Page) {
   return sendExtensionRpc<Array<{ origin: string; expiresAt: number }>>(page, {
     type: "policy.getSessionGrants",
@@ -479,5 +487,276 @@ test.describe("Settings - per-origin policy", () => {
     }).toBe(1);
     await resolveNextApproval(popup, "deny");
     expect((await prompted).success).toBe(false);
+  });
+
+  /**
+   * The last untested member of the reauth family.
+   *
+   * `PermissionsTab.handleSetPerKindRule` splits three buttons that sit next to
+   * each other and look identical: `deny` and `ask` write straight through,
+   * `allow` goes via `reauth.request`. The asymmetry is the whole point - a
+   * per-kind `allow` is a standing, silent permission to sign that kind
+   * forever, and it is reachable in one click from a screen a user leaves open.
+   * Its two siblings (`high` trust, session grant) are pinned above; without
+   * this test the cheapest of the three standing permissions was the one
+   * nobody checked.
+   *
+   * Kind 0 is the probe because it is in NO trust allowlist at any level -
+   * `trust-definitions.ts` leaves profile metadata out of both `high` and
+   * `medium` deliberately. So an explicit per-kind rule is the only thing in
+   * the product that can ever make it sign without asking, and anything that
+   * reaches `allow` here reached it through the control under test.
+   *
+   * Two independent layers enforce this, and unlike the protected-kind case in
+   * `approval-flow.spec.ts` this test bites on EACH of them alone - verified by
+   * mutating each in turn:
+   *
+   *   - delete the `reauth.request` from `PermissionsTab.handleSetPerKindRule`
+   *     and step 2 fails, no dialog. (The background still refuses the
+   *     password-less write, so the hole does not open; Allow just silently
+   *     stops working, which is its own regression worth catching.)
+   *   - delete the `requireReauth` from `PolicyRpcHandler.handleSetKindRule`
+   *     and step 4 fails: the wrong password is accepted, the dialog closes
+   *     with no error, and `rules["0"]` becomes "allow". That is the hole.
+   */
+  test("allowing a kind from Settings costs the password; denying it does not", async ({
+    openPopup,
+    openOptions,
+    extensionContext,
+  }) => {
+    const popup = await openPopup();
+    await seedUnlockedVault(popup);
+
+    const options = await openPermissionsTab(openOptions);
+    const dialog = reauthDialog(options);
+    const row = options.getByTestId("origin-policy-kind-0");
+    const effective = options.getByTestId("origin-policy-effective-0");
+
+    // Baseline, and the first `policy.evaluate` of the run, which persists the
+    // consent-migration marker before any policy edit - see the first test.
+    expect(await decisionFor(popup, 0)).toEqual({ mode: "ask", reason: "trust" });
+    await expect(effective).toContainText("Asks every time");
+
+    // 1. Deny is free. No dialog, and the rule is written immediately - which
+    //    the poll below proves on its own: if a password dialog had opened,
+    //    `setPerKindRule` would not have been called at all and nothing would
+    //    be stored.
+    await row.getByRole("button", { name: "Deny", exact: true }).click();
+    await expect.poll(() => storedRule(popup, 0)).toBe("deny");
+    await expect(dialog).toBeHidden();
+    await expect(
+      row.getByRole("button", { name: "Deny", exact: true })
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(effective).toContainText("Refused");
+    await expect(effective).toContainText("a rule you set");
+    expect(await decisionFor(popup, 0)).toEqual({ mode: "deny", reason: "rule" });
+
+    // Observable: the site is refused a profile edit outright, and the refusal
+    // costs nobody a prompt.
+    const dapp = await openDapp(extensionContext);
+    const refused = await signFromDapp(dapp, 0, '{"name":"refused"}');
+    expect(refused.success).toBe(false);
+    expect(await pendingRequests(popup)).toHaveLength(0);
+
+    // 2. Allow is not free. The dialog names the origin and the kind, because
+    //    "confirm your password" on its own does not tell a user which of the
+    //    eight rows on this screen they are about to hand a standing
+    //    permission to.
+    await row.getByRole("button", { name: "Allow", exact: true }).click();
+    await expect(
+      dialog.getByRole("heading", { name: "Confirm with your password" })
+    ).toBeVisible();
+    await expect(dialog).toContainText(
+      `Always allow kind 0 for ${DAPP_ORIGIN}.`
+    );
+    await expect(dialog).toContainText(
+      "Events of that kind will be signed without a prompt."
+    );
+
+    // 3. Cancelling changes nothing. `useReauth.onCancel` rejects the promise
+    //    and `handleSetPerKindRule` swallows it, so the danger here is a
+    //    half-applied edit: the UI snapping to Allow while storage still says
+    //    deny, which would leave the screen lying about what the site may do.
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    expect(await storedRule(popup, 0)).toBe("deny");
+    expect(await decisionFor(popup, 0)).toEqual({ mode: "deny", reason: "rule" });
+    await expect(
+      row.getByRole("button", { name: "Deny", exact: true })
+    ).toHaveAttribute("aria-pressed", "true");
+
+    // 4. A wrong password is refused, and refused by the background rather
+    //    than by the dialog - `policy-rpc.ts:153-160` calls `requireReauth`
+    //    for mode `allow` whatever the UI did. If this ever landed, an
+    //    unattended unlocked session would be enough to make a site sign a
+    //    profile rewrite silently forever.
+    await row.getByRole("button", { name: "Allow", exact: true }).click();
+    await confirmReauth(options, "Wrong-Password-Entirely-2026!");
+    await expect(dialog.getByText(/invalid_password/)).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(dialog).toBeVisible();
+    expect(await storedRule(popup, 0)).toBe("deny");
+    expect(await decisionFor(popup, 0)).toEqual({ mode: "deny", reason: "rule" });
+
+    // 5. The right password, in the same still-open dialog, lands.
+    await confirmReauth(options, TEST_PASSWORD);
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+    await expect.poll(() => storedRule(popup, 0)).toBe("allow");
+    await expect(
+      row.getByRole("button", { name: "Allow", exact: true })
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(effective).toContainText("Signs without asking");
+    expect(await decisionFor(popup, 0)).toEqual({
+      mode: "allow",
+      reason: "rule",
+    });
+
+    // And the permission is real: the same request that was refused a moment
+    // ago is now signed with no prompt at all.
+    const silent = await signFromDapp(dapp, 0, '{"name":"allowed"}');
+    expect(silent.success).toBe(true);
+    if (silent.success) {
+      expect(silent.signed.kind).toBe(0);
+      expect(silent.signed.sig).toMatch(/^[0-9a-f]{128}$/);
+    }
+    expect(await pendingRequests(popup)).toHaveLength(0);
+
+    // 6. And it can be taken back for free. `ask` is the third button in the
+    //    same fieldset and takes the same free branch as Deny; a password
+    //    demanded here would mean a user who has lost their password can never
+    //    withdraw a permission they regret, which is the wrong direction to
+    //    put friction in.
+    await row.getByRole("button", { name: "Ask", exact: true }).click();
+    await expect.poll(() => storedRule(popup, 0)).toBe("ask");
+    await expect(dialog).toBeHidden();
+    expect(await decisionFor(popup, 0)).toEqual({ mode: "ask", reason: "rule" });
+
+    const asks = signFromDapp(dapp, 0, '{"name":"asks again"}');
+    await expect
+      .poll(async () => (await pendingRequests(popup)).length, { timeout: 10_000 })
+      .toBe(1);
+    await resolveNextApproval(popup, "deny");
+    expect((await asks).success).toBe(false);
+  });
+
+  /**
+   * Revoke is not Remove, and the difference is the test.
+   *
+   * `OriginPolicyTable` offers two destructive controls that a user could
+   * easily read as the same thing. Remove (covered by the first test in this
+   * file) deletes the policy record outright and returns the site to
+   * `fallback`. Revoke clears ONE field - the recorded
+   * `identityDisclosure` - and leaves the trust level, the per-kind rules and
+   * the row itself exactly as they were. A user who revokes the public key
+   * must not silently lose the signing policy they spent time on, and must not
+   * silently keep a disclosure grant they just took back.
+   *
+   * The failure mode this guards is specific and has already happened once:
+   * `useAppSettings.revokeIdentityDisclosure` sends `identityDisclosure: "ask"`
+   * rather than `undefined`, because Zod strips an explicitly-undefined
+   * optional key and the patch would reach the background as `{}` - a Revoke
+   * button that looks like it worked and changes nothing. So the stored value
+   * is asserted verbatim here, not merely "not allow".
+   */
+  test("Revoke clears the disclosure grant and keeps the rest of the policy", async ({
+    openPopup,
+    openOptions,
+    extensionContext,
+  }) => {
+    const popup = await openPopup();
+    await seedUnlockedVault(popup);
+
+    const options = await openPermissionsTab(openOptions);
+    const disclosure = options.getByTestId(`origin-disclosure-${DAPP_ORIGIN}`);
+    const revoke = disclosure.getByRole("button", { name: "Revoke" });
+
+    // Forces the consent migration to persist its marker BEFORE the trust
+    // level is edited below. The migration rewrites a stored `medium` back to
+    // `low`, so running it late would silently undo the edit this test relies
+    // on as its "policy survived" evidence.
+    expect(await decisionFor(popup, 7)).toEqual({ mode: "ask", reason: "trust" });
+
+    // Give the origin a policy worth keeping: a trust level the user chose and
+    // an explicit per-kind rule. Both are free to set, so no password is
+    // needed to arrange the fixture through the real UI.
+    await trustControl(options)
+      .getByRole("button", { name: "Medium", exact: true })
+      .click();
+    await expect.poll(() => storedTrust(popup)).toBe("medium");
+
+    await options
+      .getByTestId("origin-policy-kind-0")
+      .getByRole("button", { name: "Deny", exact: true })
+      .click();
+    await expect.poll(() => storedRule(popup, 0)).toBe("deny");
+
+    expect(await decisionFor(popup, 7)).toEqual({ mode: "allow", reason: "trust" });
+
+    // The grant is live: seeding recorded `identityDisclosure: "allow"`, so
+    // the page is answered without anyone being asked.
+    const dapp = await openDapp(extensionContext);
+    await askForPublicKey(dapp);
+    const beforeRevoke = await readPublicKeyAttempt(dapp);
+    expect(beforeRevoke.ok).toBe(true);
+    expect(beforeRevoke.value).toMatch(/^[0-9a-f]{64}$/);
+    expect(await pendingRequests(popup)).toHaveLength(0);
+
+    await expect(disclosure).toContainText("This site can read your public key");
+    await expect(revoke).toBeVisible();
+    await revoke.click();
+
+    // The screen now says the honest thing, and offers nothing to revoke.
+    await expect(disclosure).toContainText(
+      "You will be asked next time this site wants it"
+    );
+    await expect(revoke).toBeHidden();
+
+    // The row is still here. Remove would have emptied the table.
+    await expect(options.getByText(DAPP_ORIGIN).first()).toBeVisible();
+    await expect(
+      options.getByRole("heading", { name: "No Origins Configured" })
+    ).toBeHidden();
+
+    // And everything except the disclosure decision survived, in storage and
+    // in the engine's answer. `trust`, not `fallback`: the site is still one
+    // the signer has an opinion about.
+    const kept = await storedOrigin(popup);
+    expect(kept).toBeDefined();
+    expect(kept?.trustLevel).toBe("medium");
+    expect(kept?.rules?.["0"]).toBe("deny");
+    expect(kept?.identityDisclosure).toBe("ask");
+    expect(await decisionFor(popup, 7)).toEqual({ mode: "allow", reason: "trust" });
+    expect(await decisionFor(popup, 0)).toEqual({ mode: "deny", reason: "rule" });
+
+    // The half that matters: the next request for the public key reaches a
+    // human. Not answered from the revoked grant, and not refused on the quiet
+    // either - `nostr-rpc.ts` short-circuits a recorded `"deny"` with
+    // DISCLOSURE_REFUSED and queues nothing, which is the wrong outcome here
+    // and is indistinguishable from the right one unless the queue is checked.
+    await askForPublicKey(dapp);
+    await expect
+      .poll(async () => (await pendingRequests(popup)).length, { timeout: 10_000 })
+      .toBe(1);
+    const [prompt] = await pendingRequests(popup);
+    expect(prompt.operation).toBe("identity_disclosure");
+    expect(prompt.origin).toBe(DAPP_ORIGIN);
+
+    // Answering it returns the key, which is the proof the request was
+    // genuinely parked on a decision rather than already resolved.
+    await resolveNextApproval(popup, "allow");
+    const afterRevoke = await readPublicKeyAttempt(dapp);
+    expect(afterRevoke.ok).toBe(true);
+    expect(afterRevoke.value).toBe(beforeRevoke.value);
+
+    // Re-granting merges into the surviving record instead of recreating it:
+    // the trust level and the rule the user set are still theirs.
+    await expect.poll(async () => (await storedOrigin(popup))?.identityDisclosure).toBe(
+      "allow"
+    );
+    const regranted = await storedOrigin(popup);
+    expect(regranted?.trustLevel).toBe("medium");
+    expect(regranted?.rules?.["0"]).toBe("deny");
+    await expect(disclosure).toContainText("This site can read your public key");
   });
 });
