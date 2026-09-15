@@ -320,9 +320,12 @@ Immediately after the `if (!fs.existsSync(extensionPath)) { ... }` block:
     }
 ```
 
-- [ ] **Step 3: Navigate the initial page, and attach diagnostics**
+- [ ] **Step 3: Reuse the initial page, and attach diagnostics**
 
-Playwright's fallback ARIA snapshot in `error-context.md` comes from `context.pages()[0]`, which `launchPersistentContext` leaves at `about:blank` because every fixture calls `newPage()`. Navigating it once makes that artifact useful for all 16 specs.
+Playwright's fallback ARIA snapshot in `error-context.md` comes from
+`context.pages()[0]`, which `launchPersistentContext` leaves at `about:blank`
+because every fixture calls `newPage()`. Handing that page to the first opener
+makes the snapshot show the real UI, and benefits all 16 specs.
 
 Immediately after `launchPersistentContext` returns, before `await use(context)`:
 
@@ -331,15 +334,36 @@ Immediately after `launchPersistentContext` returns, before `await use(context)`
       extensionPath,
       mode: buildMode,
     });
-
-    // error-context.md snapshots pages()[0]; persistent contexts open it at
-    // about:blank and every fixture below calls newPage(), so the snapshot was
-    // always empty. One navigation makes it real.
-    const initial = context.pages()[0];
-    if (initial) {
-      await initial.goto("chrome-extension://invalid/").catch(() => {});
-    }
 ```
+
+Then replace the three `open*` fixtures' `extensionContext.newPage()` call with a
+shared helper defined above `test.extend`:
+
+```ts
+/**
+ * error-context.md snapshots context.pages()[0]. A persistent context opens it
+ * at about:blank and every fixture used to call newPage(), so that snapshot was
+ * always empty. Hand the blank page to the first caller instead.
+ */
+async function openExtensionPage(
+  context: BrowserContext,
+  url: string
+): Promise<Page> {
+  const blank = context.pages().find((p) => p.url() === "about:blank");
+  const page = blank ?? (await context.newPage());
+  await page.goto(url);
+  return page;
+}
+```
+
+and have each opener call it, e.g. for `openPopup`:
+
+```ts
+    const open = async () =>
+      openExtensionPage(extensionContext, `chrome-extension://${extensionId}/popup.html`);
+```
+
+Do the same for `openSidepanel` (`sidepanel.html`) and `openOptions` (`options.html`).
 
 Then in the existing `finally`, before `context.close()`:
 
