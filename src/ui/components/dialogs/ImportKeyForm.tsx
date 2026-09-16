@@ -1,11 +1,11 @@
 import { useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NO_AUTOFILL_PROPS } from "@/components/ui/password-input";
 import { parsePrivateKey } from "@/infrastructure/messaging/client";
 import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
-import { ArrowLeft, Loader2, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
+import { KeyFormActions } from "./KeyFormActions";
 
 interface ImportKeyFormProps {
   onBack: () => void;
@@ -142,28 +142,12 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
         </div>
       )}
 
-      <div className="flex gap-2 pt-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onBack}
-          disabled={isImporting}
-          className="flex-1"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-        <Button type="submit" disabled={isImporting} className="flex-1">
-          {isImporting ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Importing...
-            </>
-          ) : (
-            "Import Key"
-          )}
-        </Button>
-      </div>
+      <KeyFormActions
+        onBack={onBack}
+        pending={isImporting}
+        submitLabel="Import Key"
+        pendingLabel="Importing..."
+      />
 
       <div className="rounded-[10px] border border-border bg-muted/50 p-3">
         <p className="text-xs text-muted-foreground">

@@ -1,10 +1,9 @@
 import { useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NO_AUTOFILL_PROPS } from "@/components/ui/password-input";
 import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { KeyFormActions } from "./KeyFormActions";
 
 interface CreateKeyFormProps {
   onBack: () => void;
@@ -95,28 +94,12 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
         </div>
       )}
 
-      <div className="flex gap-2 pt-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onBack}
-          disabled={isGenerating}
-          className="flex-1"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-        <Button type="submit" disabled={isGenerating} className="flex-1">
-          {isGenerating ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Creating...
-            </>
-          ) : (
-            "Create Key"
-          )}
-        </Button>
-      </div>
+      <KeyFormActions
+        onBack={onBack}
+        pending={isGenerating}
+        submitLabel="Create Key"
+        pendingLabel="Creating..."
+      />
     </form>
   );
 }

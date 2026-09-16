@@ -74,11 +74,18 @@ jobs:
       - run: pnpm run build
       - run: pnpm run build:firefox
 
-      # The manifest and build-output assertions need BUILT output, which the
-      # verify job does not produce. Without this line the whole suite skips
-      # in CI: verify runs tests without building, build builds without
+      # The manifest and key-handling-bundle assertions need BUILT output,
+      # which the verify job does not produce. Without this step they never
+      # run at all: verify runs tests without building, build builds without
       # running them.
-      - run: pnpm exec vitest run tests/security/manifest-assertions.test.ts
+      #
+      # OSTRILO_REQUIRE_BUILD_OUTPUT turns "nothing was built" from a skip into
+      # a failure. This is the one job that has just built both targets, so
+      # here an absent `.output/` means the build silently produced nothing,
+      # and that must not pass quietly. See tests/security/build-output.ts.
+      - run: pnpm exec vitest run tests/security/manifest-assertions.test.ts tests/security/key-handling-bundle.test.ts
+        env:
+          OSTRILO_REQUIRE_BUILD_OUTPUT: "1"
 
   audit:
     name: Dependency audit

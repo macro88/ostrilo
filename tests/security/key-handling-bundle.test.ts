@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { KEY_HANDLING_DOCUMENTS } from "@/ui/components/logo/key-handling-documents";
+import { buildOutputPresent } from "./build-output";
 
 /**
  * The build-output half of the realm guarantee.
@@ -20,9 +21,12 @@ import { KEY_HANDLING_DOCUMENTS } from "@/ui/components/logo/key-handling-docume
  * boundary, and following it would make the boundary invisible to the guard
  * that exists to check it.
  *
- * RUNNING IT. It needs real build output and SKIPS with a message naming the
- * command when a target has not been built. Run `pnpm run build` and
- * `pnpm run build:firefox` first. A skip is not a pass.
+ * RUNNING IT. It needs real build output. `pnpm run test:build-output` builds
+ * both targets and then runs this file, which is what the `Extension builds`
+ * job does. Run bare, with nothing built, it skips and names the command - and
+ * a skip is not a pass, which is why the build-output entry condition lives in
+ * `./build-output.ts`: with `OSTRILO_REQUIRE_BUILD_OUTPUT=1` set, as the build
+ * job sets it, a missing target fails instead of skipping.
  */
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -130,14 +134,7 @@ for (const target of TARGETS) {
   const built = existsSync(outputDir);
 
   describe(`${target.name}: key-handling documents exclude 3D libraries`, () => {
-    it.skipIf(built)(
-      `SKIPPED - run \`${target.command}\` first; a skip is not a pass`,
-      () => {
-        expect(built).toBe(true);
-      }
-    );
-
-    if (!built) return;
+    if (!buildOutputPresent(built, target.command)) return;
 
     it.each(KEY_HANDLING_DOCUMENTS)(
       "%s reaches no chunk containing a 3D engine",
