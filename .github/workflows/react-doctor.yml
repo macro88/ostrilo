@@ -32,6 +32,15 @@ jobs:
       # Third-party actions are pinned to commit SHAs, not tags. A tag can be
       # moved to point at different code; a SHA cannot.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # Full history, not the default shallow clone. React Doctor reports
+          # only what a PR *introduces*, which it works out by diffing against
+          # the merge base with `main`. A shallow checkout has no merge base, so
+          # the scan silently falls back to listing every finding in the changed
+          # files - including ones that have been on `main` for months. That
+          # turns the PR comment into noise and hides the findings that are
+          # actually new.
+          fetch-depth: 0
 
       - uses: millionco/react-doctor@7f8d5ed1d496e83e8949544a911668306d9fd438 # v2.2.9
         with:

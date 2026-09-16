@@ -60,12 +60,26 @@ function Slider({
         Named per thumb, and only when there is one thumb: a range slider's two
         thumbs would otherwise share one name and be indistinguishable.
       */}
-      {_values.map((valueAtThumb, index) => (
+      {/*
+        Keyed by thumb POSITION, deliberately. A thumb's identity on a slider is
+        where it sits in the value tuple - thumb 0 is the low thumb, thumb 1 the
+        high one - and that never reorders or filters. The value is not identity
+        here, it is the state the thumb carries.
+
+        The previous key folded the value in (`${index}-${valueAtThumb}`), which
+        changed on every step of a drag, so React unmounted and remounted the
+        thumb each time. Every consumer of this component is controlled and
+        single-thumb (auto-lock, session lifetime, activity retention), so that
+        remount landed on the element holding DOM focus: arrow-keying one of
+        these controls dropped focus after each keypress, on settings that
+        decide how long an unlocked vault stays unlocked.
+      */}
+      {_values.map((_valueAtThumb, index) => (
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           aria-label={_values.length === 1 ? ariaLabel : undefined}
           aria-labelledby={_values.length === 1 ? ariaLabelledBy : undefined}
-          key={`${index}-${valueAtThumb}`}
+          key={index}
           className="seal border-primary bg-primary ring-ring/35 block size-4 shrink-0 border transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
         />
       ))}

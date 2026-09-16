@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { buildOutputPresent } from "./build-output";
 
 /**
  * Build-output assertions for the generated extension manifests.
@@ -24,9 +25,13 @@ import path from "node:path";
  *
  * Established by the OpenSpec change `harden-manifest-and-build`.
  *
- * Running it. The suite needs real build output, so it SKIPS with a message
- * naming the required command when a target has not been built. Use
- * `pnpm run test:manifest`, which builds both targets and then runs this file.
+ * Running it. The suite needs real build output. Use
+ * `pnpm run test:manifest`, which builds both targets and then runs this file,
+ * or `pnpm run test:build-output` for this file and the key-handling bundle
+ * guard together. Run bare, with nothing built, it skips and names the command.
+ * That skip is not a pass: the entry condition lives in `./build-output.ts`,
+ * and with `OSTRILO_REQUIRE_BUILD_OUTPUT=1` set - as both of those scripts and
+ * the `Extension builds` job set it - a missing target fails instead.
  */
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -218,11 +223,7 @@ for (const target of TARGETS) {
   const manifestPath = path.join(outDir, "manifest.json");
 
   describe(`generated manifest: ${target.label}`, () => {
-    if (!existsSync(manifestPath)) {
-      it.skip(
-        `SKIPPED - ${target.outDir}/manifest.json not found. Run \`${target.buildCommand}\` (or \`pnpm run test:manifest\`) to generate it.`,
-        () => {}
-      );
+    if (!buildOutputPresent(existsSync(manifestPath), target.buildCommand)) {
       return;
     }
 
