@@ -1,11 +1,11 @@
 # Ostrilo v2 Product Requirements Document
 ## The World's Best Nostr Signing Extension
 
-- **Document Version:** 2.1
+- **Document Version:** 2.2
 - **Created:** 2025-12-09
 - **Original Target Release:** Q2 2025
-- **Last Status Reconciliation:** 2026-06-12
-- **Document Status:** Roadmap Status Draft
+- **Last Status Reconciliation:** 2026-09-17
+- **Document Status:** Roadmap Status Draft - reconciled against `main` at `a32c33e`
 
 ---
 
@@ -65,7 +65,7 @@ Ostrilo v2 aims to become the **world's best Nostr signing extension** by delive
 
 ### Current Implementation Snapshot
 
-- **Status date:** 2026-06-13
+- **Status date:** 2026-09-17
 - **Source of truth:** current `src/`, `tests/`, `openspec/specs/`, archived OpenSpec changes, and project docs in this repository.
 
 The original release dates are now historical planning targets. The status markers in this document describe the current codebase, not the original plan.
@@ -88,7 +88,7 @@ The original release dates are now historical planning targets. The status marke
 - Structured JSON-RPC-compatible error responses with canonical machine codes, numeric mappings, and developer docs.
 - Light/dark/system theme selection with live system-preference updates across popup, side panel, approval window, and options page.
 - WXT Chrome/Firefox build targets, Playwright extension E2E tests, smoke screenshot flow, and React Doctor CI.
-- Explicit manifest policy on both build targets: a declared `content_security_policy.extension_pages` (closed `default-src`, `script-src 'self'` with no `unsafe-eval`, no plaintext `http:`/`ws:` source), a reviewed permission set of `storage`, `windows` and `alarms` plus Chrome's `sidePanel`, `use_dynamic_url` on the injected NIP-07 provider so pages cannot probe a fixed extension URL, the Firefox target moved from MV2 to MV3 so no target keeps a persistent background page holding decrypted keys, and `console` output stripped from production bundles. `tests/security/manifest-assertions.test.ts` asserts all of it against the generated manifests, which is what caught — and now fences — the placeholder `sidebar_action` block Firefox had been shipping. SEC-004 stays 🔄 rather than ✅ because the suite is not yet wired into a CI job that builds first; see `docs/extension-manifest.md` and `docs/ci-verification.md`.
+- Explicit manifest policy on both build targets: a declared `content_security_policy.extension_pages` (closed `default-src`, `script-src 'self'` with no `unsafe-eval`, no plaintext `http:`/`ws:` source), a reviewed permission set of `storage`, `windows` and `alarms` plus Chrome's `sidePanel`, `use_dynamic_url` on the injected NIP-07 provider so pages cannot probe a fixed extension URL, the Firefox target moved from MV2 to MV3 so no target keeps a persistent background page holding decrypted keys, and `console` output stripped from production bundles. `tests/security/manifest-assertions.test.ts` asserts all of it against the generated manifests, which is what caught — and now fences — the placeholder `sidebar_action` block Firefox had been shipping. SEC-004 is now ✅: `verify.yml`'s `build` job runs `manifest-assertions.test.ts` and `key-handling-bundle.test.ts` against freshly built Chrome and Firefox output with `OSTRILO_REQUIRE_BUILD_OUTPUT=1`, so an absent `.output/` fails the job instead of skipping the suite. Stated precisely, the gate asserts the shipped manifests' CSP - no `unsafe-eval` or `wasm-unsafe-eval`, no `unsafe-inline` in `script-src`, no remote script origin, no plaintext transport, a closed `default-src` - plus build-output hygiene: no source-map files, no inline source-map comments, no `console` call in any production bundle. It does not grep bundle text for `eval(`; the asserted CSP is what forbids evaluation at runtime. See `docs/extension-manifest.md` and `docs/ci-verification.md`.
 - Encrypted key backup replaces the plaintext key download. The create-key backup
   step no longer writes `{privateKey, privateKeyHex}` to disk in the clear: it
   writes a versioned `ostrilo-key-backup` envelope sealed with the vault's own
@@ -108,6 +108,39 @@ The original release dates are now historical planning targets. The status marke
   four. `tests/security/key-handling-bundle.test.ts` walks each built document's
   module and `modulepreload` graph and fails on the WebGL markers or a transitive
   byte ceiling.
+- Playwright now covers the Tier-1 journeys the coverage audit named, rather than
+  asserting that a page rendered: onboarding create and import, backup round-trip
+  (the product reads back the file it writes) and backing out of the backup step,
+  approval flow and timeout and withdrawal, protected-kind policy, remembered
+  site-signing policy, identity disclosure, vault lock, activity retention, relays,
+  security and general and advanced settings, the public-key surface including QR.
+  Five approval specs that asserted nothing were replaced. The suite no longer calls
+  a public relay; it serves its own fixtures over TLS. Test counts are deliberately
+  absent here and in `docs/TESTING.md` - run the runners.
+- An agent-driven E2E loop: a scratch project and template, shared driving helpers,
+  page and service-worker console captured to a file, build selected by mode with the
+  artifact's provenance asserted, and the build skipped when `src/` is unchanged.
+  See `docs/agent-loop.md`.
+- The design-review runner captures every surface in both themes and in populated
+  state as well as fresh-vault state - a renamed key, a second key, a cached profile,
+  three relays, three sites at three trust levels, real signed and denied activity,
+  and a two-site approval queue. That populated pass is what exposed a layout bug the
+  empty-vault set could not show. The runner's own defects (a run that died at the
+  backup step, approvals never captured after the content script moved to
+  `https://*/*`, the Approve button photographed inside its 500ms cooldown) were
+  fixed as part of the review. No capture contains an nsec. See
+  `docs/design-review/README.md`.
+- The polish round of 2026-09-17 closed every finding in that review, including three
+  token pairs that failed WCAG AA - among them the amber carrying *"There is no
+  recovery"* on the backup step, now 5.90:1 - and rewrote the design rules' contrast
+  section to state what the tokens actually guarantee.
+- Defects that only driving the real UI surfaced, now fixed: both timeout sliders were
+  unlabelled to a screen reader and inoperable from the keyboard (the options page
+  swallowed arrow keys to switch tabs); Reset All Settings answered a destructive
+  confirm and then silently reset nothing, because the background password-gates the
+  timeout fields and the patch carried no password - it now routes through the same
+  reauth dialog; the UI reported a version the extension was not running; and the dev
+  server's own assets were blocked by the extension CSP.
 
 **Partially implemented or narrower than the PRD wording:**
 
@@ -196,9 +229,17 @@ The original release dates are now historical planning targets. The status marke
   are not built, so the popup still hosts onboarding, unlock and the whole main app
   in one realm. That realm split is the remaining half, and the row stays 🔄.
 - Activity filtering covers origin and event kind; it does not yet include full-text search, date-range filtering, result filtering, or saved presets.
-- Accessibility has meaningful keyboard/ARIA coverage for key management and Radix-based controls, but no repo-wide WCAG 2.1 AA audit has been completed.
+- Accessibility has meaningful keyboard/ARIA coverage for key management and Radix-based
+  controls, the design tokens now meet AA on their intended surfaces, and the timeout
+  sliders are labelled and keyboard-operable. No repo-wide WCAG 2.1 AA audit has been
+  completed, so UX-011 stays 🔄.
 - Relay/profile infrastructure exists, but NIP-specific protocol flows such as NIP-04, NIP-44, NIP-42, NIP-57 validation, NIP-65 publish workflows, and NIP-05 DNS verification remain unimplemented.
 - Settings use browser sync storage and synchronize between local extension contexts, but cross-device sync, conflict handling, and NIP-78/decentralized sync are deferred.
+- Code splitting exists at exactly one boundary and for a security reason, not a
+  performance one: the 3D mascot loads behind `React.lazy` so its chunk cannot enter a
+  document that handles key material. UI routes are not split, no route loads on demand,
+  and there is no CI bundle-size budget. PERF-002 moves from ⬜ to 🔄 on that one
+  boundary; PERF-003 and PERF-009 are untouched.
 
 ---
 
@@ -217,7 +258,7 @@ Security is the foundation of trust in a signing extension. Users entrust Ostril
 | SEC-001 | Complete Memory Zeroization | M | 🔄 | v2.0 | 1 | "Create a proposal to implement comprehensive memory zeroization for all sensitive data including private keys, passwords, derived keys, and decrypted plaintext throughout the application lifecycle, ensuring buffers are zeroed immediately after use in try-finally blocks" |
 | SEC-002 | Hardware Security Module Support | S | ⬜ | v2.1 | 1 | "Create a proposal to add optional hardware security module (HSM) integration via WebAuthn for private key storage, allowing users to store keys on YubiKey, Ledger, or similar devices" |
 | SEC-003 | Secure UI Component Isolation | M | 🔄 | v2.0 | 1 | "Create a proposal to refactor UI components to never store private keys or passwords in React state, using refs and immediate RPC forwarding instead, with secure memory handling" |
-| SEC-004 | Content Security Policy Enforcement | M | 🔄 | v2.0 | 1 | "Create a proposal to add CI validation that scans build output for eval, inline scripts, and unsafe-inline directives, ensuring strict CSP compliance in manifest.json" |
+| SEC-004 | Content Security Policy Enforcement | M | ✅ | v2.0 | 1 | "Create a proposal to add CI validation that scans build output for eval, inline scripts, and unsafe-inline directives, ensuring strict CSP compliance in manifest.json" |
 | SEC-005 | Secrets Scanning in CI/CD | M | ⬜ | v2.0 | 1 | "Create a proposal to integrate automated secrets scanning in CI/CD pipeline using tools like TruffleHog or git-secrets to detect accidentally committed private keys, API tokens, or passwords" |
 | SEC-006 | Rate Limiting for Signing Operations | S | ⬜ | v2.0 | 1 | "Create a proposal to implement rate limiting on signing operations per origin to prevent abuse, with configurable thresholds (e.g., 100 signs/minute) and temporary blocks for suspicious activity" |
 | SEC-007 | Phishing Protection with Domain Verification | M | ⬜ | v2.0 | 1 | "Create a proposal to implement domain verification against known phishing sites using community-maintained blocklists, warning users before signing on suspicious domains" |
@@ -346,7 +387,7 @@ Performance and reliability are non-negotiable for a signing extension. Slow or 
 | ID | Title | Priority | Status | Version | Epic | OpenSpec Proposal Prompt |
 |----|-------|----------|--------|---------|------|--------------------------|
 | PERF-001 | Sub-5ms Signing Operations | S | ⬜ | v2.0 | 5 | "Create a proposal to optimize signing performance targeting ≤5ms P50 latency and ≤10ms P99 latency with benchmarks in CI measuring schnorr signature generation and event serialization" |
-| PERF-002 | Lazy Loading & Code Splitting | S | ⬜ | v2.0 | 5 | "Create a proposal to implement code splitting and lazy loading for UI routes reducing initial bundle size, loading components on-demand, and improving extension startup time" |
+| PERF-002 | Lazy Loading & Code Splitting | S | 🔄 | v2.0 | 5 | "Create a proposal to implement code splitting and lazy loading for UI routes reducing initial bundle size, loading components on-demand, and improving extension startup time" |
 | PERF-003 | Background Script Optimization | M | ⬜ | v2.0 | 5 | "Create a proposal to optimize background script bundle size to ≤150KB gzipped through tree-shaking, dependency optimization, and removing unused code, with CI size checks" |
 | PERF-004 | Memory Leak Detection | M | ⬜ | v2.0 | 5 | "Create a proposal to add automated memory leak detection in CI/CD using heap snapshots, monitoring for leaked event listeners, retained closures, and unbounded caches" |
 | PERF-005 | Efficient Storage Patterns | S | 🔄 | v2.0 | 5 | "Create a proposal to optimize storage access patterns with batching, debouncing, and strategic caching reducing chrome.storage API calls and improving responsiveness" |
@@ -489,17 +530,17 @@ The current codebase has delivered a strong signer foundation rather than the fu
 - ✅ **Profile and relays:** NIP-01 kind:0 profile fetch/cache/display/edit/publish, relay list settings, multi-relay query/publish handling, and local profile cache.
 - ✅ **Settings surfaces:** popup Basic Settings, full Options Page, tab navigation, URL hash deep links, local settings sync between popup/options, relay settings, policy settings, and activity-log controls.
 - ✅ **Theme:** light/dark/system theme selection with live system-preference updates across extension UI surfaces.
-- ✅ **Testing and tooling:** Vitest coverage across domain/application/infrastructure/UI, Playwright extension E2E tests, smoke screenshots, WXT Chrome/Firefox build targets, and React Doctor CI.
+- ✅ **Testing and tooling:** Vitest coverage across domain/application/infrastructure/UI/security, Playwright coverage of the Tier-1 journeys, an agent-driven E2E loop with console capture, a dual-theme design-review runner that photographs populated state as well as a fresh vault, WXT Chrome/Firefox build targets, and a CI verification gate (typecheck, lint, tests, both builds, built-output security assertions, dependency audit) plus React Doctor.
 
 ### Foundation Gaps
 
 These items should be treated as the next hardening priority before claiming the original v2.0 foundation complete.
 
 - 🔄 **Security hardening:** finish secure UI input isolation, complete zeroization coverage for sensitive UI paths, add wipe/export recovery flows, and confirm auto-lock/session behavior at runtime.
-- ⬜ **Security automation:** add CSP/build-output validation, secrets scanning, dependency/security audit automation, bundle-size checks, and memory-leak detection.
+- 🔄 **Security automation:** CSP and build-output validation now run in CI against freshly built output, and the dependency audit blocks on high and critical. Still missing: secrets scanning (SEC-005), bundle-size checks (PERF-009), and memory-leak detection (PERF-004).
 - 🔄 **Approval intelligence:** keep the current detail-first approval UI, then add NIP-specific previews and risk analysis for zaps, DMs, relay changes, and high-risk event kinds.
 - 🔄 **Activity experience:** extend current origin/kind filters with full-text search, result filtering, date ranges, and CSV export.
-- 🔄 **Accessibility:** broaden existing keyboard/ARIA coverage into a repo-wide WCAG 2.1 AA audit and remediation pass.
+- 🔄 **Accessibility:** token contrast now meets AA on its intended surfaces and the timeout sliders are operable and named; broaden existing keyboard/ARIA coverage into a repo-wide WCAG 2.1 AA audit and remediation pass.
 - ⬜ **Protocol depth:** implement explicit NIP-04, NIP-44, NIP-42, NIP-57 validation, NIP-65 relay-list publishing, and NIP-05 DNS verification instead of relying on generic event signing.
 - ⬜ **Developer surface:** publish formal TypeScript definitions, capability detection, API versioning/deprecation policy, and a real documentation site.
 
@@ -642,6 +683,7 @@ All requirements include specific OpenSpec prompts in their respective tables ab
 |---------|------|--------|---------|
 | 2.0 | 2025-12-09 | Copilot Agent | Initial v2 PRD with comprehensive requirements, RTM, MoSCoW, Epics, and roadmap |
 | 2.1 | 2026-06-12 | Codex | Reconciled roadmap and requirement statuses against the current implementation; added multi-session progress workflow |
+| 2.2 | 2026-09-17 | Claude Opus 5 | Reconciled against `main` at `a32c33e`: refreshed the stale reconciliation dates (the security narrative had been written on 2026-09-14 under a June date), recorded the E2E journey coverage, the agent E2E loop, the dual-theme and populated-state design review and the defects it closed; SEC-004 🔄 → ✅ now that the built-output assertions run in CI, PERF-002 ⬜ → 🔄 for the single lazy boundary |
 
 ---
 
