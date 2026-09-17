@@ -147,8 +147,8 @@ describe("privileged pages do not load relay-chosen media", () => {
     expect(container.textContent).toContain("Alice");
     expect(container.textContent).toContain("Bob");
     // Identities stay distinguishable by name and truncated npub.
-    expect(container.textContent).toContain("npub1mainaaaaaaa...aaaaaaaa");
-    expect(container.textContent).toContain("npub1altbbbbbbbb...bbbbbbbb");
+    expect(container.textContent).toContain("npub1mainaaa…aaaaaa");
+    expect(container.textContent).toContain("npub1altbbbb…bbbbbb");
   });
 });
 

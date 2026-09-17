@@ -5,20 +5,20 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/ui/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap text-sm font-semibold outline-none transition-all duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap text-sm font-semibold outline-none transition-all duration-150 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: "btn-ink",
-        destructive: "btn-danger",
-        outline: "btn-ghost",
-        secondary: "btn-ghost bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        destructive: "btn-danger disabled:opacity-50",
+        outline: "btn-ghost disabled:opacity-50",
+        secondary: "btn-ghost bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50",
         ghost:
-          "rounded-lg px-3 py-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/35",
-        link: "text-primary underline-offset-4 hover:underline",
+          "rounded-lg px-3 py-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:opacity-50",
+        link: "text-primary underline-offset-4 hover:underline disabled:opacity-50",
       },
       size: {
-        default: "h-10 px-4 py-2 has-[>svg]:px-3",
+        default: "h-11 px-4 py-2 has-[>svg]:px-3",
         sm: "h-8 gap-1.5 px-3 has-[>svg]:px-2.5",
         lg: "h-11 px-6 has-[>svg]:px-4",
         icon: "size-9 rounded-lg p-0",

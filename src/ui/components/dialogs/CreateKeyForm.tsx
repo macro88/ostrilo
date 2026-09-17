@@ -68,8 +68,8 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
           autoFocus
           {...NO_AUTOFILL_PROPS}
         />
-        <p className="text-xs text-muted-foreground">
-          Re-enter your password to encrypt the new key
+        <p className="text-[11.5px] text-muted-foreground">
+          Re-entered to encrypt the new key.
         </p>
       </div>
 
@@ -83,14 +83,17 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
           disabled={isGenerating}
           maxLength={50}
         />
-        <p className="text-xs text-muted-foreground">
-          Give this key a memorable name to identify it later
+        <p className="text-[11.5px] text-muted-foreground">
+          A label only you see, to tell your keys apart.
         </p>
       </div>
 
       {error && (
-        <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
-          <p className="text-sm text-destructive">{error}</p>
+        <div
+          role="alert"
+          className="rounded-[10px] bg-[var(--ink-red-soft)] px-3 py-2.5 text-[13px] text-[var(--ink-red)]"
+        >
+          {error}
         </div>
       )}
 

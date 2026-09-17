@@ -29,14 +29,15 @@ Defined in `src/assets/tailwind.css`. Never hard-code hex values in components; 
 | Card / surface | `#FFFFFF` | `#201A2E` |
 | Text primary (`--ink`) | `#2A2238` | `#EDEAF6` |
 | Text secondary (`--ink-2`) | `#736B89` | `#9C92B8` |
-| Text tertiary (`--ink-3`) | `#A39CB6` | `#6E6589` |
+| Text tertiary (`--ink-3`) | `#867E9E` | `#857BA6` |
 | Border hairline | `#E7E4EE` | `#332B49` |
 | Border strong / inputs | `#D9D5E3` | `#3D3456` |
 | Accent (`--ink-violet`) | `#5F50A0` | `#A78FFF` |
 | Accent soft | `#EFECF7` | `#3A2F5E` |
-| Success (`--ink-mint`) | `#2E9B7F` | `#6FD9BC` |
-| Warning (`--ink-amber`) | `#94682E` | `#E8B36A` |
+| Success (`--ink-mint`) | `#1E7A63` | `#6FD9BC` |
+| Warning (`--ink-amber`) | `#7A5320` | `#E8B36A` |
 | Danger (`--ink-red`) | `#BD4A55` | `#F2728C` |
+| Dialog backdrop (`--overlay`) | `rgb(42 34 56 / 0.55)` | `rgb(0 0 0 / 0.72)` |
 
 **Dark mode is not an inversion** — it is the "Deep Ink" variant: primary buttons become violet (`--primary` flips from ink to violet), surfaces come from the mascot's darkest facets, and mono carries even more of the hierarchy.
 
@@ -46,7 +47,7 @@ Defined in `src/assets/tailwind.css`. Never hard-code hex values in components; 
 - **JetBrains Mono** for all data: npub/nsec, event kinds, timestamps in lists, countdowns, JSON, version numbers.
 - Baloo 2 and Inter are **removed**. Do not reintroduce them.
 - Scale (popup surfaces): title 17–20 / section label 11 uppercase +0.08em / body 13 / secondary 11.5–12.5 / mono data 10.5–12. Options page may run one step larger.
-- Section labels are 11px, bold, uppercase, tracked, `--ink-2`. They replace card headers in most cases.
+- Section labels use `.section-label` (11px, bold, uppercase, +0.08em, `--ink-2`). Use the class; do not hand-roll the utilities. They **replace** card headers — a section label sitting *under* a card header is the bug, not the fix.
 - Fonts are **bundled** (`@fontsource-variable/archivo`, `@fontsource/jetbrains-mono`). Never load fonts from a CDN — MV3 CSP.
 
 ## 5. Shape language
@@ -59,6 +60,8 @@ The angular signature comes in exactly two shapes:
 Everything else: `--radius` 8px (inputs, buttons, chips' container cards), `--radius-row` 10px (grouped list cards), 12px (dialogs). No pills except genuinely round things (dots, toggle tracks, avatars that aren't seals).
 
 ⚠️ `clip-path` swallows focus outlines — notched/sealed interactive elements must draw focus **inside** (`outline-offset: -3px`; already handled by `.notch`/`.btn-ink`).
+
+⚠️ `.notch`, `.notch-sm`, `.seal` and `.ink-card` are declared with `@utility` in `tailwind.css`, **not** `@layer components`. Tailwind's variant engine cannot see a component-layer class, so a variant form compiles to nothing — silently, with no build error. Both variant uses in the tree depend on this: `data-[state=active]:notch-sm` (`src/ui/components/ui/tabs.tsx`) and `@min-[420px]:ink-card` (`src/ui/features/home/components/HomeView.tsx`). That is how the options nav's active notch shipped unrendered. Declare every new shape or surface class with `@utility`, and confirm a variant form actually paints before you rely on it.
 
 ## 6. Banned patterns (the de-slop list)
 
@@ -76,7 +79,7 @@ These were removed in the redesign. **Do not reintroduce any of them:**
 
 ## 7. Components (canonical specs)
 
-- **Primary button** `.btn-ink` — solid ink (violet in dark), white text, 700, notched. Hover brightens, active nudges 1px. When paired with a ghost: ghost `flex:1`, primary `flex:2`.
+- **Primary button** `.btn-ink` — solid ink (violet in dark), white text, 700, notched. Hover brightens, active nudges 1px. When paired with a ghost: ghost `flex:1`, primary `flex:2`. Disabled is a solid `--input` plate with `--ink-2` text — no translucency, no hover brightening, `cursor: not-allowed`. Disabled reads as *not yet*, never as broken.
 - **Secondary** `.btn-ghost` — white, hairline `--input` border, radius 8.
 - **Cards** `.ink-card` — white, 1px `--border`, radius 10, **no shadow**. Settings/data use grouped rows (`.ink-row`) divided by hairlines inside one card, not separate cards per field.
 - **Status chips** `.seal-chip` + variant — soft fill, no border, 10px bold uppercase, notch-sm. (ACTIVE, TRUSTED, FIRST VISIT, DENIED…)
@@ -86,11 +89,13 @@ These were removed in the redesign. **Do not reintroduce any of them:**
 - **Selects** — borderless value + chevron right-aligned inside a row, or input-style when standalone.
 - **Slider** — 4px track, violet fill, **seal-shaped thumb** (16px hexagon).
 - **Switch** — standard track/thumb; checked = violet. Radius is fine here (it's a round thing).
-- **Bottom nav** — 4 items; active = `--ink-violet-soft` plate (notch-sm) + violet icon/label; inactive `--ink-3`.
-- **Dialogs** — radius 12, `--elev-overlay` shadow, backdrop `rgb(42 34 56 / 0.35)`. The only place shadows are allowed (plus dropdowns/toasts).
+- **Bottom nav** — 4 items; active = `--ink-violet-soft` plate (notch-sm) + violet icon/label; inactive `--ink-2` (labels are information, so never `--ink-3`; see §11).
+- **Dialogs** — radius 12, `--elev-overlay` shadow, backdrop `--overlay` (ink wash at 0.55 light / 0.72 Deep Ink). The backdrop must suppress the page behind it: nothing underneath may out-contrast the dialog. The only place shadows are allowed (plus dropdowns/toasts).
 - **Warnings** — soft amber panel (`--ink-amber-soft` bg, amber text, radius 10) with a seal icon. No border, no rail.
 - **Code/JSON panels** `.code-panel` — mono 11–12, hairline border. In approval contexts label the panel (EVENT · size) and offer "View raw JSON".
-- **Step indicators** — faceted dots; the active step stretches to an 18px bar.
+- **Step indicators** `OnboardingStepDots` — faceted dots; the active step stretches to an 18px bar. Steps already passed keep the accent, so the row reads as progress rather than as scattered marks.
+- **Settings tabs** `SettingsLayout` — `SettingsTabHeader` (title, at most one sentence, the tab's single primary action), then `SettingsSection` labels over grouped `.ink-card`s of `SettingsRow`s. Build a new tab from these, not from fresh markup.
+- **Empty states** — two idioms, not interchangeable. A whole surface empties to a centred `SealMark` (`tone="muted"`, `size="lg"`) or `MascotSeal`, a bold title, and one 13px line. A list inside a card empties to a single quiet line in the card, no mark. Either way: say what will fill the surface, never restate the heading, and give the surface one message — an empty activity card is not the place to advertise an unrelated action.
 
 ## 8. The approval surface (signature moment)
 
@@ -122,7 +127,7 @@ Friendly but adult. Short declaratives. Honest about security; never cute about 
 
 - Durations 120–160ms, `--ease-out` (`cubic-bezier(.2,.8,.2,1)`). Fade+4px-rise on dialog entry; 1px press on primary. **No bounce, no shimmer, no confetti, no infinite loops.**
 - Respect `prefers-reduced-motion` (already wired in the stylesheet).
-- Text contrast ≥ 4.5:1 (every token pair above passes on its intended surface; verify if you mix).
+- Text contrast ≥ 4.5:1 for anything the user must read. Every §3 text token passes on its intended surface (card, soft fill, or background) except `--ink-3`, which is held to ≥ 3:1 and is for placeholders and decorative marks only — never for information. Verify if you mix pairs.
 - Hit targets ≥ 44px on popup surfaces (rows already are).
 - Visible focus everywhere; remember the clip-path rule (§5).
 
@@ -136,3 +141,5 @@ Friendly but adult. Short declaratives. Honest about security; never cute about 
 - [ ] Focus visible on every interactive element, incl. notched ones
 - [ ] Copy follows §10 voice; no emoji in chrome
 - [ ] Screenshot runner re-run if surfaces changed (`docs/design-review/capture-screenshots.mjs`)
+- [ ] Both themes captured — the dark pass is a second invocation (`OSTRILO_DESIGN_REVIEW_THEME=dark`); Deep Ink cannot be inferred from the light shot (§3)
+- [ ] Judged on a **populated** vault, not a fresh one — the runner's second phase seeds keys, activity, relays and a queue. A home-card clipping bug survived a full review because an empty vault never showed three activity rows.

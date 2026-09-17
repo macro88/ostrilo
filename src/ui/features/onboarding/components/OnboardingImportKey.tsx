@@ -13,6 +13,7 @@ import {
 import { OnboardingImportKeyStep } from "./OnboardingImportKeyStep";
 import { OnboardingImportPasswordStep } from "./OnboardingImportPasswordStep";
 import { OnboardingImportSuccessStep } from "./OnboardingImportSuccessStep";
+import { OnboardingStepDots } from "./OnboardingStepDots";
 
 interface OnboardingImportKeyProps {
   onBack: () => void;
@@ -336,34 +337,15 @@ export function OnboardingImportKey({
   const currentStepIndex = importSteps.indexOf(state.currentStep);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            {importSteps.map((step, index) => (
-              <div
-                key={step}
-                className={`flex h-8 w-8 items-center justify-center text-sm font-semibold ${
-                  state.currentStep === step
-                    ? "seal bg-primary text-primary-foreground"
-                    : currentStepIndex > index
-                      ? "seal bg-[var(--ink-mint-soft)] text-[var(--ink-mint)]"
-                      : "seal bg-muted text-muted-foreground"
-                }`}
-              >
-                {index + 1}
-              </div>
-            ))}
-          </div>
-          <div className="h-2 rounded-full bg-muted">
-            <div
-              className="h-2 rounded-full bg-primary transition-[width] duration-300"
-              style={{
-                width: `${(currentStepIndex + 1) * 33.33}%`,
-              }}
-            />
-          </div>
-        </div>
+    <div className="flex min-h-screen flex-col p-4">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
+        {/* Welcome · key · password. The success screen keeps the last dot
+            lit: it is the end of the same three steps, not a fourth. */}
+        <OnboardingStepDots
+          count={importSteps.length}
+          active={Math.min(currentStepIndex + 1, importSteps.length - 1)}
+          className="mb-5"
+        />
 
         {state.currentStep === "import" && (
           <OnboardingImportKeyStep

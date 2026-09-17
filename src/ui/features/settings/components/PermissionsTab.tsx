@@ -1,4 +1,4 @@
-import { Shield } from "lucide-react";
+import { Globe } from "lucide-react";
 import type { TrustLevel } from "@/domain/types";
 import { useCallback, useEffect, useState } from "react";
 import { policyGetSessionGrants } from "@/infrastructure/messaging/client";
@@ -6,9 +6,13 @@ import {
   OriginPolicyTable,
   DisclosureHistory,
 } from "@/ui/features/settings/components/shared";
+import {
+  SettingsLoading,
+  SettingsSection,
+  SettingsTabHeader,
+} from "@/ui/features/settings/components/shared/SettingsLayout";
 import { useAppSettings } from "@/hooks/useAppSettings";
-import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
-import { EmptyState } from "@/ui/components/common/EmptyState";
+import { SealMark } from "@/ui/components/common/SealMark";
 import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
 import { useReauth } from "@/ui/hooks/useReauth";
 
@@ -42,11 +46,7 @@ export function PermissionsTab() {
   }, [refreshGrants]);
 
   if (isLoading) {
-    return (
-      <div className="py-12">
-        <LoadingSpinner label="Loading settings..." />
-      </div>
-    );
+    return <SettingsLoading />;
   }
 
   // `allow` and an enabled session grant are standing permissions to sign
@@ -122,43 +122,50 @@ export function PermissionsTab() {
   const hasOrigins = settings.origins && settings.origins.length > 0;
 
   return (
-    <div className="ink-card p-4 space-y-6">
-      <div>
-        <h2 className="screen-title">Permissions</h2>
-        <p className="text-sm text-muted-foreground">
-          Manage per-origin policies and trust levels
-        </p>
-      </div>
+    <div>
+      <SettingsTabHeader
+        title="Permissions"
+        lede="Each site that has asked you to sign gets a trust level and, if you want, a rule per event kind."
+      />
 
-      <div className="flex items-center gap-2 mb-4">
-        <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
-          <Shield className="h-4 w-4" />
-        </div>
-        <h3 className="font-medium">Per-Origin Policies</h3>
-      </div>
+      <SettingsSection label="Sites">
+        {!hasOrigins ? (
+          // The empty state is a row in the card the list would fill, not a
+          // centred block: the first site to ask will take exactly this place.
+          <div className="ink-card">
+            <div className="ink-row py-5">
+              <SealMark icon={Globe} tone="muted" size="lg" />
+              <div className="min-w-0 flex-1">
+                <h4 className="text-sm font-semibold leading-snug text-foreground">
+                  No sites yet
+                </h4>
+                <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground text-pretty">
+                  The first site that asks you to sign will appear here, with
+                  its trust level and rules.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <OriginPolicyTable
+            origins={settings.origins}
+            mediumAllowKinds={settings.mediumAllowKinds}
+            onUpdateTrust={handleUpdateTrust}
+            sessionGrants={sessionGrants}
+            onRemove={removeOriginPolicy}
+            onToggleSession={handleToggleSession}
+            onSetPerKindRule={handleSetPerKindRule}
+            onRevokeDisclosure={revokeIdentityDisclosure}
+          />
+        )}
+      </SettingsSection>
 
-      {!hasOrigins ? (
-        <EmptyState
-          icon={Shield}
-          title="No Origins Configured"
-          description="Origin policies will appear here once you interact with websites that request Nostr signing. You can configure trust levels and per-kind rules for each origin."
-        />
-      ) : (
-        <OriginPolicyTable
-          origins={settings.origins}
-          mediumAllowKinds={settings.mediumAllowKinds}
-          onUpdateTrust={handleUpdateTrust}
-          sessionGrants={sessionGrants}
-          onRemove={removeOriginPolicy}
-          onToggleSession={handleToggleSession}
-          onSetPerKindRule={handleSetPerKindRule}
-          onRevokeDisclosure={revokeIdentityDisclosure}
-        />
-      )}
-
-      <div className="border-t border-border pt-6">
+      <SettingsSection
+        label="Public key reads"
+        note="Your public key is not a secret. This list is about linkage: which sites have tied your browsing to that identity."
+      >
         <DisclosureHistory />
-      </div>
+      </SettingsSection>
 
       <ReauthDialog {...reauth.dialogProps} />
     </div>

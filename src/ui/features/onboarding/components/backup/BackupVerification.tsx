@@ -32,6 +32,8 @@ interface BackupVerificationProps {
 
 type Route = "transcription" | "file";
 
+const FIELD_LABEL_CLASS = "mb-1.5 text-[13px]";
+
 /**
  * Evidence that the key was actually recorded, replacing a checkbox.
  *
@@ -132,30 +134,36 @@ export function BackupVerification({
   }, [checkNsec, onVerified, passphrase]);
 
   if (verified) {
+    // Mint, because this is the one "go" state on the step (DESIGN_RULES §2.4).
     return (
-      <div className="seal-chip seal-chip-success flex" role="status">
-        <Check className="h-4 w-4" />
+      <div
+        className="mt-3 flex items-center gap-2.5 px-1 text-sm font-semibold text-[var(--ink-mint)]"
+        role="status"
+      >
+        <span className="seal flex h-6 w-6 shrink-0 items-center justify-center bg-[var(--ink-mint-soft)]">
+          <Check className="h-3.5 w-3.5" strokeWidth={3} />
+        </span>
         Backup verified
       </div>
     );
   }
 
   return (
-    <div className="ink-card space-y-3 p-4">
-      <div>
-        <h3 className="text-sm font-semibold">Check your backup</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Prove the key really was recorded before you leave this screen.
-        </p>
-      </div>
+    <div className="ink-card mt-3 p-4">
+      <div className="section-label">Check your backup</div>
 
       {fileRouteAvailable && (
-        <div className="flex gap-2" role="tablist" aria-label="Verification method">
+        <div
+          className="mt-2 flex gap-2"
+          role="tablist"
+          aria-label="Verification method"
+        >
           <Button
             variant={route === "transcription" ? "secondary" : "ghost"}
             size="sm"
             role="tab"
             aria-selected={route === "transcription"}
+            className="h-10 flex-1"
             onClick={() => {
               setRoute("transcription");
               setError("");
@@ -168,6 +176,7 @@ export function BackupVerification({
             size="sm"
             role="tab"
             aria-selected={route === "file"}
+            className="h-10 flex-1"
             onClick={() => {
               setRoute("file");
               setError("");
@@ -179,59 +188,68 @@ export function BackupVerification({
       )}
 
       {route === "transcription" || !fileRouteAvailable ? (
-        <div className="space-y-2">
-          <Label htmlFor="backupVerification">
+        <div className="mt-3">
+          <Label htmlFor="backupVerification" className={FIELD_LABEL_CLASS}>
             Last {VERIFICATION_SUFFIX_LENGTH} characters of your nsec
           </Label>
-          <Input
-            id="backupVerification"
-            type="text"
-            value={suffix}
-            maxLength={VERIFICATION_SUFFIX_LENGTH}
-            // Pasting the answer proves nothing about a backup.
-            onPaste={(event) => event.preventDefault()}
-            onChange={(event) => setSuffix(event.target.value)}
-            className="font-mono"
-            {...NO_AUTOFILL_PROPS}
-          />
-          <Button
-            variant="secondary"
-            onClick={handleCheckSuffix}
-            disabled={suffix.trim().length !== VERIFICATION_SUFFIX_LENGTH}
-            className="w-full"
-          >
-            Check
-          </Button>
+          <div className="flex gap-2">
+            <Input
+              id="backupVerification"
+              type="text"
+              value={suffix}
+              maxLength={VERIFICATION_SUFFIX_LENGTH}
+              // Pasting the answer proves nothing about a backup.
+              onPaste={(event) => event.preventDefault()}
+              onChange={(event) => setSuffix(event.target.value)}
+              className="h-11 min-w-0 flex-1 font-mono text-[13px] tracking-wider"
+              {...NO_AUTOFILL_PROPS}
+            />
+            <Button
+              variant="secondary"
+              onClick={handleCheckSuffix}
+              disabled={suffix.trim().length !== VERIFICATION_SUFFIX_LENGTH}
+              className="h-11 px-5"
+            >
+              Check
+            </Button>
+          </div>
         </div>
       ) : (
-        <div className="space-y-2">
-          <Label
-            htmlFor="backupFile"
-            className="inline-flex cursor-pointer items-center rounded-lg border border-input bg-card px-3 py-2 text-sm font-semibold hover:bg-accent hover:text-accent-foreground"
-          >
-            {fileName || "Choose backup file"}
-          </Label>
-          <input
-            id="backupFile"
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={handleFileSelected}
-            aria-label="Choose backup file"
-          />
-          <Label htmlFor="backupFilePassphrase">Backup passphrase</Label>
-          <Input
-            id="backupFilePassphrase"
-            type="password"
-            value={passphrase}
-            onChange={(event) => setPassphrase(event.target.value)}
-            {...NO_AUTOFILL_PROPS}
-          />
+        <div className="mt-3 space-y-3">
+          <div>
+            <Label
+              htmlFor="backupFile"
+              className="btn-ghost flex h-11 w-full cursor-pointer items-center justify-center text-sm"
+            >
+              {fileName || "Choose backup file"}
+            </Label>
+            <input
+              id="backupFile"
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={handleFileSelected}
+              aria-label="Choose backup file"
+            />
+          </div>
+          <div>
+            <Label htmlFor="backupFilePassphrase" className={FIELD_LABEL_CLASS}>
+              Backup passphrase
+            </Label>
+            <Input
+              id="backupFilePassphrase"
+              type="password"
+              value={passphrase}
+              onChange={(event) => setPassphrase(event.target.value)}
+              className="h-11 text-sm"
+              {...NO_AUTOFILL_PROPS}
+            />
+          </div>
           <Button
             variant="secondary"
             onClick={handleCheckFile}
             disabled={busy || !fileName || passphrase.length === 0}
-            className="w-full"
+            className="h-11 w-full"
           >
             {busy ? "Checking" : "Check file"}
           </Button>
@@ -239,10 +257,13 @@ export function BackupVerification({
       )}
 
       {error && (
-        <div className="seal-chip seal-chip-danger flex" role="alert">
-          <AlertTriangle className="h-4 w-4" />
-          {error}
-        </div>
+        <p
+          className="mt-3 flex items-start gap-1.5 text-xs font-medium text-destructive"
+          role="alert"
+        >
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{error}</span>
+        </p>
       )}
     </div>
   );

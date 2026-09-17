@@ -1,5 +1,9 @@
 import { Key, Plus } from "lucide-react";
 import { KeySelectorCard } from "@/ui/features/settings/components/shared";
+import {
+  SettingsSection,
+  SettingsTabHeader,
+} from "@/ui/features/settings/components/shared/SettingsLayout";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { useProfileMetadata } from "@/ui/hooks/useProfileMetadata";
 import { renameKey, deleteKey } from "@/infrastructure/messaging/client";
@@ -22,7 +26,6 @@ type AddKeyMode = "choice" | "create" | "import" | null;
 async function handleRename(keyId: string, newLabel: string) {
   await renameKey(keyId, newLabel);
 }
-
 
 export function KeysIdentitiesTab() {
   const { keys, selectedUnlockedKey, selectKey } = useKeyManager();
@@ -66,36 +69,31 @@ export function KeysIdentitiesTab() {
     setAddKeyMode("choice");
   };
 
+  const count = keys.length === 1 ? "One key" : `${keys.length} keys`;
+
   return (
-    <div className="ink-card p-4 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="screen-title">Keys & Identities</h2>
-          <p className="text-sm text-muted-foreground">
-            Manage your Nostr identities
-          </p>
-        </div>
-        <Button onClick={() => setAddKeyMode("choice")}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Key
-        </Button>
-      </div>
-
-      <div className="flex items-center gap-2 mb-4">
-        <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
-          <Key className="h-4 w-4" />
-        </div>
-        <h3 className="font-medium">Your Keys</h3>
-      </div>
-
-      <KeySelectorCard
-        keys={keys}
-        selectedKeyId={selectedUnlockedKey?.id}
-        profiles={profiles}
-        onSelectKey={handleSelectKey}
-        onRename={handleRename}
-        onDelete={handleDelete}
+    <div>
+      <SettingsTabHeader
+        title="Keys & Identities"
+        lede={`${count} in this vault. Requests are signed with the active key.`}
+        action={
+          <Button onClick={() => setAddKeyMode("choice")}>
+            <Plus aria-hidden="true" />
+            Add Key
+          </Button>
+        }
       />
+
+      <SettingsSection label="Your keys">
+        <KeySelectorCard
+          keys={keys}
+          selectedKeyId={selectedUnlockedKey?.id}
+          profiles={profiles}
+          onSelectKey={handleSelectKey}
+          onRename={handleRename}
+          onDelete={handleDelete}
+        />
+      </SettingsSection>
 
       <ReauthDialog {...reauth.dialogProps} />
 

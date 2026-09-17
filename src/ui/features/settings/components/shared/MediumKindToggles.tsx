@@ -7,32 +7,41 @@ interface MediumKindTogglesProps {
   onToggle: (kind: number, enabled: boolean) => void;
 }
 
+/**
+ * One grouped card, one row per kind (DESIGN_RULES §7): the kind's name, its
+ * number in mono, and the switch. Protected kinds keep a disabled switch and
+ * say why, so the list stays a complete account of what medium trust covers.
+ */
 export function MediumKindToggles({
   mediumAllowKinds,
   onToggle,
 }: MediumKindTogglesProps) {
+  const allowed = new Set(mediumAllowKinds);
+
   return (
-    <div className="space-y-2">
-      {Object.entries(COMMON_EVENT_KINDS).map(([kind, description]) => {
+    <div className="ink-card">
+      {Object.entries(COMMON_EVENT_KINDS).map(([kind, name]) => {
         const kindNum = parseInt(kind);
         const isProtected = isProtectedKind(kindNum);
-        const isEnabled = !isProtected && mediumAllowKinds.includes(kindNum);
+        const isEnabled = !isProtected && allowed.has(kindNum);
         const descriptionId = `medium-kind-${kind}-description`;
 
         return (
-          <div key={kind} className="flex items-center justify-between gap-3 rounded-[10px] border border-border bg-muted/35 p-3">
-            <div className="min-w-0">
-              <div className="text-sm font-medium">Kind {kind}</div>
-              <div
-                id={descriptionId}
-                className="text-xs text-muted-foreground"
-              >
-                {description}
-                {isProtected
-                  ? " always requires approval and cannot be auto-allowed."
-                  : ""}
-              </div>
+          <div key={kind} className="ink-row">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold leading-snug">{name}</div>
+              {isProtected && (
+                <p
+                  id={descriptionId}
+                  className="mt-0.5 text-[13px] leading-snug text-muted-foreground"
+                >
+                  Always requires approval and cannot be auto-allowed.
+                </p>
+              )}
             </div>
+            <span className="w-20 shrink-0 text-right font-mono text-xs text-muted-foreground">
+              kind {kind}
+            </span>
             <Switch
               checked={isEnabled}
               disabled={isProtected}
@@ -41,7 +50,7 @@ export function MediumKindToggles({
                   onToggle(kindNum, checked);
                 }
               }}
-              aria-describedby={descriptionId}
+              aria-describedby={isProtected ? descriptionId : undefined}
               aria-label={
                 isProtected
                   ? `Kind ${kind} always requires approval`

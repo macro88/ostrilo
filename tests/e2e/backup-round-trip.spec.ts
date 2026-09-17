@@ -33,7 +33,6 @@ async function reachBackupStep(popup: Page): Promise<void> {
   ).toBeVisible();
 
   await popup.getByText("Create New Key", { exact: true }).click();
-  await popup.getByRole("button", { name: "Continue" }).click();
   await expect(
     popup.getByRole("heading", { name: "Create Your Nostr Key" })
   ).toBeVisible();

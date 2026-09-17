@@ -1,5 +1,5 @@
-import { Home, User, Activity, Settings } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Activity, Home, Settings, User } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export type TabKey = "home" | "profile" | "activity" | "settings";
 
@@ -31,27 +31,39 @@ const tabs = [
   },
 ];
 
+/**
+ * Four labelled items (DESIGN_RULES §7). Plain buttons rather than the Button
+ * primitive: its `[&_svg]:size-4` rule pinned every icon to 16px, which is
+ * why the bar read as a row of captions with specks above them.
+ */
 export function BottomTabs({ activeTab, onTabChange }: BottomTabsProps) {
   return (
-    <nav className="flex w-full max-w-full items-center justify-between gap-1 overflow-hidden border-t border-border bg-card p-2">
+    <nav
+      aria-label="Primary"
+      className="flex w-full shrink-0 items-stretch justify-around gap-1 border-t border-border bg-card px-2 py-1"
+    >
       {tabs.map(({ key, label, icon: Icon }) => {
         const isActive = activeTab === key;
         return (
-          <Button
+          <button
             key={key}
-            variant="ghost"
+            type="button"
             onClick={() => onTabChange(key)}
-            className={`flex h-auto min-w-0 flex-1 flex-col items-center gap-1 px-1 py-2 transition-colors ${
+            aria-current={isActive ? "page" : undefined}
+            className={cn(
+              "flex min-h-12 w-full max-w-24 flex-col items-center justify-center gap-1 px-2 py-1.5 text-[11px] font-semibold leading-none transition-colors duration-150",
               isActive
                 ? "notch-sm bg-secondary text-secondary-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
+                : "rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
           >
-            <Icon className="w-5 h-5 shrink-0" />
-            <span className="w-full truncate text-center text-xs font-semibold leading-none">
-              {label}
-            </span>
-          </Button>
+            <Icon
+              className="size-[22px] shrink-0"
+              strokeWidth={isActive ? 2.25 : 2}
+              aria-hidden="true"
+            />
+            <span className="max-w-full truncate">{label}</span>
+          </button>
         );
       })}
     </nav>

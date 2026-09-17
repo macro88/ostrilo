@@ -103,9 +103,14 @@ function profileCard(page: Page, label: string) {
   });
 }
 
-/** How `ProfileSummary` shortens the npub for the header chip. */
+/**
+ * How the identity strip shortens the npub.
+ *
+ * `ProfileSummary` renders the shared `<Pubkey>` there, so the profile surface
+ * truncates exactly the way the home screen and the settings tab do.
+ */
 function summaryNpub(npub: string): string {
-  return `${npub.slice(0, 10)}...${npub.slice(-6)}`;
+  return `${npub.slice(0, 8)}…${npub.slice(-6)}`;
 }
 
 test.describe("profile view", () => {
@@ -141,8 +146,8 @@ test.describe("profile view", () => {
     await openProfileTab(popup);
 
     // Each of these could only have come from the cache: the one configured
-    // relay does not resolve, so the fetch path resolves null and the fields
-    // would read "Not set" / "Add a bio" instead.
+    // relay does not resolve, so the fetch path resolves null and every row
+    // would be an "Add ..." control instead of a value.
     await expect(profileCard(popup, "Display Name")).toContainText(
       "Nadia Quill"
     );
@@ -184,16 +189,19 @@ test.describe("profile view", () => {
     // The fetch runs, finds nothing, and the surface says so in its own words
     // rather than showing a spinner forever or an error the user cannot act on.
     // The deadline is RELAY_BOUNDS.FETCH_DEADLINE_MS (5s), hence the headroom.
-    await expect(profileCard(popup, "Display Name")).toContainText("Not set", {
-      timeout: 15_000,
-    });
-    await expect(profileCard(popup, "About")).toContainText("Add a bio");
-    await expect(profileCard(popup, "Website")).toContainText(
-      "Add your website"
-    );
-    await expect(profileCard(popup, "Picture URL")).toContainText(
-      "No picture URL set. Images are never loaded in this window."
-    );
+    // An empty field is a control, not a line of prose: every row carries the
+    // same verb and opens the editor on that field. Asserted by role, because
+    // "the card contains the word Add" would be true of any one of them.
+    for (const field of ["Display Name", "About", "Website", "Picture URL"]) {
+      await expect(
+        popup.getByRole("button", { name: `Add ${field}` })
+      ).toBeVisible({ timeout: 15_000 });
+    }
+    // The privacy statement sits under the card rather than inside the row,
+    // because it holds whether or not a URL is set.
+    await expect(
+      popup.getByText("Images are never loaded in this window.")
+    ).toBeVisible();
 
     // NIP-05 and Lightning cards are rendered only when the profile carries
     // them, so an empty profile must not invent placeholder rows for them.

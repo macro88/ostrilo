@@ -4,17 +4,10 @@ import { escapeInvisible } from "@/domain/display/safe-text";
 import { Button } from "@/components/ui/button";
 import type { PendingRequest } from "@/domain/types";
 import { getKindName, isSigningRequest } from "@/domain/types";
-import {
-  Globe,
-  Clock,
-  FileText,
-  ChevronDown,
-  ChevronRight,
-  Check,
-  X,
-} from "lucide-react";
-import { SealMark } from "@/components/common/SealMark";
+import { ChevronDown, ChevronRight, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatCountdown, type OriginTrust } from "./useApprovalDisplay";
+import { TrustChip } from "./EventDetailView";
 
 export interface QueueListViewProps {
   /** All pending requests in the queue */
@@ -29,6 +22,14 @@ export interface QueueListViewProps {
   onBatchAction?: (action: "approve" | "deny", requestIds: string[]) => void;
   /** Disable actions while a resolution is in flight */
   disabled?: boolean;
+  /**
+   * Rendered inside another surface that already carries a title (the side
+   * panel's "Pending Approvals" sheet). Keeps the count and Deny all, drops
+   * the "Approval Inbox" heading so two titles never stack.
+   */
+  embedded?: boolean;
+  /** Trust state per origin, for the chip on each group. Absent while settings load. */
+  trustByOrigin?: ReadonlyMap<string, OriginTrust>;
   /** Optional layout class */
   className?: string;
 }
@@ -50,7 +51,9 @@ export function QueueListView({
   onSelectRequest,
   onBatchAction,
   disabled = false,
+  trustByOrigin,
   className,
+  embedded = false,
 }: QueueListViewProps) {
   // Lazy: the Set was being rebuilt on every render even though only the
   // first one is ever used, and this list re-renders on every queue change.
@@ -113,12 +116,8 @@ export function QueueListView({
 
   if (requests.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-6">
-        <SealMark icon={FileText} size="lg" className="mb-4" />
-        <h2 className="text-lg font-semibold mb-2">No Pending Requests</h2>
-        <p className="text-muted-foreground text-center text-sm">
-          All approval requests have been processed.
-        </p>
+      <div className="flex h-full flex-col items-center justify-center p-6 text-center">
+        <h2 className="text-[17px] font-bold">No Pending Requests</h2>
       </div>
     );
   }
@@ -128,34 +127,27 @@ export function QueueListView({
       className={cn("flex h-full min-h-0 flex-col bg-background", className)}
       data-testid="approval-inbox"
     >
-      <div className="shrink-0 border-b border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold">Approval Inbox</h1>
-            <p className="text-xs text-muted-foreground">
-              {requests.length} request{requests.length !== 1 ? "s" : ""} from{" "}
-              {groups.length} site{groups.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-          {onBatchAction && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleDenyAll}
-              disabled={disabled}
-              className="gap-1"
-            >
-              <X className="w-3 h-3" />
-              Deny all
-            </Button>
-          )}
-        </div>
+      <div className="shrink-0 border-b border-border bg-card px-4 py-3">
+        {!embedded && (
+          <h1 className="text-[17px] font-bold leading-6">Approval Inbox</h1>
+        )}
+        <p
+          className={
+            embedded
+              ? "text-sm font-semibold leading-6"
+              : "text-xs text-muted-foreground"
+          }
+        >
+          {requests.length} request{requests.length !== 1 ? "s" : ""} from{" "}
+          {groups.length} site{groups.length !== 1 ? "s" : ""}
+        </p>
       </div>
 
       {/* Scrollable List */}
-      <div className="flex-1 space-y-3 overflow-auto p-3">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {groups.map((group) => {
           const isExpanded = expandedOrigins.has(group.origin);
+          const trust = trustByOrigin?.get(group.origin);
           return (
             <div
               key={group.origin}
@@ -166,47 +158,36 @@ export function QueueListView({
               <button
                 type="button"
                 onClick={() => toggleOrigin(group.origin)}
-                className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/50"
+                aria-expanded={isExpanded}
+                className="flex min-h-12 w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/50"
               >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 shrink-0" />
-                  )}
-                  <Globe className="w-4 h-4 shrink-0 text-muted-foreground" />
-                  <span className="font-medium text-sm truncate">
-                    {group.domain}
-                  </span>
-                </div>
-                <span className="seal-chip seal-chip-accent ml-2 shrink-0">
-                  {group.requests.length}
+                {isExpanded ? (
+                  <ChevronDown
+                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <ChevronRight
+                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="min-w-0 flex-1 truncate font-mono text-[13px] font-bold tracking-tight">
+                  {group.domain}
                 </span>
-              </button>
-
-              {/* Origin Batch Actions */}
-              {/* Bulk APPROVE is deliberately absent.
-
-                  Approving in bulk is approving without looking, and the way
-                  to get a signature a user did not mean to give is to ask
-                  many times and offer one button that answers all of them.
-                  Bulk DENY stays: refusing without looking is always safe,
-                  and a user buried in prompts needs a way out that is not
-                  "approve everything". */}
-              {isExpanded && onBatchAction && group.requests.length > 1 && (
-                <div className="flex gap-2 border-y border-border bg-muted/30 px-3 py-2">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleBatchDeny(group.origin)}
-                    disabled={disabled}
-                    className="flex-1 gap-1"
+                {trust && <TrustChip trust={trust} />}
+                {/* The count matters only while the rows are folded away. */}
+                {!isExpanded && (
+                  <span
+                    className="seal-chip seal-chip-accent shrink-0 font-mono"
+                    aria-label={`${group.requests.length} request${
+                      group.requests.length !== 1 ? "s" : ""
+                    }`}
                   >
-                    <X className="w-3 h-3" />
-                    Deny all from site
-                  </Button>
-                </div>
-              )}
+                    {group.requests.length}
+                  </span>
+                )}
+              </button>
 
               {/* Request List */}
               {isExpanded && (
@@ -222,10 +203,57 @@ export function QueueListView({
                   ))}
                 </div>
               )}
+
+              {/* Per-site batch action.
+
+                  Bulk APPROVE is deliberately absent. Approving in bulk is
+                  approving without looking, and the way to get a signature a
+                  user did not mean to give is to ask many times and offer one
+                  button that answers all of them. Bulk DENY stays: refusing
+                  without looking is always safe, and a user buried in prompts
+                  needs a way out that is not "approve everything".
+
+                  Shown whether or not the group is expanded, and only when
+                  there is more than one site - with a single site it is the
+                  same action as Deny all in the footer. */}
+              {onBatchAction &&
+                groups.length > 1 &&
+                group.requests.length > 1 && (
+                  <div className="border-t border-border px-3.5 py-2.5">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleBatchDeny(group.origin)}
+                      disabled={disabled}
+                      className="h-10 w-full text-xs"
+                    >
+                      Deny all from site
+                    </Button>
+                  </div>
+                )}
             </div>
           );
         })}
       </div>
+
+      {/* Pinned footer, the same geometry as the detail screens: the trust
+          line, then the one bulk action. Deny is the safe action, so it wears
+          the same neutral ghost the detail's Deny does. */}
+      {onBatchAction && (
+        <div className="shrink-0 border-t border-border bg-card px-4 pb-4 pt-2.5">
+          <p className="flex items-center justify-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            <Shield className="h-3.5 w-3.5" aria-hidden="true" />
+            Keys never leave your browser.
+          </p>
+          <Button
+            variant="outline"
+            onClick={handleDenyAll}
+            disabled={disabled}
+            className="mt-2.5 h-12 w-full"
+          >
+            Deny all
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -257,6 +285,10 @@ function RequestItem({
   const contentPreview =
     safePreview.length > 50 ? safePreview.slice(0, 50) + "..." : safePreview;
 
+  // No "just now" line: requests expire after sixty seconds, so every row
+  // would carry the same words. The countdown already says how fresh it is.
+  // The trailing chevron is what says "this opens": a row with a timer, a
+  // kind chip and a preview but no affordance reads as a status card.
   return (
     <button
       type="button"
@@ -265,72 +297,39 @@ function RequestItem({
       data-testid="approval-request-item"
       data-request-id={request.id}
       className={cn(
-        "w-full border-t p-3 text-left transition-colors first:border-t-0 hover:bg-muted/50",
+        "flex w-full items-center gap-2 border-t border-border py-3 pl-3.5 pr-2.5 text-left transition-colors hover:bg-muted/50",
         isSelected && "bg-secondary text-secondary-foreground hover:bg-secondary"
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0 space-y-1">
-          {/* Kind Badge */}
-          <div className="flex items-center gap-2">
-            <span className="seal-chip seal-chip-accent font-mono">
-              {event ? `kind:${event.kind}` : "identity"}
-            </span>
-            <span className="text-xs font-medium text-muted-foreground">
-              {kindName}
-            </span>
-          </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex w-full items-center gap-2">
+          <span className="seal-chip seal-chip-accent shrink-0 font-mono normal-case tracking-normal">
+            {event ? `kind:${event.kind}` : "identity"}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+            {kindName}
+          </span>
+          <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-[var(--ink-amber)]">
+            {formatCountdown(timeRemaining)}
+          </span>
+        </div>
 
-          {/* Content Preview */}
-          {event?.content && (
-            <p className="text-xs text-muted-foreground font-mono truncate">
+        {event ? (
+          event.content && (
+            <p className="w-full truncate font-mono text-xs text-muted-foreground">
               {contentPreview}
             </p>
-          )}
-
-          {/* Timestamp */}
-          <p className="text-xs text-muted-foreground">
-            {formatTimestamp(request.createdAt)}
+          )
+        ) : (
+          <p className="w-full truncate text-xs text-muted-foreground">
+            Wants to read your public key.
           </p>
-        </div>
-
-        {/* Countdown */}
-        <div className="seal-chip seal-chip-warning shrink-0 font-mono">
-          <Clock className="w-3 h-3" />
-          {formatCountdown(timeRemaining)}
-        </div>
+        )}
       </div>
+      <ChevronRight
+        className="h-4 w-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
     </button>
   );
-}
-
-// Helper functions
-
-function formatTimestamp(timestamp: number): string {
-  const date = new Date(timestamp * 1000);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-
-  if (diffMins < 1) return "just now";
-  if (diffMins === 1) return "1 minute ago";
-  if (diffMins < 60) return `${diffMins} minutes ago`;
-
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours === 1) return "1 hour ago";
-  if (diffHours < 24) return `${diffHours} hours ago`;
-
-  // Format as date
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatCountdown(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }

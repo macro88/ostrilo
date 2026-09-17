@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 /**
  * Keeps a request that cannot be rendered from taking the whole window with it.
@@ -64,40 +64,39 @@ export class ApprovalErrorBoundary extends Component<
   render() {
     if (!this.state.failed) return this.props.children;
 
+    // Same geometry as the detail views it stands in for: a scrolling body and
+    // a pinned action bar, so the refusal lands where Deny always is.
     return (
       <div
         className="flex h-full min-h-0 flex-col bg-background"
         data-testid="approval-render-error"
       >
-        <div className="min-h-0 flex-1 space-y-4 overflow-auto p-6">
-          <div className="rounded-[10px] bg-[var(--ink-amber-soft)] p-4 text-[var(--ink-amber)]">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <div className="space-y-2 text-xs font-semibold">
-                <p>This request could not be displayed.</p>
-                <p>
-                  Do not approve something you cannot read. Deny it, and the
-                  other pending requests are unaffected.
-                </p>
-              </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="flex items-start gap-3 rounded-[10px] bg-[var(--ink-amber-soft)] p-4 text-[var(--ink-amber)]">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <div className="space-y-2 text-xs font-semibold leading-[1.45]">
+              <p>This request could not be displayed.</p>
+              <p>
+                Do not approve something you cannot read. Deny it; the other
+                pending requests are unaffected.
+              </p>
             </div>
           </div>
         </div>
 
-        <div className="shrink-0 space-y-3 border-t border-border bg-card p-4">
+        <div className="shrink-0 space-y-2 border-t border-border bg-card px-4 pb-4 pt-3">
           <Button
             variant="outline"
             onClick={this.props.onDeny}
             className="h-12 w-full"
           >
-            <X className="h-4 w-4" />
             Deny this request
           </Button>
           {this.props.onBack && (
             <Button
               variant="ghost"
               onClick={this.props.onBack}
-              className="w-full"
+              className="h-11 w-full"
             >
               Back to the queue
             </Button>

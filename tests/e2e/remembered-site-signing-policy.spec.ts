@@ -64,7 +64,6 @@ async function completeCreateKeyOnboarding(page: Page) {
     .toBeVisible();
 
   await page.getByText("Create New Key", { exact: true }).click();
-  await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Create Your Nostr Key" }))
     .toBeVisible();
   await page.getByLabel("Key Name").fill("Remembered Allow Test Key");
@@ -158,8 +157,24 @@ test.describe("Remembered site signing policy", () => {
 
     const approvalPage = await approvalPagePromise;
     await approvalPage.waitForLoadState("domcontentloaded");
-    await approvalPage.getByTestId("approval-request-item").click();
-    await expect(approvalPage.getByTestId("approval-detail")).toBeVisible();
+    // A lone request opens on its detail. This page inherits the context's
+    // 390px viewport, below the `md` breakpoint at which the prompt shows the
+    // queue beside the detail, so the queue row is behind the back button
+    // rather than on screen. Click the row only if the queue is what showed.
+    const detail = approvalPage.getByTestId("approval-detail");
+    const row = approvalPage.getByTestId("approval-request-item").first();
+    // Not `detail.or(row)`: when the lone request auto-opens, the selected row
+    // stays mounted behind the detail, so `.or()` matches both and trips
+    // strict mode. Wait for whichever arrives, then act on what is showing.
+    await expect
+      .poll(async () => (await detail.isVisible()) || (await row.isVisible()), {
+        timeout: 10_000,
+      })
+      .toBe(true);
+    if (!(await detail.isVisible())) {
+      await row.click();
+    }
+    await expect(detail).toBeVisible();
     await expect(approvalPage.getByTestId("remember-scope-copy")).toContainText(
       "Remember this decision for this site and event kind"
     );
@@ -204,6 +219,11 @@ test.describe("Remembered site signing policy", () => {
     // `.first()` because the trust-level control carries an sr-only legend
     // that also names the origin, so a bare text match is ambiguous.
     await expect(options.getByText(DAPP_ORIGIN).first()).toBeVisible();
+
+    // The per-kind rules open under the site's row.
+    const siteRow = options.getByTestId(`origin-row-${DAPP_ORIGIN}`);
+    await siteRow.click();
+    await expect(siteRow).toHaveAttribute("aria-expanded", "true");
 
     const relayListRule = options.getByTestId("origin-policy-kind-10002");
     await expect(relayListRule).toContainText("Relay List");

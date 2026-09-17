@@ -17,7 +17,7 @@ import { seedUnlockedVault, sendExtensionRpc } from "./fixtures/agent";
 async function openGeneralTab(page: Page) {
   await page.getByRole("tab", { name: "General" }).click();
   await expect(
-    page.getByRole("heading", { name: "General Settings" })
+    page.getByRole("heading", { name: "General", exact: true })
   ).toBeVisible();
 }
 
@@ -131,7 +131,7 @@ test.describe("general settings", () => {
     await openGeneralTab(options);
 
     expect((await settings(options)).sidePanel).toBe(false);
-    await expect(options.getByLabel("Open extension in:")).toContainText("Popup");
+    await expect(options.getByLabel("Open extension in")).toContainText("Popup");
 
     await sendExtensionRpc(options, {
       type: "settings.update",
@@ -142,13 +142,13 @@ test.describe("general settings", () => {
     // The control reflects the stored value rather than its own local state.
     await options.reload();
     await openGeneralTab(options);
-    await expect(options.getByLabel("Open extension in:")).toContainText(
+    await expect(options.getByLabel("Open extension in")).toContainText(
       "Side Panel"
     );
 
     // Returning to the popup goes through the UI: that path calls
     // `disableDocking()`, which does not open a panel.
-    await options.getByLabel("Open extension in:").click();
+    await options.getByLabel("Open extension in").click();
     await options.getByRole("option", { name: "Popup" }).click();
     await expect.poll(async () => (await settings(options)).sidePanel).toBe(false);
   });

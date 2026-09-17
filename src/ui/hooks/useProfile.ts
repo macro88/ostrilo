@@ -1,6 +1,7 @@
 import { useReducer, useEffect, useCallback } from "react";
 import { rpc } from "@/infrastructure/messaging/client";
 import type { ProfileMetadata } from "@/domain/profile/types";
+import { RELAY_BOUNDS } from "@/domain/relay";
 
 interface ProfileState {
   profile: ProfileMetadata | null;
@@ -11,15 +12,33 @@ interface ProfileState {
 type ProfileAction =
   | { type: "reset" }
   | { type: "request" }
+  | { type: "settled" }
   | { type: "success"; profile: ProfileMetadata | null }
   | { type: "optimistic"; profile: ProfileMetadata }
   | { type: "failure"; error: string };
 
-const initialProfileState: ProfileState = {
-  profile: null,
-  loading: false,
-  error: null,
-};
+/**
+ * How long the surface waits for `profile.get` before it stops showing
+ * placeholders.
+ *
+ * The background settles every relay fetch at `FETCH_DEADLINE_MS`, so an
+ * answer that has not arrived a second after that is not coming in a form
+ * worth waiting for. Past this point the rows read as an unpublished profile
+ * ("Not set"), which is the only claim the extension can honestly make; a late
+ * answer still lands and fills them in.
+ */
+const PROFILE_SETTLE_MS = RELAY_BOUNDS.FETCH_DEADLINE_MS + 1000;
+
+/**
+ * A pubkey means a fetch starts the moment the hook mounts, so the first frame
+ * is a loading frame. Starting at `loading: false` painted one frame of
+ * "Not set" beside an enabled Edit button before the effect flipped it - a
+ * flash for the user, and a frame the design-review runner mistook for the
+ * resting state.
+ */
+function createInitialState(pubkey: string | null): ProfileState {
+  return { profile: null, loading: pubkey !== null, error: null };
+}
 
 function profileReducer(
   state: ProfileState,
@@ -27,9 +46,11 @@ function profileReducer(
 ): ProfileState {
   switch (action.type) {
     case "reset":
-      return initialProfileState;
+      return createInitialState(null);
     case "request":
       return { ...state, loading: true, error: null };
+    case "settled":
+      return { ...state, loading: false };
     case "success":
       return { profile: action.profile, loading: false, error: null };
     case "optimistic":
@@ -43,7 +64,11 @@ function profileReducer(
  * Hook for fetching and managing profile metadata
  */
 export function useProfile(pubkey: string | null) {
-  const [state, dispatch] = useReducer(profileReducer, initialProfileState);
+  const [state, dispatch] = useReducer(
+    profileReducer,
+    pubkey,
+    createInitialState
+  );
 
   const fetchProfile = useCallback(
     async (forceFetch = false) => {
@@ -52,9 +77,13 @@ export function useProfile(pubkey: string | null) {
         return;
       }
 
-      try {
-        dispatch({ type: "request" });
+      dispatch({ type: "request" });
+      const settle = window.setTimeout(
+        () => dispatch({ type: "settled" }),
+        PROFILE_SETTLE_MS
+      );
 
+      try {
         const data = await rpc<ProfileMetadata | null>({
           type: "profile.get" as any,
           params: { pubkey, forceFetch },
@@ -67,6 +96,8 @@ export function useProfile(pubkey: string | null) {
           type: "failure",
           error: err instanceof Error ? err.message : "Failed to fetch profile",
         });
+      } finally {
+        window.clearTimeout(settle);
       }
     },
     [pubkey]

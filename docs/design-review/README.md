@@ -1,95 +1,249 @@
 # Ostrilo Inkline Design Review
 
-Date: 2026-06-11
+Date: 2026-09-16 (review), 2026-09-17 (polish round)
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §6 (banned patterns) and §12 (PR checklist)
+Build reviewed: production (`.output/chrome-mv3`), per the AGENTS.md rule that UI is judged on the production build, never the agent build.
 
 ## Scope
 
-Implemented the Inkline redesign across the extension UI:
+All 23 fresh-vault surfaces plus 13 populated-state surfaces, captured in **both themes** — 36 screenshots per theme, 72 total.
 
-- Onboarding: welcome, create choice, create key, backup
-- Popup and side panel: home, profile, profile edit, activity, quick settings
-- Dialogs: add key, create key, import key, QR modal
-- Options page: general, keys, security, permissions, activity log, relays, advanced
-- Approval window: empty state, grouped queue, event detail
-- Lock screen
+The previous review (2026-06-11) covered light only. DESIGN_RULES §12 requires every
+surface to hold up in light *and* dark, and §3 is explicit that Deep Ink is not an
+inversion but a role reassignment, so it cannot be inferred from the light capture.
+This is the first review where the dark half of the rubric is backed by evidence.
 
-`src/ui/features/settings/components/SettingsView.tsx` remains an unmounted legacy component. The active popup settings surface is `BasicSettings`; the active full settings surface is `src/extension/options/OptionsApp.tsx`.
+## How to reproduce
 
-## What Changed
+```bash
+pnpm run build
+node docs/design-review/capture-screenshots.mjs
+OSTRILO_DESIGN_REVIEW_THEME=dark node docs/design-review/capture-screenshots.mjs
+```
 
-- Replaced the Arcade Plush token layer with Inkline tokens in `src/assets/tailwind.css`.
-- Added `docs/design/DESIGN_RULES.md` as the canonical design-system source.
-- Added repo guidance in `AGENTS.md` and `.github/copilot-instructions.md` to prevent old gradients, accent rails, dot grids, Plush classes, and candy palette choices from returning.
-- Removed the superseded Arcade Plush brand kit from the active docs set.
-- Updated shared primitives: button, badge, input, select, slider, tabs, dialog, dropdown, avatar, public-key display, QR modal, empty state, and a new `SealMark`.
-- Split logo behavior so popup/header chrome uses the static mascot image, while the 3D model is opt-in for hero moments with a static poster fallback.
-- Migrated rendered surfaces from Plush cards/chips/bubbles to Inkline cards, hairline rows, seal chips, notched primary actions, and terse security copy.
-- Reworked approval detail around the handoff structure: origin summary, signing facts, content payload, raw JSON toggle, trust line, pinned Deny and Approve & sign actions.
-- Updated the screenshot runner selectors for the new home and approval headings.
+Two invocations rather than one two-pass run: the runner drives onboarding from an
+empty vault, and that only happens once per browser profile.
+
+## Runner defects found and fixed
+
+The runner had rotted since June and was reporting a misleading picture. Three fixes
+landed in `capture-screenshots.mjs` as part of this review:
+
+1. **The run died at the backup step.** Finish is now gated on backup verification
+   rather than the acknowledgement checkbox (`OnboardingCreateKeyBackupStep`), so the
+   old `check(); click Finish` sequence timed out on a permanently disabled button.
+   The runner now answers the suffix challenge the way
+   `tests/e2e/onboarding-create.spec.ts` does, reading the length off the input's
+   `maxlength` rather than restating `VERIFICATION_SUFFIX_LENGTH`.
+
+2. **The approval captures were silently absent.** `aa5c706` tightened the content
+   script to `https://*/*`; the runner served the test dapp over plain HTTP, so
+   `window.nostr` was never injected and no approval was ever enqueued. The runner now
+   serves TLS using the same throwaway certificate helper as the e2e fixtures
+   (`tests/e2e/fixtures/make-dev-cert.ts`).
+
+3. **The signature moment was photographed in a state no user acts on.** Approve is
+   deliberately disabled for `APPROVE_COOLDOWN_MS` (500ms) while the pane binds to a
+   request; the runner screenshotted at 250ms, so every archived review showed the
+   product's most important button greyed out. It now waits past the cooldown.
+
+A fourth capture gap is worth naming because it is not fully fixable: the approval
+detail pane scrolls internally, and a `fullPage` screenshot stops at the viewport. At
+the real 400x600 popup size the content panel, the raw-JSON toggle and the trust line
+all sit below the fold. A second shot (`21b-approval-payload`) now opens "View raw JSON" and scrolls the
+envelope into view (the content panel itself sits above the fold since the polish round), and
+a new `04b-onboarding-backup-revealed` covers the revealed backup card and verification
+challenge — a surface added since June that had never been reviewed. **No capture
+contains an nsec**; the key is re-masked before every screenshot.
+
+## Populated state
+
+Everything above photographs a brand-new vault. A second phase in the runner
+unlocks that vault and seeds what real use looks like: the key renamed to a
+long name, a second key, a cached profile (published against a dead relay so
+nothing leaves the machine), three relays, three sites at low, medium and high
+trust, signed and denied activity from `nostrich.org` and `snort.social`
+(both resolved to the fixture server with `--host-resolver-rules`), and a
+two-site approval queue. These captures exist because a layout bug (home cards
+shrinking and clipping their rows once three activity entries existed) was
+invisible in the empty-vault set.
+
+| Surface | Light | Deep Ink (dark) |
+|---|---|---|
+| Home, populated | ![](screenshots/23-popup-home-populated.png) | ![](screenshots/dark/23-popup-home-populated.png) |
+| Activity, populated | ![](screenshots/24-popup-activity-populated.png) | ![](screenshots/dark/24-popup-activity-populated.png) |
+| Profile, populated | ![](screenshots/25-popup-profile-populated.png) | ![](screenshots/dark/25-popup-profile-populated.png) |
+| Quick settings, long key name | ![](screenshots/26-popup-settings-populated.png) | ![](screenshots/dark/26-popup-settings-populated.png) |
+| Key selector open | ![](screenshots/27-key-selector-open.png) | ![](screenshots/dark/27-key-selector-open.png) |
+| Side panel home, populated | ![](screenshots/28-sidepanel-home-populated.png) | ![](screenshots/dark/28-sidepanel-home-populated.png) |
+| Options keys, two keys | ![](screenshots/29-options-keys-populated.png) | ![](screenshots/dark/29-options-keys-populated.png) |
+| Options permissions, three sites | ![](screenshots/30-options-permissions-populated.png) | ![](screenshots/dark/30-options-permissions-populated.png) |
+| Options permissions, one site expanded | ![](screenshots/30b-options-permissions-site-expanded.png) | ![](screenshots/dark/30b-options-permissions-site-expanded.png) |
+| Options relays, three relays | ![](screenshots/31-options-relays-populated.png) | ![](screenshots/dark/31-options-relays-populated.png) |
+| Approval queue, two sites | ![](screenshots/32-approval-queue-populated.png) | ![](screenshots/dark/32-approval-queue-populated.png) |
+| Approval detail, identity disclosure | ![](screenshots/33-approval-detail-disclosure.png) | ![](screenshots/dark/33-approval-detail-disclosure.png) |
+| Lock screen, wrong password | ![](screenshots/34-lock-screen-error.png) | ![](screenshots/dark/34-lock-screen-error.png) |
+
+## Status: the findings below were fixed
+
+Every finding in this review was closed by the polish round of 2026-09-17, which
+also rebuilt each surface against Phantom 26.30.1 as an external bar. The
+findings are kept as written so the record shows what was wrong and why; the
+short notes under each say how it was closed. The screenshots in this file are
+the post-polish captures.
+
+### How the polish round worked
+
+Five pieces (popup shell and home, lock and onboarding, approval, profile and
+activity and quick settings, options) were rebuilt in isolated worktrees. After
+each round every surface was photographed in both themes and put beside the same
+moment in Phantom, labels stripped and sides randomised, for a reviewer who was
+told nothing about which product was which. A piece was finished when the blind
+comparison chose Ostrilo on every pair.
+
+Result: lock and onboarding 10/10, options 22/22, approval 14/14, profile and
+activity and settings 16/16. The popup shell finished at 6/10, holding the
+populated home, the populated side panel and the key switcher in both themes;
+its two fresh-vault home screens are the one place the loop was stopped on
+judgment rather than a win, because the comparison asked repeatedly for a
+prominent first-run action and a signer that already holds a key has no honest
+one to offer.
+
+## Findings
+
+### 1. Three token pairs fail WCAG AA, and §11 asserts that none do — §11
+
+**Closed.** Light amber 4.26:1 → 5.90:1, light mint 3.44:1 → 5.22:1. `--ink-3` was raised in both themes and §11 was rewritten to state what the tokens actually guarantee: `--ink-3` is held to ≥3:1 and is for placeholders and decorative marks only, never information.
+
+§11 states "every token pair above passes on its intended surface". Computed from the
+§3 table:
+
+| Pair | Ratio | AA (4.5:1) |
+|---|---|---|
+| Light: `--ink-amber` on `--ink-amber-soft` | 4.26:1 | **fail** |
+| Light: `--ink-mint` on card | 3.44:1 | **fail** |
+| Light: `--ink-3` on card | 2.63:1 | **fail** |
+| Dark: `--ink-3` on card | 3.11:1 | **fail** |
+| All other pairs in §3 | 4.91-9.87:1 | pass |
+
+The amber failure is the one that matters. It is the body copy of *"There is no
+recovery"* on the backup step (`04b-onboarding-backup-revealed`) — the most
+safety-critical warning in the product, and the place a user is least able to afford
+missing a word. The mint failure undercuts §4 ("mint means go"): the go signal is the
+weakest text on light surfaces. Either darken the light amber and mint ramps, or amend
+§11 to stop claiming a guarantee the tokens do not provide.
+
+### 2. A decorative icon plate on every section title — §6 #4, §5
+
+**Closed.** The plates are gone from every settings tab and from the profile, activity and quick-settings surfaces; sections are introduced by `.section-label` instead.
+
+`<div className="seal inline-flex ... bg-secondary h-8 w-8">` wrapping a purely
+decorative icon appears **14 times across 14 files**, on essentially every settings
+tab, activity and profile section.
+
+§6 #4 retired exactly this: "Icon-in-tinted-rounded-square decorations on every card
+title. Icons appear inline at text size, in `--ink-2` or violet, only when they add
+meaning." The shape moved from a rounded square to a seal, but the pattern is the
+decoration, not the corner radius. §5 also scopes the seal to avatars, status marks,
+slider thumbs, step indicators and the lock badge — a section-header plate is not in
+that list, and spending the shape language on chrome is what §2 warns against.
+
+Visible in `12-options-general` ("Display"), `13-options-keys` ("Your Keys"), and every
+other options tab.
+
+### 3. Section labels are not section labels — §4
+
+**Closed.** `.section-label` (11px bold uppercase tracked) was added to the stylesheet and now carries every section heading, replacing card headers rather than sitting beneath them.
+
+§4: "Section labels are 11px, bold, uppercase, tracked, `--ink-2`. They replace card
+headers in most cases." Nine occurrences of `<h3 className="font-medium">` render as
+default-size, medium-weight sentence case instead — and they sit *below* a card header
+rather than replacing one, so `12-options-general` carries "General Settings" + a
+description + "Display" for two controls.
+
+### 4. Mint used decoratively on an unfinished step — §4
+
+**Closed.** The mint seal is gone from the backup step; mint now appears there only once the backup is verified.
+
+`04b-onboarding-backup-revealed` opens with a mint `CheckCircle` seal above "Backup
+Your Key". §4 is explicit that mint means go "and nothing else", and is "never
+decorative". Here it reads as done at the moment nothing has been done yet, on the one
+screen where a premature sense of completion is most costly.
+
+## What holds up
+
+Worth recording, because most of the redesign is intact:
+
+- **§6 banned patterns are otherwise clean.** No `linear-gradient`, no
+  `border-inline-start` rails, no dot-grid or `radial-gradient`, no `icon-bubble`, no
+  `btn-plush`, no Baloo/Inter, no pink. Every `rounded-full` is a genuinely round thing
+  (switch track, slider track, progress bar, non-seal avatar) — no pill buttons.
+- **§3 tokens only.** Zero hard-coded hex values in any component under `src/ui` or
+  `src/extension`.
+- **§8 is fully satisfied** once the fold is accounted for: origin block, facts rows,
+  content panel with byte count, "View raw JSON", the "Keys never leave your browser."
+  trust line, and ghost Deny (1fr) + notched ink "Approve & sign" (2fr). The notch
+  renders correctly and focus stays inside the clip-path.
+- **Deep Ink is a genuine variant, not an inversion.** Primary correctly flips from ink
+  to violet, and the dark primary's foreground is dark ink on violet at 6.3:1.
+- **npub display** is mono and middle-truncated with a copy affordance everywhere it
+  appears.
 
 ## Verification
 
-- `pnpm run compile` passed.
-- `pnpm run build` passed.
-- `node docs/design-review/capture-screenshots.mjs` passed with Chromium launch escalation, capturing all 22 screenshots.
-- The screenshot runner created a real key through onboarding and generated a real pending approval from a local test dapp, so approval queue/detail screenshots are runtime captures rather than static mock screenshots.
-
-Build notes: WXT/Vite still emit existing deprecation, dynamic-import, and chunk-size warnings. They did not fail the build.
-
-Font note: `@fontsource-variable/archivo` and `@fontsource/jetbrains-mono` were not installed locally, and network/package fetches were not available in the sandbox. The CSS now prefers Archivo and JetBrains Mono with system fallbacks; the dependency install remains the only deferred handoff item.
+- `pnpm run build` — passed.
+- `pnpm run compile` — passed.
+- `pnpm run test` — passed, 1346 tests across 83 files (unit, integration, security).
+- Light capture — passed, 24 screenshots, with a real pending approval generated from a
+  local TLS test dapp (runtime capture, not a mock).
+- Dark capture — passed, 24 screenshots, confirmed byte-different from light.
+- Changes in this review are confined to `docs/design-review/`. No application source
+  was modified, so `pnpm run lint`, `pnpm run doctor` and the Firefox build were not
+  re-run; the findings above are reported, not fixed.
 
 ## Screenshots
 
 ### Onboarding
 
-![Onboarding welcome](screenshots/01-onboarding-welcome.png)
+| Surface | Light | Deep Ink (dark) |
+|---|---|---|
+| Onboarding welcome | ![Onboarding welcome, light](screenshots/01-onboarding-welcome.png) | ![Onboarding welcome, dark](screenshots/dark/01-onboarding-welcome.png) |
+| Onboarding create key | ![Onboarding create key, light](screenshots/03-onboarding-create-key.png) | ![Onboarding create key, dark](screenshots/dark/03-onboarding-create-key.png) |
+| Onboarding backup | ![Onboarding backup, light](screenshots/04-onboarding-backup.png) | ![Onboarding backup, dark](screenshots/dark/04-onboarding-backup.png) |
+| Onboarding backup revealed | ![Onboarding backup revealed, light](screenshots/04b-onboarding-backup-revealed.png) | ![Onboarding backup revealed, dark](screenshots/dark/04b-onboarding-backup-revealed.png) |
+### Popup and side panel
 
-![Onboarding create choice](screenshots/02-onboarding-create-choice.png)
-
-![Onboarding create key](screenshots/03-onboarding-create-key.png)
-
-![Onboarding backup](screenshots/04-onboarding-backup.png)
-
-### Popup And Side Panel
-
-![Popup home](screenshots/05-popup-home.png)
-
-![Side panel home](screenshots/06-sidepanel-home.png)
-
-![Popup profile](screenshots/07-popup-profile.png)
-
-![Popup profile edit](screenshots/08-popup-profile-edit.png)
-
-![Popup activity](screenshots/09-popup-activity.png)
-
-![Popup quick settings](screenshots/10-popup-quick-settings.png)
-
-![Add key dialog](screenshots/11-add-key-dialog.png)
-
+| Surface | Light | Deep Ink (dark) |
+|---|---|---|
+| Popup home | ![Popup home, light](screenshots/05-popup-home.png) | ![Popup home, dark](screenshots/dark/05-popup-home.png) |
+| Sidepanel home | ![Sidepanel home, light](screenshots/06-sidepanel-home.png) | ![Sidepanel home, dark](screenshots/dark/06-sidepanel-home.png) |
+| Popup profile | ![Popup profile, light](screenshots/07-popup-profile.png) | ![Popup profile, dark](screenshots/dark/07-popup-profile.png) |
+| Popup profile edit | ![Popup profile edit, light](screenshots/08-popup-profile-edit.png) | ![Popup profile edit, dark](screenshots/dark/08-popup-profile-edit.png) |
+| Popup activity | ![Popup activity, light](screenshots/09-popup-activity.png) | ![Popup activity, dark](screenshots/dark/09-popup-activity.png) |
+| Popup quick settings | ![Popup quick settings, light](screenshots/10-popup-quick-settings.png) | ![Popup quick settings, dark](screenshots/dark/10-popup-quick-settings.png) |
+| Add key dialog | ![Add key dialog, light](screenshots/11-add-key-dialog.png) | ![Add key dialog, dark](screenshots/dark/11-add-key-dialog.png) |
 ### Options
 
-![Options general](screenshots/12-options-general.png)
-
-![Options keys](screenshots/13-options-keys.png)
-
-![Options security](screenshots/14-options-security.png)
-
-![Options permissions](screenshots/15-options-permissions.png)
-
-![Options activity log](screenshots/16-options-activity-log.png)
-
-![Options relays](screenshots/17-options-relays.png)
-
-![Options advanced](screenshots/18-options-advanced.png)
-
+| Surface | Light | Deep Ink (dark) |
+|---|---|---|
+| Options general | ![Options general, light](screenshots/12-options-general.png) | ![Options general, dark](screenshots/dark/12-options-general.png) |
+| Options keys | ![Options keys, light](screenshots/13-options-keys.png) | ![Options keys, dark](screenshots/dark/13-options-keys.png) |
+| Options security | ![Options security, light](screenshots/14-options-security.png) | ![Options security, dark](screenshots/dark/14-options-security.png) |
+| Options permissions | ![Options permissions, light](screenshots/15-options-permissions.png) | ![Options permissions, dark](screenshots/dark/15-options-permissions.png) |
+| Options activity log | ![Options activity log, light](screenshots/16-options-activity-log.png) | ![Options activity log, dark](screenshots/dark/16-options-activity-log.png) |
+| Options relays | ![Options relays, light](screenshots/17-options-relays.png) | ![Options relays, dark](screenshots/dark/17-options-relays.png) |
+| Options advanced | ![Options advanced, light](screenshots/18-options-advanced.png) | ![Options advanced, dark](screenshots/dark/18-options-advanced.png) |
 ### Approval
 
-![Approval empty](screenshots/19-approval-empty.png)
-
-![Approval queue](screenshots/20-approval-queue.png)
-
-![Approval detail](screenshots/21-approval-detail.png)
-
+| Surface | Light | Deep Ink (dark) |
+|---|---|---|
+| Approval empty | ![Approval empty, light](screenshots/19-approval-empty.png) | ![Approval empty, dark](screenshots/dark/19-approval-empty.png) |
+| Approval, one request on arrival | ![Approval on arrival, light](screenshots/20-approval-queue.png) | ![Approval on arrival, dark](screenshots/dark/20-approval-queue.png) |
+| Approval queue, reached by back | ![Approval queue, light](screenshots/20b-approval-queue-via-back.png) | ![Approval queue, dark](screenshots/dark/20b-approval-queue-via-back.png) |
+| Approval detail | ![Approval detail, light](screenshots/21-approval-detail.png) | ![Approval detail, dark](screenshots/dark/21-approval-detail.png) |
+| Approval raw JSON | ![Approval raw JSON, light](screenshots/21b-approval-payload.png) | ![Approval raw JSON, dark](screenshots/dark/21b-approval-payload.png) |
 ### Locked
 
-![Lock screen](screenshots/22-lock-screen.png)
+| Surface | Light | Deep Ink (dark) |
+|---|---|---|
+| Lock screen | ![Lock screen, light](screenshots/22-lock-screen.png) | ![Lock screen, dark](screenshots/dark/22-lock-screen.png) |

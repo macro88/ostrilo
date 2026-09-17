@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Eye } from "lucide-react";
 import type { ActivityLogEntry } from "@/domain/types";
 import { activityGetRecent } from "@/infrastructure/messaging/client";
 import { formatOrigin } from "@/domain/display/origin";
@@ -27,6 +26,34 @@ interface OriginReads {
   lastAt: number;
 }
 
+/** `ActivityGetRecentRequestSchema` caps `limit` at 100 per call. */
+const PAGE_SIZE = 100;
+/** The service keeps at most this many entries; it bounds the paging below. */
+const LOG_CAPACITY = 500;
+
+/**
+ * Reads the whole log a page at a time.
+ *
+ * This used to ask for all 500 entries in one call. The request schema
+ * rejects any limit above 100, so the read failed as INVALID_PARAMS every
+ * time; the failure fell into the same branch as a locked vault, and an
+ * unlocked user was told history was "unavailable while the vault is locked".
+ */
+async function readWholeLog(): Promise<ActivityLogEntry[]> {
+  const all: ActivityLogEntry[] = [];
+  let offset = 0;
+  while (offset < LOG_CAPACITY) {
+    const { entries, total } = await activityGetRecent({
+      limit: PAGE_SIZE,
+      offset,
+    });
+    all.push(...entries);
+    offset += entries.length;
+    if (entries.length < PAGE_SIZE || offset >= total) break;
+  }
+  return all;
+}
+
 function summarise(entries: ActivityLogEntry[]): OriginReads[] {
   const byOrigin = new Map<string, OriginReads>();
 
@@ -48,19 +75,32 @@ function summarise(entries: ActivityLogEntry[]): OriginReads[] {
   return [...byOrigin.values()].sort((a, b) => b.lastAt - a.lastAt);
 }
 
+/**
+ * A locked vault is the one failure this surface can name. Anything else is
+ * reported as a failure to load, never as "nobody has read your key".
+ */
+function isLockedError(error: unknown): boolean {
+  const code = (error as { errorCode?: unknown } | null)?.errorCode;
+  if (code === "locked") return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /locked/i.test(message);
+}
+
+type HistoryState =
+  | { status: "loading" }
+  | { status: "ready"; reads: OriginReads[] }
+  | { status: "locked" }
+  | { status: "failed" };
+
 export function DisclosureHistory() {
-  const [reads, setReads] = useState<OriginReads[] | null>(null);
+  const [state, setState] = useState<HistoryState>({ status: "loading" });
 
   const refresh = useCallback(async () => {
     try {
-      // The whole log. It is capped at 500 entries by the service, and the
-      // aggregation is over a handful of fields.
-      const { entries } = await activityGetRecent({ limit: 500 });
-      setReads(summarise(entries));
-    } catch {
-      // A locked or unreachable background has no history to show. An empty
-      // list is the honest render; it must not claim nobody has read the key.
-      setReads(null);
+      const entries = await readWholeLog();
+      setState({ status: "ready", reads: summarise(entries) });
+    } catch (error) {
+      setState({ status: isLockedError(error) ? "locked" : "failed" });
     }
   }, []);
 
@@ -68,58 +108,49 @@ export function DisclosureHistory() {
     void refresh();
   }, [refresh]);
 
+  const quiet = "ink-row text-[13px] text-muted-foreground";
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
-          <Eye className="h-4 w-4" />
-        </div>
-        <div>
-          <h3 className="font-medium">Sites that read your public key</h3>
-          <p className="text-xs text-muted-foreground">
-            Your public key is not a secret — it is published on relays. This
-            list is about linkage: which sites have tied your browsing to that
-            identity.
+    <div className="space-y-2">
+      <div className="ink-card">
+        {state.status === "loading" && (
+          <p className={quiet}>Reading the activity log...</p>
+        )}
+        {state.status === "locked" && (
+          <p className={quiet}>
+            History is unavailable while the vault is locked.
           </p>
-        </div>
+        )}
+        {state.status === "failed" && (
+          <p className={quiet}>
+            History could not be loaded. Reopen this page to try again.
+          </p>
+        )}
+        {state.status === "ready" && state.reads.length === 0 && (
+          <p className={quiet}>No site has read your public key yet.</p>
+        )}
+        {state.status === "ready" &&
+          state.reads.map((row) => (
+            <div
+              key={row.origin}
+              className="ink-row"
+              data-testid={`disclosure-origin-${row.origin}`}
+            >
+              <span className="min-w-0 flex-1 truncate font-mono text-[13px]">
+                {formatOrigin(row.origin).display}
+              </span>
+              <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">
+                {row.allowed} read{row.allowed === 1 ? "" : "s"}
+                {row.refused > 0 && `, ${row.refused} refused`}
+              </span>
+            </div>
+          ))}
       </div>
-
-      {reads === null && (
-        <p className="text-sm text-muted-foreground">
-          History is unavailable while the vault is locked.
+      {state.status === "ready" && state.reads.length > 0 && (
+        <p className="px-0.5 text-[13px] leading-snug text-muted-foreground">
+          Counts come from the activity log, which keeps the most recent 500
+          entries. Older reads are not included.
         </p>
-      )}
-
-      {reads !== null && reads.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          No site has read your public key yet.
-        </p>
-      )}
-
-      {reads !== null && reads.length > 0 && (
-        <>
-          <div className="space-y-2">
-            {reads.map((row) => (
-              <div
-                key={row.origin}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-border bg-muted/35 p-3"
-                data-testid={`disclosure-origin-${row.origin}`}
-              >
-                <span className="font-mono text-xs">
-                  {formatOrigin(row.origin).display}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {row.allowed} read{row.allowed === 1 ? "" : "s"}
-                  {row.refused > 0 && `, ${row.refused} refused`}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Counts come from the activity log, which keeps the most recent 500
-            entries. Older reads are not included.
-          </p>
-        </>
       )}
     </div>
   );

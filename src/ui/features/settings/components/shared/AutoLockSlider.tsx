@@ -8,6 +8,8 @@ interface AutoLockSliderProps {
   min?: number;
   max?: number;
   step?: number;
+  /** Omit the explanatory sentence; for grouped rows in the popup. */
+  compact?: boolean;
 }
 
 export function AutoLockSlider({
@@ -16,6 +18,7 @@ export function AutoLockSlider({
   min = AUTO_LOCK_BOUNDS.min,
   max = AUTO_LOCK_BOUNDS.max,
   step = 1,
+  compact = false,
 }: AutoLockSliderProps) {
   const handleChange = (values: number[]) => {
     onChange(values[0]);
@@ -27,10 +30,14 @@ export function AutoLockSlider({
   const minutes = normalizeAutoLockMinutes(value);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <Label>Auto-lock after inactivity</Label>
-        <span className="text-sm text-muted-foreground">{minutes} min</span>
+    <div className="w-full space-y-2.5">
+      <div className="flex items-baseline justify-between gap-4">
+        <Label className="text-sm font-semibold leading-snug">
+          Auto-lock after inactivity
+        </Label>
+        <span className="text-sm font-medium text-muted-foreground tabular-nums">
+          {minutes} min
+        </span>
       </div>
       <Slider
         value={[minutes]}
@@ -41,10 +48,12 @@ export function AutoLockSlider({
         className="w-full"
         aria-label="Auto-lock timeout"
       />
-      <p className="text-xs text-muted-foreground">
-        Measured from your last activity in the extension, not from when you
-        unlocked.
-      </p>
+      {!compact && (
+        <p className="text-[13px] leading-snug text-muted-foreground">
+          Measured from your last activity in the extension, not from when you
+          unlocked.
+        </p>
+      )}
     </div>
   );
 }

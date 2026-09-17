@@ -71,7 +71,6 @@ async function completeCreateKeyOnboarding(
   await captureStepScreenshot(page, testInfo, "01-popup-welcome");
 
   await page.getByText("Create New Key", { exact: true }).click();
-  await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Create Your Nostr Key" }))
     .toBeVisible();
   await page.getByLabel("Key Name").fill("Agent Smoke Key");
@@ -133,8 +132,12 @@ test.describe("Agent extension smoke", () => {
 
     await popup.getByRole("button", { name: "Settings" }).click();
     await expect(popup.getByRole("heading", { name: "Settings" })).toBeVisible();
-    await expect(popup.getByText("Active Key")).toBeVisible();
-    await captureStepScreenshot(popup, testInfo, "09-settings-active-key");
+    // The quick-controls panel carries the controls, not a copy of the active
+    // key: the header names that on every tab. A control and the panel's one
+    // action stand in for "this rendered".
+    await expect(popup.getByLabel("Theme")).toBeVisible();
+    await expect(popup.getByRole("button", { name: "Lock now" })).toBeVisible();
+    await captureStepScreenshot(popup, testInfo, "09-settings-quick-controls");
 
     // `allow` is a standing permission to sign without prompting, so it is
     // password-gated in the background. The password rides with the request;

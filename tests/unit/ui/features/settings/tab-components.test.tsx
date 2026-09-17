@@ -39,6 +39,7 @@ const appSettingsMock = vi.hoisted(() => ({
   setPerKindRule: vi.fn(),
   updateMediumAllowKinds: vi.fn(),
   resetSettings: vi.fn(),
+  updateSidePanel: vi.fn(),
 }));
 
 const keyManagerMock = vi.hoisted(() => ({
@@ -75,6 +76,7 @@ vi.mock("@/hooks/useAppSettings", () => ({
     setPerKindRule: appSettingsMock.setPerKindRule,
     updateMediumAllowKinds: appSettingsMock.updateMediumAllowKinds,
     resetSettings: appSettingsMock.resetSettings,
+    updateSidePanel: appSettingsMock.updateSidePanel,
   }),
 }));
 
@@ -92,8 +94,19 @@ vi.mock("@/infrastructure/messaging/client", () => ({
   activityGetRecent: vi.fn().mockResolvedValue({ entries: [], total: 0 }),
 }));
 
-vi.mock("@/components/navigation/open-in-selector", () => ({
-  OpenInSelector: () => <div>Open in selector</div>,
+// The "Open extension in" row writes the legacy docking flag and the
+// browser's panel behaviour through these hooks. Both reach
+// `webextension-polyfill`, which refuses to load outside an extension page.
+vi.mock("@/hooks/useWxtStorage", () => ({
+  useWxtStorage: () => [false, vi.fn().mockResolvedValue(undefined)],
+}));
+
+vi.mock("@/hooks/useSidePanelDock", () => ({
+  useSidePanelDock: () => ({
+    supported: false,
+    enableDocking: vi.fn(),
+    disableDocking: vi.fn(),
+  }),
 }));
 
 vi.mock("@/ui/features/settings/components/shared", () => ({
@@ -311,8 +324,8 @@ describe("options page tab components", () => {
   it("renders General settings and wires theme changes", () => {
     const container = render(<GeneralSettingsTab />);
 
-    expect(container.textContent).toContain("General Settings");
-    expect(container.textContent).toContain("Open in selector");
+    expect(container.textContent).toContain("General");
+    expect(container.textContent).toContain("Open extension in");
 
     clickByText(container, "Theme selector: light");
 
@@ -347,7 +360,7 @@ describe("options page tab components", () => {
   it("renders the Permissions empty state", () => {
     const container = render(<PermissionsTab />);
 
-    expect(container.textContent).toContain("No Origins Configured");
+    expect(container.textContent).toContain("No sites yet");
   });
 
   it("wires Permissions table actions when origins exist", () => {

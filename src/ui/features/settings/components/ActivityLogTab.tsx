@@ -1,7 +1,10 @@
-import { Clock } from "lucide-react";
 import { ActivityLogConfig } from "@/ui/features/settings/components/shared";
+import {
+  SettingsLoading,
+  SettingsSection,
+  SettingsTabHeader,
+} from "@/ui/features/settings/components/shared/SettingsLayout";
 import { useAppSettings } from "@/hooks/useAppSettings";
-import { LoadingSpinner } from "@/ui/components/common/LoadingSpinner";
 import { activityGetRecent } from "@/infrastructure/messaging/client";
 import { useState } from "react";
 
@@ -35,6 +38,13 @@ async function exportActivityLog(maxEntries: number) {
   });
 }
 
+const STATUS_COPY: Record<ExportStatus, string> = {
+  idle: "Exports stay local to this browser and include activity entries only.",
+  busy: "Exporting the activity log...",
+  success: "Activity log exported as a local JSON file.",
+  error: "Could not export the activity log. Try again from this page.",
+};
+
 export function ActivityLogTab() {
   const [exportStatus, setExportStatus] = useState<ExportStatus>("idle");
   const {
@@ -56,45 +66,29 @@ export function ActivityLogTab() {
   };
 
   if (isLoading) {
-    return (
-      <div className="py-12">
-        <LoadingSpinner label="Loading settings..." />
-      </div>
-    );
+    return <SettingsLoading />;
   }
 
   return (
-    <div className="ink-card p-4 space-y-6">
-      <div>
-        <h2 className="screen-title">Activity Log</h2>
-        <p className="text-sm text-muted-foreground">
-          Configure activity log retention and management
-        </p>
-      </div>
-
-      <div className="flex items-center gap-2 mb-4">
-        <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
-          <Clock className="h-4 w-4" />
-        </div>
-        <h3 className="font-medium">Log Configuration</h3>
-      </div>
-
-      <ActivityLogConfig
-        maxEntries={settings.maxActivityEntries ?? 50}
-        onChange={updateMaxActivityEntries}
-        onClear={clearActivityLog}
-        onExport={handleExport}
-        exportDisabled={exportStatus === "busy"}
-        exportLabel={exportStatus === "busy" ? "Exporting..." : "Export Log"}
+    <div>
+      <SettingsTabHeader
+        title="Activity Log"
+        lede="The signer records every request it answers. The log stays in this browser."
       />
-      <p className="text-sm text-muted-foreground" role="status">
-        {exportStatus === "success" &&
-          "Activity log exported as a local JSON file."}
-        {exportStatus === "error" &&
-          "Could not export the activity log. Try again from this page."}
-        {exportStatus === "idle" &&
-          "Exports stay local to this browser and include activity entries only."}
-      </p>
+
+      <SettingsSection
+        label="Stored entries"
+        note={<span role="status">{STATUS_COPY[exportStatus]}</span>}
+      >
+        <ActivityLogConfig
+          maxEntries={settings.maxActivityEntries ?? 50}
+          onChange={updateMaxActivityEntries}
+          onClear={clearActivityLog}
+          onExport={handleExport}
+          exportDisabled={exportStatus === "busy"}
+          exportLabel={exportStatus === "busy" ? "Exporting..." : "Export Log"}
+        />
+      </SettingsSection>
     </div>
   );
 }

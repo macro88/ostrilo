@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
 import { describeViolation } from "@/domain/utils/password-policy";
 import { evaluatePasswordStrength } from "@/infrastructure/messaging/client";
-import { AlertTriangle, Check, Download, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, Loader2 } from "lucide-react";
 import {
   backupFileName,
   createKeyBackup,
@@ -19,9 +19,11 @@ interface BackupEncryptedExportProps {
    */
   getPayload: () => KeyBackupPayload | null;
   onSaved: () => void;
+  /** Cancel. The step unmounts the panel, and the passphrase state goes with it. */
+  onClose: () => void;
 }
 
-type ExportPhase = "closed" | "prompt" | "working" | "saved";
+type ExportPhase = "prompt" | "working" | "saved";
 
 /**
  * Hands the browser a file without a navigation.
@@ -42,7 +44,9 @@ function saveFile(contents: string, filename: string): void {
 }
 
 /**
- * "Save encrypted backup", the replacement for "Download Backup".
+ * The panel behind "Save encrypted backup", the replacement for "Download
+ * Backup". The trigger button lives in the backup step's action row; this
+ * component is the form it opens.
  *
  * The removed control serialised `{ name, privateKey: nsec, privateKeyHex }` to
  * disk in the clear, with no passphrase and no warning, under a filename that
@@ -59,8 +63,9 @@ function saveFile(contents: string, filename: string): void {
 export function BackupEncryptedExport({
   getPayload,
   onSaved,
+  onClose,
 }: BackupEncryptedExportProps) {
-  const [phase, setPhase] = useState<ExportPhase>("closed");
+  const [phase, setPhase] = useState<ExportPhase>("prompt");
   const [passphrase, setPassphrase] = useState("");
   const [confirmPassphrase, setConfirmPassphrase] = useState("");
   const [error, setError] = useState("");
@@ -74,8 +79,8 @@ export function BackupEncryptedExport({
   const handleCancel = useCallback(() => {
     dropPassphrase();
     setError("");
-    setPhase("closed");
-  }, [dropPassphrase]);
+    onClose();
+  }, [dropPassphrase, onClose]);
 
   const handleSave = useCallback(async () => {
     if (passphrase !== confirmPassphrase) {
@@ -125,37 +130,27 @@ export function BackupEncryptedExport({
     passphrase,
   ]);
 
-  if (phase === "closed") {
-    return (
-      <Button
-        variant="outline"
-        onClick={() => setPhase("prompt")}
-        className="w-full"
-      >
-        <Download className="mr-2 h-4 w-4" />
-        Save encrypted backup
-      </Button>
-    );
-  }
-
   if (phase === "saved") {
     return (
-      <div className="space-y-2">
-        <div className="seal-chip seal-chip-success flex" role="status">
-          <Check className="h-4 w-4" />
+      <div className="mt-3 border-t border-border pt-3">
+        <p
+          className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink-mint)]"
+          role="status"
+        >
+          <Check className="h-3.5 w-3.5" />
           Encrypted backup saved
-        </div>
-        <p className="text-xs text-muted-foreground">
+        </p>
+        <p className="mt-1 text-xs leading-snug text-muted-foreground">
           The file is useless without the passphrase you just chose. Ostrilo
           cannot recover it.
         </p>
-        <Button
-          variant="outline"
+        <button
+          type="button"
           onClick={() => setPhase("prompt")}
-          className="w-full"
+          className="-my-2.5 mt-0.5 inline-flex h-11 items-center text-xs font-semibold text-[var(--ink-violet)] hover:underline"
         >
           Save another copy
-        </Button>
+        </button>
       </div>
     );
   }
@@ -163,43 +158,45 @@ export function BackupEncryptedExport({
   const working = phase === "working";
 
   return (
-    <div className="ink-card space-y-3 p-4">
-      <div>
-        <h3 className="text-sm font-semibold">Encrypt the backup file</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          This passphrase is only for this file. It is separate from your master
-          password, it is not stored anywhere, and Ostrilo cannot recover it.
-          Lose it and the file is unusable.
-        </p>
+    <div className="mt-3 border-t border-border pt-3">
+      <p className="text-xs leading-snug text-muted-foreground">
+        Choose a passphrase for this file. It is separate from your master
+        password, is stored nowhere, and cannot be recovered. Lose it and the
+        file is unusable.
+      </p>
+
+      <div className="mt-3">
+        <PasswordInput
+          idPrefix="backup"
+          label="Backup passphrase"
+          placeholder="Passphrase for this file"
+          value={passphrase}
+          onChange={setPassphrase}
+          confirmValue={confirmPassphrase}
+          onConfirmChange={setConfirmPassphrase}
+          confirmLabel="Confirm backup passphrase"
+          confirmPlaceholder="Re-enter the passphrase"
+          showStrengthMeter
+          disabled={working}
+        />
       </div>
 
-      <PasswordInput
-        idPrefix="backup"
-        label="Backup passphrase"
-        placeholder="Enter a passphrase for this file"
-        value={passphrase}
-        onChange={setPassphrase}
-        confirmValue={confirmPassphrase}
-        onConfirmChange={setConfirmPassphrase}
-        confirmLabel="Confirm backup passphrase"
-        confirmPlaceholder="Re-enter the passphrase"
-        showStrengthMeter
-        disabled={working}
-      />
-
       {error && (
-        <div className="seal-chip seal-chip-danger flex" role="alert">
-          <AlertTriangle className="h-4 w-4" />
-          {error}
-        </div>
+        <p
+          className="mt-3 flex items-start gap-1.5 text-xs font-medium text-destructive"
+          role="alert"
+        >
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{error}</span>
+        </p>
       )}
 
-      <div className="flex gap-2">
+      <div className="mt-3 flex gap-2">
         <Button
           variant="outline"
           onClick={handleCancel}
           disabled={working}
-          className="flex-1"
+          className="h-11 flex-1"
         >
           Cancel
         </Button>
@@ -209,11 +206,11 @@ export function BackupEncryptedExport({
           variant="secondary"
           onClick={handleSave}
           disabled={working || passphrase.length === 0}
-          className="flex-1"
+          className="h-11 flex-1"
         >
           {working ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
               Encrypting
             </>
           ) : (

@@ -12,6 +12,7 @@ interface ImageUploadFieldProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Shown under the field when an image host is configured. */
   helpText?: string;
   /**
    * HTTPS endpoint that receives the uploaded image.
@@ -21,6 +22,8 @@ interface ImageUploadFieldProps {
    * outbound request to anyone but the configured relays.
    */
   uploadEndpoint?: string;
+  /** Focus the URL input on mount, when the editor was opened on this field. */
+  autoFocus?: boolean;
 }
 
 /**
@@ -47,8 +50,9 @@ export function ImageUploadField({
   onChange,
   disabled = false,
   placeholder = "https://example.com/image.jpg",
-  helpText = "Paste an https:// image URL. Max 5MB (JPEG, PNG, GIF, WebP) if you upload.",
+  helpText = "Up to 5MB. JPEG, PNG, GIF or WebP.",
   uploadEndpoint,
+  autoFocus = false,
 }: ImageUploadFieldProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -87,9 +91,7 @@ export function ImageUploadField({
     // Validate file type
     const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
     if (!validTypes.includes(file.type)) {
-      setUploadError(
-        "Please select a valid image file (JPEG, PNG, GIF, or WebP)"
-      );
+      setUploadError("Choose a JPEG, PNG, GIF or WebP image.");
       event.target.value = "";
       return;
     }
@@ -162,42 +164,44 @@ export function ImageUploadField({
     setUploadError(null);
   };
 
-  return (
-    <div>
-      <Label htmlFor={id}>{label}</Label>
-      <div className="space-y-2">
-        <Input
-          id={id}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          type="url"
-          disabled={disabled || isUploading}
-        />
+  const busy = disabled || isUploading;
 
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        type="url"
+        disabled={busy}
+        autoFocus={autoFocus}
+      />
+
+      {(canUpload || value) && (
         <div className="flex gap-2">
           {canUpload && (
             <>
-              <button
+              <Button
+                variant="outline"
                 type="button"
-                className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold transition-colors ${
-                  disabled || isUploading
-                    ? "cursor-not-allowed opacity-50"
-                    : "hover:bg-accent"
-                }`}
-                disabled={disabled || isUploading}
+                className="min-w-0 flex-1"
+                disabled={busy}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload className="h-4 w-4" />
-                {isUploading ? "Uploading..." : `Upload to ${destinationHost}`}
-              </button>
+                <span className="truncate">
+                  {isUploading ? "Uploading..." : `Upload to ${destinationHost}`}
+                </span>
+              </Button>
               <input
                 id={`${id}-upload`}
                 ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/gif,image/webp"
                 onChange={handleFileUpload}
-                disabled={disabled || isUploading}
+                disabled={busy}
                 className="hidden"
                 aria-label={`${label} file upload`}
               />
@@ -208,37 +212,35 @@ export function ImageUploadField({
               variant="outline"
               type="button"
               onClick={handleRemove}
-              disabled={disabled || isUploading}
-              className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20"
+              disabled={busy}
               title="Remove image"
             >
               Remove
             </Button>
           )}
         </div>
+      )}
 
-        {isUploading && uploadProgress > 0 && (
-          <progress
-            className="h-2 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary"
-            value={uploadProgress}
-            max={100}
-            aria-label="Image upload progress"
-          />
-        )}
+      {isUploading && uploadProgress > 0 && (
+        <progress
+          className="h-1 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary"
+          value={uploadProgress}
+          max={100}
+          aria-label="Image upload progress"
+        />
+      )}
 
-        {uploadError && (
-          <p className="text-xs text-destructive">{uploadError}</p>
-        )}
+      {uploadError && (
+        <p role="alert" className="text-xs text-destructive">
+          {uploadError}
+        </p>
+      )}
 
-        {!canUpload && (
-          <p className="text-xs text-muted-foreground">
-            No image host is configured, so there is nowhere to upload to. Paste
-            an https:// image URL instead.
-          </p>
-        )}
-
-        <p className="text-xs text-muted-foreground">{helpText}</p>
-      </div>
+      <p className="text-[11.5px] text-muted-foreground">
+        {canUpload
+          ? helpText
+          : "No image host is configured. Paste an https:// image URL."}
+      </p>
     </div>
   );
 }

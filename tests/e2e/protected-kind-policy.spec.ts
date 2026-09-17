@@ -50,7 +50,6 @@ async function completeCreateKeyOnboarding(page: Page) {
     .toBeVisible();
 
   await page.getByText("Create New Key", { exact: true }).click();
-  await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Create Your Nostr Key" }))
     .toBeVisible();
   await page.getByLabel("Key Name").fill("Protected Kind Test Key");

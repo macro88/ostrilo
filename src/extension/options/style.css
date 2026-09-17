@@ -1,4 +1,14 @@
-html, body, #root {
+/*
+ * Options page scaffolding. Tokens and shared classes (.ink-card, .ink-row,
+ * .section-label, .notch-sm ...) come from src/assets/tailwind.css; this file
+ * only lays the page out.
+ *
+ * The page is a browser tab, not the popup, so it runs one type step larger
+ * (DESIGN_RULES §4) and gives grouped rows 56px instead of the popup's 44px.
+ */
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
   padding: 0;
@@ -8,150 +18,62 @@ html, body, #root {
   min-height: 100vh;
 }
 
-/* Container constraints for optimal readability */
-.options-container {
-  max-width: 1200px;
-  width: min(100%, 1200px);
-  margin: 0 auto;
-  padding: 0 1.5rem;
+/* One measure for header and body so the mark, the nav and the content share
+   a left edge. 960px = 200px nav + 48px gutter + a 640px reading column. */
+.options-shell {
+  width: min(100% - 3rem, 60rem);
+  margin-inline: auto;
 }
 
-.tab-content-wrapper {
-  max-width: 800px;
-  margin: 0 auto;
+.options-header {
+  display: flex;
+  align-items: center;
+  min-height: 3.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
 }
 
-/* Tab content spacing and padding */
-.tab-content {
-  padding: 1.5rem 0;
+.options-layout {
+  display: grid;
+  grid-template-columns: 12.5rem minmax(0, 40rem);
+  column-gap: 3rem;
+  padding-block: 2rem 5rem;
 }
 
-.options-tabs {
-  overflow-x: auto;
-  scrollbar-gutter: stable;
-  overscroll-behavior-inline: contain;
+.options-nav {
+  position: sticky;
+  top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  align-self: start;
 }
 
-.tab-section {
-  margin-bottom: 2rem;
+.options-panel {
+  min-width: 0;
 }
 
-.tab-section:last-child {
-  margin-bottom: 0;
+/* Rows on this surface: 56px tall, 16px side padding. The popup keeps
+   .ink-row's own density. */
+.options-panel .ink-row {
+  min-height: 3.5rem;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
 }
 
-.tab-section-header {
-  margin-bottom: 1rem;
-}
-
-.tab-section-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-.tab-section-description {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-
-/* Form field spacing */
-.form-field {
-  margin-bottom: 1.5rem;
-}
-
-.form-field:last-child {
-  margin-bottom: 0;
-}
-
-/* Loading states */
-.loading-spinner {
-  display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid var(--muted);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@media (max-width: 56rem) {
+  .options-layout {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 1.5rem;
+    padding-block: 1.25rem 3rem;
   }
-}
 
-.loading-overlay {
-  position: relative;
-  pointer-events: none;
-  opacity: 0.6;
-}
-
-/* Empty states */
-.empty-state {
-  text-align: center;
-  padding: 3rem 1.5rem;
-}
-
-.empty-state-icon {
-  font-size: 3rem;
-  color: var(--muted-foreground);
-  margin-bottom: 1rem;
-}
-
-.empty-state-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-.empty-state-description {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-  margin-bottom: 1.5rem;
-}
-
-/* Responsive breakpoints */
-@media (max-width: 1024px) {
-  .options-container {
-    padding: 0 1rem;
+  .options-nav {
+    position: static;
+    flex-direction: row;
+    gap: 0.25rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+    scrollbar-width: thin;
   }
-  
-  .tab-content-wrapper {
-    max-width: 100%;
-  }
-  
-  .tab-content {
-    padding: 1rem 0;
-  }
-  
-  .tab-section {
-    margin-bottom: 1.5rem;
-  }
-}
-
-@media (max-width: 640px) {
-  .options-container {
-    padding: 0 0.75rem;
-  }
-  
-  .tab-content {
-    padding: 0.75rem 0;
-  }
-  
-  .empty-state {
-    padding: 2rem 1rem;
-  }
-}
-
-/* Accessibility improvements */
-.tab-content:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
-/* Smooth transitions */
-.tab-content,
-.loading-overlay {
-  transition: opacity 0.2s ease-in-out;
 }

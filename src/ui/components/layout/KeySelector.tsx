@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, useMemo } from "react";
+import { useState, memo } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import {
   DropdownMenu,
@@ -22,36 +22,25 @@ interface KeySelectorProps {
    * If not provided, the "Add Key" button will not be shown.
    */
   onAddKey?: () => void;
-  compact?: boolean;
 }
+
+const ACTIVE_KEY_NAME_ID = "active-key-name";
 
 /**
  * Multi-Key Selector Component
- * 
- * Displays a dropdown menu that allows users to switch between multiple Nostr keys.
- * Shows the currently active key with profile avatar and display name, fetched from
- * Nostr relays. Integrates with the KeyManagerContext for key operations.
- * 
- * @component
- * @example
- * ```tsx
- * <KeySelector onAddKey={() => setShowAddDialog(true)} />
- * ```
- * 
- * Features:
- * - Profile-aware key display with local seal avatars and names from Nostr metadata
- * - Dropdown menu with all available keys
- * - Visual indicator (checkmark) for currently selected key
- * - Optional "Add Key" action at bottom of dropdown
- * - Loading states during key switching
- * - Keyboard navigation support (Arrow keys, Enter, Escape)
- * - WCAG 2.1 AA compliant with proper ARIA attributes
- * - Memoized for performance optimization
- * 
+ *
+ * The active identity, rendered as the header's account control: seal avatar,
+ * display name and a chevron, opening a list of every key in the vault.
+ *
+ * The visible name is also the screen's level-2 heading. The heading wraps the
+ * trigger and points `aria-labelledby` at the name, so it is announced (and
+ * found by tests) as the key's name rather than as the trigger's own
+ * "Select active key" label.
+ *
  * @remarks
- * This component uses Radix UI DropdownMenu for accessible dropdown behavior.
- * Profile metadata is fetched via useProfileMetadata hook and cached for 5 minutes.
- * All keys share the same vault password and are encrypted at rest.
+ * Uses Radix UI DropdownMenu for accessible dropdown behavior. Profile
+ * metadata is fetched via useProfileMetadata and cached for 5 minutes. All
+ * keys share the same vault password and are encrypted at rest.
  *
  * Avatars are always the local seal with the key's initial. A relay chooses the
  * profile picture URL, and this is the surface on which the user confirms which
@@ -60,7 +49,6 @@ interface KeySelectorProps {
  */
 export const KeySelector = memo(function KeySelector({
   onAddKey,
-  compact = false,
 }: KeySelectorProps) {
   const { keys, selectedUnlockedKey, selectKey } = useKeyManager();
   const [isOpen, setIsOpen] = useState(false);
@@ -68,8 +56,7 @@ export const KeySelector = memo(function KeySelector({
 
   // Fetch profile metadata for all keys
   const pubkeys = keys.map((key: UIKeyInfo) => key.publicKeyHex);
-  const { profiles, isLoading: isLoadingProfiles } =
-    useProfileMetadata(pubkeys);
+  const { profiles } = useProfileMetadata(pubkeys);
 
   const handleSelectKey = async (keyId: string) => {
     if (keyId === selectedUnlockedKey?.id || isSwitching) return;
@@ -80,7 +67,6 @@ export const KeySelector = memo(function KeySelector({
       setIsOpen(false);
     } catch (error) {
       console.error("Failed to switch key:", error);
-      // TODO: Show toast notification
     } finally {
       setIsSwitching(false);
     }
@@ -106,47 +92,45 @@ export const KeySelector = memo(function KeySelector({
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <DropdownMenuTrigger
-        className={cn(
-          "flex items-center gap-2 rounded-lg px-2.5 py-2",
-          "border border-input bg-card",
-          "hover:bg-muted transition-all duration-150",
-          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-          isSwitching && "opacity-50 cursor-wait"
-        )}
-        disabled={isSwitching}
-        aria-label="Select active key"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        aria-controls="key-selector-listbox"
+      <h2
+        className="min-w-0 text-[15px] font-bold leading-tight"
+        aria-labelledby={ACTIVE_KEY_NAME_ID}
       >
-        <Avatar shape="seal" className="h-6 w-6">
-          <AvatarFallback className="text-xs">
-            {currentKeyDisplay.displayName.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        {!compact && (
-          <div className="flex flex-col items-start min-w-0">
-            <span className="text-sm font-medium truncate max-w-[120px]">
-              {currentKeyDisplay.displayName}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {currentKeyDisplay.truncatedNpub}
-            </span>
-          </div>
-        )}
-        <ChevronDown
+        <DropdownMenuTrigger
           className={cn(
-            "h-4 w-4 text-muted-foreground transition-transform duration-200",
-            isOpen && "rotate-180"
+            "flex h-11 min-w-0 max-w-full items-center gap-2 rounded-lg pl-2 pr-2 text-left",
+            "transition-colors duration-150 hover:bg-muted",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+            isSwitching && "cursor-wait opacity-50"
           )}
-          aria-hidden="true"
-        />
-      </DropdownMenuTrigger>
+          disabled={isSwitching}
+          aria-label="Select active key"
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-controls="key-selector-listbox"
+        >
+          <Avatar shape="seal" className="size-7">
+            <AvatarFallback className="bg-secondary text-xs font-bold text-secondary-foreground">
+              {currentKeyDisplay.displayName.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <span id={ACTIVE_KEY_NAME_ID} className="truncate">
+            {currentKeyDisplay.displayName}
+          </span>
+          <ChevronDown
+            className={cn(
+              "size-3.5 shrink-0 text-[var(--ink-3)] transition-transform duration-150",
+              isOpen && "rotate-180"
+            )}
+            aria-hidden="true"
+          />
+        </DropdownMenuTrigger>
+      </h2>
 
       <DropdownMenuContent
         align="start"
-        className="w-[280px] max-w-[calc(100vw-1rem)]"
+        sideOffset={6}
+        className="w-[288px] max-w-[calc(100vw-1rem)] p-1.5"
         role="listbox"
         id="key-selector-listbox"
         aria-label="Available keys"
@@ -160,9 +144,9 @@ export const KeySelector = memo(function KeySelector({
               key={key.id}
               onClick={() => handleSelectKey(key.id)}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors duration-150",
-                "hover:bg-accent/80 focus:bg-accent focus:outline-none",
-                isSelected && "bg-accent"
+                "flex min-h-12 cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150",
+                "hover:bg-muted focus:bg-muted focus:outline-none",
+                isSelected && "bg-muted"
               )}
               role="option"
               aria-selected={isSelected}
@@ -170,38 +154,46 @@ export const KeySelector = memo(function KeySelector({
                 keyDisplay.truncatedNpub
               }${isSelected ? " (currently selected)" : ""}`}
             >
-              <div className="flex items-center justify-center w-5">
-                {isSelected && (
-                  <Check className="h-4 w-4 text-primary" aria-hidden="true" />
-                )}
-              </div>
-              <Avatar shape="seal" className="h-8 w-8">
-                <AvatarFallback className="text-xs">
+              <Avatar shape="seal" className="size-8">
+                <AvatarFallback className="bg-secondary text-xs font-bold text-secondary-foreground">
                   {keyDisplay.displayName.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex flex-col items-start min-w-0 flex-1">
-                <span className="text-sm font-medium truncate w-full">
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-foreground">
                   {keyDisplay.displayName}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="block truncate font-mono text-[11px] text-muted-foreground">
                   {keyDisplay.truncatedNpub}
                 </span>
               </div>
+              <span className="flex w-5 shrink-0 justify-center">
+                {isSelected && (
+                  <Check
+                    className="size-4 text-[var(--ink-violet)]"
+                    aria-hidden="true"
+                  />
+                )}
+              </span>
             </DropdownMenuItem>
           );
         })}
 
         {onAddKey && (
           <>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator className="my-1.5" />
             <DropdownMenuItem
               onClick={onAddKey}
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer text-primary hover:bg-accent/80 transition-colors duration-150 focus:outline-none focus:bg-accent"
+              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-[var(--ink-violet)] transition-colors duration-150 hover:bg-muted focus:bg-muted focus:outline-none"
               aria-label="Add new key"
             >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              <span className="text-sm font-medium">Add Key</span>
+              <span className="flex size-8 shrink-0 items-center justify-center">
+                <Plus
+                  className="size-4 text-[var(--ink-violet)]"
+                  aria-hidden="true"
+                />
+              </span>
+              <span className="text-sm font-semibold">Add Key</span>
             </DropdownMenuItem>
           </>
         )}

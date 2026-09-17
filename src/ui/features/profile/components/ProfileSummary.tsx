@@ -1,16 +1,76 @@
 import type { ProfileMetadata } from "@/domain/profile/types";
 import { Button } from "@/components/ui/button";
+import { Pubkey } from "@/components/common/pubkey";
 import { RefreshCw } from "lucide-react";
-import { ProfileField } from "./ProfileField";
+import { cn } from "@/lib/utils";
+import { ProfileField, ProfileTextField } from "./ProfileField";
 import { RemoteUrlField } from "./RemoteUrlField";
+
+/** A field of the published profile, as the summary addresses it. */
+export type ProfileEditField = "name" | "about" | "website" | "picture";
 
 interface ProfileSummaryProps {
   profile: ProfileMetadata | null;
   loading: boolean;
   error: string | null;
   npub: string;
-  onEdit: () => void;
+  onEdit: (field?: ProfileEditField) => void;
   onRefresh: () => void;
+}
+
+/**
+ * The identity strip: the local seal, and the npub as a real control.
+ *
+ * The name is deliberately absent. The header names the active key on every
+ * tab and the published name is a row of the card below, so printing it here
+ * as well said the same thing three times on one screen. What is nowhere else
+ * on this screen is the npub, so that is what this block carries - mono,
+ * middle-truncated, with copy and QR, the treatment §7 asks for.
+ *
+ * The seal is the local mark with the profile's initial, never the relay's
+ * picture: a relay chooses that URL, and this page holds the signing session,
+ * so loading it would tell an attacker-selected host the user's IP address
+ * every time the profile surface renders. The URL stays inspectable in the
+ * card below.
+ */
+function IdentityStrip({ initial, npub }: { initial: string; npub: string }) {
+  return (
+    <section className="ink-card overflow-hidden" aria-label="Active identity">
+      <div className="ink-row">
+        <span
+          className="seal flex h-10 w-10 shrink-0 items-center justify-center bg-secondary text-base font-bold text-secondary-foreground"
+          aria-hidden="true"
+        >
+          {initial}
+        </span>
+        <Pubkey pubkey={npub} className="min-w-0 flex-1" />
+      </div>
+    </section>
+  );
+}
+
+function ProfileError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex items-center justify-between gap-3 rounded-[10px] bg-[var(--ink-red-soft)] px-3 py-2.5 text-[13px] text-[var(--ink-red)]"
+    >
+      <p className="min-w-0">{message}</p>
+      <Button
+        variant="link"
+        onClick={onRetry}
+        className="h-auto shrink-0 p-0 text-[13px] font-semibold text-[var(--ink-red)]"
+      >
+        Try again
+      </Button>
+    </div>
+  );
 }
 
 export function ProfileSummary({
@@ -21,93 +81,130 @@ export function ProfileSummary({
   onEdit,
   onRefresh,
 }: ProfileSummaryProps) {
-  const truncatedNpub = npub ? `${npub.slice(0, 10)}...${npub.slice(-6)}` : "";
+  // Only the first fetch has nothing to show. A refresh over a cached profile
+  // keeps the values on screen and spins the refresh control instead. While it
+  // lasts every row is a placeholder and the primary is held: the card is in
+  // one state, never half loaded.
   const showLoadingField = loading && !profile;
+  // Same preference as the key switcher in the header, so the two never name
+  // the same identity differently.
+  const profileName = profile?.display_name || profile?.name || "";
+  const isUnpublished =
+    !showLoadingField &&
+    !profileName &&
+    !profile?.about &&
+    !profile?.website &&
+    !profile?.picture;
 
   return (
-    <div className="screen-shell">
-      <div className="screen-header text-center">
-        {/*
-          The avatar is the local seal with the profile initial. A relay chooses
-          the picture URL, and this page holds the signing session, so loading
-          it here would tell an attacker-selected host the user's IP address
-          every time the profile surface renders. The URL stays inspectable
-          below instead.
-        */}
-        <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-3 h-16 w-16 text-2xl">
-          {(profile?.name || profile?.display_name)?.[0]?.toUpperCase() || "?"}
-        </div>
-        <h2 className="screen-title">Profile Settings</h2>
-        {truncatedNpub && (
-          <p className="mx-auto my-2 w-fit rounded-lg bg-muted px-2.5 py-1 font-mono text-xs text-muted-foreground">
-            {truncatedNpub}
-          </p>
-        )}
-        <p className="screen-description">Manage your Nostr identity</p>
-      </div>
+    <div className="flex h-full flex-col">
+      {/*
+        One scroll container holds both the content and the action row. The
+        row is sticky to the container's bottom edge: with a short profile it
+        sits directly under the card, with a long one it stays in reach while
+        the rows scroll beneath it.
+      */}
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden [overscroll-behavior:contain] [scrollbar-gutter:stable]">
+        {/* space-y-3, not 4: at 400x600 the four rows, the note under them and
+            the action row come to just over the viewport at space-y-4, which
+            cut the privacy line in half at rest. */}
+        <div className="space-y-3 px-4 pt-4">
+          <div className="screen-header">
+            <h2 className="screen-title">Profile Settings</h2>
+            {/*
+              An empty screen is an invitation to act, so it says what the
+              screen is for. Once something is published the rows say it
+              better than a sentence could.
+            */}
+            {isUnpublished && (
+              <p className="screen-description">
+                Publish a name and bio so apps can show who you are.
+              </p>
+            )}
+          </div>
 
-      {error && (
-        <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
-          <p className="text-sm text-destructive">{error}</p>
-          <Button
-            variant="link"
-            onClick={onRefresh}
-            className="mt-2 h-auto p-0 text-xs text-destructive"
-          >
-            Try again
-          </Button>
-        </div>
-      )}
+          {error && <ProfileError message={error} onRetry={onRefresh} />}
 
-      <div className="space-y-2">
-        <ProfileField
-          label="Display Name"
-          loading={showLoadingField}
-          value={profile?.name || profile?.display_name || "Not set"}
-        />
-        <ProfileField
-          label="About"
-          loading={showLoadingField}
-          value={profile?.about || "Add a bio"}
-        />
-        <RemoteUrlField
-          label="Website"
-          value={profile?.website}
-          emptyText="Add your website"
-          openLabel="Open website in a new tab"
-        />
-        <RemoteUrlField
-          label="Picture URL"
-          value={profile?.picture}
-          emptyText="No picture URL set. Images are never loaded in this window."
-          openLabel="Open picture in a new tab"
-        />
-
-        {profile?.nip05 && (
-          <ProfileField label="NIP-05" loading={false} value={profile.nip05} />
-        )}
-
-        {profile?.lud16 && (
-          <ProfileField
-            label="Lightning Address"
-            loading={false}
-            value={profile.lud16}
+          <IdentityStrip
+            initial={profileName[0]?.toUpperCase() || "?"}
+            npub={npub}
           />
-        )}
 
-        <div className="flex gap-2">
-          <Button onClick={onEdit} disabled={loading} className="flex-1">
-            Edit Profile
-          </Button>
+          <section className="space-y-2">
+            <p className="section-label">Public profile</p>
+            <div
+              className="ink-card overflow-hidden"
+              aria-busy={showLoadingField}
+            >
+              <ProfileTextField
+                label="Display Name"
+                loading={showLoadingField}
+                value={profileName}
+                onAdd={() => onEdit("name")}
+              />
+              <ProfileTextField
+                label="About"
+                loading={showLoadingField}
+                value={profile?.about}
+                multiline
+                onAdd={() => onEdit("about")}
+              />
+
+              <RemoteUrlField
+                label="Website"
+                loading={showLoadingField}
+                value={profile?.website}
+                onAdd={() => onEdit("website")}
+                openLabel="Open website in a new tab"
+              />
+              <RemoteUrlField
+                label="Picture URL"
+                loading={showLoadingField}
+                value={profile?.picture}
+                onAdd={() => onEdit("picture")}
+                openLabel="Open picture in a new tab"
+              />
+
+              {profile?.nip05 && (
+                <ProfileField
+                  label="NIP-05"
+                  loading={false}
+                  value={profile.nip05}
+                />
+              )}
+              {profile?.lud16 && (
+                <ProfileField
+                  label="Lightning Address"
+                  loading={false}
+                  value={profile.lud16}
+                />
+              )}
+            </div>
+            <p className="px-1 text-[11.5px] text-muted-foreground">
+              Images are never loaded in this window.
+            </p>
+          </section>
+        </div>
+
+        <div className="sticky bottom-0 flex gap-2 bg-background px-4 pb-4 pt-3">
           <Button
             variant="outline"
-            size="icon"
             onClick={onRefresh}
             disabled={loading}
+            className="h-11 w-11 shrink-0 px-0"
             title="Refresh profile from relays"
             aria-label="Refresh profile from relays"
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw
+              className={cn("h-4 w-4", loading && "motion-safe:animate-spin")}
+            />
+          </Button>
+          <Button
+            onClick={() => onEdit()}
+            disabled={showLoadingField}
+            className="h-11 flex-1"
+          >
+            Edit Profile
           </Button>
         </div>
       </div>

@@ -1,14 +1,25 @@
-import { Shield, Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AutoLockSlider,
   SessionTTLSlider,
 } from "@/ui/features/settings/components/shared";
+import {
+  SettingsLoading,
+  SettingsRow,
+  SettingsSection,
+  SettingsTabHeader,
+} from "@/ui/features/settings/components/shared/SettingsLayout";
 import { useAppSettings } from "@/hooks/useAppSettings";
-import { useState } from "react";
 import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
 import { useReauth } from "@/ui/hooks/useReauth";
 
+/**
+ * Only what works. This tab used to carry a biometric-unlock checkbox bound
+ * to local state (the lock screen's handler says the feature is not
+ * implemented) and disabled "Change Password" / "Export Private Key" buttons
+ * with no handler behind them. A control that cannot do anything is a promise
+ * the surface cannot keep, so none of the three is rendered.
+ */
 export function SecuritySettingsTab() {
   const {
     settings,
@@ -18,7 +29,6 @@ export function SecuritySettingsTab() {
     resetSettings,
   } = useAppSettings();
   const reauth = useReauth();
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
 
   // Both timeouts are password-gated in the background. The gate is on the
   // change, not on the direction: reasoning about "only when it gets
@@ -51,6 +61,7 @@ export function SecuritySettingsTab() {
       // Cancelled.
     }
   };
+
   // The reset patch rewrites both timeouts, so it carries the same gate the
   // sliders do. It used to ask with `confirm()` and then send the patch with no
   // password: the background refused it, nothing reset, and the only trace was
@@ -70,82 +81,53 @@ export function SecuritySettingsTab() {
     }
   };
 
-  const biometricAvailable =
-    "credentials" in navigator && "create" in navigator.credentials;
-
   if (isLoading) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Loading settings...</p>
-      </div>
-    );
+    return <SettingsLoading />;
   }
 
   return (
-    <div className="ink-card p-4 space-y-6">
-      <div>
-        <h2 className="screen-title">Security Settings</h2>
-        <p className="text-sm text-muted-foreground">
-          Configure authentication and session management
-        </p>
-      </div>
+    <div>
+      <SettingsTabHeader
+        title="Security"
+        lede="How long an unlocked vault stays open. Changing either timeout asks for your password."
+      />
 
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
-            <Shield className="h-4 w-4" />
-          </div>
-          <h3 className="font-medium">Security</h3>
-        </div>
-
-        {biometricAvailable && (
-          <div className="flex items-center space-x-2 rounded-[10px] border border-border bg-muted/40 p-3">
-            <Fingerprint className="h-5 w-5 text-primary" />
-            <div className="flex-1">
-              <div className="font-medium">Enable Biometric Unlock</div>
-              <div className="text-sm text-muted-foreground">
-                Use fingerprint or face recognition for quick access
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={biometricEnabled}
-              onChange={(e) => setBiometricEnabled(e.target.checked)}
-              className="rounded"
-              aria-label="Enable biometric unlock"
+      <SettingsSection label="Timeouts">
+        <div className="ink-card">
+          <div className="ink-row">
+            <AutoLockSlider
+              value={settings.autoLockMinutes}
+              onChange={changeAutoLock}
             />
           </div>
-        )}
-
-        <AutoLockSlider
-          value={settings.autoLockMinutes}
-          onChange={changeAutoLock}
-        />
-
-        <SessionTTLSlider
-          value={settings.sessionTTLMinutes}
-          onChange={changeSessionTTL}
-        />
-
-        <ReauthDialog {...reauth.dialogProps} />
-
-        {/* Action buttons */}
-        <div className="space-y-2 border-t border-border pt-4">
-          <Button variant="outline" className="w-full text-left" disabled>
-            Change Password
-          </Button>
-          <Button variant="outline" className="w-full text-left" disabled>
-            Export Private Key
-          </Button>
-          <Button
-            variant="destructive"
-            className="w-full"
-            onClick={resetAll}
-          >
-            Reset All Settings
-          </Button>
+          <div className="ink-row">
+            <SessionTTLSlider
+              value={settings.sessionTTLMinutes}
+              onChange={changeSessionTTL}
+            />
+          </div>
         </div>
-      </div>
+      </SettingsSection>
+
+      <SettingsSection label="Defaults">
+        <div className="ink-card">
+          <SettingsRow
+            label="Start from the defaults"
+            description="Relays, theme and both timeouts go back to their shipped values. Your keys are not affected."
+            control={
+              <Button
+                variant="destructive"
+                className="h-10"
+                onClick={resetAll}
+              >
+                Reset All Settings
+              </Button>
+            }
+          />
+        </div>
+      </SettingsSection>
+
+      <ReauthDialog {...reauth.dialogProps} />
     </div>
   );
 }

@@ -20,10 +20,14 @@ export function SessionTTLSlider({ value, onChange }: SessionTTLSliderProps) {
   const minutes = resolveSessionTTLMinutes(value);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <Label>Session grant timeout</Label>
-        <span className="text-sm text-muted-foreground">{minutes} min</span>
+    <div className="w-full space-y-2.5">
+      <div className="flex items-baseline justify-between gap-4">
+        <Label className="text-sm font-semibold leading-snug">
+          Session grant timeout
+        </Label>
+        <span className="text-sm font-medium text-muted-foreground tabular-nums">
+          {minutes} min
+        </span>
       </div>
       <Slider
         value={[minutes]}
@@ -34,7 +38,7 @@ export function SessionTTLSlider({ value, onChange }: SessionTTLSliderProps) {
         className="w-full"
         aria-label="Session grant timeout"
       />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[13px] leading-snug text-muted-foreground">
         A session grant also ends when the vault locks, whichever comes first.
       </p>
     </div>

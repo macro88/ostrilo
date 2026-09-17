@@ -216,6 +216,18 @@ export default defineConfig({
       },
     },
     build: {
+      /**
+       * Never inline a font as a `data:` URI.
+       *
+       * Vite inlines any asset under ~4KB, which caught four JetBrains Mono
+       * subsets. `font-src 'self'` then blocked every one of them at runtime:
+       * the CSP has no `data:` source, and adding one to admit our own bundled
+       * fonts would also admit an attacker-supplied face. Emitting them as
+       * files keeps the directive as strict as it is and makes the bundled
+       * fonts actually load, which DESIGN_RULES §4 requires.
+       */
+      assetsInlineLimit: (filePath: string) =>
+        /\.(woff2?|ttf|otf|eot)$/i.test(filePath) ? false : undefined,
       rollupOptions: {
         external: [],
         output: {

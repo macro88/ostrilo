@@ -60,10 +60,12 @@ export function ReauthDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Confirm with your password</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="w-[calc(100%-2rem)] gap-4 p-5 sm:max-w-md">
+        <DialogHeader className="text-left">
+          <DialogTitle className="text-[17px] font-bold">
+            Confirm with your password
+          </DialogTitle>
+          <DialogDescription className="text-[13px]">
             {action}
             {consequence ? ` ${consequence}` : ""}
           </DialogDescription>
@@ -91,7 +93,7 @@ export function ReauthDialog({
             </Button>
             <Button
               type="submit"
-              className="flex-1"
+              className="flex-[2]"
               disabled={!password || busy}
             >
               {busy ? "Checking…" : "Confirm"}

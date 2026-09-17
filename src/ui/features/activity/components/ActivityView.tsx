@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer } from "react";
 import { useActivityLog } from "../hooks/useActivityLog";
 import type { PendingRequest } from "@/domain/types";
-import { Activity } from "lucide-react";
 import {
   getAllApprovalRequests,
   getApprovalCount,
@@ -71,7 +70,7 @@ export function ActivityView() {
   );
   const { settings } = useAppSettings();
 
-  const { entries, loading, hasMore, loadMore, refresh } = useActivityLog({
+  const { entries, loading, hasMore, loadMore } = useActivityLog({
     origin: state.originFilter,
     kind: state.kindFilter,
   });
@@ -170,51 +169,53 @@ export function ActivityView() {
     dispatch({ type: "clearFilters" });
   };
 
+  const hasFilters = Boolean(state.originFilter || state.kindFilter);
+
+  // A column that fills the tab, so the empty state can sit in the middle of
+  // the space the list would occupy instead of hugging the title.
   return (
-    <div className="screen-shell">
-      <div className="screen-header">
-        <div className="flex items-start gap-3">
-          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground">
-            <Activity className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="screen-title">Recent Activity</h2>
-            <p className="screen-description">
-              Signing history, site requests, and approval decisions.
-            </p>
-          </div>
+    <div className="flex h-full flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden p-4 [overscroll-behavior:contain] [scrollbar-gutter:stable]">
+        {/*
+          Every block in this column is `shrink-0`: a flex item whose overflow
+          is hidden has an automatic minimum height of zero, so without it the
+          cards shrink to fit the viewport and clip their own rows instead of
+          letting the column scroll.
+        */}
+        <div className="screen-header shrink-0">
+          <h2 className="screen-title">Recent Activity</h2>
         </div>
+
+        <ActivityPendingApprovals
+          requests={state.pendingRequests}
+          count={state.pendingCount}
+          expanded={state.showPendingSection}
+          sidePanel={Boolean(settings?.sidePanel)}
+          showApprovalDialog={state.showApprovalDialog}
+          onToggleExpanded={() => dispatch({ type: "togglePendingSection" })}
+          onOpenApprovalWindow={handleOpenApprovalWindow}
+          onCloseApprovalDialog={() => dispatch({ type: "hideApprovalDialog" })}
+        />
+
+        <ActivityFilters
+          visible={entries.length > 0 || hasFilters}
+          originFilter={state.originFilter}
+          kindFilter={state.kindFilter}
+          origins={uniqueOrigins}
+          onOriginChange={handleOriginChange}
+          onKindChange={handleKindChange}
+          onClear={handleClearFilters}
+        />
+
+        <ActivityEntryList
+          entries={entries}
+          loading={loading}
+          hasMore={hasMore}
+          hasFilters={hasFilters}
+          onLoadMore={loadMore}
+          onClearFilters={handleClearFilters}
+        />
       </div>
-
-      <ActivityPendingApprovals
-        requests={state.pendingRequests}
-        count={state.pendingCount}
-        expanded={state.showPendingSection}
-        sidePanel={Boolean(settings?.sidePanel)}
-        showApprovalDialog={state.showApprovalDialog}
-        onToggleExpanded={() => dispatch({ type: "togglePendingSection" })}
-        onOpenApprovalWindow={handleOpenApprovalWindow}
-        onCloseApprovalDialog={() => dispatch({ type: "hideApprovalDialog" })}
-      />
-
-      <ActivityFilters
-        visible={entries.length > 0 || Boolean(state.originFilter || state.kindFilter)}
-        originFilter={state.originFilter}
-        kindFilter={state.kindFilter}
-        origins={uniqueOrigins}
-        onOriginChange={handleOriginChange}
-        onKindChange={handleKindChange}
-        onClear={handleClearFilters}
-      />
-
-      <ActivityEntryList
-        entries={entries}
-        loading={loading}
-        hasMore={hasMore}
-        hasFilters={Boolean(state.originFilter || state.kindFilter)}
-        onLoadMore={loadMore}
-        onClearFilters={handleClearFilters}
-      />
     </div>
   );
 }

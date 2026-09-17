@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   KeyManagerProvider,
   useKeyManagerContext,
@@ -14,7 +14,6 @@ import { ActivityLogTab } from "@/ui/features/settings/components/ActivityLogTab
 import { RelaysTab } from "@/ui/features/settings/components/RelaysTab";
 import { AdvancedTab } from "@/ui/features/settings/components/AdvancedTab";
 import { Logo } from "@/ui/components/logo/Logo";
-import { extensionVersion } from "@/ui/lib/extension-version";
 import {
   Activity,
   Key,
@@ -35,13 +34,18 @@ const TABS = [
   { key: "advanced", label: "Advanced", icon: Wrench },
 ] as const;
 
-const TAB_KEYS = TABS.map((tab) => tab.key);
+type TabKey = (typeof TABS)[number]["key"];
 
-function getHashTab() {
-  const hash = window.location.hash.slice(1);
-  return TAB_KEYS.includes(hash as any) ? hash : "general";
+const TAB_KEYS: readonly TabKey[] = TABS.map((tab) => tab.key);
+
+function isTabKey(value: string): value is TabKey {
+  return (TAB_KEYS as readonly string[]).includes(value);
 }
 
+function getHashTab(): TabKey {
+  const hash = window.location.hash.slice(1);
+  return isTabKey(hash) ? hash : "general";
+}
 
 /**
  * Lock gate for the options page.
@@ -72,8 +76,8 @@ function OptionsGate({ children }: { children: React.ReactNode }) {
   // No vault yet: nothing to lock, and nothing to show.
   if (!hasKeys) {
     return (
-      <div className="options-container py-16 text-center">
-        <p className="text-muted-foreground">
+      <div className="options-shell py-16 text-center">
+        <p className="text-sm text-muted-foreground">
           Create a key in the Ostrilo popup before opening settings.
         </p>
       </div>
@@ -91,8 +95,7 @@ export function OptionsApp() {
   // Apply theme based on settings and system preference
   useTheme();
 
-  const [activeTab, setActiveTab] = useState(getHashTab);
-  const version = extensionVersion();
+  const [activeTab, setActiveTab] = useState<TabKey>(getHashTab);
 
   // Handle URL hash navigation
   useEffect(() => {
@@ -109,10 +112,11 @@ export function OptionsApp() {
   }, []);
 
   // Update URL hash when tab changes
-  const handleTabChange = (tab: string) => {
+  const handleTabChange = useCallback((tab: string) => {
+    if (!isTabKey(tab)) return;
     setActiveTab(tab);
     window.history.pushState(null, "", `#${tab}`);
-  };
+  }, []);
 
   // Keyboard navigation
   useEffect(() => {
@@ -136,8 +140,8 @@ export function OptionsApp() {
         return;
       }
 
-      const currentIndex = TAB_KEYS.indexOf(activeTab as any);
-      
+      const currentIndex = TAB_KEYS.indexOf(activeTab);
+
       if ((e.key === "ArrowRight" || e.key === "ArrowDown") && currentIndex < TAB_KEYS.length - 1) {
         handleTabChange(TAB_KEYS[currentIndex + 1]);
       } else if ((e.key === "ArrowLeft" || e.key === "ArrowUp") && currentIndex > 0) {
@@ -147,96 +151,74 @@ export function OptionsApp() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeTab]);
+  }, [activeTab, handleTabChange]);
 
-  // Cross-context settings sync - listen for changes from popup/sidepanel
-  // Note: useAppSettings hook already handles storage changes internally via useWxtStorage
-  // No need for explicit listener here - settings components will re-render automatically
+  // Cross-context settings sync: useAppSettings already re-reads on the
+  // background's settings-changed notification, so every tab re-renders when
+  // the popup or side panel changes a setting. No listener needed here.
 
   return (
     <KeyManagerProvider>
       <OptionsGate>
-      <div className="app-canvas flex min-h-screen flex-col bg-background">
-        <header className="border-b border-border bg-card">
-          <div className="options-container py-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <Logo size="lg" />
-                <div className="min-w-0">
-                  <h1 className="text-2xl font-bold leading-tight">
-                    Ostrilo Settings
-                  </h1>
-                  <p className="text-sm text-muted-foreground">
-                    Configure your local Nostr signer
-                  </p>
-                </div>
-              </div>
-              {version && (
-                <div className="seal-chip seal-chip-accent">v{version}</div>
-              )}
+        <div className="app-canvas flex min-h-screen flex-col bg-background">
+          {/* A 24px static mark beside the wordmark (DESIGN_RULES §9); the
+              version lives under Advanced > About, not up here. */}
+          <header className="options-header">
+            <div className="options-shell flex items-center gap-3">
+              <Logo size="sm" />
+              <h1 className="text-[17px] font-bold leading-none tracking-[-0.01em]">
+                Ostrilo Settings
+              </h1>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <main className="flex-1">
-          <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <div className="options-container grid gap-6 py-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-              <aside className="lg:sticky lg:top-6 lg:self-start">
-                <TabsList className="options-tabs ink-card flex w-full flex-row justify-start gap-1 overflow-x-auto p-2 lg:flex-col lg:items-stretch lg:overflow-visible">
-                  {TABS.map(({ key, label, icon: Icon }) => (
-                    <TabsTrigger
-                      key={key}
-                      value={key}
-                      className="justify-start gap-2 lg:w-full lg:flex-none"
-                    >
-                      <Icon className="h-4 w-4" />
-                      {label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </aside>
+          <main className="flex-1">
+            <Tabs
+              value={activeTab}
+              onValueChange={handleTabChange}
+              className="options-shell options-layout"
+            >
+              <TabsList aria-label="Settings sections" className="options-nav">
+                {TABS.map(({ key, label, icon: Icon }) => (
+                  <TabsTrigger key={key} value={key} className="justify-start">
+                    <Icon aria-hidden="true" />
+                    {label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
 
-              <div className="min-w-0">
-                <TabsContent value="general" className="tab-content">
+              <div className="options-panel">
+                <TabsContent value="general">
                   <GeneralSettingsTab />
                 </TabsContent>
 
-                <TabsContent value="keys" className="tab-content">
+                <TabsContent value="keys">
                   <KeysIdentitiesTab />
                 </TabsContent>
 
-                <TabsContent value="security" className="tab-content">
+                <TabsContent value="security">
                   <SecuritySettingsTab />
                 </TabsContent>
 
-                <TabsContent value="permissions" className="tab-content">
+                <TabsContent value="permissions">
                   <PermissionsTab />
                 </TabsContent>
 
-                <TabsContent value="activity" className="tab-content">
+                <TabsContent value="activity">
                   <ActivityLogTab />
                 </TabsContent>
 
-                <TabsContent value="relays" className="tab-content">
+                <TabsContent value="relays">
                   <RelaysTab />
                 </TabsContent>
 
-                <TabsContent value="advanced" className="tab-content">
+                <TabsContent value="advanced">
                   <AdvancedTab />
                 </TabsContent>
               </div>
-            </div>
-          </Tabs>
-        </main>
-
-        <footer className="mt-auto mb-8 bg-transparent">
-          <div className="options-container py-4">
-            <p className="text-sm text-muted-foreground text-center">
-              Settings are automatically saved
-            </p>
-          </div>
-        </footer>
-      </div>
+            </Tabs>
+          </main>
+        </div>
       </OptionsGate>
     </KeyManagerProvider>
   );

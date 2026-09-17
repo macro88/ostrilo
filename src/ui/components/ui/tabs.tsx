@@ -3,17 +3,13 @@ import * as TabsPrimitive from "@radix-ui/react-tabs"
 
 import { cn } from "@/lib/utils"
 
-function Tabs({
-  className,
-  ...props
-}: React.ComponentProps<typeof TabsPrimitive.Root>) {
-  return (
-    <TabsPrimitive.Root
-      data-slot="tabs"
-      className={cn("flex flex-col gap-2", className)}
-      {...props}
-    />
-  )
+/**
+ * Tabs drawn as a settings nav: 40px items, secondary ink at rest, the active
+ * one on a notched violet-soft plate (DESIGN_RULES §7, "Bottom nav"). The
+ * options page is the only consumer and supplies the list's layout classes.
+ */
+function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
+  return <TabsPrimitive.Root data-slot="tabs" className={className} {...props} />
 }
 
 function TabsList({
@@ -23,10 +19,7 @@ function TabsList({
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      className={cn(
-        "bg-transparent text-muted-foreground inline-flex min-h-10 w-fit items-center justify-center gap-1 p-1",
-        className
-      )}
+      className={cn("flex gap-0.5 text-muted-foreground", className)}
       {...props}
     />
   )
@@ -40,7 +33,10 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "data-[state=active]:notch-sm data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground focus-visible:border-ring focus-visible:ring-ring/35 focus-visible:outline-ring text-muted-foreground inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-transparent px-3 py-1 text-sm font-semibold whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "inline-flex h-10 shrink-0 items-center gap-2.5 rounded-lg px-3 text-sm font-semibold whitespace-nowrap text-muted-foreground transition-[color,background-color] duration-150",
+        "hover:bg-muted hover:text-foreground",
+        "data-[state=active]:notch-sm data-[state=active]:rounded-none data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground data-[state=active]:hover:bg-secondary data-[state=active]:hover:text-secondary-foreground",
+        "disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -55,7 +51,7 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 outline-none", className)}
+      className={cn("outline-none", className)}
       {...props}
     />
   )

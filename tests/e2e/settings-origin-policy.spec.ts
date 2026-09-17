@@ -91,7 +91,12 @@ async function pendingRequests(page: Page) {
   return requests;
 }
 
-/** Opens the options page on the Permissions tab at a desktop width. */
+/**
+ * Opens the options page on the Permissions tab at a desktop width, with the
+ * seeded site's details expanded. The list shows one row per site; the trust
+ * control, the public-key grant, the session switch and the per-kind rules
+ * open under the row.
+ */
 async function openPermissionsTab(
   openOptions: () => Promise<Page>
 ): Promise<Page> {
@@ -101,7 +106,17 @@ async function openPermissionsTab(
   await expect(
     options.getByRole("heading", { name: "Permissions" })
   ).toBeVisible();
+  await expandSite(options);
   return options;
+}
+
+async function expandSite(options: Page): Promise<void> {
+  const row = options.getByTestId(`origin-row-${DAPP_ORIGIN}`);
+  await expect(row).toBeVisible();
+  if ((await row.getAttribute("aria-expanded")) !== "true") {
+    await row.click();
+  }
+  await expect(row).toHaveAttribute("aria-expanded", "true");
 }
 
 function trustControl(options: Page) {
@@ -202,10 +217,10 @@ test.describe("Settings - per-origin policy", () => {
     // The remove button confirms with window.confirm, which Playwright
     // dismisses unless a handler says otherwise.
     options.once("dialog", (dialog) => void dialog.accept());
-    await options.getByRole("button", { name: "Remove origin" }).click();
+    await options.getByRole("button", { name: "Remove site" }).click();
 
     await expect(
-      options.getByRole("heading", { name: "No Origins Configured" })
+      options.getByRole("heading", { name: "No sites yet" })
     ).toBeVisible();
     await expect.poll(() => storedOrigin(popup)).toBeUndefined();
 
@@ -715,7 +730,7 @@ test.describe("Settings - per-origin policy", () => {
     // The row is still here. Remove would have emptied the table.
     await expect(options.getByText(DAPP_ORIGIN).first()).toBeVisible();
     await expect(
-      options.getByRole("heading", { name: "No Origins Configured" })
+      options.getByRole("heading", { name: "No sites yet" })
     ).toBeHidden();
 
     // And everything except the disclosure decision survived, in storage and

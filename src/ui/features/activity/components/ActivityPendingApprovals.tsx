@@ -1,10 +1,16 @@
 import { Button } from "@/components/ui/button";
+import { SealMark } from "@/components/common/SealMark";
 import { formatOrigin } from "@/domain/display/origin";
-import { Badge } from "@/components/ui/badge";
 import { ApprovalPrompt } from "@/ui/features/approval/components/ApprovalPrompt";
 import type { PendingRequest } from "@/domain/types";
 import { getKindName, isSigningRequest } from "@/domain/types";
-import { Bell, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import {
+  ArrowLeft,
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+} from "lucide-react";
 
 interface ActivityPendingApprovalsProps {
   requests: PendingRequest[];
@@ -35,96 +41,89 @@ export function ActivityPendingApprovals({
     <>
       {showApprovalDialog && sidePanel && (
         <div className="app-canvas fixed inset-0 z-50 flex flex-col bg-background">
-          <div className="flex items-center justify-between border-b border-border bg-card p-3">
-            <h2 className="text-lg font-semibold">Pending Approvals</h2>
+          <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
+            <h2 className="text-lg font-bold">Pending Approvals</h2>
             <Button variant="ghost" size="sm" onClick={onCloseApprovalDialog}>
-              ← Back to Activity
+              <ArrowLeft className="h-4 w-4" />
+              Back to Activity
             </Button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <ApprovalPrompt />
+            <ApprovalPrompt embedded />
           </div>
         </div>
       )}
 
-      <div className="overflow-hidden rounded-[10px] border border-border bg-card shadow-sm">
+      {/* `shrink-0`: inside the tab's scrolling column an overflow-hidden card
+          would otherwise shrink to fit and clip its own rows. */}
+      <div className="ink-card shrink-0 overflow-hidden">
         <button
           type="button"
           onClick={onToggleExpanded}
-          className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/60"
+          aria-expanded={expanded}
+          className="ink-row w-full text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--ink-violet-soft)]"
         >
-          <div className="flex items-center gap-2">
-            <span className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground bg-[var(--ink-amber-soft)] text-[var(--ink-amber)] h-7 w-7">
-              <Bell className="h-3.5 w-3.5" />
-            </span>
-            <span className="text-sm font-semibold">Pending Approvals</span>
-            <Badge
-              variant="secondary"
-              className="bg-[var(--ink-amber-soft)] text-[var(--ink-amber)] border"
-            >
-              {count}
-            </Badge>
-          </div>
+          <SealMark icon={Bell} tone="warning" />
+          <span className="min-w-0 flex-1 text-[13px] font-bold">
+            Pending Approvals
+          </span>
+          <span className="seal-chip seal-chip-warning font-mono">{count}</span>
           {expanded ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <ChevronDown
+              className="h-4 w-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
           ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
           )}
         </button>
 
         {expanded && (
-          <div className="border-t border-border">
-            <div className="p-3 space-y-2">
-              {requests.slice(0, 3).map((request) => (
-                <div
-                  key={request.id}
-                  className="rounded-xl border border-border bg-muted/40 p-2 text-xs"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-foreground truncate">
-                        {isSigningRequest(request)
-                          ? getKindName(request.event.kind)
-                          : "Identity disclosure"}
-                      </p>
-                      <p className="text-muted-foreground truncate">
-                        {formatOrigin(request.origin).display}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      {isSigningRequest(request)
-                        ? `Kind ${request.event.kind}`
-                        : "Public key"}
-                    </Badge>
-                  </div>
+          <>
+            {requests.slice(0, 3).map((request) => (
+              <div key={request.id} className="ink-row">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-semibold">
+                    {isSigningRequest(request)
+                      ? getKindName(request.event.kind)
+                      : "Identity disclosure"}
+                  </p>
+                  <p className="truncate font-mono text-[11.5px] text-muted-foreground">
+                    {formatOrigin(request.origin).display}
+                  </p>
                 </div>
-              ))}
+                <span className="seal-chip seal-chip-accent shrink-0 font-mono">
+                  {isSigningRequest(request)
+                    ? `kind:${request.event.kind}`
+                    : "pubkey"}
+                </span>
+              </div>
+            ))}
 
+            <div className="space-y-2 border-t border-border p-3">
               {count > 3 && (
-                <p className="pt-1 text-center text-xs text-muted-foreground">
+                <p className="text-center text-xs text-muted-foreground">
                   +{count - 3} more pending
                 </p>
               )}
-
-              <Button
-                onClick={onOpenApprovalWindow}
-                className="mt-2 w-full gap-2"
-                size="sm"
-              >
+              <Button onClick={onOpenApprovalWindow} className="w-full">
                 {sidePanel ? (
                   <>
-                    <Bell className="h-3 w-3" />
+                    <Bell className="h-4 w-4" />
                     Review Approvals
                   </>
                 ) : (
                   <>
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink className="h-4 w-4" />
                     Open Approval Window
                   </>
                 )}
               </Button>
             </div>
-          </div>
+          </>
         )}
       </div>
     </>

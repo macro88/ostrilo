@@ -19,7 +19,7 @@ export function AppLayout({
     <div className="app-canvas flex h-screen w-full flex-col overflow-hidden bg-background">
       <Header onAddKey={onAddKey} />
 
-      <main className="w-full flex-1 overflow-y-auto overflow-x-hidden">
+      <main className="min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden">
         {children}
       </main>
 

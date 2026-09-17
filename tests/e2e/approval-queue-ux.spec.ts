@@ -421,9 +421,11 @@ test.describe("Approval queue UX", () => {
       .click();
 
     approvalPage = await waitForApprovalPage(extensionContext, extensionId);
-    // Reopening lands on the queue list, not on a pre-selected request:
-    // the pane binds only to what the user picks.
-    await approvalPage.getByTestId("approval-request-item").first().click();
+    // Reopening with a SINGLE request pending binds straight to its detail:
+    // one request is one decision, and a list of one is a detour. The pane
+    // still never re-binds on its own while other requests remain - that case
+    // is covered by the concurrent-requests test above, where nothing is
+    // selected on arrival.
     await expect(approvalPage.getByTestId("approval-detail")).toContainText(
       longContent
     );

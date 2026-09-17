@@ -1,19 +1,9 @@
-import type { CSSProperties, RefObject } from "react";
+import { useRef, type CSSProperties, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { NO_AUTOFILL_PROPS } from "@/components/ui/password-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  Eye,
-  EyeOff,
-  FileKey,
-  Key,
-  Upload,
-} from "lucide-react";
-import { SealMark } from "@/components/common/SealMark";
+import { AlertTriangle, Eye, EyeOff, FolderOpen } from "lucide-react";
 
 interface OnboardingImportKeyStepProps {
   keyName: string;
@@ -36,6 +26,8 @@ interface OnboardingImportKeyStepProps {
   onContinue: () => void;
 }
 
+const FIELD_LABEL_CLASS = "mb-1.5 text-[13px]";
+
 export function OnboardingImportKeyStep({
   keyName,
   showPrivateKey,
@@ -55,31 +47,37 @@ export function OnboardingImportKeyStep({
   onCancelBackup,
   onContinue,
 }: OnboardingImportKeyStepProps) {
+  // The file picker is a real button that forwards to the hidden input, so it
+  // is reachable from the keyboard. A styled <label> is not focusable.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   return (
-    <div className="space-y-6">
+    <div className="flex flex-1 flex-col">
       <div className="screen-header text-center">
-        <SealMark icon={FileKey} size="lg" className="mx-auto mb-3" />
-        <h2 className="screen-title">Import Your Key</h2>
-        <p className="screen-description">
-          Import an existing Nostr private key (nsec format)
+        <h2 className="screen-title text-[20px]">Import Your Key</h2>
+        <p className="screen-description mx-auto mt-1.5 max-w-[340px]">
+          Paste an nsec1… or hex private key (64 characters), or open an
+          Ostrilo encrypted backup.
         </p>
       </div>
 
-      <div className="ink-card space-y-4 p-4">
+      <div className="mt-5 space-y-4">
         <div>
-          <Label htmlFor="keyName">Key Name</Label>
+          <Label htmlFor="keyName" className={FIELD_LABEL_CLASS}>
+            Key Name
+          </Label>
           <Input
             id="keyName"
             placeholder="My Imported Key"
             value={keyName}
             onChange={(e) => onKeyNameChange(e.target.value)}
+            className="h-11 text-sm"
             {...NO_AUTOFILL_PROPS}
           />
         </div>
 
         <div>
-          <Label htmlFor="privateKey" className="flex items-center gap-2">
-            <Key className="h-4 w-4" />
+          <Label htmlFor="privateKey" className={FIELD_LABEL_CLASS}>
             Private Key (nsec)
           </Label>
           <div className="relative">
@@ -91,90 +89,90 @@ export function OnboardingImportKeyStep({
               id="privateKey"
               ref={privateKeyRef}
               type="text"
-              placeholder="nsec1..."
+              placeholder="nsec1…"
               style={
                 {
                   WebkitTextSecurity: showPrivateKey ? "none" : "disc",
                 } as CSSProperties
               }
-              className={
-                importError
-                  ? "border-destructive pr-16 font-mono"
-                  : "pr-16 font-mono"
-              }
+              aria-invalid={importError ? true : undefined}
+              className="h-11 pr-11 font-mono text-[13px]"
               {...NO_AUTOFILL_PROPS}
             />
-            <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
-              <button
-                type="button"
-                onClick={onTogglePrivateKey}
-                className="p-1 text-muted-foreground hover:text-foreground"
-                aria-label={
-                  showPrivateKey ? "Hide private key" : "Show private key"
-                }
-              >
-                {showPrivateKey ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onTogglePrivateKey}
+              className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted-foreground hover:text-foreground"
+              aria-label={
+                showPrivateKey ? "Hide private key" : "Show private key"
+              }
+            >
+              {showPrivateKey ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
           </div>
         </div>
 
-        <div className="rounded-[10px] border border-dashed border-border bg-muted/40 p-4">
-          <div className="text-center space-y-2">
-            <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
-            <div className="text-sm text-muted-foreground">
-              Or upload a key file
-            </div>
-            <Label
-              htmlFor="file-upload"
-              className="inline-flex cursor-pointer items-center rounded-lg border border-input bg-card px-3 py-2 text-sm font-semibold hover:bg-accent hover:text-accent-foreground"
-            >
-              Choose File
-            </Label>
-            <input
-              id="file-upload"
-              type="file"
-              accept=".json,.txt,.key"
-              onChange={onFileUpload}
-              className="hidden"
-              aria-label="Upload key file"
-            />
-          </div>
+        <div>
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            className="h-11 w-full"
+          >
+            <FolderOpen className="h-4 w-4" />
+            Open a key file
+          </Button>
+          <input
+            id="file-upload"
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.txt,.key"
+            onChange={onFileUpload}
+            className="hidden"
+            aria-label="Upload key file"
+          />
         </div>
 
         {backupFileName && (
-          <div className="ink-card space-y-2 p-3">
-            <div className="text-sm font-medium">
+          <div className="ink-card p-4">
+            <div className="text-sm font-semibold">
               Encrypted backup: {backupFileName}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="mt-1 text-xs leading-snug text-muted-foreground">
               Enter the passphrase you chose when you saved this file. It is not
               your master password, and Ostrilo cannot recover it.
             </p>
-            <Label htmlFor="importBackupPassphrase">Backup passphrase</Label>
-            <Input
-              id="importBackupPassphrase"
-              type="password"
-              value={backupPassphrase}
-              onChange={(e) => onBackupPassphraseChange(e.target.value)}
-              {...NO_AUTOFILL_PROPS}
-            />
+            <div className="mt-3">
+              <Label htmlFor="importBackupPassphrase" className={FIELD_LABEL_CLASS}>
+                Backup passphrase
+              </Label>
+              <Input
+                id="importBackupPassphrase"
+                type="password"
+                value={backupPassphrase}
+                onChange={(e) => onBackupPassphraseChange(e.target.value)}
+                className="h-11 text-sm"
+                {...NO_AUTOFILL_PROPS}
+              />
+            </div>
             {backupError && (
-              <div className="seal-chip seal-chip-danger flex" role="alert">
-                <AlertTriangle className="h-4 w-4" />
-                {backupError}
-              </div>
+              <p
+                className="mt-3 flex items-start gap-1.5 text-xs font-medium text-destructive"
+                role="alert"
+              >
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{backupError}</span>
+              </p>
             )}
-            <div className="flex gap-2">
+            <div className="mt-3 flex gap-2">
               <Button
                 variant="outline"
                 onClick={onCancelBackup}
                 disabled={backupBusy}
-                className="flex-1"
+                className="h-11 flex-1"
               >
                 Cancel
               </Button>
@@ -182,52 +180,32 @@ export function OnboardingImportKeyStep({
                 variant="secondary"
                 onClick={onUnlockBackup}
                 disabled={backupBusy || backupPassphrase.length === 0}
-                className="flex-1"
+                className="h-11 flex-1"
               >
                 {backupBusy ? "Opening" : "Open backup"}
               </Button>
             </div>
           </div>
         )}
-
-        <div className="rounded-[10px] bg-muted/60 p-3">
-          <div className="text-sm">
-            <div className="font-medium mb-1">Supported formats:</div>
-            <ul className="text-xs text-muted-foreground space-y-1">
-              <li>nsec1... (bech32 format)</li>
-              <li>Hex private key (64 characters)</li>
-              <li>Ostrilo encrypted backup (.json)</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="rounded-[10px] bg-[var(--ink-amber-soft)] p-3 text-[var(--ink-amber)]">
-          <div className="flex items-center gap-2 mb-1">
-            <AlertTriangle className="h-4 w-4" />
-            <div className="font-medium text-sm">Security Notice</div>
-          </div>
-          <div className="text-xs">
-            Only import keys you trust. Malicious keys could compromise your
-            Nostr identity.
-          </div>
-        </div>
       </div>
 
       {importError && (
-        <div className="seal-chip seal-chip-danger flex">
-          <AlertTriangle className="h-4 w-4" />
-          {importError}
-        </div>
+        <p className="mt-3 flex items-start gap-1.5 text-xs font-medium text-destructive">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{importError}</span>
+        </p>
       )}
 
-      <div className="flex space-x-3">
-        <Button variant="outline" onClick={onBack} className="flex-1">
-          <ArrowLeft className="mr-2 h-4 w-4" />
+      <div className="mt-auto flex gap-3 pt-6">
+        <Button variant="outline" onClick={onBack} className="h-12 flex-1">
           Back
         </Button>
-        <Button onClick={onContinue} disabled={isLoading} className="flex-1">
+        <Button
+          onClick={onContinue}
+          disabled={isLoading}
+          className="h-12 flex-[2]"
+        >
           Continue
-          <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </div>
     </div>

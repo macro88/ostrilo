@@ -1,25 +1,59 @@
 import { chromium } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
-import http from "node:http";
+import https from "node:https";
+import fsSync from "node:fs";
+import { ensureDevCertificate } from "../../tests/e2e/fixtures/make-dev-cert.ts";
 
 const cwd = process.cwd();
 const extensionPath = path.join(cwd, ".output", "chrome-mv3");
-const outDir = path.join(cwd, "docs", "design-review", "screenshots");
+
+/**
+ * One run captures one theme:
+ *
+ *   node docs/design-review/capture-screenshots.mjs
+ *   OSTRILO_DESIGN_REVIEW_THEME=dark node docs/design-review/capture-screenshots.mjs
+ *
+ * DESIGN_RULES §12 requires every surface to hold up in light AND dark, and §3
+ * is explicit that Deep Ink is not an inversion — it reassigns roles, so it has
+ * to be photographed rather than inferred from the light capture.
+ *
+ * Two invocations rather than one two-pass run: this script drives onboarding
+ * from an empty vault, and that only happens once per browser profile.
+ */
+const theme =
+  process.env.OSTRILO_DESIGN_REVIEW_THEME === "dark" ? "dark" : "light";
+const screenshotsRoot = path.join(cwd, "docs", "design-review", "screenshots");
+const outDir =
+  theme === "dark" ? path.join(screenshotsRoot, "dark") : screenshotsRoot;
 const userDataDir = path.join(
   "/private/tmp",
-  `ostrilo-design-review-${Date.now()}`
+  `ostrilo-design-review-${theme}-${Date.now()}`
 );
 
 await fs.mkdir(outDir, { recursive: true });
+console.log(`Capturing ${theme} theme into ${outDir}`);
 
 async function launchContext() {
   const base = {
     headless: true,
     viewport: { width: 400, height: 600 },
+    // The theme setting defaults to "system" and every surface mounts
+    // useTheme, so driving prefers-color-scheme exercises the real
+    // resolveEffectiveTheme path instead of forcing the .dark class on.
+    colorScheme: theme,
+    // The fixture server below uses a throwaway self-signed certificate,
+    // because the content script matches https:// only. This browser instance
+    // is a review artifact and trusts nothing else.
+    ignoreHTTPSErrors: true,
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,
+      "--ignore-certificate-errors",
+      // The populated phase seeds activity and policies from origins that
+      // read like real sites. Both names resolve to the fixture server; the
+      // certificate mismatch is covered by the flag above.
+      "--host-resolver-rules=MAP nostrich.org 127.0.0.1, MAP snort.social 127.0.0.1",
     ],
   };
 
@@ -37,15 +71,22 @@ async function launchContext() {
 function startServer() {
   const html =
     '<!doctype html><html><head><meta charset="utf-8"><title>Ostrilo test dapp</title></head><body><h1>Ostrilo test dapp</h1><button id="sign" type="button">Sign</button></body></html>';
-  const server = http.createServer((req, res) => {
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    res.end(html);
-  });
+  // TLS, not plain HTTP: the NIP-07 content script matches `https://*/*`
+  // only (hardened in aa5c706), so an http:// page never gets window.nostr
+  // and the approval captures silently fall out of the run.
+  const { cert, key } = ensureDevCertificate();
+  const server = https.createServer(
+    { cert: fsSync.readFileSync(cert), key: fsSync.readFileSync(key) },
+    (req, res) => {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(html);
+    }
+  );
 
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
-      resolve({ server, origin: `http://127.0.0.1:${address.port}` });
+      resolve({ server, origin: `https://localhost:${address.port}` });
     });
   });
 }
@@ -90,6 +131,67 @@ async function captureTabs(page, tabs) {
   await captureNext(0);
 }
 
+const PASSWORD = "CorrectHorseBatteryStaple!2026";
+
+/** Privileged RPC from an extension page; throws on an error envelope. */
+async function rpc(page, message) {
+  const response = await page.evaluate(
+    (m) => chrome.runtime.sendMessage(m),
+    message
+  );
+  if (!response?.ok) {
+    const err = response?.error;
+    throw new Error(
+      `${message.type} failed: ${err?.data?.errorCode ?? err?.message ?? "unknown"}${
+        err?.data?.details ? ` (${err.data.details})` : ""
+      }`
+    );
+  }
+  return response.data;
+}
+
+/**
+ * One populated-state capture. A failure here is logged and skipped so the
+ * rest of the run still lands; the missing file is the signal.
+ */
+async function step(name, fn) {
+  try {
+    await fn();
+  } catch (error) {
+    console.warn(`populated step "${name}" failed:`, error.message);
+  }
+}
+
+async function signFromPage(page, event) {
+  return page.evaluate(async (ev) => {
+    try {
+      await window.nostr.signEvent(ev);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: String(error?.message || error) };
+    }
+  }, event);
+}
+
+/** Fires a request that will prompt, without waiting for the answer. */
+async function beginSignFromPage(page, event) {
+  await page.evaluate((ev) => {
+    window.__ostriloPending = (window.__ostriloPending || []).concat(
+      window.nostr.signEvent(ev).catch((e) => String(e?.message || e))
+    );
+  }, event);
+}
+
+async function beginGetPublicKey(page) {
+  await page.evaluate(() => {
+    window.__ostriloPending = (window.__ostriloPending || []).concat(
+      window.nostr.getPublicKey().catch((e) => String(e?.message || e))
+    );
+  });
+}
+
+const HEX64 = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+
 async function getPendingCount(page) {
   const countResult = await page.evaluate(() =>
     chrome.runtime.sendMessage({ type: "approval.count" })
@@ -123,9 +225,9 @@ try {
   await popup.getByText("Welcome to Ostrilo").waitFor({ timeout: 15000 });
   await screenshot(popup, "01-onboarding-welcome");
 
+  // Tapping a welcome row proceeds; there is no select-then-Continue step any
+  // more, so there is no "create choice" state left to photograph.
   await safeClick(popup.getByRole("button", { name: /Create New Key/i }));
-  await screenshot(popup, "02-onboarding-create-choice");
-  await safeClick(popup.getByRole("button", { name: /Continue/i }));
   await popup.getByText("Create Your Nostr Key").waitFor({ timeout: 10000 });
   await screenshot(popup, "03-onboarding-create-key");
 
@@ -135,6 +237,33 @@ try {
   await safeClick(popup.getByRole("button", { name: /Create Key/i }), 10000);
   await popup.getByText("Backup Your Key").waitFor({ timeout: 20000 });
   await screenshot(popup, "04-onboarding-backup");
+
+  // Finish is gated on backup verification, not on the acknowledgement
+  // checkbox, so the runner has to answer the suffix challenge the way
+  // tests/e2e/onboarding-create.spec.ts does. The key is re-masked before any
+  // screenshot is taken: no capture commits an nsec to the repository.
+  await safeClick(
+    popup.getByRole("button", { name: "Reveal Private Key" }),
+    10000
+  );
+  const keyField = popup.getByLabel("Private Key (nsec format)");
+  await keyField.waitFor({ state: "visible", timeout: 10000 });
+  await safeClick(popup.getByRole("button", { name: "Show private key" }));
+  const nsec = await keyField.inputValue();
+  await safeClick(popup.getByRole("button", { name: "Hide private key" }));
+
+  const verification = popup.getByLabel(/Last \d+ characters of your nsec/);
+  await verification.waitFor({ state: "visible", timeout: 10000 });
+  await screenshot(popup, "04b-onboarding-backup-revealed");
+
+  // Read the length off the input rather than restating
+  // VERIFICATION_SUFFIX_LENGTH, which this script cannot import.
+  const suffixLength =
+    Number(await verification.getAttribute("maxlength")) || 8;
+  await verification.fill(nsec.slice(-suffixLength));
+  await safeClick(popup.getByRole("button", { name: "Check", exact: true }));
+  await popup.getByText("Backup verified").waitFor({ timeout: 10000 });
+
   await popup.locator("#backupConfirm").check();
   await safeClick(popup.getByRole("button", { name: /Finish/i }), 10000);
   await popup.getByRole("heading", { name: "Design Review Key" }).waitFor({
@@ -152,6 +281,13 @@ try {
 
   await safeClick(popup.getByRole("button", { name: /Profile/i }));
   await popup.getByText("Profile Settings").waitFor({ timeout: 10000 });
+  // The profile fetch renders skeletons and a disabled Edit Profile until the
+  // relay answers or the deadline passes. Photograph the resting state, not
+  // the first 250ms of the fetch.
+  await popup
+    .locator('button:has-text("Edit Profile"):not([disabled])')
+    .waitFor({ timeout: 15000 })
+    .catch(() => {});
   await screenshot(popup, "07-popup-profile");
   const editProfile = popup.getByRole("button", { name: /Edit Profile/i });
   if (await editProfile.isVisible().catch(() => false)) {
@@ -203,15 +339,12 @@ try {
     .waitFor({ timeout: 15000 });
   await screenshot(approvalEmpty, "19-approval-empty");
 
+  // No policy is pre-seeded for the origin. Kind 1 is a protected kind, so it
+  // prompts regardless, and a site the extension has never seen is the state
+  // a first signing request actually arrives in - it is what puts the red
+  // FIRST VISIT chip on the origin block (DESIGN_RULES §8). Seeding a `low`
+  // record used to photograph the rarer "answered before, never trusted" case.
   const origin = serverInfo.origin;
-  const policyResult = await popup.evaluate((originValue) => {
-    return chrome.runtime.sendMessage({
-      type: "policy.setOrigin",
-      origin: originValue,
-      patch: { trustLevel: "low", rules: { 1: "ask" } },
-    });
-  }, origin);
-  console.log("policy.setOrigin", JSON.stringify(policyResult));
 
   const dapp = await context.newPage();
   await dapp.goto(`${origin}/test-page.html`);
@@ -236,10 +369,24 @@ try {
     const approvalQueue = await context.newPage();
     await approvalQueue.setViewportSize({ width: 400, height: 600 });
     await approvalQueue.goto(approvalUrl);
+    // A lone request opens on its detail: one request is one decision, so the
+    // window as it opens IS the decision screen. Photographed past the approve
+    // cooldown for the same reason 21 is. The queue with a single request is
+    // one back-tap away and is captured next, so the review still sees it.
+    await approvalQueue
+      .getByRole("heading", { name: /request/i })
+      .waitFor({ timeout: 15000 });
+    await approvalQueue
+      .getByRole("button", { name: /Approve & sign/i })
+      .waitFor({ state: "visible", timeout: 10000 });
+    await screenshot(approvalQueue, "20-approval-queue", { delay: 900 });
+    await safeClick(
+      approvalQueue.getByRole("button", { name: "Back to approval queue" })
+    );
     await approvalQueue.getByText(/Approval Inbox|Pending Approvals/).waitFor({
-      timeout: 15000,
+      timeout: 10000,
     });
-    await screenshot(approvalQueue, "20-approval-queue");
+    await screenshot(approvalQueue, "20b-approval-queue-via-back");
     const firstRequest = approvalQueue
       .getByRole("button")
       .filter({ hasText: /Kind 1|Short Text Note|Design review/ })
@@ -252,12 +399,266 @@ try {
     await approvalQueue
       .getByRole("heading", { name: /request/i })
       .waitFor({ timeout: 10000 });
-    await screenshot(approvalQueue, "21-approval-detail");
+
+    // Past APPROVE_COOLDOWN_MS (500ms). Approve is deliberately disabled while
+    // the pane binds to a new request, so the default 250ms delay photographed
+    // the product's most important button in a state no user acts on.
+    await approvalQueue
+      .getByRole("button", { name: /Approve & sign/i })
+      .waitFor({ state: "visible", timeout: 10000 });
+    await screenshot(approvalQueue, "21-approval-detail", { delay: 900 });
+
+    // The content panel now sits above the fold at 400x600, so this second
+    // shot photographs the other half of the payload: the raw event envelope
+    // behind "View raw JSON", which is what a user cross-checking against the
+    // dapp actually reads. A fullPage capture stops at the viewport, so the
+    // toggle is scrolled into view before it is opened.
+    const rawJsonToggle = approvalQueue.getByRole("button", {
+      name: /View raw JSON/i,
+    });
+    if (await rawJsonToggle.isVisible().catch(() => false)) {
+      await rawJsonToggle.scrollIntoViewIfNeeded();
+      await rawJsonToggle.click();
+      const rawJson = approvalQueue.getByTestId("approval-raw-json");
+      await rawJson.waitFor({ state: "visible", timeout: 5000 });
+      await rawJson.scrollIntoViewIfNeeded();
+      await screenshot(approvalQueue, "21b-approval-payload");
+    }
   }
 
   await safeClick(popup.getByRole("button", { name: /Lock extension/i }));
   await popup.getByText(/Ostrilo is Locked/i).waitFor({ timeout: 10000 });
   await screenshot(popup, "22-lock-screen");
+
+  // ───────────────────────── Populated state ─────────────────────────
+  // Everything above photographs a brand-new vault with nothing in it. Real
+  // use has a long key name, several keys, signed and denied activity, site
+  // policies at every trust level, several relays and a profile. Layout bugs
+  // (cards shrinking, rows clipping, names truncating) only show up here.
+  const port = new URL(serverInfo.origin).port;
+  const nostrich = `https://nostrich.org:${port}`;
+  const snort = `https://snort.social:${port}`;
+  const KEY_NAME = "Jimbo Jesus Jones";
+
+  await step("unlock", async () => {
+    await popup.locator('input[type="password"]').first().fill(PASSWORD);
+    await popup.keyboard.press("Enter");
+    await popup
+      .getByRole("heading", { level: 2, name: "Design Review Key" })
+      .waitFor({ timeout: 15000 });
+  });
+
+  await step("seed keys", async () => {
+    const list = await rpc(popup, { type: "keys.list" });
+    // `keys.list` returns a bare array; `list.keys` would be Array.prototype.keys.
+    const keys = Array.isArray(list) ? list : list?.keys ?? [];
+    const first = keys.find((k) => k.label === "Design Review Key") ?? keys[0];
+    await rpc(popup, { type: "vault.renameKey", id: first.id, label: KEY_NAME });
+    await rpc(popup, { type: "vault.generate", password: PASSWORD, label: "Work" });
+    await rpc(popup, { type: "vault.select", id: first.id });
+  });
+
+  await step("seed profile", async () => {
+    // Publish against a dead relay so nothing leaves the machine; the
+    // optimistic cache write is what the profile view reads.
+    await rpc(popup, {
+      type: "settings.update",
+      patch: { relays: ["wss://localhost:1"] },
+    });
+    await rpc(popup, {
+      type: "profile.update",
+      params: {
+        metadata: {
+          name: "jimbo",
+          display_name: KEY_NAME,
+          about: "Signs things locally. Never snoops.",
+          website: "https://jimbo.example",
+          picture: "https://jimbo.example/avatar.png",
+        },
+      },
+    }).catch((error) => console.warn("profile.update:", error.message));
+    await rpc(popup, {
+      type: "settings.update",
+      patch: {
+        relays: ["wss://relay.primal.net", "wss://relay.damus.io", "wss://nos.lol"],
+      },
+    });
+  });
+
+  await step("seed policies", async () => {
+    await rpc(popup, {
+      type: "policy.setOrigin",
+      origin: nostrich,
+      patch: { trustLevel: "high", identityDisclosure: "allow", name: "Nostrich" },
+      password: PASSWORD,
+    });
+    await rpc(popup, {
+      type: "policy.setKindRule",
+      origin: nostrich,
+      kind: 7,
+      mode: "allow",
+      password: PASSWORD,
+    });
+    await rpc(popup, {
+      type: "policy.setOrigin",
+      origin: snort,
+      patch: { trustLevel: "medium" },
+    });
+    await rpc(popup, {
+      type: "policy.setOrigin",
+      origin: "https://primal.net",
+      patch: { trustLevel: "low", identityDisclosure: "deny" },
+    });
+  });
+
+  const nostrichPage = await context.newPage();
+  const snortPage = await context.newPage();
+  await step("seed activity", async () => {
+    await nostrichPage.goto(`${nostrich}/test-page.html`);
+    await nostrichPage.waitForFunction(() => typeof window.nostr !== "undefined", null, { timeout: 10000 });
+    await nostrichPage.evaluate(() => window.nostr.getPublicKey());
+    const reaction = (content) => ({
+      kind: 7,
+      content,
+      tags: [["e", HEX64], ["p", HEX64]],
+      created_at: Math.floor(Date.now() / 1000),
+    });
+    console.log("nostrich sign 7", JSON.stringify(await signFromPage(nostrichPage, reaction("+"))));
+    console.log("nostrich sign 7", JSON.stringify(await signFromPage(nostrichPage, reaction("🤙"))));
+    // One refusal, so the log shows a red mark.
+    await beginSignFromPage(nostrichPage, {
+      kind: 1,
+      content: "A note the user decides not to sign",
+      tags: [],
+      created_at: Math.floor(Date.now() / 1000),
+    });
+    await waitForPendingCount(popup, Date.now() + 8000);
+    const pending = await rpc(popup, { type: "approval.getAll" });
+    const toDeny = (pending?.requests ?? [])[0];
+    if (toDeny) {
+      await rpc(popup, { type: "approval.resolve", requestId: toDeny.id, action: "deny" });
+    }
+
+    await snortPage.goto(`${snort}/test-page.html`);
+    await snortPage.waitForFunction(() => typeof window.nostr !== "undefined", null, { timeout: 10000 });
+    console.log("snort sign 7", JSON.stringify(await signFromPage(snortPage, reaction("+"))));
+  });
+
+  await step("queue pending requests", async () => {
+    // Left pending for the queue captures: two sites, three requests.
+    await beginSignFromPage(nostrichPage, {
+      kind: 1,
+      content: "GM nostr. Testing my new signer, it keeps the keys in the browser and asks before anything is signed.",
+      tags: [["t", "introductions"]],
+      created_at: Math.floor(Date.now() / 1000),
+    });
+    await beginGetPublicKey(snortPage);
+    await beginSignFromPage(snortPage, {
+      kind: 1,
+      content: "Reply from a site with medium trust",
+      tags: [["e", HEX64, "", "reply"], ["p", HEX64]],
+      created_at: Math.floor(Date.now() / 1000),
+    });
+    await popup.waitForTimeout(800);
+  });
+
+  await step("23-popup-home-populated", async () => {
+    await popup.reload();
+    await popup.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 15000 });
+    await popup.getByText("Signed reaction").first().waitFor({ timeout: 10000 });
+    await screenshot(popup, "23-popup-home-populated");
+  });
+
+  await step("24-popup-activity-populated", async () => {
+    await safeClick(popup.getByRole("button", { name: /Activity/i }));
+    await popup.getByText("Recent Activity").waitFor({ timeout: 10000 });
+    await popup.getByText(/reaction/i).first().waitFor({ timeout: 10000 });
+    await screenshot(popup, "24-popup-activity-populated", { delay: 600 });
+  });
+
+  await step("25-popup-profile-populated", async () => {
+    await safeClick(popup.getByRole("button", { name: /Profile/i }));
+    await popup.getByText("Profile Settings").waitFor({ timeout: 10000 });
+    await popup
+      .locator('button:has-text("Edit Profile"):not([disabled])')
+      .waitFor({ timeout: 15000 })
+      .catch(() => {});
+    await screenshot(popup, "25-popup-profile-populated");
+  });
+
+  await step("26-popup-settings-populated", async () => {
+    await safeClick(popup.getByRole("button", { name: /Settings/i }));
+    await popup.getByText("Quick controls for this signer window.").waitFor({ timeout: 10000 });
+    await screenshot(popup, "26-popup-settings-populated");
+  });
+
+  await step("27-key-selector-open", async () => {
+    await safeClick(popup.getByRole("button", { name: /Home/i }));
+    await popup.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 10000 });
+    await popup.getByLabel("Select active key").click();
+    await popup.getByRole("option").first().waitFor({ timeout: 5000 });
+    await screenshot(popup, "27-key-selector-open");
+    await popup.keyboard.press("Escape");
+  });
+
+  await step("28-sidepanel-home-populated", async () => {
+    await sidepanel.reload();
+    await sidepanel.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 15000 });
+    await sidepanel.getByText("Signed reaction").first().waitFor({ timeout: 10000 });
+    await screenshot(sidepanel, "28-sidepanel-home-populated");
+  });
+
+  await step("options populated", async () => {
+    await options.reload();
+    await options.getByText("Ostrilo Settings").waitFor({ timeout: 15000 });
+    await captureTabs(options, [
+      ["29-options-keys-populated", "Keys & Identities"],
+      ["30-options-permissions-populated", "Permissions"],
+      ["31-options-relays-populated", "Relays"],
+    ]);
+
+    // A site's controls (trust level, public-key grant, session grant, rules
+    // by kind, remove) open under its row. Photograph one open, or the only
+    // capture of those controls would be the collapsed list.
+    await safeClick(options.getByRole("tab", { name: "Permissions" }));
+    const firstSite = options.locator('[data-testid^="origin-row-"]').first();
+    if (await firstSite.isVisible().catch(() => false)) {
+      await firstSite.click();
+      await screenshot(options, "30b-options-permissions-site-expanded");
+    }
+  });
+
+  await step("approval queue populated", async () => {
+    const queue = await context.newPage();
+    await queue.setViewportSize({ width: 400, height: 600 });
+    await queue.goto(approvalUrl);
+    await queue.getByText(/Approval Inbox|Pending Approvals/).waitFor({ timeout: 15000 });
+    await screenshot(queue, "32-approval-queue-populated", { delay: 600 });
+    // Expand the second site if collapsed, then open its identity request.
+    const snortGroup = queue.locator('[data-testid="approval-origin-group"][data-origin*="snort"]');
+    if (await snortGroup.isVisible().catch(() => false)) {
+      const toggle = snortGroup.getByRole("button").first();
+      if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+      const item = snortGroup.getByText(/Identity disclosure/i).first();
+      await item.click();
+      await queue
+        .getByRole("button", { name: /Deny/i })
+        .first()
+        .waitFor({ timeout: 10000 });
+      await screenshot(queue, "33-approval-detail-disclosure", { delay: 900 });
+    }
+  });
+
+  await step("34-lock-screen-error", async () => {
+    await popup.reload();
+    await popup.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 15000 });
+    await safeClick(popup.getByRole("button", { name: /Lock extension/i }));
+    await popup.getByText(/Ostrilo is Locked/i).waitFor({ timeout: 10000 });
+    await popup.locator('input[type="password"]').first().fill("not-the-password");
+    await popup.keyboard.press("Enter");
+    await popup.getByRole("alert").waitFor({ timeout: 10000 });
+    await screenshot(popup, "34-lock-screen-error");
+  });
 } finally {
   serverInfo.server.close();
   await context.close();

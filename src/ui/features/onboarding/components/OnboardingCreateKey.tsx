@@ -10,6 +10,7 @@ import {
 import { useOnboarding } from "../hooks/useOnboarding";
 import { OnboardingCreateKeyBackupStep } from "./OnboardingCreateKeyBackupStep";
 import { OnboardingCreateKeyInputStep } from "./OnboardingCreateKeyInputStep";
+import { OnboardingStepDots } from "./OnboardingStepDots";
 import { VERIFICATION_SUFFIX_LENGTH } from "./backup/BackupVerification";
 import {
   CLIPBOARD_CLEAR_MS,
@@ -304,8 +305,17 @@ export function OnboardingCreateKey({
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-4">
+    <div className="flex min-h-screen flex-col p-4">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
+        {/* Welcome · this step · backup. The dots are the only chrome above
+            the title; there is no icon plate and no back arrow up here, Back
+            lives in the action row where the rules put it. */}
+        <OnboardingStepDots
+          count={3}
+          active={state.step === "input" ? 1 : 2}
+          className="mb-5"
+        />
+
         {state.step === "input" && (
           <OnboardingCreateKeyInputStep
             keyName={state.keyName}

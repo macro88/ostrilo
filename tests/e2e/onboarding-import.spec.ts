@@ -89,7 +89,6 @@ async function startImportFlow(page: Page): Promise<void> {
   ).toBeVisible();
 
   await page.getByText("Import Existing Key", { exact: true }).click();
-  await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Import Your Key" })

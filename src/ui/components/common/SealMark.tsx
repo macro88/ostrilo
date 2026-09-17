@@ -6,6 +6,12 @@ type SealTone = "accent" | "success" | "warning" | "danger" | "muted";
 interface SealMarkProps {
   icon?: LucideIcon;
   label?: string;
+  /**
+   * Hide the mark from assistive technology even though `label` is set. Use
+   * when the same text is printed right next to the seal, so a screen reader
+   * does not announce the initial and then the name.
+   */
+  decorative?: boolean;
   tone?: SealTone;
   size?: "sm" | "md" | "lg";
   className?: string;
@@ -28,6 +34,7 @@ const sizeClasses = {
 export function SealMark({
   icon: Icon,
   label,
+  decorative = false,
   tone = "accent",
   size = "md",
   className,
@@ -40,8 +47,8 @@ export function SealMark({
         sizeClasses[size],
         className
       )}
-      aria-hidden={!label}
-      aria-label={label}
+      aria-hidden={decorative || !label}
+      aria-label={decorative ? undefined : label}
     >
       {Icon ? <Icon /> : label?.slice(0, 1).toUpperCase()}
     </span>

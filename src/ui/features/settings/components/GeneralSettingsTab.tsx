@@ -1,38 +1,191 @@
-import { Computer } from "lucide-react";
-import { OpenInSelector } from "@/components/navigation/open-in-selector";
+import { useState } from "react";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ThemeSelector } from "@/ui/features/settings/components/shared";
+import {
+  SettingsLinkRow,
+  SettingsLoading,
+  SettingsSection,
+  SettingsTabHeader,
+  rowSelectTriggerClassName,
+} from "@/ui/features/settings/components/shared/SettingsLayout";
+import { SealMark } from "@/ui/components/common/SealMark";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { useWxtStorage } from "@/hooks/useWxtStorage";
+import { useSidePanelDock } from "@/hooks/useSidePanelDock";
+import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
+import { normalizeAutoLockMinutes } from "@/domain/types";
+import { resolveSessionTTLMinutes } from "@/domain/policy/session-grants";
+
+type DisplayMode = "popup" | "sidepanel";
+
+function isDisplayMode(value: string): value is DisplayMode {
+  return value === "popup" || value === "sidepanel";
+}
+
+function count(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * The signer at a glance: the active identity and the one value that matters
+ * from each other tab, each row opening that tab. The controls themselves stay
+ * where a user looks for them; this is the settings-root list (the shape of
+ * Phantom's root, macOS General) that gives the first tab an object of its own.
+ * Labels repeat the wording of the controls they summarise.
+ */
+function AtAGlance() {
+  const { settings } = useAppSettings();
+  const { keys, selectedUnlockedKey } = useKeyManager();
+  const sites = settings.origins?.length ?? 0;
+
+  return (
+    <div className="ink-card overflow-hidden">
+      <SettingsLinkRow
+        href="#keys"
+        leading={
+          <SealMark
+            label={selectedUnlockedKey?.label ?? "?"}
+            decorative
+            size="lg"
+            className="h-10 w-10 text-sm"
+          />
+        }
+        label={selectedUnlockedKey?.label ?? "No active key"}
+        description={
+          selectedUnlockedKey ? "Active key" : "Choose the key that signs"
+        }
+        value={count(keys.length, "key", "keys")}
+      />
+      <SettingsLinkRow
+        href="#security"
+        label="Auto-lock after inactivity"
+        value={`${normalizeAutoLockMinutes(settings.autoLockMinutes)} min`}
+      />
+      <SettingsLinkRow
+        href="#security"
+        label="Session grant timeout"
+        value={`${resolveSessionTTLMinutes(settings.sessionTTLMinutes)} min`}
+      />
+      <SettingsLinkRow
+        href="#permissions"
+        label="Site permissions"
+        value={sites === 0 ? "None yet" : count(sites, "site", "sites")}
+      />
+      <SettingsLinkRow
+        href="#relays"
+        label="Relays"
+        value={count(settings.relays.length, "relay", "relays")}
+      />
+      <SettingsLinkRow
+        href="#activity"
+        label="Activity log"
+        value={`${settings.maxActivityEntries ?? 50} entries kept`}
+      />
+    </div>
+  );
+}
+
+/**
+ * Where the extension opens: the toolbar popup or the browser's side panel.
+ *
+ * Makes the same three writes `OpenInSelector` does - the legacy
+ * `sync:isDocked` flag, the `sidePanel` setting, and the browser's panel
+ * behaviour - but as a row with the value on the right (DESIGN_RULES §7).
+ */
+function OpenInRow() {
+  const [, setIsDocked] = useWxtStorage("sync:isDocked", false);
+  const { supported, enableDocking, disableDocking } = useSidePanelDock();
+  const { settings, updateSidePanel } = useAppSettings();
+
+  // Shown while the writes are in flight, so the value does not snap back
+  // between the click and the background's settings-changed notification.
+  const [pending, setPending] = useState<DisplayMode | null>(null);
+  const mode: DisplayMode =
+    pending ?? (settings.sidePanel ? "sidepanel" : "popup");
+
+  const handleModeChange = async (next: string) => {
+    if (!isDisplayMode(next)) return;
+    setPending(next);
+    const dock = next === "sidepanel";
+    try {
+      const writes: Promise<unknown>[] = [
+        setIsDocked(dock),
+        updateSidePanel(dock),
+      ];
+      if (supported) {
+        writes.push(dock ? enableDocking(true) : disableDocking());
+      }
+      await Promise.all(writes);
+    } finally {
+      setPending(null);
+    }
+  };
+
+  return (
+    <div className="ink-row">
+      <div className="min-w-0 flex-1">
+        <Label
+          htmlFor="open-in-mode"
+          className="text-sm font-semibold leading-snug"
+        >
+          Open extension in
+        </Label>
+        {!supported && mode === "sidepanel" && (
+          <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
+            Side panel is not supported in this browser
+          </p>
+        )}
+      </div>
+      <Select value={mode} onValueChange={handleModeChange}>
+        <SelectTrigger
+          id="open-in-mode"
+          size="sm"
+          className={rowSelectTriggerClassName}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          <SelectItem value="popup">Popup</SelectItem>
+          <SelectItem value="sidepanel">Side Panel</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 export function GeneralSettingsTab() {
   const { settings, isLoading, updateTheme } = useAppSettings();
 
   if (isLoading) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Loading settings...</p>
-      </div>
-    );
+    return <SettingsLoading />;
   }
 
   return (
-    <div className="ink-card p-4 space-y-6">
-      <div>
-        <h2 className="screen-title">General Settings</h2>
-        <p className="text-sm text-muted-foreground">
-          Configure display and interface preferences
-        </p>
-      </div>
+    <div>
+      <SettingsTabHeader
+        title="General"
+        lede="Your signer at a glance - each row opens its settings."
+      />
 
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
-            <Computer className="h-4 w-4" />
+      <SettingsSection label="At a glance">
+        <AtAGlance />
+      </SettingsSection>
+
+      <SettingsSection label="Display">
+        <div className="ink-card">
+          <div className="ink-row">
+            <ThemeSelector value={settings.theme} onChange={updateTheme} />
           </div>
-          <h3 className="font-medium">Display</h3>
+          <OpenInRow />
         </div>
-        <ThemeSelector value={settings.theme} onChange={updateTheme} />
-        <OpenInSelector />
-      </div>
+      </SettingsSection>
     </div>
   );
 }

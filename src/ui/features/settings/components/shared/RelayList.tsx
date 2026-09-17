@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import { isValidRelayUrl } from "@/domain/utils/validation";
 import { RELAY_BOUNDS } from "@/domain/relay/constants";
 
@@ -51,32 +51,40 @@ export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
 
   return (
     <div className="space-y-3">
-      {/* Relay list */}
-      <div className="space-y-2">
-        {relays.map((relay) => (
-          <div
-            key={relay}
-            className="flex items-center justify-between gap-3 rounded-[10px] border border-border bg-muted/50 p-3"
-          >
-            <span className="text-sm font-mono truncate flex-1">{relay}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onRemove(relay)}
-              className="h-8 w-8 p-0"
-              aria-label={`Remove ${relay}`}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
-      </div>
+      {/* Relay list: one grouped card, mono URLs (DESIGN_RULES §4, §7). */}
+      {relays.length > 0 ? (
+        <ul className="ink-card" aria-label="Configured relays">
+          {relays.map((relay) => (
+            <li key={relay} className="ink-row">
+              <span className="min-w-0 flex-1 truncate font-mono text-[13px]">
+                {relay}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onRemove(relay)}
+                className="size-9 -mr-2"
+                aria-label={`Remove ${relay}`}
+              >
+                <X aria-hidden="true" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="ink-card">
+          <p className="ink-row text-[13px] text-muted-foreground">
+            No relays configured.
+          </p>
+        </div>
+      )}
 
-      {/* Add new relay */}
+      {/* Add new relay: the screen's one primary action. */}
       <div className="flex gap-2">
         <Input
           placeholder="wss://relay.example.com"
           value={newRelay}
+          className="h-11 font-mono text-[13px] md:text-[13px]"
           onChange={(e) => {
             setNewRelay(e.target.value);
             if (error) setError("");
@@ -86,15 +94,20 @@ export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
               handleAdd();
             }
           }}
+          aria-label="Relay URL"
           aria-describedby="relay-url-help"
         />
-        <Button onClick={handleAdd} size="icon" aria-label="Add relay">
-          <Plus className="h-4 w-4" />
+        <Button onClick={handleAdd} aria-label="Add relay" className="px-5">
+          Add Relay
         </Button>
       </div>
       <p
         id="relay-url-help"
-        className={error ? "text-sm text-destructive" : "text-sm text-muted-foreground"}
+        className={
+          error
+            ? "px-0.5 text-[13px] leading-snug text-destructive"
+            : "px-0.5 text-[13px] leading-snug text-muted-foreground"
+        }
         role={error ? "alert" : undefined}
       >
         {error || "Relays must use secure WebSocket URLs that start with wss://."}
@@ -104,7 +117,7 @@ export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
         relay learns every identity you hold. That only means anything with more
         than one relay, and saying so is the honest version of the trade.
       */}
-      <p className="text-sm text-muted-foreground">
+      <p className="px-0.5 text-[13px] leading-snug text-muted-foreground text-pretty">
         {relays.length <= 1
           ? "With one relay configured, that relay sees every identity this extension looks up. Add more relays to spread those lookups out."
           : "Profile lookups are spread across these relays so no single relay sees every identity you hold."}

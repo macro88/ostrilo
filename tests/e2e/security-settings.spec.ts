@@ -22,7 +22,7 @@ const AUTO_LOCK_LABEL = "Auto-lock timeout";
 async function openSecurityTab(page: Page) {
   await page.getByRole("tab", { name: "Security" }).click();
   await expect(
-    page.getByRole("heading", { name: "Security Settings" })
+    page.getByRole("heading", { name: "Security", exact: true })
   ).toBeVisible();
 }
 
@@ -198,10 +198,12 @@ test.describe("security settings", () => {
   });
 
   /**
-   * The two disabled actions are deliberate: a half-built "Export Private Key"
-   * that appeared to work would be the worst possible bug in this product. If
-   * either is ever enabled it must arrive with its own tests, and this failing
-   * is the reminder.
+   * Neither action exists, and neither is shown. Disabled "Change Password"
+   * and "Export Private Key" buttons used to sit here as placeholders; a
+   * half-built "Export Private Key" that appeared to work would be the worst
+   * possible bug in this product, and a dead button is a promise the surface
+   * cannot keep. If either ever arrives it must bring its own tests, and this
+   * failing is the reminder.
    */
   test("does not offer password change or key export yet", async ({
     openPopup,
@@ -211,9 +213,9 @@ test.describe("security settings", () => {
 
     await expect(
       options.getByRole("button", { name: "Change Password" })
-    ).toBeDisabled();
+    ).toHaveCount(0);
     await expect(
       options.getByRole("button", { name: "Export Private Key" })
-    ).toBeDisabled();
+    ).toHaveCount(0);
   });
 });

@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 
 interface QRCodeProps {
@@ -14,6 +13,9 @@ interface QRCodeProps {
 /**
  * Reusable QR code component that displays a QR code in an SVG format.
  * Optimized for displaying public keys and other text data.
+ *
+ * The SVG paints its own white quiet zone, so the code scans on the dark
+ * surface too; nothing here tints it to the theme.
  */
 function QRCode({
   value,
@@ -29,7 +31,7 @@ function QRCode({
         size={size}
         level={level}
         includeMargin={includeMargin}
-        className="rounded-lg border-4 border-background"
+        className="rounded-lg"
       />
     </div>
   );
@@ -51,9 +53,24 @@ export function QRCodeModal({
   value,
   title = "QR Code",
   onClose,
-  size = 280,
+  size = 232,
   showValue = true,
 }: QRCodeModalProps) {
+  const closeButton = useRef<HTMLButtonElement>(null);
+
+  // A non-modal <dialog open> neither takes focus nor closes on Escape.
+  useEffect(() => {
+    closeButton.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   return (
     <dialog
       open
@@ -61,24 +78,24 @@ export function QRCodeModal({
       aria-modal="true"
       aria-labelledby="qr-code-title"
     >
-      <div className="ink-card p-4 w-full max-w-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 id="qr-code-title" className="text-lg font-semibold">
+      <div className="w-full max-w-sm rounded-[12px] border border-border bg-card p-4 text-card-foreground shadow-[var(--elev-overlay)]">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 id="qr-code-title" className="text-[17px] font-bold">
             {title}
           </h3>
-          <Button
-            size="icon"
-            variant="ghost"
+          <button
+            ref={closeButton}
+            type="button"
             onClick={onClose}
-            className="h-8 w-8"
+            className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
             aria-label="Close QR code"
           >
-            <X className="h-4 w-4" />
-          </Button>
+            <X className="size-4" aria-hidden="true" />
+          </button>
         </div>
-        <QRCode value={value} size={size} className="mb-4" />
+        <QRCode value={value} size={size} />
         {showValue && (
-          <p className="text-xs text-muted-foreground text-center break-all font-mono">
+          <p className="mt-3 break-all text-center font-mono text-xs leading-relaxed text-foreground">
             {value}
           </p>
         )}

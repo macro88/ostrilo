@@ -2,9 +2,10 @@ import { useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NO_AUTOFILL_PROPS } from "@/components/ui/password-input";
+import { SealMark } from "@/components/common/SealMark";
 import { parsePrivateKey } from "@/infrastructure/messaging/client";
 import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { KeyFormActions } from "./KeyFormActions";
 
 interface ImportKeyFormProps {
@@ -84,8 +85,8 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
           disabled={isImporting}
           {...NO_AUTOFILL_PROPS}
         />
-        <p className="text-xs text-muted-foreground">
-          Re-enter your password to encrypt the imported key
+        <p className="text-[11.5px] text-muted-foreground">
+          Re-entered to encrypt the imported key.
         </p>
       </div>
 
@@ -99,7 +100,7 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
             placeholder="nsec1... or hex format"
             disabled={isImporting}
             autoFocus
-            className="pr-10"
+            className="pr-10 font-mono"
             {...NO_AUTOFILL_PROPS}
           />
           <button
@@ -116,9 +117,6 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
             )}
           </button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Enter your existing Nostr private key in nsec1 or hex format
-        </p>
       </div>
 
       <div className="space-y-2">
@@ -131,14 +129,17 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
           disabled={isImporting}
           maxLength={50}
         />
-        <p className="text-xs text-muted-foreground">
-          Give this key a memorable name to identify it later
+        <p className="text-[11.5px] text-muted-foreground">
+          A label only you see, to tell your keys apart.
         </p>
       </div>
 
       {error && (
-        <div className="ink-card p-4 bg-[var(--ink-red-soft)] text-[var(--ink-red)]">
-          <p className="text-sm text-destructive">{error}</p>
+        <div
+          role="alert"
+          className="rounded-[10px] bg-[var(--ink-red-soft)] px-3 py-2.5 text-[13px] text-[var(--ink-red)]"
+        >
+          {error}
         </div>
       )}
 
@@ -149,11 +150,12 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
         pendingLabel="Importing..."
       />
 
-      <div className="rounded-[10px] border border-border bg-muted/50 p-3">
-        <p className="text-xs text-muted-foreground">
-          <strong>Note:</strong> The imported key will be encrypted with your
-          vault's existing password. Make sure you trust the source of this
-          private key.
+      {/* Soft amber panel with a seal icon, no border (DESIGN_RULES §7). */}
+      <div className="flex items-start gap-2.5 rounded-[10px] bg-[var(--ink-amber-soft)] p-3 text-xs text-[var(--ink-amber)]">
+        <SealMark icon={ShieldAlert} tone="warning" size="sm" className="mt-px" />
+        <p>
+          Encrypted with your existing vault password. Only import a key from a
+          source you trust.
         </p>
       </div>
     </form>

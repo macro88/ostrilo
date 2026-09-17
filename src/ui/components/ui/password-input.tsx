@@ -3,7 +3,8 @@ import { evaluatePasswordStrength } from "@/infrastructure/messaging/client";
 import type { PasswordVerdict as PasswordStrength } from "@/domain/utils/password-policy";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Shield, Check, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { AlertTriangle, Eye, EyeOff, Check, X } from "lucide-react";
 
 // The verdict shape is declared ONCE, in the domain policy module. This file
 // used to redeclare it, which is how a UI ended up gating on its own idea of
@@ -40,6 +41,12 @@ export const NO_AUTOFILL_PROPS = {
  */
 const STRENGTH_DEBOUNCE_MS = 250;
 
+/** Field label: 13px medium ink, sitting 6px above its input. */
+const FIELD_LABEL_CLASS = "mb-1.5 text-[13px]";
+
+/** Popup inputs are 44px tall (DESIGN_RULES §11 hit targets) and 13px type. */
+const FIELD_INPUT_CLASS = "h-11 pr-11 text-sm";
+
 interface PasswordInputProps {
   label: string;
   placeholder?: string;
@@ -73,6 +80,17 @@ interface PasswordInputProps {
    * controlled value leaves the DOM node's own `value` behind.
    */
   inputRef?: Ref<HTMLInputElement>;
+  /**
+   * Keeps the label for assistive technology and label-based selectors but
+   * takes it off the screen. For surfaces where the heading already says what
+   * the single field is for, a second line saying it again is noise.
+   */
+  labelHidden?: boolean;
+  /**
+   * Marks the field invalid without rendering a message, for callers that
+   * announce the failure themselves (the lock screen owns its `role="alert"`).
+   */
+  invalid?: boolean;
 }
 
 function getStrengthColor(score: number) {
@@ -153,6 +171,10 @@ function useDebouncedStrength(
   return enabled ? strength : null;
 }
 
+/**
+ * Show/hide, drawn as a full-height 44px strip on the right edge of the field
+ * so the eye is a real hit target and not a 16px glyph.
+ */
 function RevealToggle({
   shown,
   onToggle,
@@ -168,7 +190,7 @@ function RevealToggle({
     <button
       type="button"
       onClick={onToggle}
-      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+      className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
       disabled={disabled}
       aria-label={shown ? `Hide ${label}` : `Show ${label}`}
     >
@@ -177,61 +199,131 @@ function RevealToggle({
   );
 }
 
+/**
+ * Four 4px bars and a one-word verdict on one line. The requirement list only
+ * appears while something is still unmet, so a good password costs one line.
+ */
 function PasswordStrengthMeter({ strength }: { strength: PasswordStrength }) {
+  const unmet = strength.requirements.filter((req) => !req.passes);
+
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">Password Strength</span>
+      <div className="flex items-center gap-3">
+        <div className="flex flex-1 gap-1" aria-hidden="true">
+          {[0, 1, 2, 3].map((level) => (
+            <div
+              key={level}
+              className={`h-1 flex-1 rounded-sm ${
+                level < strength.score
+                  ? getStrengthColor(strength.score)
+                  : "bg-muted"
+              }`}
+            />
+          ))}
+        </div>
         <span
-          className={`text-sm font-medium ${strengthTextClass(strength.score)}`}
+          className={`text-xs font-semibold ${strengthTextClass(strength.score)}`}
         >
           {getStrengthLabel(strength.score)}
         </span>
       </div>
 
-      <div className="flex gap-1">
-        {[0, 1, 2, 3].map((level) => (
-          <div
-            key={level}
-            className={`h-2 flex-1 rounded-sm ${
-              level < strength.score
-                ? getStrengthColor(strength.score)
-                : "bg-muted"
-            }`}
-          />
-        ))}
-      </div>
-
-      {strength.requirements.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Requirements:</div>
-          {strength.requirements.map((req) => (
-            <div key={req.label} className="flex items-center gap-2 text-xs">
-              {req.passes ? (
-                <Check className="h-3 w-3 text-[var(--ink-mint)]" />
-              ) : (
-                <X className="h-3 w-3 text-destructive" />
-              )}
-              <span
-                className={
-                  req.passes ? "text-foreground" : "text-muted-foreground"
-                }
-              >
-                {req.label}
-              </span>
-            </div>
+      {unmet.length > 0 && (
+        <ul className="space-y-1">
+          {unmet.map((req) => (
+            <li
+              key={req.label}
+              className="flex items-center gap-2 text-xs text-muted-foreground"
+            >
+              <X className="h-3 w-3 shrink-0 text-destructive" />
+              <span>{req.label}</span>
+            </li>
           ))}
-        </div>
+        </ul>
+      )}
+      {unmet.length === 0 && strength.requirements.length > 0 && (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Check className="h-3 w-3 shrink-0 text-[var(--ink-mint)]" />
+          Meets every requirement
+        </p>
       )}
     </div>
   );
 }
 
-function ErrorChip({ message }: { message: string }) {
+function ErrorLine({ message }: { message: string }) {
   return (
-    <div className="seal-chip seal-chip-danger flex">
-      <X className="h-4 w-4" />
-      {message}
+    <p className="flex items-start gap-1.5 text-xs font-medium text-destructive">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>{message}</span>
+    </p>
+  );
+}
+
+interface PasswordFieldProps {
+  id: string;
+  label: string;
+  labelHidden?: boolean;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+  invalid: boolean;
+  autoFocus?: boolean;
+  inputRef?: Ref<HTMLInputElement>;
+  /** What the reveal toggle names: "password" or "confirmation password". */
+  toggleLabel: string;
+}
+
+/**
+ * One labelled, maskable field. The password and its confirmation are the
+ * same control twice, so the reveal state and the label association live here
+ * once rather than being spelled out in both places.
+ */
+function PasswordField({
+  id,
+  label,
+  labelHidden = false,
+  placeholder,
+  value,
+  onChange,
+  disabled,
+  invalid,
+  autoFocus = false,
+  inputRef,
+  toggleLabel,
+}: PasswordFieldProps) {
+  const [shown, setShown] = useState(false);
+
+  return (
+    <div>
+      <Label
+        htmlFor={id}
+        className={cn(FIELD_LABEL_CLASS, labelHidden && "sr-only")}
+      >
+        {label}
+      </Label>
+      <div className="relative">
+        <Input
+          id={id}
+          ref={inputRef}
+          type={shown ? "text" : "password"}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          autoFocus={autoFocus}
+          aria-invalid={invalid || undefined}
+          className={FIELD_INPUT_CLASS}
+          {...NO_AUTOFILL_PROPS}
+        />
+        <RevealToggle
+          shown={shown}
+          onToggle={() => setShown(!shown)}
+          disabled={disabled}
+          label={toggleLabel}
+        />
+      </div>
     </div>
   );
 }
@@ -251,9 +343,9 @@ export function PasswordInput({
   confirmPlaceholder = "Confirm your password",
   autoFocus = false,
   inputRef,
+  labelHidden = false,
+  invalid = false,
 }: PasswordInputProps) {
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const shouldShowStrength = showStrengthMeter && value.length > 0;
   const strength = useDebouncedStrength(value, shouldShowStrength);
 
@@ -269,64 +361,43 @@ export function PasswordInput({
   }, [confirmValue, value]);
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <Label htmlFor={passwordId} className="flex items-center gap-2">
-          <Shield className="h-4 w-4" />
-          {label}
-        </Label>
-        <div className="relative">
-          <Input
-            id={passwordId}
-            ref={inputRef}
-            type={showPassword ? "text" : "password"}
-            placeholder={placeholder}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            disabled={disabled}
-            autoFocus={autoFocus}
-            className={error ? "border-destructive" : ""}
-            {...NO_AUTOFILL_PROPS}
-          />
-          <RevealToggle
-            shown={showPassword}
-            onToggle={() => setShowPassword(!showPassword)}
-            disabled={disabled}
-            label="password"
-          />
-        </div>
+    <div className="space-y-4">
+      <div>
+        <PasswordField
+          id={passwordId}
+          label={label}
+          labelHidden={labelHidden}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+          invalid={Boolean(error) || invalid}
+          autoFocus={autoFocus}
+          inputRef={inputRef}
+          toggleLabel="password"
+        />
+        {showStrengthMeter && strength && (
+          <div className="mt-2.5">
+            <PasswordStrengthMeter strength={strength} />
+          </div>
+        )}
       </div>
 
-      {showStrengthMeter && strength && (
-        <PasswordStrengthMeter strength={strength} />
-      )}
-
       {confirmValue !== undefined && onConfirmChange && (
-        <div className="space-y-2">
-          <Label htmlFor={confirmId}>{confirmLabel}</Label>
-          <div className="relative">
-            <Input
-              id={confirmId}
-              type={showConfirmPassword ? "text" : "password"}
-              placeholder={confirmPlaceholder}
-              value={confirmValue}
-              onChange={(e) => onConfirmChange(e.target.value)}
-              disabled={disabled}
-              className={confirmError ? "border-destructive" : ""}
-              {...NO_AUTOFILL_PROPS}
-            />
-            <RevealToggle
-              shown={showConfirmPassword}
-              onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
-              disabled={disabled}
-              label="confirmation password"
-            />
-          </div>
-        </div>
+        <PasswordField
+          id={confirmId}
+          label={confirmLabel}
+          placeholder={confirmPlaceholder}
+          value={confirmValue}
+          onChange={onConfirmChange}
+          disabled={disabled}
+          invalid={Boolean(confirmError)}
+          toggleLabel="confirmation password"
+        />
       )}
 
-      {error && <ErrorChip message={error} />}
-      {confirmError && <ErrorChip message={confirmError} />}
+      {error && <ErrorLine message={error} />}
+      {confirmError && <ErrorLine message={confirmError} />}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useCallback } from "react";
+import { useReducer, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   getAllApprovalRequests,
@@ -13,9 +13,13 @@ import { QueueListView } from "./QueueListView";
 import { EventDetailView } from "./EventDetailView";
 import { DisclosureDetailView } from "./DisclosureDetailView";
 import { ApprovalErrorBoundary } from "./ApprovalErrorBoundary";
+import { describeOriginTrust, type OriginTrust } from "./useApprovalDisplay";
 import { browser } from "wxt/browser";
 import { Logo } from "@/ui/components/logo/Logo";
+import { SealMark } from "@/components/common/SealMark";
+import { useAppSettings } from "@/ui/hooks/useAppSettings";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
+import { cn } from "@/lib/utils";
 
 interface ApprovalPromptState {
   requests: PendingRequest[];
@@ -61,20 +65,33 @@ function approvalPromptReducer(
         state.selectedRequestId &&
         action.requests.some((request) => request.id === state.selectedRequestId);
 
+      // A single request arriving into a window that had NOTHING on screen
+      // opens directly: one request is one decision, and a list of one is a
+      // detour. This fires only from an empty list - the initial load, or a
+      // request landing while the empty state shows - so the approve button
+      // can never appear under a cursor that was just pressing something.
+      const loneArrival =
+        state.requests.length === 0 && action.requests.length === 1
+          ? action.requests[0]
+          : null;
+
+      // Deliberately NOT auto-selecting when the previous selection is gone
+      // and other requests remain. The detail pane used to instantly re-bind
+      // to the next queued request, so the approve button the user had just
+      // clicked reappeared under their cursor bound to a DIFFERENT event. One
+      // more click and they have approved something they never read. Going
+      // from several requests to one after a resolution is exactly that case,
+      // so `loneArrival` requires the list to have been empty.
       return {
         ...state,
         requests: action.requests,
         selectedKey: action.selectedKey,
-        // Deliberately NOT auto-selecting requests[0] when the previous
-        // selection is gone. The detail pane used to instantly re-bind to
-        // the next queued request, so the approve button the user had just
-        // clicked reappeared under their cursor bound to a DIFFERENT event.
-        // One more click and they have approved something they never read.
-        // The user goes back to the list and chooses.
         selectedRequestId: selectedStillPending
           ? state.selectedRequestId
-          : null,
-        showCompactDetail: selectedStillPending ? state.showCompactDetail : false,
+          : (loneArrival?.id ?? null),
+        showCompactDetail: selectedStillPending
+          ? state.showCompactDetail
+          : loneArrival !== null,
         isLoading: false,
         error: null,
       };
@@ -102,11 +119,19 @@ function approvalPromptReducer(
  * ApprovalPrompt component displays pending approval requests
  * in a queue list view, with detailed event information when selected
  */
-export function ApprovalPrompt() {
+interface ApprovalPromptProps {
+  /** See QueueListView.embedded: hosted under another surface's title. */
+  embedded?: boolean;
+}
+
+export function ApprovalPrompt({ embedded = false }: ApprovalPromptProps = {}) {
   const [state, dispatch] = useReducer(
     approvalPromptReducer,
     initialApprovalPromptState
   );
+  // Origin policies, for the FIRST VISIT / KNOWN SITE / TRUSTED chip. Read
+  // through the shared settings store, which useTheme has already primed.
+  const { settings, isLoading: settingsLoading } = useAppSettings();
 
   // Fetch all pending requests
   const fetchRequests = useCallback(async () => {
@@ -169,6 +194,22 @@ export function ApprovalPrompt() {
     browser.runtime.onMessage.addListener(handleMessage);
     return () => browser.runtime.onMessage.removeListener(handleMessage);
   }, [fetchRequests]);
+
+  const trustByOrigin = useMemo(() => {
+    // Undefined until the policies have loaded: a chip that said FIRST VISIT
+    // for a moment and then changed would be a chip nobody could trust.
+    if (settingsLoading) return undefined;
+    const map = new Map<string, OriginTrust>();
+    for (const request of state.requests) {
+      if (!map.has(request.origin)) {
+        map.set(
+          request.origin,
+          describeOriginTrust(request.origin, settings.origins)
+        );
+      }
+    }
+    return map;
+  }, [settingsLoading, settings.origins, state.requests]);
 
   // Handle user action on selected request
   const handleAction = async (action: ApprovalAction) => {
@@ -236,53 +277,41 @@ export function ApprovalPrompt() {
     }
   };
 
-  // Loading state
+  // Loading state. Same composition as the empty state, so a queue that turns
+  // out to be empty does not jump.
   if (state.isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-6">
-        <div className="mb-4 h-16 w-16 animate-pulse">
-          <Logo size="max" />
-        </div>
-        <p className="text-muted-foreground">Loading requests...</p>
-      </div>
+      <ApprovalNotice mark={<MascotSeal />} title="Loading requests" />
+    );
+  }
+
+  // Error state. Checked before the empty state: a failed load also leaves
+  // the list empty, and "No Pending Requests" would be the wrong thing to say.
+  if (state.error) {
+    return (
+      <ApprovalNotice
+        mark={<SealMark icon={AlertTriangle} tone="danger" size="lg" />}
+        title="Error loading requests"
+        description={state.error}
+        action={{ label: "Try again", onClick: fetchRequests }}
+      />
     );
   }
 
   // No requests state
   if (state.requests.length === 0) {
+    // The line says what this window is FOR and what will bring it back. An
+    // earlier version restated the heading ("Nothing is waiting for your
+    // approval"), which is why it was cut; this one carries what the heading
+    // cannot. Close sits under the cluster rather than pinned to the window's
+    // edge - there is no decision here to anchor a footer to.
     return (
-      <div className="flex flex-col items-center justify-center h-full p-6">
-        <div className="mb-4 h-16 w-16">
-          <Logo size="max" />
-        </div>
-        <h2 className="text-lg font-semibold mb-2">No Pending Requests</h2>
-        <p className="text-muted-foreground text-center text-sm">
-          There are no signing requests waiting for approval.
-        </p>
-        <Button
-          variant="outline"
-          className="mt-4"
-          onClick={() => window.close()}
-        >
-          Close
-        </Button>
-      </div>
-    );
-  }
-
-  // Error state
-  if (state.error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-6">
-        <AlertTriangle className="w-12 h-12 text-destructive mb-4" />
-        <h2 className="text-lg font-semibold mb-2">Error</h2>
-        <p className="text-muted-foreground text-center text-sm">
-          {state.error}
-        </p>
-        <Button variant="outline" className="mt-4" onClick={fetchRequests}>
-          Try Again
-        </Button>
-      </div>
+      <ApprovalNotice
+        mark={<MascotSeal />}
+        title="No Pending Requests"
+        description="This window opens when a site asks for a signature or your public key."
+        action={{ label: "Close", onClick: () => window.close() }}
+      />
     );
   }
 
@@ -308,6 +337,8 @@ export function ApprovalPrompt() {
         onSelectRequest={handleSelectRequest}
         onBatchAction={handleBatchAction}
         disabled={state.isResolving}
+        trustByOrigin={trustByOrigin}
+        embedded={embedded}
         className={state.showCompactDetail ? "hidden md:flex" : "flex"}
       />
 
@@ -320,7 +351,11 @@ export function ApprovalPrompt() {
           onBack={() => dispatch({ type: "showList" })}
           showBackButton={state.showCompactDetail}
           isResolving={state.isResolving}
-          className={state.showCompactDetail ? "flex" : "hidden md:flex"}
+          originTrust={trustByOrigin?.get(selectedRequest.origin)}
+          className={cn(
+            state.showCompactDetail ? "flex" : "hidden md:flex",
+            "md:border-l md:border-border"
+          )}
         />
       ) : (
         <div className="hidden items-center justify-center border-l border-border bg-background p-6 text-center md:flex">
@@ -333,6 +368,90 @@ export function ApprovalPrompt() {
   );
 }
 
+/**
+ * The window when there is nothing to decide: loading, empty, or failed.
+ *
+ * One composition for all three, so nothing jumps between them. The mascot is
+ * the single hero this flow is allowed (DESIGN_RULES §9). The action, when
+ * there is one, is a compact button under the cluster: there is no decision
+ * on this screen for a pinned footer to belong to.
+ */
+function ApprovalNotice({
+  mark,
+  title,
+  description,
+  action,
+}: {
+  mark: ReactNode;
+  title: string;
+  description?: string;
+  action?: { label: string; onClick: () => void };
+}) {
+  return (
+    // Symmetric padding, so `justify-center` actually centres the cluster. An
+    // asymmetric bottom pad used to lift it ~25px above centre.
+    <div className="flex h-full min-h-0 flex-col items-center justify-center bg-background p-6 text-center">
+      {/* One measure for the whole cluster: the mark, the words and the
+          control share an edge instead of each finding their own width. */}
+      <div className="flex w-full max-w-[22rem] flex-col items-center">
+        {mark}
+        <h2 className="mt-5 text-[17px] font-bold leading-6">{title}</h2>
+        {description && (
+          <p className="mt-1.5 text-pretty text-[13px] leading-5 text-muted-foreground">
+            {description}
+          </p>
+        )}
+        {/* The only control on the screen, so by DESIGN_RULES §7 it IS this
+            screen's primary and takes the solid notched treatment. As a ghost
+            it sat a shade off the background and read as disabled - worst of
+            all in Deep Ink, where the hairline all but vanished. Full width on
+            the cluster's measure, at the height the detail screens give their
+            actions: at ~120px the 9px notch was a large bite out of a small
+            block and read as damage rather than as the signature. */}
+        {action && (
+          <Button className="mt-6 h-12 w-full" onClick={action.onClick}>
+            {action.label}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The mascot, seated in a seal.
+ *
+ * The asset is a head cut flat across its base. Standing free at hero size
+ * that cut is the last edge the eye meets and reads as a crop rather than a
+ * silhouette. The seal is Ostrilo's own mark shape (§5) and its lower edges
+ * converge to a point below the cut, so the composition ends on the plate
+ * rather than on the damage. The soft fill also lifts the mascot's darkest
+ * facets off the Deep Ink background, which §9 asks to be checked.
+ *
+ * The mascot is seated deliberately LOW and slightly oversized, so the flat
+ * base passes below the seal's point and is clipped away by the plate itself
+ * (clip-path clips descendants) - the head emerges from the seal rather than
+ * stopping at a cut. Its top clears the plate's upper edges, which are at
+ * full width where the image begins, so no facet is lost up there.
+ *
+ * 96px of mascot in a 120px plate. The review captures render at 1x and the
+ * crest spikes are the finest detail in the artwork, so the pixels across them
+ * are the lever on how hard those edges alias - hence the larger of the two
+ * sizes that still leaves 12px of half-width clearance past the beak.
+ */
+function MascotSeal() {
+  return (
+    <span
+      aria-hidden="true"
+      className="seal flex h-[7.5rem] w-[7.5rem] shrink-0 items-end justify-center bg-secondary"
+    >
+      <span className="h-24 w-24 translate-y-3">
+        <Logo size="max" alt="" />
+      </span>
+    </span>
+  );
+}
+
 interface DetailPaneProps {
   request: PendingRequest;
   signingKey: KeyRecord | null;
@@ -341,6 +460,7 @@ interface DetailPaneProps {
   onBack: () => void;
   showBackButton: boolean;
   isResolving: boolean;
+  originTrust?: OriginTrust;
   className: string;
 }
 

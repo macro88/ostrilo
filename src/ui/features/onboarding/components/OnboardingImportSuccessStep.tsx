@@ -1,43 +1,36 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, CheckCircle } from "lucide-react";
-import { SealMark } from "@/components/common/SealMark";
+import { Check } from "lucide-react";
 
 interface OnboardingImportSuccessStepProps {
   keyName: string;
   onStart: () => void;
 }
 
+/**
+ * The one screen in the import flow where mint is right: the key is in the
+ * vault, encrypted, and nothing is left to do but start.
+ */
 export function OnboardingImportSuccessStep({
   keyName,
   onStart,
 }: OnboardingImportSuccessStepProps) {
   return (
-    <div className="space-y-6">
-      <div className="screen-header text-center">
-        <SealMark
-          icon={CheckCircle}
-          tone="success"
-          size="lg"
-          className="mx-auto mb-3"
-        />
-        <h2 className="screen-title">Import Successful</h2>
-        <p className="screen-description">
-          Your Nostr key has been securely imported and encrypted
+    <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col items-center justify-center text-center">
+        <span className="seal flex h-14 w-14 items-center justify-center bg-[var(--ink-mint-soft)] text-[var(--ink-mint)]">
+          <Check className="h-6 w-6" strokeWidth={2.5} />
+        </span>
+        <h2 className="screen-title mt-4 text-[20px]">Import Successful</h2>
+        <p className="mt-1.5 text-sm font-medium text-foreground">
+          "{keyName}" is ready to use
+        </p>
+        <p className="screen-description mt-1 max-w-[300px]">
+          Encrypted with your master password and stored on this device.
         </p>
       </div>
 
-      <div className="rounded-[10px] bg-[var(--ink-mint-soft)] p-4 text-[var(--ink-mint)]">
-        <div className="space-y-2">
-          <div className="font-semibold">"{keyName}" is ready to use</div>
-          <div className="text-sm">
-            Your key is now encrypted and stored securely on this device
-          </div>
-        </div>
-      </div>
-
-      <Button onClick={onStart} className="w-full" size="lg">
+      <Button onClick={onStart} className="mt-auto h-12 w-full" size="lg">
         Get Started
-        <ArrowRight className="ml-2 h-4 w-4" />
       </Button>
     </div>
   );

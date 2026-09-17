@@ -352,12 +352,14 @@ describe("settings shared components", () => {
     expect(kindOneToggle.disabled).toBe(true);
     expect(zapRequestToggle.checked).toBe(false);
     expect(zapRequestToggle.disabled).toBe(true);
-    expect(container.textContent).toContain(
-      "Short Text Note always requires approval"
-    );
-    expect(container.textContent).toContain(
-      "Zap Request always requires approval"
-    );
+    expect(
+      container.querySelector("#medium-kind-1-description")?.textContent
+    ).toContain("Always requires approval and cannot be auto-allowed.");
+    expect(
+      container.querySelector("#medium-kind-9734-description")?.textContent
+    ).toContain("Always requires approval and cannot be auto-allowed.");
+    expect(container.textContent).toContain("Short Text Note");
+    expect(container.textContent).toContain("Zap Request");
     expect(container.textContent).toContain("Zap Receipt");
 
     click(kindOneToggle);

@@ -1,27 +1,55 @@
+import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
 import { useReauth } from "@/ui/hooks/useReauth";
-import { Key, Settings as SettingsIcon } from "lucide-react";
-import { Pubkey } from "@/components/common/pubkey";
 import {
-  ThemeSelector,
   AutoLockSlider,
+  ThemeSelector,
 } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
+import { openOptionsTab, type OptionsTab } from "@/ui/lib/open-options";
 
-function openOptionsPage() {
-  // Type assertions for browser extension APIs
-  const browserAPI = (globalThis as any).browser || (globalThis as any).chrome;
-  if (browserAPI?.runtime?.openOptionsPage) {
-    browserAPI.runtime.openOptionsPage();
-  }
+function SettingsHeader() {
+  return (
+    <div className="screen-header shrink-0">
+      <h2 className="screen-title">Settings</h2>
+      <p className="screen-description">
+        Quick controls for this signer window.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A row that leaves for the full settings page, on the tab it names.
+ *
+ * The popup deliberately does not reproduce those tabs - it is a quick-control
+ * surface - but it is where a user goes looking, so the two things they go
+ * looking for get a way through rather than a single "All settings" that makes
+ * the panel a waiting room.
+ */
+function SettingsLinkRow({ label, tab }: { label: string; tab?: OptionsTab }) {
+  return (
+    <button
+      type="button"
+      onClick={() => openOptionsTab(tab)}
+      className="ink-row w-full text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--ink-violet-soft)]"
+    >
+      <span className="min-w-0 flex-1 text-sm font-semibold">{label}</span>
+      <ChevronRight
+        className="h-4 w-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+    </button>
+  );
 }
 
 export function BasicSettings() {
   const { settings, isLoading, updateTheme, updateAutoLockMinutes } =
     useAppSettings();
   const reauth = useReauth();
+  const { lock } = useKeyManager();
 
   // Same gate as the Security tab. The popup is the surface most likely to
   // be open on an unattended screen, so it is the one that most needs it.
@@ -38,7 +66,6 @@ export function BasicSettings() {
       // Cancelled.
     }
   };
-  const { selectedUnlockedKey } = useKeyManager();
 
   // Note: useAppSettings hook already handles storage changes internally via useWxtStorage
   // Settings components will re-render automatically when values change
@@ -46,60 +73,74 @@ export function BasicSettings() {
   if (isLoading) {
     return (
       <div className="screen-shell">
-        <div className="ink-card p-4 text-center">
-          <p className="text-sm text-muted-foreground">Loading settings...</p>
+        <SettingsHeader />
+        <div className="ink-card overflow-hidden" aria-busy="true">
+          {["theme", "lock", "more"].map((row) => (
+            <div key={row} className="ink-row" aria-hidden="true">
+              <span className="h-2.5 w-1/3 rounded-sm bg-muted motion-safe:animate-pulse" />
+            </div>
+          ))}
         </div>
       </div>
     );
   }
 
+  /*
+    No identity block here. The header carries the active key on every tab, so
+    a card repeating the same name 130px below it said one thing twice and
+    spent a third of the panel doing it. The npub lives on the Profile tab,
+    which is the screen about the identity; this one is about the controls.
+  */
   return (
-    <div className="screen-shell">
-      <div className="screen-header text-center">
-        <h2 className="screen-title">Settings</h2>
-        <p className="screen-description">Quick controls for this signer window.</p>
-      </div>
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 pt-4 [overscroll-behavior:contain] [scrollbar-gutter:stable]">
+        <SettingsHeader />
 
-      <div className="ink-card p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground h-8 w-8">
-            <Key className="h-4 w-4" />
+        <section className="shrink-0 space-y-1.5">
+          <p className="section-label">Preferences</p>
+          <div className="ink-card overflow-hidden">
+            <div className="ink-row">
+              <ThemeSelector
+                value={settings.theme}
+                onChange={(theme) => updateTheme(theme)}
+              />
+            </div>
+
+            <div className="ink-row">
+              <AutoLockSlider
+                value={settings.autoLockMinutes}
+                onChange={changeAutoLock}
+                compact
+              />
+            </div>
           </div>
-          <h3 className="font-medium">Active Key</h3>
-        </div>
-        {selectedUnlockedKey ? (
-          <div className="space-y-2">
-            <Pubkey
-              key={selectedUnlockedKey.id}
-              label={selectedUnlockedKey.label}
-              pubkey={selectedUnlockedKey.publicKeyBech32}
-            />
+        </section>
+
+        <section className="shrink-0 space-y-1.5">
+          <p className="section-label">Manage</p>
+          <div className="ink-card overflow-hidden">
+            <SettingsLinkRow label="Keys & identities" tab="keys" />
+            <SettingsLinkRow label="Site permissions" tab="permissions" />
+            <SettingsLinkRow label="All settings" />
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No key selected</p>
-        )}
+        </section>
       </div>
 
-      <div className="ink-card p-4">
-        <ThemeSelector value={settings.theme} onChange={updateTheme} />
+      {/*
+        The panel's decisive action, where Phantom puts it. A signer's quick
+        controls are theme and timeout; its one real act is ending the session
+        now rather than waiting for the timeout to do it.
+      */}
+      <div className="shrink-0 space-y-2 px-4 pb-4 pt-3">
+        <Button className="h-12 w-full" onClick={() => lock()}>
+          Lock now
+        </Button>
+        <p className="text-center text-[11.5px] text-muted-foreground">
+          Locking clears your keys from memory until you unlock.
+        </p>
       </div>
 
-      <div className="ink-card p-4">
-        <AutoLockSlider
-          value={settings.autoLockMinutes}
-          onChange={changeAutoLock}
-        />
-        <ReauthDialog {...reauth.dialogProps} />
-      </div>
-
-      <Button
-        variant="outline"
-        className="w-full"
-        onClick={openOptionsPage}
-      >
-        <SettingsIcon className="h-4 w-4 mr-2" />
-        Advanced Settings
-      </Button>
+      <ReauthDialog {...reauth.dialogProps} />
     </div>
   );
 }

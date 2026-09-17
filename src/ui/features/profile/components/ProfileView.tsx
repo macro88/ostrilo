@@ -2,9 +2,8 @@ import { useState } from "react";
 import { useProfile } from "@/ui/hooks/useProfile";
 import type { ProfileMetadata } from "@/domain/profile/types";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
-import { User } from "lucide-react";
 import { ProfileEditForm } from "./ProfileEditForm";
-import { ProfileSummary } from "./ProfileSummary";
+import { ProfileSummary, type ProfileEditField } from "./ProfileSummary";
 
 function createProfileFormData(
   profile: ProfileMetadata | null
@@ -30,6 +29,7 @@ export function ProfileView() {
     useProfile(selectedPubkey);
 
   const [formData, setFormData] = useState<ProfileMetadata>({});
+  const [focusField, setFocusField] = useState<ProfileEditField | undefined>();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -44,8 +44,16 @@ export function ProfileView() {
     await refresh();
   };
 
-  const handleEditClick = () => {
+  /**
+   * Opens the editor, optionally on the field the user pressed.
+   *
+   * An empty row is a control, so pressing "Add Website" has to land on the
+   * website input rather than on the top of a form the user then has to
+   * search.
+   */
+  const handleEditClick = (field?: ProfileEditField) => {
     setFormData(createProfileFormData(profile));
+    setFocusField(field);
     setIsEditing(true);
     setSaveError(null);
   };
@@ -54,6 +62,7 @@ export function ProfileView() {
     setIsEditing(false);
     setSaveError(null);
     setFormData({});
+    setFocusField(undefined);
   };
 
   const handleSave = async () => {
@@ -71,6 +80,7 @@ export function ProfileView() {
 
       await updateProfile(cleanedData);
       setIsEditing(false);
+      setFocusField(undefined);
     } catch (err) {
       console.error("Failed to save profile:", err);
       setSaveError(
@@ -88,12 +98,11 @@ export function ProfileView() {
   if (!selectedPubkey) {
     return (
       <div className="screen-shell">
-        <div className="screen-header text-center">
-          <div className="seal inline-flex shrink-0 items-center justify-center bg-secondary text-secondary-foreground mx-auto mb-3 h-14 w-14">
-            <User className="h-6 w-6" />
-          </div>
+        <div className="screen-header">
           <h2 className="screen-title">Profile Settings</h2>
-          <p className="screen-description">Select a key to manage its Nostr profile.</p>
+          <p className="screen-description">
+            Select a key to manage its Nostr profile.
+          </p>
         </div>
       </div>
     );
@@ -105,6 +114,7 @@ export function ProfileView() {
         formData={formData}
         isSaving={isSaving}
         saveError={saveError}
+        focusField={focusField}
         onChange={handleInputChange}
         onCancel={handleCancelEdit}
         onSave={handleSave}

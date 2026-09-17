@@ -1,12 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { Check, Copy, AlertTriangle } from "lucide-react";
+import { Check, AlertTriangle } from "lucide-react";
 import type { ClipboardStatus } from "../../backup/useExpiringClipboard";
 
-interface BackupClipboardPanelProps {
+interface BackupClipboardStatusProps {
   status: ClipboardStatus;
   secondsRemaining: number;
   clearWindowSeconds: number;
-  onCopy: () => void;
   onClearNow: () => void;
 }
 
@@ -17,82 +16,88 @@ function formatCountdown(seconds: number): string {
 }
 
 /**
- * The copy control, its expiry, and what to do when the Clipboard API says no.
+ * What the copy control does to the clipboard, its expiry, and what to do when
+ * the Clipboard API says no. The button itself is rendered by the step, in the
+ * same row as the encrypted export; this is the line underneath.
  *
  * The interval is stated BEFORE the click, not after. The clear overwrites the
  * clipboard without reading it - reading needs the `clipboardRead` permission -
  * so it can replace something the user copied in the meantime, and the only
- * honest place to say that is next to the button that starts the window.
+ * honest place to say that is next to the button that starts the window. Once
+ * the window is running, the countdown replaces that line.
  */
-export function BackupClipboardPanel({
+export function BackupClipboardStatus({
   status,
   secondsRemaining,
   clearWindowSeconds,
-  onCopy,
   onClearNow,
-}: BackupClipboardPanelProps) {
+}: BackupClipboardStatusProps) {
   const pending = status === "copied" && secondsRemaining > 0;
 
   return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={onCopy} className="flex-1">
-          {status === "copied" ? (
-            <>
-              <Check className="mr-2 h-4 w-4" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="mr-2 h-4 w-4" />
-              Copy key
-            </>
-          )}
-        </Button>
-        {pending && (
-          <Button variant="outline" onClick={onClearNow} className="flex-1">
-            Clear now
-          </Button>
-        )}
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        Copying clears the clipboard automatically after {clearWindowSeconds}{" "}
-        seconds. Anything else you copy in that window is replaced too.
-      </p>
-
-      {pending && (
+    <div className="mt-2 text-xs leading-snug text-muted-foreground">
+      {pending ? (
         <div
-          className="flex items-center gap-2 text-xs text-[var(--ink-amber)]"
+          className="flex items-center justify-between gap-2 text-[var(--ink-amber)]"
           role="status"
         >
-          <span>Clipboard clears in</span>
-          <span className="font-mono" data-testid="clipboard-countdown">
-            {formatCountdown(secondsRemaining)}
+          <span>
+            Clipboard clears in{" "}
+            <span className="font-mono" data-testid="clipboard-countdown">
+              {formatCountdown(secondsRemaining)}
+            </span>
           </span>
+          {/* 44px hit box in a 24px line: the negative margins keep the row
+              tight while the target stays the size the rules ask for. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClearNow}
+            className="-my-2.5 h-11 px-2 text-xs font-semibold text-foreground"
+          >
+            Clear now
+          </Button>
         </div>
+      ) : (
+        <p>
+          Copying clears the clipboard automatically after {clearWindowSeconds}{" "}
+          seconds. Anything else you copy in that window is replaced too.
+        </p>
       )}
 
       {status === "cleared" && (
-        <div className="seal-chip seal-chip-success flex" role="status">
-          <Check className="h-4 w-4" />
+        <p
+          className="mt-1.5 flex items-center gap-1.5 font-semibold text-[var(--ink-mint)]"
+          role="status"
+        >
+          <Check className="h-3.5 w-3.5" />
           Clipboard cleared
-        </div>
+        </p>
       )}
 
       {status === "copy-failed" && (
-        <div className="seal-chip seal-chip-danger flex" role="alert">
-          <AlertTriangle className="h-4 w-4" />
-          The copy did not happen. Write the key down from the panel below
-          instead.
-        </div>
+        <p
+          className="mt-1.5 flex items-start gap-1.5 font-medium text-destructive"
+          role="alert"
+        >
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            The copy did not happen. Write the key down from the panel below
+            instead.
+          </span>
+        </p>
       )}
 
       {status === "clear-failed" && (
-        <div className="seal-chip seal-chip-danger flex" role="alert">
-          <AlertTriangle className="h-4 w-4" />
-          Could not clear the clipboard. Copy something else to overwrite it.
-        </div>
+        <p
+          className="mt-1.5 flex items-start gap-1.5 font-medium text-destructive"
+          role="alert"
+        >
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Could not clear the clipboard. Copy something else to overwrite it.
+          </span>
+        </p>
       )}
     </div>
   );

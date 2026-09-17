@@ -5,7 +5,7 @@ import { useKeyManager } from "../hooks/useKeyManager";
 import { UNLOCK_FAILED, type UnlockResult } from "@/ui/state/KeyManagerContext";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import { useEphemeralInputTeardown } from "../hooks/useEphemeralInputTeardown";
-import { Lock, Unlock, AlertTriangle, Fingerprint, Shield, Key } from "lucide-react";
+import { AlertTriangle, Lock } from "lucide-react";
 import { Logo } from "@/ui/components/logo/Logo";
 import { SealMark } from "@/components/common/SealMark";
 
@@ -67,30 +67,34 @@ export function describeUnlockFailure(
   return copy;
 }
 
+/**
+ * The lock screen is five things, top to bottom: the mascot wearing the lock
+ * seal, the title, the field, Unlock, and one honest line at the foot. It used to say
+ * "your keys are safe" four different ways and offer a biometric button whose
+ * only behaviour was to report that it did not work. Ostrilo has no recovery
+ * path by design, so where another wallet puts "Forgot password" this screen
+ * says nothing.
+ */
 export function LockScreen({
   onUnlock,
   title = "Ostrilo is Locked",
 }: LockScreenProps) {
-  const { unlock, isLoading, hasKeys } = useKeyManager();
+  const { unlock, isLoading } = useKeyManager();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const passwordFieldRef = useRef<HTMLInputElement>(null);
 
   useEphemeralInputTeardown(passwordFieldRef);
 
-  // Derive biometric availability synchronously
-  const biometricAvailable =
-    typeof navigator !== "undefined" &&
-    typeof (navigator as any).credentials !== "undefined" &&
-    typeof (navigator as any).credentials.create === "function";
-
   const handleUnlock = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
     if (isLoading) return;
 
+    // Unlock stays enabled on an empty field - a disabled primary reads as a
+    // dead control - so this guard is the one that answers an empty submit.
     if (!password.trim()) {
-      setError("Password is required");
+      setError("Enter your master password.");
       return;
     }
 
@@ -110,120 +114,67 @@ export function LockScreen({
     setError(describeUnlockFailure(result));
   };
 
-  const handleBiometricUnlock = async () => {
-    console.log("Biometric unlock requested (not implemented yet)");
-    setError("Biometric unlock is not yet implemented");
-  };
-
   return (
-    <div className="app-canvas flex h-full flex-col items-center justify-center space-y-4 bg-background p-4 text-center">
-      <div className="w-full max-w-sm text-center">
-        <div className="relative mx-auto mb-3 h-24 w-24">
-          <Logo size="max" mode="model" />
-          <SealMark
-            icon={Lock}
-            size="sm"
-            className="absolute bottom-1 right-2 h-7 w-7"
+    <div className="app-canvas flex h-full flex-col items-center bg-background px-6 py-6">
+      {/* One group, read top to bottom with no gap wider than a line of type:
+          mascot, heading, field, Unlock. `my-auto` centres it in whatever
+          height the document gives (600px popup, full-tab options page); the
+          extra bottom padding lifts it a little above true centre, which is
+          where the eye expects a single object to sit. Only the reassurance
+          line lives at the foot. */}
+      <form
+        onSubmit={handleUnlock}
+        className="my-auto flex w-full max-w-sm flex-col items-center pb-8"
+      >
+        <div className="relative h-28 w-28">
+          <Logo size="max" mode="model" alt="" />
+          {/* The lock seal, ringed in the canvas colour so it reads as a
+              badge pinned to the mascot rather than a mark floating beside it. */}
+          <span className="seal absolute -bottom-0.5 right-0 flex h-10 w-10 items-center justify-center bg-background">
+            <SealMark icon={Lock} size="md" className="h-8 w-8" />
+          </span>
+        </div>
+
+        <h1 className="screen-title mt-6 text-center text-[20px]">{title}</h1>
+
+        <div className="mt-4 w-full">
+          <PasswordInput
+            label="Master Password"
+            labelHidden
+            placeholder="Master password"
+            value={password}
+            onChange={setPassword}
+            disabled={isLoading}
+            idPrefix="unlock"
+            autoFocus
+            inputRef={passwordFieldRef}
+            invalid={Boolean(error)}
           />
-        </div>
-        <h1 className="screen-title">{title}</h1>
-        <p className="screen-description">
-          Enter your master password to access your keys
-        </p>
-      </div>
-
-      {hasKeys && (
-        <div className="seal-chip seal-chip-accent">
-          <Key className="h-3 w-3" />
-          Your keys are secured
-        </div>
-      )}
-
-      <div className="ink-card w-full max-w-sm space-y-4 p-4">
-        {/* One guard for both the Enter key and the button. `onKeyPress` was
-            deprecated in React 19 and only the Enter path ever reached the
-            empty-password check, because the button is disabled when the field
-            is blank. */}
-        <form onSubmit={handleUnlock} className="space-y-4">
-          <div className="text-left">
-            <PasswordInput
-              label="Master Password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={setPassword}
-              disabled={isLoading}
-              idPrefix="unlock"
-              autoFocus
-              inputRef={passwordFieldRef}
-            />
-          </div>
-
-          {/* Error message */}
           {error && (
-            <div
-              className="seal-chip seal-chip-danger flex text-left"
+            <p
+              className="mt-2 flex items-start gap-1.5 text-xs font-medium text-destructive"
               role="alert"
             >
-              <AlertTriangle className="h-4 w-4" />
-              {error}
-            </div>
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{error}</span>
+            </p>
           )}
+        </div>
 
-          {/* Unlock button */}
-          <Button
-            type="submit"
-            disabled={isLoading || !password.trim()}
-            className="h-11 w-full"
-          >
-            {isLoading ? (
-              "Unlocking..."
-            ) : (
-              <>
-                <Unlock className="mr-2 h-4 w-4" />
-                Unlock
-              </>
-            )}
-          </Button>
-        </form>
+        <Button type="submit" disabled={isLoading} className="mt-4 h-12 w-full">
+          {isLoading ? "Unlocking..." : "Unlock"}
+        </Button>
 
-        {/* Biometric unlock */}
-        {biometricAvailable && (
-          <>
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  or
-                </span>
-              </div>
-            </div>
+        {/* There is deliberately no attempt counter here. One used to live in
+            component state, which meant closing and reopening the popup reset it
+            and a caller driving the message bus never saw it at all. Rate
+            limiting is the background's, in `unlock-throttle.service.ts`, and the
+            wait it imposes is reported through the error above. */}
+      </form>
 
-            <Button
-              variant="outline"
-              onClick={handleBiometricUnlock}
-              disabled={isLoading}
-              className="w-full"
-            >
-              <Fingerprint className="mr-2 h-4 w-4" />
-              Use Biometric
-            </Button>
-          </>
-        )}
-      </div>
-
-      {/* Security notice */}
-      <div className="text-xs text-muted-foreground">
-        <Shield className="h-3 w-3 inline mr-1" />
-        Your keys stay encrypted in this browser
-      </div>
-
-      {/* There is deliberately no attempt counter here. One used to live in
-          component state, which meant closing and reopening the popup reset it
-          and a caller driving the message bus never saw it at all. Rate
-          limiting is the background's, in `unlock-throttle.service.ts`, and the
-          wait it imposes is reported through the error above. */}
+      <p className="text-center text-xs text-muted-foreground">
+        Your keys stay encrypted in this browser.
+      </p>
     </div>
   );
 }

@@ -57,7 +57,7 @@ export function MainApp() {
     ) : activeTab === "settings" ? (
       <BasicSettings />
     ) : (
-      <HomeView />
+      <HomeView onNavigate={setActiveTab} />
     );
 
   return (

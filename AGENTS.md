@@ -7,6 +7,27 @@ All development work must conform to `docs/development-standards.md`. Before edi
 
 All UI work must follow `docs/design/DESIGN_RULES.md`. Do not reintroduce gradients, accent rails, dot-grid backgrounds, the retired Arcade Plush class names, or pink/candy palette choices.
 
+Judge a UI change in **both themes**, against a **populated** vault. The
+screenshot runner does both:
+
+```bash
+pnpm run build
+node docs/design-review/capture-screenshots.mjs
+OSTRILO_DESIGN_REVIEW_THEME=dark node docs/design-review/capture-screenshots.mjs
+```
+
+Two invocations rather than one two-pass run: the runner drives onboarding from
+an empty vault, and that happens once per browser profile. Its second phase
+unlocks that vault and seeds a second key, a long key name, a cached profile,
+three relays, three sites at different trust levels, signed and denied activity,
+and a two-site approval queue. Decide from those captures. A fresh vault hides
+layout bugs that appear only once a surface has rows in it — home cards shrinking
+and clipping their rows survived a full design review that way. Deep Ink is a
+role reassignment, not an inversion, so it cannot be inferred from the light
+capture either.
+
+Record what the review found in `docs/design-review/README.md`.
+
 ## Driving the Extension
 
 To see the extension actually run — screenshots, console and service-worker

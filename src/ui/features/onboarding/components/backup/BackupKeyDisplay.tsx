@@ -82,52 +82,51 @@ export function BackupKeyDisplay({
   }, [getNsec, revealNonce, showPrivateKey, showTranscription]);
 
   return (
-    <div className="space-y-3">
-      <div>
-        <Label htmlFor="privateKey">Private Key (nsec format)</Label>
-        <div className="relative">
-          <Input
-            id="privateKey"
-            type="text"
-            ref={inputRef}
-            readOnly
-            defaultValue=""
-            aria-describedby="privateKeyHint"
-            style={
-              {
-                WebkitTextSecurity: showPrivateKey ? "none" : "disc",
-              } as CSSProperties
-            }
-            className="pr-10 font-mono text-sm"
-            {...NO_AUTOFILL_PROPS}
-          />
-          <button
-            type="button"
-            onClick={onToggleShowPrivateKey}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
-            aria-label={showPrivateKey ? "Hide private key" : "Show private key"}
-          >
-            {showPrivateKey ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
-          </button>
-        </div>
-        <p id="privateKeyHint" className="mt-1 text-xs text-muted-foreground">
-          Anyone who reads this line controls your identity.
-        </p>
+    <div>
+      {/* The label doubles as the panel's header (DESIGN_RULES §4: section
+          labels replace card headers). */}
+      <Label
+        htmlFor="privateKey"
+        className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground"
+      >
+        Private Key (nsec format)
+      </Label>
+      <div className="relative mt-2">
+        <Input
+          id="privateKey"
+          type="text"
+          ref={inputRef}
+          readOnly
+          defaultValue=""
+          style={
+            {
+              WebkitTextSecurity: showPrivateKey ? "none" : "disc",
+            } as CSSProperties
+          }
+          className="h-11 pr-11 font-mono text-[13px] tracking-wide"
+          {...NO_AUTOFILL_PROPS}
+        />
+        <button
+          type="button"
+          onClick={onToggleShowPrivateKey}
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted-foreground hover:text-foreground"
+          aria-label={showPrivateKey ? "Hide private key" : "Show private key"}
+        >
+          {showPrivateKey ? (
+            <EyeOff className="h-4 w-4" />
+          ) : (
+            <Eye className="h-4 w-4" />
+          )}
+        </button>
       </div>
 
       {showTranscription && (
-        <div className="rounded-[10px] bg-[var(--ink-amber-soft)] p-3 text-[var(--ink-amber)]">
-          <div className="mb-1 text-[11px] font-bold uppercase tracking-wider">
-            Write it down
-          </div>
+        <div className="code-panel mt-3">
+          <div className="section-label mb-1.5 font-sans">Write it down</div>
           <div
             ref={transcriptionRef}
             data-testid="nsec-transcription"
-            className="select-all break-all font-mono text-xs leading-6"
+            className="select-all break-all font-mono text-xs leading-6 text-foreground"
           />
         </div>
       )}

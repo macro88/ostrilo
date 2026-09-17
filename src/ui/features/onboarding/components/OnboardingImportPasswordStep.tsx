@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
-import { ArrowLeft, ArrowRight, CheckCircle, Key } from "lucide-react";
-import { SealMark } from "@/components/common/SealMark";
+import { Check } from "lucide-react";
 
 interface OnboardingImportPasswordStepProps {
   keyName: string;
@@ -29,31 +28,33 @@ export function OnboardingImportPasswordStep({
   onImport,
 }: OnboardingImportPasswordStepProps) {
   return (
-    <div className="space-y-6">
+    <div className="flex flex-1 flex-col">
       <div className="screen-header text-center">
-        <SealMark icon={Key} size="lg" className="mx-auto mb-3" />
-        <h2 className="screen-title">Secure Your Key</h2>
-        <p className="screen-description">
-          Create a strong password to encrypt your imported key
+        <h2 className="screen-title text-[20px]">Secure Your Key</h2>
+        <p className="screen-description mx-auto mt-1.5 max-w-[320px]">
+          Choose the master password you will unlock this key with.
         </p>
       </div>
 
-      <div className="ink-card space-y-4 p-4">
-        {hasParsedKey && (
-          <div className="seal-chip seal-chip-success flex w-full items-start rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <CheckCircle className="h-4 w-4" />
-              <div className="font-medium text-sm">Key Validated</div>
-            </div>
-            <div className="text-xs">
+      {/* Mint, because the background parsed the key: this is a "go" state. */}
+      {hasParsedKey && (
+        <div className="mt-5 flex items-start gap-2.5 rounded-[10px] bg-[var(--ink-mint-soft)] px-3.5 py-3 text-[var(--ink-mint)]">
+          <span className="seal mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center bg-[var(--ink-mint)] text-[var(--ink-mint-soft)]">
+            <Check className="h-3 w-3" strokeWidth={3} />
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">Key Validated</div>
+            <div className="mt-0.5 break-words text-xs">
               Private key "{keyName}" is ready for import
             </div>
           </div>
-        )}
+        </div>
+      )}
 
+      <div className={hasParsedKey ? "mt-4" : "mt-5"}>
         <PasswordInput
           label="Master Password"
-          placeholder="Enter a strong password"
+          placeholder="Choose a strong password"
           value={password}
           onChange={onPasswordChange}
           confirmValue={confirmPassword}
@@ -64,14 +65,21 @@ export function OnboardingImportPasswordStep({
         />
       </div>
 
-      <div className="flex space-x-3">
-        <Button variant="outline" onClick={onBack} disabled={isLoading} className="flex-1">
-          <ArrowLeft className="mr-2 h-4 w-4" />
+      <div className="mt-auto flex gap-3 pt-6">
+        <Button
+          variant="outline"
+          onClick={onBack}
+          disabled={isLoading}
+          className="h-12 flex-1"
+        >
           Back
         </Button>
-        <Button onClick={onImport} disabled={isLoading} className="flex-1">
+        <Button
+          onClick={onImport}
+          disabled={isLoading}
+          className="h-12 flex-[2]"
+        >
           {isLoading ? "Importing..." : "Import Key"}
-          <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </div>
     </div>

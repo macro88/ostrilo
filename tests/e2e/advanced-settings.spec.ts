@@ -182,7 +182,7 @@ async function openAdvancedTab(page: Page): Promise<void> {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("tab", { name: "Advanced" }).click();
   await expect(
-    page.getByRole("heading", { name: "Advanced Settings" })
+    page.getByRole("heading", { name: "Advanced", exact: true })
   ).toBeVisible();
 }
 
@@ -456,7 +456,7 @@ test.describe("advanced settings: medium-trust auto-allow", () => {
     // same sentence, and this assertion is specifically about kind 1.
     await expect(
       options.locator(`#medium-kind-${PROTECTED_KIND}-description`)
-    ).toContainText("always requires approval and cannot be auto-allowed.");
+    ).toContainText(/always requires approval and cannot be auto-allowed\./i);
 
     // Now go around the UI entirely. This is the layer that counts.
     await sendExtensionRpc(options, {

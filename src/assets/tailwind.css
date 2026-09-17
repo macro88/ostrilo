@@ -13,6 +13,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Bundled type (DESIGN_RULES §4). The @font-face rules ship with the
+   extension and resolve under `font-src 'self'`; nothing is fetched from a
+   CDN. Archivo is the variable wght build; JetBrains Mono ships the two
+   weights the data surfaces use. */
+@import "@fontsource-variable/archivo";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/600.css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -72,13 +80,13 @@
   /* ── Inkline palette ───────────────────────────────────── */
   --ink: #2a2238;            /* primary text, primary buttons  */
   --ink-2: #736b89;          /* secondary text                 */
-  --ink-3: #a39cb6;          /* tertiary text, placeholders    */
+  --ink-3: #867e9e;          /* tertiary text, placeholders    */
   --ink-violet: #5f50a0;     /* the single accent              */
   --ink-violet-soft: #efecf7;
   --ink-lavender: #9c8fc4;   /* icon tint inside ink buttons   */
-  --ink-mint: #2e9b7f;       /* success / "go" — nothing else  */
+  --ink-mint: #1e7a63;       /* success / "go" — nothing else  */
   --ink-mint-soft: #e3f2ec;
-  --ink-amber: #94682e;      /* warnings                       */
+  --ink-amber: #7a5320;      /* warnings                       */
   --ink-amber-soft: #f6eedf;
   --ink-red: #bd4a55;        /* danger / deny                  */
   --ink-red-soft: #f7e7e8;
@@ -113,6 +121,11 @@
 
   /* ── Elevation: hairlines do the work; shadow only on overlays ── */
   --elev-overlay: 0 18px 50px rgb(42 34 56 / 0.30);
+  /* Dialog backdrop. Strong enough that the page's own primary button stops
+     competing with the dialog for the eye: at 0.35 the settings panel's
+     "Lock now" read as the brightest control on screen while a dialog was
+     open. */
+  --overlay: rgb(42 34 56 / 0.55);
   --ease-out: cubic-bezier(.2,.8,.2,1);
 }
 
@@ -121,7 +134,7 @@
   color-scheme: dark;
   --ink: #edeaf6;
   --ink-2: #9c92b8;
-  --ink-3: #6e6589;
+  --ink-3: #857ba6;
   --ink-violet: #a78fff;
   --ink-violet-soft: #3a2f5e;
   --ink-lavender: #a78fff;
@@ -160,6 +173,9 @@
   --sidebar-ring: var(--ink-violet);
 
   --elev-overlay: 0 18px 50px rgb(0 0 0 / 0.5);
+  /* Deep Ink surfaces sit close together, so the backdrop has to do more of
+     the separating than it does in light. */
+  --overlay: rgb(0 0 0 / 0.72);
 }
 
 @layer base {
@@ -216,40 +232,29 @@
     @apply mt-0.5 text-sm text-muted-foreground;
     text-wrap: pretty;
   }
+  /* Section label: 11px, bold, uppercase, tracked, secondary ink. Replaces
+     card headers (DESIGN_RULES §4). */
+  .section-label {
+    @apply text-[11px] font-bold uppercase text-muted-foreground;
+    letter-spacing: 0.08em;
+  }
 
   /* ── Shape utilities ───────────────────────────────────── */
-  /* Notched corner — the Inkline signature. Primary CTAs + small chips ONLY. */
-  .notch {
-    clip-path: polygon(
-      var(--notch) 0, 100% 0,
-      100% calc(100% - var(--notch)),
-      calc(100% - var(--notch)) 100%,
-      0 100%, 0 var(--notch));
-  }
-  .notch-sm {
-    clip-path: polygon(
-      var(--notch-sm) 0, 100% 0,
-      100% calc(100% - var(--notch-sm)),
-      calc(100% - var(--notch-sm)) 100%,
-      0 100%, 0 var(--notch-sm));
-  }
+  /* .notch, .notch-sm and .seal are declared with @utility below (outside
+     this layer) so Tailwind variants such as data-[state=active]:notch-sm
+     and hover:seal work. A plain component-layer class is invisible to the
+     variant engine, which is why the options nav's active notch silently
+     never rendered. */
   /* clip-path swallows outlines: notched elements draw focus INSIDE */
   .notch:focus-visible, .notch-sm:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: -3px;
   }
 
-  /* Faceted hexagon — avatars, seals, slider thumbs, step dots. */
-  .seal {
-    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-  }
-
   /* ── Cards & rows ──────────────────────────────────────── */
-  /* Hairline card. No drop shadow, no left rail. */
-  .ink-card {
-    @apply border border-border bg-card;
-    border-radius: var(--radius-row);
-  }
+  /* .ink-card is declared with @utility below, outside this layer, so variant
+     forms such as @min-[420px]:ink-card work. A component-layer class is
+     invisible to the variant engine and compiles to nothing. */
   /* Row inside a grouped .ink-card list */
   .ink-row {
     @apply flex items-center gap-3 px-3.5 py-3 border-t border-border first:border-t-0;
@@ -272,6 +277,15 @@
   }
   .btn-ink:hover { filter: brightness(1.12); }
   .btn-ink:active { transform: translateY(1px); }
+  /* Disabled reads as "not yet", not "broken": a solid muted plate with
+     secondary ink, no translucency, no hover brightening. */
+  .btn-ink:disabled, .btn-ink[aria-disabled="true"] {
+    background: var(--input);
+    color: var(--ink-2);
+    filter: none;
+    transform: none;
+    cursor: not-allowed;
+  }
   .btn-ink:focus-visible { outline: 2px solid var(--ring); outline-offset: -3px; }
 
   /* Secondary: hairline ghost, normal radius. */
@@ -315,6 +329,33 @@
     border-radius: var(--radius);
     max-block-size: 12rem;
   }
+}
+
+/* Notched corner — the Inkline signature. Primary CTAs + small chips ONLY. */
+@utility notch {
+  clip-path: polygon(
+    var(--notch) 0, 100% 0,
+    100% calc(100% - var(--notch)),
+    calc(100% - var(--notch)) 100%,
+    0 100%, 0 var(--notch));
+}
+@utility notch-sm {
+  clip-path: polygon(
+    var(--notch-sm) 0, 100% 0,
+    100% calc(100% - var(--notch-sm)),
+    calc(100% - var(--notch-sm)) 100%,
+    0 100%, 0 var(--notch-sm));
+}
+/* Hairline card. No drop shadow, no left rail. */
+@utility ink-card {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: var(--radius-row);
+}
+
+/* Faceted hexagon — avatars, seals, slider thumbs, step dots. */
+@utility seal {
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
 }
 
 @media (prefers-reduced-motion: reduce) {

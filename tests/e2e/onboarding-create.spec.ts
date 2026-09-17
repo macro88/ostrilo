@@ -30,7 +30,6 @@ test.describe("Onboarding - Create Key", () => {
     ).toBeVisible();
 
     await page.getByText("Create New Key", { exact: true }).click();
-    await page.getByRole("button", { name: "Continue" }).click();
 
     await expect(
       page.getByRole("heading", { name: "Create Your Nostr Key" })
@@ -130,7 +129,6 @@ test.describe("leaving the backup step", () => {
       popup.getByRole("heading", { name: "Welcome to Ostrilo" })
     ).toBeVisible();
     await popup.getByText("Create New Key", { exact: true }).click();
-    await popup.getByRole("button", { name: "Continue" }).click();
     await popup.getByLabel("Key Name").fill("Teardown Key");
     await popup.getByLabel("Master Password").fill(password);
     await popup.getByLabel("Confirm Password").fill(password);

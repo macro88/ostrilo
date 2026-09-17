@@ -728,7 +728,9 @@ test.describe("profile edit", () => {
     // the assertions above would also pass on a page that rendered nothing.
     expect(key.npub).toBeTruthy();
     const summary = surfaces[0].text;
-    expect(summary).toContain(key.npub!.slice(0, 10));
+    // The identity strip renders the shared `<Pubkey>`, which shows the first
+    // eight characters of the npub before the ellipsis.
+    expect(summary).toContain(key.npub!.slice(0, 8));
   });
 
   test("a relay that refuses the event leaves the edits on screen", async ({
@@ -748,8 +750,13 @@ test.describe("profile edit", () => {
     // method that does not exist, and the relay's own reason is dropped. The
     // pattern below matches that string and a message that actually names the
     // relay, so fixing the code does not fail this test.
+    // Scoped to the alert: the form's own description now reads "Published to
+    // your relays for anyone to read.", which the pattern below also matches,
+    // so an unscoped getByText resolves to two elements.
     await expect(
-      popup.getByText(/rpc:profile\.update|publish|relay/i)
+      popup
+        .getByRole("alert")
+        .filter({ hasText: /rpc:profile\.update|publish|relay/i })
     ).toBeVisible({ timeout: 20_000 });
 
     // Still editing, with the user's text intact: a failed publish must not

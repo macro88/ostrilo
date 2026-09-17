@@ -32,10 +32,16 @@ export function ActivityFilters({
     return null;
   }
 
+  const active = Boolean(originFilter || kindFilter);
+
   return (
-    <div className="flex gap-2 flex-col sm:flex-row">
+    <div className="flex shrink-0 items-center gap-2">
       <Select value={originFilter || "all"} onValueChange={onOriginChange}>
-        <SelectTrigger className="w-full h-8 text-xs">
+        <SelectTrigger
+          size="sm"
+          className="w-full min-w-0 flex-1 text-xs"
+          aria-label="Filter by site"
+        >
           <SelectValue placeholder="All Origins" />
         </SelectTrigger>
         <SelectContent>
@@ -52,7 +58,11 @@ export function ActivityFilters({
         value={kindFilter?.toString() || "all"}
         onValueChange={onKindChange}
       >
-        <SelectTrigger className="w-full h-8 text-xs">
+        <SelectTrigger
+          size="sm"
+          className="w-full min-w-0 flex-1 text-xs"
+          aria-label="Filter by event kind"
+        >
           <SelectValue placeholder="All Kinds" />
         </SelectTrigger>
         <SelectContent>
@@ -65,14 +75,14 @@ export function ActivityFilters({
         </SelectContent>
       </Select>
 
-      {(originFilter || kindFilter) && (
+      {active && (
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={onClear}
-          className="w-full h-8 text-xs"
+          className="h-8 shrink-0 px-2 text-xs"
         >
-          Clear Filters
+          Clear filters
         </Button>
       )}
     </div>

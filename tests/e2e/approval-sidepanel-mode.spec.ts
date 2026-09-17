@@ -214,10 +214,29 @@ async function openInlineApproval(panel: Page): Promise<void> {
   ).toBeVisible();
 }
 
-/** Selects the queued request inside the inline surface. */
+/**
+ * Lands on the detail of the queued request inside the inline surface.
+ *
+ * A lone request opens on its detail directly, and the panel is below the
+ * `md` breakpoint, so the queue - and its row - is hidden behind the back
+ * button in that case. Whichever of the two the prompt shows first is the
+ * state to act on: click the row only when the queue is what is showing.
+ */
 async function openFirstInlineRequest(panel: Page): Promise<void> {
-  await panel.getByTestId("approval-request-item").first().click();
-  await expect(panel.getByTestId("approval-detail")).toBeVisible();
+  const detail = panel.getByTestId("approval-detail");
+  const row = panel.getByTestId("approval-request-item").first();
+  // Not `detail.or(row)`: when the lone request auto-opens, the selected row
+  // stays mounted behind the detail, so `.or()` matches both and trips strict
+  // mode. Wait for whichever arrives, then act on the state that is showing.
+  await expect
+    .poll(async () => (await detail.isVisible()) || (await row.isVisible()), {
+      timeout: 10_000,
+    })
+    .toBe(true);
+  if (!(await detail.isVisible())) {
+    await row.click();
+  }
+  await expect(detail).toBeVisible();
 }
 
 test.describe("side-panel approval delivery", () => {
@@ -298,8 +317,10 @@ test.describe("side-panel approval delivery", () => {
     const panel = await openSidepanel();
     // The panel starts on Home — asserted, so that "Activity is showing" later
     // means the broadcast moved it rather than it having been there all along.
+    // The key name now lives in the header on every tab, so Home is
+    // identified by its own "Active identity" region instead.
     await expect(
-      panel.getByRole("heading", { level: 2, name: "Agent Loop Key" })
+      panel.getByRole("region", { name: "Active identity" })
     ).toBeVisible({ timeout: 15_000 });
     await expect(activityTitle(panel)).toBeHidden();
 
@@ -310,7 +331,7 @@ test.describe("side-panel approval delivery", () => {
 
       await expect(activityTitle(panel)).toBeVisible();
       await expect(
-        panel.getByRole("heading", { level: 2, name: "Agent Loop Key" })
+        panel.getByRole("region", { name: "Active identity" })
       ).toBeHidden();
 
       // And the request is waiting there, not merely the tab. The control is

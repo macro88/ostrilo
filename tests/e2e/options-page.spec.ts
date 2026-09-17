@@ -119,7 +119,7 @@ test.describe("Options page", () => {
     await options.getByRole("tab", { name: "Security" }).click();
     await expect(options).toHaveURL(/options\.html#security/);
     await expect(
-      options.getByRole("heading", { name: "Security Settings" })
+      options.getByRole("heading", { name: "Security", exact: true })
     ).toBeVisible();
 
     const tabSwitchMs = await options.evaluate(async () => {
