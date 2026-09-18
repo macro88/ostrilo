@@ -237,12 +237,6 @@ export class ApprovalQueueService {
     if (dedupeKey && this.eventIdMap.has(dedupeKey)) {
       const existingEntry = this.eventIdMap.get(dedupeKey)!;
       existingEntry.resolvers.push(resolver);
-      console.log(
-        `[ApprovalQueue] Duplicate event detected for ${origin} (hash: ${eventIdHash!.substring(
-          0,
-          8
-        )}...), reusing existing request ${existingEntry.request.id}`
-      );
       // Don't notify for duplicates - no actual queue change, and
       // deliberately no rate-limit charge: collapsing a double-click into
       // one prompt must not cost the page the same as asking twice.

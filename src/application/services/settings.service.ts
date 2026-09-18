@@ -161,7 +161,10 @@ export class SettingsService {
     try {
       const { browser } = await import("wxt/browser");
       browser.runtime.sendMessage({ __event: SETTINGS_CHANGED_EVENT });
-    } catch {}
+    } catch {
+      // No listener is the normal case (no extension page open); the
+      // broadcast is best-effort and its failure changes nothing here.
+    }
     return next;
   }
 }

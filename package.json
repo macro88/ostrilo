@@ -36,7 +36,11 @@
     "agent:loop:prod": "node -e \"fs.rmSync('test-results/agent',{recursive:true,force:true})\" && OSTRILO_E2E_HEADED=1 OSTRILO_E2E_SCREENSHOT_DIR=test-results/agent playwright test --project=agent-scratch",
     "agent:screens": "OSTRILO_E2E_BUILD_MODE=agent OSTRILO_E2E_SCREENSHOT_DIR=test-results/agent playwright test --project=agent-scratch tests/e2e/agent-screens.spec.ts",
     "agent:clean": "node -e \"fs.rmSync('test-results/agent',{recursive:true,force:true})\" && rm -f tests/e2e/*.scratch.spec.ts",
-    "doctor": "react-doctor"
+    "doctor": "react-doctor",
+    "slop": "aislop scan",
+    "slop:changes": "aislop scan --changes",
+    "slop:fix": "aislop fix --safe",
+    "slop:ci": "aislop ci --human"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
@@ -78,6 +82,7 @@
     "@vitest/coverage-v8": "^4.1.8",
     "@wxt-dev/auto-icons": "^1.1.1",
     "@wxt-dev/module-react": "^1.2.2",
+    "aislop": "0.16.1",
     "eslint": "^10.10.0",
     "http-server": "^14.1.1",
     "jsdom": "^29.1.1",

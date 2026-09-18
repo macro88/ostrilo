@@ -1,8 +1,6 @@
 import {
   Authorisation,
   OriginPolicy,
-  PolicyContext,
-  PolicyInput,
   PolicyOutput,
 } from "@/domain/types";
 import { evaluatePolicy } from "@/domain/policy/evaluate";
@@ -110,7 +108,10 @@ export class PolicyService {
     try {
       const { browser } = await import("wxt/browser");
       browser.runtime.sendMessage({ __event: SETTINGS_CHANGED_EVENT });
-    } catch {}
+    } catch {
+      // No listener is the normal case (no extension page open); the
+      // broadcast is best-effort and its failure changes nothing here.
+    }
   }
 
   async setOriginPolicy(
@@ -211,7 +212,7 @@ export class PolicyService {
     const idx = origins.findIndex((o) => o.origin === origin);
     const now = Math.floor(Date.now() / 1000);
     if (idx >= 0) {
-      const rules = { ...(origins[idx].rules ?? {}) } as Record<
+      const rules = { ...origins[idx].rules } as Record<
         number,
         Authorisation
       > as any;

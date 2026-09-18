@@ -771,7 +771,10 @@ export class KeyVaultService {
       try {
         const { browser } = await import("wxt/browser");
         browser.runtime.sendMessage({ __event: SETTINGS_CHANGED_EVENT });
-      } catch {}
+      } catch {
+        // No listener is the normal case (no extension page open); the
+        // broadcast is best-effort and its failure changes nothing here.
+      }
     }
     // After the state is written and the keys are gone, so a listener sees a
     // locked vault. Concurrent and settled, not sequential: the listeners are

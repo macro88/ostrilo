@@ -1,0 +1,45 @@
+# aislop - catches what AI coding agents leave behind: narrative comments,
+# swallowed exceptions, `as any` casts, console leftovers, dead code,
+# oversized functions. Deterministic (regex + AST + standard tooling), no
+# LLM in the runtime path, so the same code always scores the same.
+#
+# It runs in three places, always through the pinned devDependency:
+#   - after every agent edit batch   .claude/hooks/aislop.sh
+#   - on demand                      pnpm run slop
+#   - on every PR and push to main   .github/workflows/aislop.yml
+#
+# Rule reference: pnpm exec aislop rules
+
+version: 1
+
+exclude:
+  # Build output and generated code. `.wxt` holds wxt's generated ambient
+  # types and entrypoint shims; scoring generated files measures wxt, not us.
+  - .output
+  - .wxt
+  # Playwright artifacts, including the agent-loop screenshots.
+  - test-results
+  - playwright-report
+
+lint:
+  # `pnpm run compile` is already a blocking check in verify.yml and is the
+  # authority on types here. Running tsc a second time inside every post-edit
+  # hook would double the latency of the feedback loop to say the same thing.
+  typecheck: false
+
+ci:
+  # The score when aislop was wired in (2026-09-17) was 75: 7 errors, all
+  # false positives now suppressed inline with reasons, and 199 warnings.
+  #
+  # 70 is a ratchet floor, not a target. It blocks a slide without pretending
+  # the existing warning backlog is already clean. Raise it as that backlog
+  # comes down - the number is only meaningful against a fixed rule set, so
+  # move it deliberately rather than letting it drift.
+  failBelow: 70
+
+telemetry:
+  # aislop posts anonymised run metadata (version, OS, arch, install id) to a
+  # third-party analytics endpoint by default on local runs. This repository
+  # holds a signer's source; it makes no unnecessary outbound calls from a
+  # developer machine. Off everywhere, not just in CI.
+  enabled: false

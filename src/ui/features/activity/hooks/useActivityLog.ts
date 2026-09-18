@@ -1,5 +1,5 @@
 import { useReducer, useEffect, useCallback } from "react";
-import type { ActivityLogEntry, ActivityFilters } from "@/domain/types";
+import type { ActivityLogEntry } from "@/domain/types";
 import {
   activityGetRecent,
   activityFilterBy,

@@ -16,7 +16,7 @@ export function MainApp() {
   const { activeTab, setActiveTab } = useAppNavigation("home");
   const [isAddKeyDialogOpen, setIsAddKeyDialogOpen] = useState(false);
   const { needsOnboarding } = useOnboarding();
-  const { selectedUnlockedKey, isLoading, isLocked, refreshKeys } =
+  const { isLoading, isLocked, refreshKeys } =
     useKeyManager();
 
   const handleAddKey = () => {

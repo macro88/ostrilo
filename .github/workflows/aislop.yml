@@ -1,0 +1,82 @@
+# aislop - catches what AI coding agents leave behind: narrative comments,
+# swallowed exceptions, `as any` casts, console leftovers, dead code,
+# oversized functions. Deterministic, so the same code always scores the same
+# and a failure here is reproducible locally with `pnpm run slop:ci`.
+#
+# Companion to react-doctor.yml, not a replacement: React Doctor judges React
+# correctness, accessibility and bundle shape; aislop judges authorship habits.
+#
+# Thresholds and rule severities live in .aislop/config.yml, so this workflow
+# and the local hook gate on exactly the same rules.
+#
+# Docs: https://github.com/scanaislop/aislop
+
+name: aislop
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Like verify.yml: a workflow with write access is itself an attack surface in
+# a wallet-class repository. The gate reports through its exit code and the run
+# log, so it needs nothing beyond reading the tree.
+permissions:
+  contents: read
+
+concurrency:
+  group: aislop-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # A PR is gated on the files it actually touches. Scoring the whole project
+  # on every PR would fail contributors for warnings that were already on main
+  # before they opened it, which teaches people to ignore the check.
+  changed-files:
+    name: Changed files
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      # Third-party actions are pinned to commit SHAs, not tags. A tag can be
+      # moved to point at different code; a SHA cannot.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # `--base origin/<branch>` needs a merge base to diff against, and
+          # the default shallow clone has none. Without full history the diff
+          # resolves to nothing and the gate passes without reading the PR.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # The pinned devDependency, never `npx aislop@latest`. The published
+      # quick-start uses an `@latest` specifier; this repository resolves the
+      # scanner through the lockfile so CI and local runs score against one
+      # rule set, and so a release cannot change the gate under a PR.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Gate changed files
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: pnpm exec aislop ci --changes --base "origin/$BASE_REF" --human
+
+  # The changed-files gate above cannot see a slow slide: every PR can touch
+  # clean files and pass while the project score falls. This job scores the
+  # whole tree on main so the trend is visible and the floor still applies.
+  project:
+    name: Whole project
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec aislop ci --human

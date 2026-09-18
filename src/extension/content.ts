@@ -1,6 +1,5 @@
 import { browser } from "wxt/browser";
 import type { RpcRequest, RpcResponse } from "@/infrastructure/messaging/rpc";
-import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
 /**
  * Content script for NIP-07 window.nostr provider
@@ -35,6 +34,7 @@ interface NostrResponseMessage {
   error?: string;
 }
 
+// aislop-ignore-next-line eslint/no-undef -- wxt auto-import; declared in .wxt/types/imports.d.ts, which this scan excludes as generated code. pnpm run compile is the authority on undefined identifiers here.
 export default defineContentScript({
   // HTTPS only.
   //
@@ -59,6 +59,7 @@ export default defineContentScript({
     // the page, where any script could find it by src and learn both that
     // Ostrilo is installed and its extension id - a stable fingerprinting
     // probe offered for free. The provider still works; only the marker goes.
+    // aislop-ignore-next-line eslint/no-undef -- wxt auto-import; declared in .wxt/types/imports.d.ts, which this scan excludes as generated code. pnpm run compile is the authority on undefined identifiers here.
     await injectScript("/injected.js", {
       keepInDom: false,
     });

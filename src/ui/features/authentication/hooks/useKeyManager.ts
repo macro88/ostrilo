@@ -1,9 +1,5 @@
-/**
- * Secure Key Manager Hook - UI Layer Only
- * Simple wrapper around the secure KeyManagerContext
- * Replaces the insecure useKeyManager that handled plaintext private keys
- */
-
+// aislop-ignore-next-line ai-slop/narrative-comment -- records that an earlier useKeyManager handled plaintext private keys, so this wrapper is not redundant indirection to be collapsed back.
+// Replaces an insecure predecessor that handled plaintext private keys.
 import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
 
 export function useKeyManager() {

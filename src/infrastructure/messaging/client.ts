@@ -53,6 +53,7 @@ export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
       // defeating the care taken elsewhere to hold the key in a ref and null it.
       // The background side already logged method and status only; this is the
       // client matching it.
+      // aislop-ignore-next-line ai-slop/console-leftover -- deliberate diagnostic, narrowed to method and status by the incident recorded above; not a leftover.
       console.log(
         "[CLIENT] Received response for",
         method,
@@ -87,6 +88,7 @@ export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
     } catch (e: any) {
       // Machine error code and method, not the thrown object: a thrown error
       // can carry a payload, and this runs in the page realm.
+      // aislop-ignore-next-line ai-slop/console-leftover -- deliberate diagnostic, narrowed to error code and method by the decision recorded above.
       console.log(
         "[CLIENT] RPC error for",
         method,

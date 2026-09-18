@@ -162,15 +162,8 @@ async function focusOrCreateApprovalWindowInner(
 ): Promise<number | undefined> {
   // Check if in sidepanel mode
   const appSettings = await settings.get();
-  console.log(
-    "[Background] focusOrCreateApprovalWindow - sidePanel setting:",
-    appSettings?.sidePanel
-  );
 
   if (appSettings?.sidePanel) {
-    console.log(
-      "[Background] Sidepanel mode enabled, sending message to switch to Activity tab"
-    );
     // Send message to sidepanel/popup to switch to Activity tab
     browser.runtime
       .sendMessage({ __event: BROADCAST_EVENTS.SWITCH_TO_ACTIVITY })
@@ -185,15 +178,9 @@ async function focusOrCreateApprovalWindowInner(
     try {
       await browser.windows.update(approvalWindowId, { focused: true });
       await updateApprovalBadge(approvalQueue.count());
-      console.log(
-        `[Background] Focused existing approval window ${approvalWindowId}`
-      );
       return approvalWindowId;
-    } catch (error) {
+    } catch {
       // Window was closed by user
-      console.log(
-        `[Background] Previous approval window ${approvalWindowId} no longer exists`
-      );
       approvalWindowId = null;
     }
   }
@@ -238,6 +225,7 @@ async function closeApprovalWindow(): Promise<void> {
   }
 }
 
+// aislop-ignore-next-line eslint/no-undef -- wxt auto-import; declared in .wxt/types/imports.d.ts, which this scan excludes as generated code. pnpm run compile is the authority on undefined identifiers here.
 export default defineBackground(() => {
   // Compose services
   const storage = createStorageSuite();
@@ -374,11 +362,6 @@ export default defineBackground(() => {
   ); // Approval queue operations
   router.registerModule("activity", new ActivityRpcHandler()); // Activity log operations
   router.registerModule("profile", new ProfileRpcHandler()); // Profile metadata operations
-
-  console.log(
-    "[Background] Registered RPC modules:",
-    router.getRegisteredNamespaces()
-  );
 
   // Register the RPC message listener
   browser.runtime.onMessage.addListener(

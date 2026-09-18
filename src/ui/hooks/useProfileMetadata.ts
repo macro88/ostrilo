@@ -31,7 +31,6 @@ export function useProfileMetadata(pubkeys: string[]) {
         setIsLoading(true);
         setError(null);
 
-        // Fetch all profiles in parallel
         const results = await Promise.allSettled(
           requestedPubkeys.map(async (pubkey) => {
             const data = await rpc<ProfileMetadata | null>({
@@ -44,7 +43,6 @@ export function useProfileMetadata(pubkeys: string[]) {
 
         if (cancelled) return;
 
-        // Build map of successful results
         const profileMap = new Map<string, ProfileMetadata>();
         results.forEach((result) => {
           if (result.status === "fulfilled" && result.value.data) {

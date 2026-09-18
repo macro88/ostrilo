@@ -24,6 +24,7 @@ import {
  * dialog, and it stops a page silently intercepting another script's signature.
  */
 
+// aislop-ignore-next-line eslint/no-undef -- wxt auto-import; declared in .wxt/types/imports.d.ts, which this scan excludes as generated code. pnpm run compile is the authority on undefined identifiers here.
 export default defineUnlistedScript(() => {
   // Intrinsics captured at injection time, before page script can run.
   const postMessage = window.postMessage.bind(window);

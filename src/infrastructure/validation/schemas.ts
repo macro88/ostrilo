@@ -315,10 +315,6 @@ export const UnsignedEventSchema = z
 
 // Infer types from schemas
 export type UnsignedEventInput = z.infer<typeof UnsignedEventSchema>;
-	
-// ============================================
-// Activity Log Validation Schemas
-// ============================================
 
 /**
  * Activity log request validation schemas
@@ -344,11 +340,6 @@ export type ActivityGetRecentRequest = z.infer<
 export type ActivityFilterByRequest = z.infer<
   typeof ActivityFilterByRequestSchema
 >;
-
-// Export validation functions
-// ============================================
-// Approval Queue Validation Schemas
-// ============================================
 
 /**
  * Approval queue request validation schemas

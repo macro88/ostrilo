@@ -34,3 +34,8 @@ playwright-report/
 
 # Agent scratch specs are disposable; see docs/agent-loop.md
 tests/e2e/*.scratch.spec.ts
+
+# aislop runtime artifacts: score history, hook baselines, repair sessions.
+# Only the checked-in config is shared; the rest is local state.
+.aislop/*
+!.aislop/config.yml

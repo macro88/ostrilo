@@ -1,4 +1,4 @@
-import { RpcRequest, RpcResponse, RpcHandler } from "../rpc.js";
+import { RpcRequest, RpcResponse } from "../rpc.js";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import { PasswordSchema, KeyInputSchema } from "../../validation/schemas.js";
 import type { RpcModule, ServiceContext } from "../rpc-router";
@@ -13,7 +13,7 @@ import { ScureBech32 } from "@/infrastructure/crypto/adapters";
 export class CryptoRpcHandler implements RpcModule {
   async handleRequest(
     message: RpcRequest,
-    context: ServiceContext
+    _context: ServiceContext
   ): Promise<RpcResponse> {
     switch (message.type) {
       case "crypto.evaluatePassword":

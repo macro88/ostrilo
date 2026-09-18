@@ -37,7 +37,6 @@ export class ActivityRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "activity.getRecent" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Validate input
     const validation = ActivityGetRecentRequestSchema.safeParse({
       limit: message.limit,
       offset: message.offset,
@@ -68,7 +67,6 @@ export class ActivityRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "activity.filterBy" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Validate input
     const validation = ActivityFilterByRequestSchema.safeParse({
       origin: message.origin,
       kind: message.kind,

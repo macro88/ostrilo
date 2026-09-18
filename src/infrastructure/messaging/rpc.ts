@@ -6,10 +6,8 @@ import type { RpcErrorObject } from "./error-codes";
 import type {
   UnsignedEvent,
   SignedEvent,
-  PendingRequest,
   ApprovalAction,
   ActivityLogEntry,
-  ActivityFilters,
 } from "@/domain/types";
 
 // Re-export error codes for convenience

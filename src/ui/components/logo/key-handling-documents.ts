@@ -47,6 +47,7 @@ export const KEY_HANDLING_DOCUMENTS = [
   "sidepanel.html",
   // Hosts `ImportKeyForm` and its private key input.
   "options.html",
+  // aislop-ignore-next-line ai-slop/narrative-comment -- not narrative: this is why a document holding no key material sits on a key-handling allowlist, and every other entry here carries the same justification.
   // Holds no key material, but its entire job is to show truthfully what is
   // about to be signed. A decorative WebGL library in that realm can repaint
   // what the user is reading before they approve it.

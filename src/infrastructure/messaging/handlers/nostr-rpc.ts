@@ -315,10 +315,6 @@ export class NostrRpcHandler implements RpcModule {
 
     // Check if vault is unlocked
     const lockState = await context.vault.getLockState();
-    console.log(
-      "[NostrRpcHandler] Vault lock state:",
-      lockState.isLocked ? "LOCKED" : "UNLOCKED"
-    );
     if (lockState.isLocked) {
       // Just the error. Nothing opens: the page-triggered unlock popup is
       // gone, and the background raises a toolbar marker instead.
@@ -348,20 +344,7 @@ export class NostrRpcHandler implements RpcModule {
       kind: event.kind,
     });
 
-    console.log(
-      "[NostrRpcHandler] Policy result for",
-      message.origin,
-      "kind",
-      event.kind,
-      ":",
-      policyResult
-    );
-
     if (policyResult.mode === "deny") {
-      console.log(
-        "[NostrRpcHandler] Policy denied request. Reason:",
-        policyResult.reason
-      );
 
       // If policy denied due to lock state mismatch, return LOCKED error instead
       if (policyResult.reason === "locked") {
@@ -402,10 +385,6 @@ export class NostrRpcHandler implements RpcModule {
         });
       }
 
-      console.log(
-        "[NostrRpcHandler] Policy requires approval, opening popup..."
-      );
-
       try {
         // Compute event ID for de-duplication
         const eventIdHash = computeEventId(NobleSha256, {
@@ -415,13 +394,6 @@ export class NostrRpcHandler implements RpcModule {
           tags: event.tags,
           content: event.content,
         });
-
-        console.log(
-          `[NostrRpcHandler] Computed event ID hash: ${eventIdHash.substring(
-            0,
-            16
-          )}...`
-        );
 
         // Wait for user approval
         const decision = await this.requestApproval(
@@ -607,10 +579,6 @@ export class NostrRpcHandler implements RpcModule {
         origin,
         event,
         (decision: ApprovalDecision, _action: ApprovalAction) => {
-          console.log(
-            "[NostrRpcHandler] Request resolved with decision:",
-            decision
-          );
 
           // Check if this was a timeout
           if (
@@ -627,11 +595,6 @@ export class NostrRpcHandler implements RpcModule {
         // dialog cannot show a different one if the user switches keys while
         // the prompt is open.
         { signingPubkey: pubkey, clientRequestId }
-      );
-
-      console.log(
-        "[NostrRpcHandler] Queued approval request:",
-        pendingRequest.id
       );
 
       // Open approval popup
@@ -653,27 +616,15 @@ export class NostrRpcHandler implements RpcModule {
    * @param requestId - The ID of the pending request
    */
   private async openApprovalPopup(requestId: string): Promise<void> {
-    console.log(
-      `[NostrRpcHandler] Opening/focusing approval window for request ${requestId}`
-    );
-    console.log(
-      "[NostrRpcHandler] windowManager available:",
-      !!this.windowManager
-    );
 
     try {
       let windowId: number | undefined;
 
       if (this.windowManager) {
         // Use window manager callback to focus/create window (may return undefined in sidepanel mode)
-        console.log("[NostrRpcHandler] Calling windowManager...");
         windowId = await this.windowManager();
-        console.log("[NostrRpcHandler] windowManager returned:", windowId);
       } else {
         // Fallback: Create new popup window (old behavior)
-        console.log(
-          "[NostrRpcHandler] No windowManager, creating popup directly"
-        );
         const approvalUrl = browser.runtime.getURL(
           `/approval.html?requestId=${encodeURIComponent(
             requestId
@@ -697,18 +648,12 @@ export class NostrRpcHandler implements RpcModule {
 
       // If windowId is undefined, we're in sidepanel mode and the message was sent to switch tabs
       if (windowId === undefined) {
-        console.log(
-          "[NostrRpcHandler] Sidepanel mode - message sent to switch to Activity tab"
-        );
         return;
       }
 
       // Update badge with pending count
       await this.updateBadgeCount();
 
-      console.log(
-        `[NostrRpcHandler] Approval window ready, window id: ${windowId}`
-      );
     } catch (err) {
       console.error("[NostrRpcHandler] Failed to open approval popup:", err);
 

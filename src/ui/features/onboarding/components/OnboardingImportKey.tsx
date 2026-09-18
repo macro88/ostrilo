@@ -277,7 +277,7 @@ export function OnboardingImportKey({
         });
         return false;
       }
-    } catch (error) {
+    } catch {
       dispatch({
         type: "setPasswordError",
         value: "Could not validate password strength",

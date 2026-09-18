@@ -3,8 +3,6 @@ import {
   getSettings as rpcGetSettings,
   updateSettings as rpcUpdateSettings,
   subscribeSettingsChanged,
-} from "@/infrastructure/messaging/client";
-import {
   policySetOrigin,
   policySetKindRule,
   policyClearSession,
@@ -101,7 +99,7 @@ export function useAppSettings() {
 
   // Merge defaults with stored to ensure new fields exist (simple migration)
   const settings = useMemo<AppSettingsV1>(
-    () => ({ ...DEFAULT_SETTINGS_V1, ...(rawSettings ?? {}) }),
+    () => ({ ...DEFAULT_SETTINGS_V1, ...rawSettings }),
     [rawSettings]
   );
 

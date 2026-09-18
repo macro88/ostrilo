@@ -52,7 +52,6 @@ export class PolicyRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "policy.evaluate" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
@@ -61,7 +60,6 @@ export class PolicyRpcHandler implements RpcModule {
       });
     }
 
-    // Validate event kind
     const kindValidation = EventKindSchema.safeParse(message.kind);
     if (!kindValidation.success) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
@@ -81,7 +79,6 @@ export class PolicyRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "policy.setOrigin" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
@@ -90,7 +87,6 @@ export class PolicyRpcHandler implements RpcModule {
       });
     }
 
-    // Validate patch data
     const validationResult = validateOriginPolicyPatch(message.patch);
     if (!validationResult.success) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
@@ -121,7 +117,6 @@ export class PolicyRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "policy.setKindRule" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
@@ -130,7 +125,6 @@ export class PolicyRpcHandler implements RpcModule {
       });
     }
 
-    // Validate event kind
     const kindValidation = EventKindSchema.safeParse(message.kind);
     if (!kindValidation.success) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
@@ -171,7 +165,6 @@ export class PolicyRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "policy.clearSession" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
@@ -188,7 +181,6 @@ export class PolicyRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "policy.setSession" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
@@ -216,7 +208,6 @@ export class PolicyRpcHandler implements RpcModule {
     message: Extract<RpcRequest, { type: "policy.removeOrigin" }>,
     context: ServiceContext
   ): Promise<RpcResponse> {
-    // Validate origin
     const originValidation = OriginSchema.safeParse(message.origin);
     if (!originValidation.success) {
       return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {

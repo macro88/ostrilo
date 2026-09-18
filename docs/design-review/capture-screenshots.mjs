@@ -131,11 +131,13 @@ async function captureTabs(page, tabs) {
   await captureNext(0);
 }
 
+// aislop-ignore-next-line security/hardcoded-secret -- throwaway passphrase for a local screenshot vault that is created and discarded by this script. It unlocks nothing that exists outside this run.
 const PASSWORD = "CorrectHorseBatteryStaple!2026";
 
 /** Privileged RPC from an extension page; throws on an error envelope. */
 async function rpc(page, message) {
   const response = await page.evaluate(
+    // aislop-ignore-next-line eslint/no-undef -- runs in the page's browser context via page.evaluate, not in Node; `chrome` is defined there.
     (m) => chrome.runtime.sendMessage(m),
     message
   );
@@ -194,6 +196,7 @@ const HEX64 = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
 
 async function getPendingCount(page) {
   const countResult = await page.evaluate(() =>
+    // aislop-ignore-next-line eslint/no-undef -- runs in the page's browser context via page.evaluate, not in Node; `chrome` is defined there.
     chrome.runtime.sendMessage({ type: "approval.count" })
   );
   return countResult?.data?.count ?? 0;

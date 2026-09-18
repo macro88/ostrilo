@@ -115,7 +115,6 @@ export class NostrRelayAdapter implements INostrRelay {
           this.isConnecting = false;
           this.reconnectAttempts = 0;
           this.gaveUpReconnecting = false;
-          console.log(`Connected to relay: ${this.relayUrl}`);
           resolve();
         };
 
@@ -131,7 +130,6 @@ export class NostrRelayAdapter implements INostrRelay {
         };
 
         this.ws.onclose = () => {
-          console.log(`Disconnected from relay: ${this.relayUrl}`);
           this.handleDisconnect();
         };
       } catch (error) {
@@ -363,8 +361,6 @@ export class NostrRelayAdapter implements INostrRelay {
       base * (1 + Math.random() * RELAY_BOUNDS.RECONNECT_JITTER_RATIO)
     );
     this.reconnectAttempts++;
-
-    console.log(`Reconnecting to ${this.relayUrl} in ${delay}ms...`);
 
     this.reconnectTimeout = setTimeout(async () => {
       this.reconnectTimeout = null;
