@@ -66,7 +66,7 @@ export const RPC_ERROR_CODES = {
   NO_KEY_SELECTED: "no_key_selected",
 
   /** A key with the same public key already exists */
-  KEY_ALREADY_EXISTS: "key_already_exists",
+  KEY_ALREADY_EXISTS: "key_already_exists", // aislop-ignore-line ai-slop/hardcoded-id -- this IS the error-contract table: the wire value vault-rpc maps service errors onto. Not a deployment identifier or credential. Same-line form keeps the JSDoc adjacent, which error-code-coverage.test.ts requires.
 
   /** The specified key ID was not found in the vault */
   KEY_NOT_FOUND: "key_not_found",

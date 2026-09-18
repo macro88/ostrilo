@@ -1,5 +1,6 @@
 import {
   Authorisation,
+  NostrEventKindAuthorisation,
   OriginPolicy,
   PolicyOutput,
 } from "@/domain/types";
@@ -212,11 +213,8 @@ export class PolicyService {
     const idx = origins.findIndex((o) => o.origin === origin);
     const now = Math.floor(Date.now() / 1000);
     if (idx >= 0) {
-      const rules = { ...origins[idx].rules } as Record<
-        number,
-        Authorisation
-      > as any;
-      (rules as any)[kind] = mode;
+      const rules: NostrEventKindAuthorisation = { ...origins[idx].rules };
+      rules[kind] = mode;
       origins[idx] = { ...origins[idx], rules, updatedAt: now };
     } else {
       // A remembered decision grants exactly the decision the user made. It
@@ -225,7 +223,7 @@ export class PolicyService {
       origins.push({
         origin,
         trustLevel: "low",
-        rules: { [kind]: mode } as any,
+        rules: { [kind]: mode },
         updatedAt: now,
       });
     }

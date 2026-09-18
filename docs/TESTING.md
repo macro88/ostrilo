@@ -6,10 +6,10 @@ Ostrilo uses a comprehensive testing strategy with multiple layers of validation
 
 ## Test Coverage Status
 
-The numbers below are what the runners actually collected on 2026-09-13, at the
-end of the security-test-assurance work. They are a snapshot, not a contract:
-suites are being added continuously, so re-run the commands rather than
-trusting a figure in a document.
+Run the commands below to get the current figures. Suites are added
+continuously, so any number written into this document is a snapshot that
+starts rotting the moment it is committed - re-run the commands rather than
+trusting a figure here.
 
 ```bash
 pnpm test                     # Vitest: unit + integration + security
@@ -32,30 +32,30 @@ reality; the commands above are now the source of truth.
 
 ```
 tests/
-├── unit/                    # 28 files, 386 tests
+├── unit/                    # services, domain, infrastructure, UI
 │   ├── application/         # Services: key vault, policy, approvals, profile
 │   ├── domain/              # Crypto utilities, NIP-01 events, validation
 │   ├── infrastructure/      # Adapters, RPC handlers, schema validation
 │   └── ui/                  # Components, hooks, theme, accessibility
-├── integration/             # 7 files, 36 tests - cross-layer workflows
-├── security/                # 6 files, 133 tests - see below
+├── integration/             # cross-layer workflows
+├── security/                # see below
 └── e2e/                     # Playwright, one spec per journey
 ```
 
 ## Test Categories
 
-### Unit Tests (28 files, 386 tests)
+### Unit Tests
 
 Application, domain, infrastructure, and UI layers. Service tests wire real
 implementations to an in-memory storage adapter rather than mocking the service
 under test.
 
-### Integration Tests (7 files, 36 tests)
+### Integration Tests
 
 Cross-layer workflows: key vault with settings, policy with key vault, the RPC
 request path end to end, relay management, and the activity log.
 
-### Security Tests (6 files, 133 tests)
+### Security Tests
 
 The governing rule for this directory: **a security test must be able to fail
 for the right reason**. A test may never mock the unit whose behavior it
@@ -63,7 +63,7 @@ claims to verify, and an assertion must observe an effect rather than an
 invocation. `expect(zeroizeSpy).toHaveBeenCalled()` is satisfied by a `zeroize`
 that does nothing; reading the bytes is not.
 
-**`entropy.test.ts` (20 tests)** - key generation entropy, in three parts of
+**`entropy.test.ts`** - key generation entropy, in three parts of
 deliberately different strength, each labelled as such in the file:
 
 - _Known-answer tests._ PBKDF2-HMAC-SHA256 at the shipped parameters
@@ -88,7 +88,7 @@ The case this replaced, "generates cryptographically secure private keys",
 generated three keys and asserted only that they differed and were 64 hex
 characters. A counter returning 1, 2, 3 passes that.
 
-**`test-seam-safety.test.ts` (10 tests)** - locks down the fact that the test
+**`test-seam-safety.test.ts`** - locks down the fact that the test
 harness cannot weaken production crypto. It asserts that `vitest.setup.ts`
 writes `globalThis.crypto` only inside its missing-subtle guard (the guard
 condition is lifted out of the file and evaluated against sentinel globals, so
@@ -98,19 +98,19 @@ appears, and - by scanning every file under `src/` - that production code
 cannot import `vitest.setup.ts`, anything under `tests/`, or a test-only crypto
 shim.
 
-**`memory-zeroization.test.ts` (13 tests)** - zeroization verified by retaining
+**`memory-zeroization.test.ts`** - zeroization verified by retaining
 the underlying byte storage of each sensitive buffer and reading it after the
 operation, on success and failure paths alike.
 
-**`crypto-security.test.ts` (13 tests)** - salt and IV uniqueness, signature
+**`crypto-security.test.ts`** - salt and IV uniqueness, signature
 behavior across keys and messages, password handling, lock-state behavior,
 input validation, and encryption at rest.
 
-**`policy-invariants.test.ts` (7 tests)** - named regression tests for the
+**`policy-invariants.test.ts`** - named regression tests for the
 consent and trust policy guards, each with a failure message naming the
 protection that was removed.
 
-**`bip340-vectors.test.ts` (70 tests)** - the official BIP-340 Schnorr vector
+**`bip340-vectors.test.ts`** - the official BIP-340 Schnorr vector
 file from `bitcoin/bips`, run verbatim through Ostrilo's own verification and
 signing paths. Known-answer tests from outside this codebase are the only kind
 that can catch a wrong-but-consistent implementation.

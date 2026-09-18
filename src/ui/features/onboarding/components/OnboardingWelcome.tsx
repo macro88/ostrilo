@@ -7,11 +7,10 @@ interface OnboardingWelcomeProps {
 }
 
 /**
- * Two ways in, each one tap. There used to be a select-a-card step and a
- * Continue button underneath; a two-way choice does not need a confirmation,
- * and the confirmation was the only notched control on the screen. The notch
- * now sits on "Create New Key" - the path a first-run user almost always
- * takes and therefore the screen's single primary action (DESIGN_RULES §5) -
+ * Two ways in, each one tap: a two-way choice needs no confirmation step.
+ *
+ * The notch sits on "Create New Key" - the path a first-run user almost always
+ * takes, and therefore the screen's single primary action (DESIGN_RULES §5) -
  * while "Import Existing Key" is a hairline row.
  */
 export function OnboardingWelcome({

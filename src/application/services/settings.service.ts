@@ -4,6 +4,7 @@ import {
   AUTO_LOCK_BOUNDS,
   DEFAULT_RELAY_URLS,
   normalizeAutoLockMinutes,
+  type OriginPolicy,
   type AppSettingsV1,
   type Theme,
 } from "@/domain/types";
@@ -114,7 +115,7 @@ export class SettingsService {
         return sanitized.length > 0 ? sanitized : d.relays;
       })(),
       origins: Array.isArray(existing?.origins)
-        ? (existing!.origins as any)
+        ? (existing.origins as OriginPolicy[])
         : d.origins,
       mediumAllowKinds: Array.isArray(existing?.mediumAllowKinds)
         ? (existing!.mediumAllowKinds as number[])

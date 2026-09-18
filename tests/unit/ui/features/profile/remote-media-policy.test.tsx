@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { ProfileSummary } from "@/ui/features/profile/components/ProfileSummary";
 import { ImageUploadField } from "@/ui/features/profile/components/ImageUploadField";
+import { RemoteUrlField } from "@/ui/features/profile/components/RemoteUrlField";
 import { KeySelectorCard } from "@/ui/features/settings/components/shared/KeySelectorCard";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -307,4 +308,132 @@ describe("identity surfaces carry no remote image sources", () => {
       expect(code).not.toMatch(/backgroundImage/);
     }
   );
+});
+
+/**
+ * The render boundary, asserted on rendered output rather than on
+ * `isAllowedRemoteUrl` directly - the predicate has its own tests in
+ * `tests/unit/domain/profile-metadata-bounds.test.ts`. What is covered here is
+ * that `RemoteUrlField` applies the allowlist at the point of rendering,
+ * independently of whatever validation the value already passed.
+ *
+ * This is defense in depth behind `validateProfileMetadata`, not a substitute
+ * for it: a profile cached before the allowlist existed can still carry an
+ * `http:` picture, and reaching a render path is not evidence that a value was
+ * validated.
+ */
+describe("RemoteUrlField applies the https allowlist at the render boundary", () => {
+  const REJECTED = [
+    ["an http: URL", "http://relay-chosen-host.example/avatar.png"],
+    ["a javascript: URL", "javascript:alert(1)"],
+    ["a data: URL", "data:text/html,<script>alert(1)</script>"],
+    ["a file: URL", "file:///etc/passwd"],
+  ] as const;
+
+  function addRow(container: HTMLElement) {
+    return container.querySelector('button[aria-label="Add Picture URL"]');
+  }
+
+  it.each(REJECTED)(
+    "presents %s as an empty field, with no affordance and no leaked text",
+    (_name, value) => {
+      const container = render(
+        <RemoteUrlField
+          label="Picture URL"
+          value={value}
+          onAdd={vi.fn()}
+          openLabel="Open picture in a new tab"
+        />
+      );
+
+      // The empty-field control that invites the user to add a value.
+      expect(addRow(container)).not.toBeNull();
+
+      // The value must not be recoverable from the rendered output.
+      expect(container.textContent).not.toContain(value);
+      expect(container.innerHTML).not.toContain(value);
+
+      expect(
+        container.querySelector('button[aria-label="Copy Picture URL"]')
+      ).toBeNull();
+      expect(
+        container.querySelector('button[aria-label="Open picture in a new tab"]')
+      ).toBeNull();
+    }
+  );
+
+  it("renders a rejected value and a genuinely empty field as the same control", () => {
+    const rejected = render(
+      <RemoteUrlField
+        label="Picture URL"
+        value="http://relay-chosen-host.example/avatar.png"
+        onAdd={vi.fn()}
+      />
+    );
+    const empty = render(
+      <RemoteUrlField label="Picture URL" value="" onAdd={vi.fn()} />
+    );
+
+    // Neither exposes an inspection affordance...
+    for (const container of [rejected, empty]) {
+      expect(addRow(container)).not.toBeNull();
+      expect(container.querySelectorAll("button")).toHaveLength(1);
+    }
+
+    // ...and they are indistinguishable in the output, which is the point: the
+    // rejected value leaks nothing, while the field stays one the user may fill.
+    expect(rejected.innerHTML).toBe(empty.innerHTML);
+  });
+
+  it("opens no tab for a value that fails the allowlist", () => {
+    const openSpy = vi
+      .spyOn(window, "open")
+      .mockImplementation(() => null as unknown as Window);
+
+    const container = render(
+      <RemoteUrlField
+        label="Picture URL"
+        value="javascript:alert(1)"
+        onAdd={vi.fn()}
+        openLabel="Open picture in a new tab"
+      />
+    );
+
+    // There is no open control to press, so the only control the field renders
+    // is the one that must NOT navigate.
+    const controls = container.querySelectorAll("button");
+    expect(controls).toHaveLength(1);
+    for (const control of controls) click(control);
+
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps monospace text and both controls for an https value", () => {
+    const value = "https://relay-chosen-host.example/avatar.png";
+    const container = render(
+      <RemoteUrlField
+        label="Picture URL"
+        value={value}
+        onAdd={vi.fn()}
+        openLabel="Open picture in a new tab"
+      />
+    );
+
+    expect(addRow(container)).toBeNull();
+
+    const mono = Array.from(container.querySelectorAll(".font-mono")).find(
+      (node) => node.textContent === value
+    );
+    expect(mono).toBeDefined();
+
+    expect(
+      container.querySelector('button[aria-label="Copy Picture URL"]')
+    ).not.toBeNull();
+    expect(
+      container.querySelector('button[aria-label="Open picture in a new tab"]')
+    ).not.toBeNull();
+
+    // Still no fetch of the remote host to render the row.
+    expect(remoteSources(container)).toEqual([]);
+  });
 });

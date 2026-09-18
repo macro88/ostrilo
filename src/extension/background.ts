@@ -50,19 +50,6 @@ let approvalWindowId: number | null = null;
 let approvalWindowOperation: Promise<number | undefined> | null = null;
 
 /**
- * Delegates to the shared sanitizer rather than keeping a second copy.
- *
- * This function used to filter on `isValidRelayUrl` alone, with no count
- * bound, so a settings write could name any number of relays and every one
- * of them would learn every managed pubkey. `sanitizeRelayUrls` trims,
- * de-duplicates, rejects anything that is not a bare `wss:` URL, and bounds
- * the result. Kept as defence in depth: RelayManager sanitizes again.
- */
-function normalizeRelayUrls(relays: unknown): string[] {
-  return sanitizeRelayUrls(relays);
-}
-
-/**
  * Set when a signing request was refused because the vault is locked.
  *
  * This is the replacement for the page-triggered unlock popup: the user
@@ -254,7 +241,11 @@ export default defineBackground(() => {
   const relayManager = new RelayManager([]);
 
   const syncRelayManager = (relaySettings?: RelaySettings) => {
-    const relayUrls = normalizeRelayUrls(relaySettings?.relays);
+    // Sanitize before the relay list is used: an unbounded list means every
+    // named relay learns every managed pubkey. `sanitizeRelayUrls` trims,
+    // de-duplicates, rejects anything that is not a bare `wss:` URL, and
+    // bounds the count. RelayManager sanitizes again.
+    const relayUrls = sanitizeRelayUrls(relaySettings?.relays);
     relayManager.setRelayUrls(relayUrls).catch((err) => {
       console.warn("Failed to sync relay settings", err);
     });

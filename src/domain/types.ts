@@ -164,6 +164,7 @@ export interface AppSettingsV1 {
   mediumAllowKinds: number[]; // shipped default for medium trust
   /** Session-grant lifetime. Bounded by DEFAULT/MAX_SESSION_TTL_MINUTES. */
   sessionTTLMinutes: number;
+  // aislop-ignore-next-line ai-slop/meta-comment -- not build-plan narration: this records why the upload endpoint is undefined by default - an undefined endpoint means no outbound request. Deleting it invites a hardcoded third-party endpoint back.
   /**
    * Where profile image uploads are sent. Undefined by default, which is
    * the point: the field used to be a hardcoded `nostr.build` endpoint, so

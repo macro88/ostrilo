@@ -176,6 +176,7 @@ export const NobleSchnorr = {
     try {
       return schnorr.verify(signature, hash32, publicKey);
     } catch {
+      // aislop-ignore-next-line ai-slop/hidden-fallback -- `false` IS the verification answer for malformed input, not a fallback hiding a failure. The Schnorr port is a synchronous boolean and every caller is a trust boundary, so this must fail closed. Logging is omitted deliberately (the input arrives from untrusted relays) and throwing would break relay handling.
       return false;
     }
   },

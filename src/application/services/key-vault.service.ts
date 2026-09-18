@@ -322,7 +322,15 @@ export class KeyVaultService {
     }
 
     const { envelope, kek } = await this.createEnvelope(password);
-    await this.saveEnvelope(envelope);
+    // A catch, not a finally: the success path transfers ownership of this KEK
+    // to the caller, so clearing it unconditionally would break every write.
+    // Mirrors createEnvelope's own failure path directly above.
+    try {
+      await this.saveEnvelope(envelope);
+    } catch (e) {
+      zeroize(kek);
+      throw e;
+    }
     return { kek, kdf: envelope.kdf, created: true };
   }
 
@@ -332,8 +340,11 @@ export class KeyVaultService {
     }
 
     const { kek, kdf } = await this.kekForWrite(password);
-    const sk = this.randomBytes(32);
+    // Drawn inside the try: the KEK is already owned here, and the CSPRNG can
+    // throw. No catch - a catch could mask the platform's own error.
+    let sk: SecretBytes | null = null;
     try {
+      sk = this.randomBytes(32);
       const pub = await this.schnorr.getPublicKey(sk);
       const id = crypto.randomUUID();
       const pubkey = bytesToHex(pub);
@@ -366,7 +377,7 @@ export class KeyVaultService {
       return record;
     } finally {
       // zeroize private key material
-      zeroize(sk);
+      if (sk) zeroize(sk);
       zeroize(kek);
     }
   }
@@ -381,11 +392,15 @@ export class KeyVaultService {
     }
 
     const { kek, kdf } = await this.kekForWrite(password);
-    const sk = parsePrivateKey(this.bech32, input) as SecretBytes;
+    // Parsed inside the try: the KEK is already owned here, and a malformed
+    // input throws. No catch - a catch could mask the parser's own error.
+    let sk: SecretBytes | null = null;
     try {
+      sk = parsePrivateKey(this.bech32, input) as SecretBytes;
       const pub = await this.schnorr.getPublicKey(sk);
       const pubHex = bytesToHex(pub);
       const existing = (await this.listKeys()).find((k) => k.pubkey === pubHex);
+      // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract, not a deployment identifier or credential: vault-rpc matches this exact string and maps it to RPC_ERROR_CODES. Moving it to an environment variable would break the mapping.
       if (existing) throw new Error("key_already_exists");
       const id = crypto.randomUUID();
       const sealed = await this.sealPrivateKey(sk, kek, kdf, id, pubHex);
@@ -415,7 +430,7 @@ export class KeyVaultService {
       await this.saveKeys(next);
       return record;
     } finally {
-      zeroize(sk);
+      if (sk) zeroize(sk);
       zeroize(kek);
     }
   }
@@ -439,7 +454,7 @@ export class KeyVaultService {
       await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
         ...state,
         selectedKeyId: id,
-      } as any);
+      });
     }
   }
 
@@ -573,6 +588,7 @@ export class KeyVaultService {
     const legacyRecords = records.filter((r) => r.v === undefined && r.salt);
 
     if (!envelope && records.length === 0) {
+      // aislop-ignore-next-line ai-slop/meta-comment -- not build-plan narration: this records the security invariant that an empty vault must not open with any password. Deleting it invites the fail-open behavior back.
       // Previously this "succeeded" and marked the session unlocked without
       // verifying anything, so an empty vault opened with any password.
       throw new Error("vault_not_created");
@@ -644,7 +660,7 @@ export class KeyVaultService {
         isLocked: false,
         selectedKeyId,
         lastActivity: Date.now(),
-      } as any);
+      });
 
       await this.notifyUnlocked();
 
@@ -754,7 +770,7 @@ export class KeyVaultService {
       isLocked: true,
       selectedKeyId: undefined,
       lastActivity: Date.now(),
-    } as any);
+    });
     // Clear session grants on lock
     await this.storage.session.remove("sessionGrants");
     // Also clear any sessionGrantAll display flags in settings
@@ -762,11 +778,11 @@ export class KeyVaultService {
     if (settings?.origins?.length) {
       const next = {
         ...settings,
-        origins: settings.origins.map((o: any) => ({
+        origins: settings.origins.map((o) => ({
           ...o,
           sessionGrantAll: false,
         })),
-      } as any;
+      } satisfies AppSettingsV1;
       await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
       try {
         const { browser } = await import("wxt/browser");
@@ -790,6 +806,7 @@ export class KeyVaultService {
     }
   }
 
+  // aislop-ignore-next-line ai-slop/meta-comment -- not build-plan narration: this block documents why the lock gate FAILS CLOSED, including the identity leak a fail-open reading caused. Deleting it invites the regression back.
   /**
    * The single definition of "is the vault locked".
    *
@@ -884,6 +901,7 @@ export class KeyVaultService {
     const id = keyId ?? [...this.unlocked.keys()][0];
     if (!id) throw new Error("no_unlocked_key");
     const sk = this.unlocked.get(id);
+    // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract, not a deployment identifier or credential: vault-rpc matches this exact string and maps it to RPC_ERROR_CODES. Moving it to an environment variable would break the mapping.
     if (!sk) throw new Error("key_locked_or_missing");
     return { keyId: id, sk };
   }
@@ -937,6 +955,7 @@ export class KeyVaultService {
   }> {
     const eventId = computeEventId(this.hash, unsignedEvent);
 
+    // aislop-ignore-next-line ai-slop/meta-comment -- not build-plan narration: this records why there is a single Schnorr call site, an invariant a security test enforces. Deleting it invites a second signing path back into the domain layer.
     // Through `this.sign`, not a second Schnorr call. This method used to
     // call `signEventHash`, which reached `@noble/curves` directly from the
     // domain layer, so the same class signed two different ways and only one

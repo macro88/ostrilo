@@ -296,9 +296,9 @@ describe("RPC Router and Handlers", () => {
     });
 
     it("should handle crypto.evaluatePassword", async () => {
-      // No module mock here on purpose. The handler imports
-      // evaluatePasswordStrength from "@/domain/utils/validation", not
-      // from "@/domain/utils/crypto", so the doMock that used to sit here
+      // No module mock here on purpose. The handler dynamically imports
+      // checkPassword from "@/domain/utils/password-policy" (crypto-rpc.ts),
+      // not from "@/domain/utils/crypto", so the doMock that used to sit here
       // never affected this test - but it DID leak into later tests in
       // this file and break their dynamic imports. Use the real function.
       const message = {

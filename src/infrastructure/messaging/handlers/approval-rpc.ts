@@ -39,6 +39,7 @@ export class ApprovalRpcHandler implements RpcModule {
     message: RpcRequest,
     context: ServiceContext
   ): Promise<RpcResponse> {
+    const method = message.type;
     switch (message.type) {
       case "approval.getNext":
         return this.handleGetNext();
@@ -54,8 +55,8 @@ export class ApprovalRpcHandler implements RpcModule {
 
       default:
         return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
-          details: (message as any).type,
-          method: (message as any).type,
+          details: method,
+          method,
         });
     }
   }

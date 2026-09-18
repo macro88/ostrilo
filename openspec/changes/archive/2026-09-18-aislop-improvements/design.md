@@ -93,6 +93,29 @@ success path transfers ownership to the caller. This is the one place where an
 unconditional `finally` would be wrong, so it is written as a `catch { zeroize(kek); throw; }`
 mirroring `createEnvelope` directly above it.
 
+#### D1 result — bounded lifecycle review (task 2.7)
+
+Re-read at implementation time, after the three fixes landed. Scope held to
+`KeyVaultService` and its direct helpers, as specified. **All seven are already
+correct**; none needed a test or a fix.
+
+| Site | Shape | Verdict |
+| --- | --- | --- |
+| `openEnvelope` | `deriveKek` is itself the acquisition; `try { … } catch { zeroize(kek); … }`; success transfers ownership | correct — the model the `kekForWrite` fix copies |
+| `createEnvelope` | same shape, `catch { zeroize(kek); throw e; }` | correct |
+| `sealPrivateKey` | `dek = randomBytes(DEK_LENGTH)` is the last statement before `try`; unconditional `finally { zeroize(dek) }` | correct — the DEK is never handed out, so unconditional is right |
+| `openPrivateKey` | `dek = await aead.decrypt(…)` is the last statement before `try`; `finally { zeroize(dek) }`. A throw in `decrypt` means no DEK exists to leak | correct |
+| `unlock` | `let kek \| null = null` before the `try`, assigned inside; `saveEnvelope` on the legacy-migration branch is **inside** the `try`, so the outer `finally` already covers the window `kekForWrite` was missing | correct |
+| `revealKey` | `let kek/sk \| null = null` before the `try`, both assigned inside, `finally { if (sk) …; if (kek) … }` | correct |
+| `verifyPassword` | same null-guarded form | correct |
+
+The two `finally` blocks called out by line number in the tasks file are
+`verifyPassword`'s and `revealKey`'s; both already use the null-guarded idiom. The
+pattern that separates the three defective sites from these seven is narrow: a secret
+acquired on the line *before* `try`, with **fallible work** on that same line or
+between it and the `try`. The seven above either acquire as the last statement before
+the `try` (nothing can fail in the gap) or acquire inside it.
+
 ### D2 — Tests assert on owned buffers, and say which buffers are not theirs
 
 `tests/security/memory-zeroization.test.ts` already establishes the technique and
@@ -271,6 +294,16 @@ validation. **Verify per handler:** where a switch happens to be exhaustive over
 union, `message` narrows to `never` in `default` and needs a documented
 `never`-safe read instead — this must be confirmed by `pnpm run compile`, not assumed.
 
+**(a′) Found during implementation, NOT done here — `profile-rpc.ts`.** The triage
+above enumerates eight handlers. `profile-rpc.ts` has the identical
+`default`-branch pattern at `:30,31`, plus three `(message as any).params` reads at
+`:41,81,131` that are a different problem (an untyped params bag, not a redundant
+cast). It was missed when the eight were listed. The two `default`-branch casts are
+the same provably-unnecessary fix; the three `params` casts are not and would need
+their own triage. **Left untouched** so this change delivers exactly the 16 casts its
+tasks and acceptance criteria name. Recorded here as the first item for the
+follow-up, not as a silent scope extension.
+
 **(b) Missing boundary validation — `client.ts:37,77,78,81`.** `rpc()` asserts
 `browser.runtime.sendMessage`'s result into `RpcResponse | undefined`, then re-casts
 through `(res as any).ok`. The fix is the standards' rule: receive `unknown` and
@@ -409,6 +442,6 @@ changes only failure-path cleanup. Rollback is a revert of the relevant commit.
 
 ## Open Questions
 
-- **Does any handler's `switch` narrow `default` to `never`?** Resolved by `pnpm run compile` per handler during task 5, not by inspection.
+- ~~**Does any handler's `switch` narrow `default` to `never`?**~~ **Resolved: none does.** `pnpm run compile` was run after each of the eight handlers individually and was clean every time, so `message.type` is well typed in every `default` branch and no `never`-safe read was needed anywhere. Each handler switches on only its own namespace while the parameter is the whole `RpcRequest` union, which is why the union never narrows away.
 - **Is `evaluatePasswordStrength` in `domain/utils/validation.ts` wanted as a public contract with no production caller?** Needs the maintainer's intent; deferred rather than guessed (#29).
 - **Can the esbuild advisory be closed narrowly?** The lockfile already resolves `esbuild@0.28.2` for some consumers, which suggests a targeted resolution may work — but it needs both builds and the full suite verified before it is proposed (#34).

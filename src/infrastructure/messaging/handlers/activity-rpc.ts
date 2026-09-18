@@ -15,6 +15,7 @@ export class ActivityRpcHandler implements RpcModule {
     message: RpcRequest,
     context: ServiceContext
   ): Promise<RpcResponse> {
+    const method = message.type;
     switch (message.type) {
       case "activity.getRecent":
         return this.handleGetRecent(message, context);
@@ -27,8 +28,8 @@ export class ActivityRpcHandler implements RpcModule {
 
       default:
         return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
-          details: (message as any).type,
-          method: (message as any).type,
+          details: method,
+          method,
         });
     }
   }

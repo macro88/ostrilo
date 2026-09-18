@@ -49,6 +49,7 @@ export class VaultRpcHandler implements RpcModule {
     message: RpcRequest,
     context: ServiceContext
   ): Promise<RpcResponse> {
+    const method = message.type;
     switch (message.type) {
       case "vault.unlock":
         return this.handleUnlock(message, context);
@@ -79,8 +80,8 @@ export class VaultRpcHandler implements RpcModule {
 
       default:
         return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
-          details: (message as any).type,
-          method: (message as any).type,
+          details: method,
+          method,
         });
     }
   }
@@ -309,6 +310,7 @@ export class VaultRpcHandler implements RpcModule {
     } catch (error) {
       // Translate service errors to RPC codes
       if (error instanceof Error) {
+        // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract: the service error string this branch maps to RPC_ERROR_CODES.KEY_ALREADY_EXISTS. Not a deployment identifier or credential.
         if (error.message === "key_already_exists") {
           return createRpcErrorResponse(RPC_ERROR_CODES.KEY_ALREADY_EXISTS, {
             details: "A key with this public key already exists",

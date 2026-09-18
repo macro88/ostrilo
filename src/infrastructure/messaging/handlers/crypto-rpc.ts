@@ -15,6 +15,7 @@ export class CryptoRpcHandler implements RpcModule {
     message: RpcRequest,
     _context: ServiceContext
   ): Promise<RpcResponse> {
+    const method = message.type;
     switch (message.type) {
       case "crypto.evaluatePassword":
         return this.handleEvaluatePassword(message);
@@ -24,8 +25,8 @@ export class CryptoRpcHandler implements RpcModule {
 
       default:
         return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
-          details: (message as any).type,
-          method: (message as any).type,
+          details: method,
+          method,
         });
     }
   }

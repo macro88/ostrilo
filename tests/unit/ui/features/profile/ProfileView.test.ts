@@ -2,11 +2,21 @@ import { describe, it, expect } from "vitest";
 import type { ProfileMetadata } from "@/domain/profile/types";
 
 /**
- * Unit tests for ProfileView component logic
- * 
- * Note: These tests validate the component's logic and data transformations
- * without rendering the full React component. This follows the pattern established
- * in other UI tests which focus on logic over rendering.
+ * Specification of the display rules ProfileView applies to profile metadata:
+ * the name and bio fallback chains, the drop-empty-and-trim pass on save, and
+ * the character-count thresholds.
+ *
+ * These tests import no executable production code - they restate the
+ * expressions rather than calling them, so they pin *intended* behavior and
+ * cannot catch a regression in `ProfileView` itself. Read them as a spec
+ * awaiting a real render test, not as coverage.
+ *
+ * This is NOT the pattern to follow. For assertions about what a profile
+ * surface actually renders, see
+ * `tests/unit/ui/features/profile/remote-media-policy.test.tsx`, which mounts
+ * the component in jsdom and asserts on the rendered output. New tests here
+ * should move in that direction; the seven tests removed from this file were
+ * ones whose assertions only re-evaluated literals they had just assigned.
  */
 
 describe("ProfileView component logic", () => {
@@ -86,47 +96,6 @@ describe("ProfileView component logic", () => {
     });
   });
 
-  describe("Display mode - Loading state", () => {
-    it("should show loading when fetching profile", () => {
-      const loading = true;
-      const profile = null;
-
-      expect(loading).toBe(true);
-      expect(profile).toBeNull();
-    });
-
-    it("should show profile when loaded", () => {
-      const loading = false;
-      const profile: ProfileMetadata = {
-        name: "Alice",
-        about: "Test bio",
-      };
-
-      expect(loading).toBe(false);
-      expect(profile).not.toBeNull();
-    });
-  });
-
-  describe("Display mode - Error state", () => {
-    it("should show error message when fetch fails", () => {
-      const error = "Failed to fetch profile from relay";
-      const profile = null;
-
-      expect(error).toBeDefined();
-      expect(profile).toBeNull();
-    });
-
-    it("should allow retry after error", () => {
-      let retryCount = 0;
-      const retry = () => {
-        retryCount++;
-      };
-
-      retry();
-      expect(retryCount).toBe(1);
-    });
-  });
-
   describe("Edit mode - Form initialization", () => {
     it("should initialize form data from profile when entering edit mode", () => {
       const profile: ProfileMetadata = {
@@ -197,41 +166,6 @@ describe("ProfileView component logic", () => {
       expect(invalidAbout.length).toBeGreaterThan(500);
     });
 
-    it("should validate URL format", () => {
-      const validUrls = [
-        "https://example.com",
-        "http://test.com/path",
-        "https://example.com:8080",
-      ];
-
-      const invalidUrls = [
-        "not a url",
-        "javascript:alert('xss')",
-        "ftp://example.com",
-      ];
-
-      // Basic URL validation logic
-      for (const url of validUrls) {
-        try {
-          new URL(url);
-          expect(true).toBe(true);
-        } catch {
-          expect(false).toBe(true); // Should not throw
-        }
-      }
-
-      for (const url of invalidUrls) {
-        try {
-          new URL(url);
-          // javascript: protocol is valid for URL constructor
-          if (url.startsWith("javascript:")) {
-            expect(true).toBe(true);
-          }
-        } catch {
-          expect(true).toBe(true); // Should throw for invalid URLs
-        }
-      }
-    });
   });
 
   describe("Edit mode - Form submission", () => {
@@ -296,20 +230,6 @@ describe("ProfileView component logic", () => {
     });
   });
 
-  describe("Edit mode - Save success", () => {
-    it("should return to display mode after successful save", () => {
-      let isEditing = true;
-      let saveError: string | null = null;
-
-      // Simulate successful save
-      isEditing = false;
-      saveError = null;
-
-      expect(isEditing).toBe(false);
-      expect(saveError).toBeNull();
-    });
-  });
-
   describe("Edit mode - Save error", () => {
     it("should show error message and remain in edit mode on failure", () => {
       let isEditing = true;
@@ -332,17 +252,6 @@ describe("ProfileView component logic", () => {
       saveError = error instanceof Error ? error.message : "Failed to save profile";
 
       expect(saveError).toBe("Failed to save profile");
-    });
-  });
-
-  describe("Manual refresh behavior", () => {
-    it("should force fetch profile data bypassing cache", () => {
-      let forceFetch = false;
-
-      // Logic from handleRefresh
-      forceFetch = true;
-
-      expect(forceFetch).toBe(true);
     });
   });
 

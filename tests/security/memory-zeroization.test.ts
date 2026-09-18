@@ -340,6 +340,122 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
     });
   });
 
+  /**
+   * The window between a secret being successfully acquired and the operation's
+   * main body starting.
+   *
+   * The `generateKey` rejection test directly above induces its failure in
+   * `schnorr.getPublicKey`, which is INSIDE the operation's `try`. A cleanup
+   * block that begins after acquisition satisfies it while still leaking the
+   * acquired KEK, so it cannot cover this window - these cases can.
+   *
+   * Every assertion here is on a buffer the operation OWNS: the KEK the KDF
+   * handed it, and the 32-byte private-key draw. `generateKey` and `importKey`
+   * do not unlock, so nothing is transferred to `this.unlocked` on these paths
+   * and there is no intentionally-retained buffer to exempt. Do not widen these
+   * to "every buffer reads zero" - an unlocked vault deliberately keeps
+   * decrypted private keys live, which the `lock` test above covers instead.
+   */
+  describe("cleanup begins at acquisition, not at the operation body", () => {
+    it("zeroizes the KEK when importKey's parser rejects the input", async () => {
+      const { svc } = service();
+      // Seed the envelope so the KEK under test is the one importKey derives,
+      // not one created by the same call.
+      await svc.generateKey("pw", "seed");
+      derivedKeys.length = 0;
+
+      await expect(svc.importKey("not-a-valid-nsec", "pw")).rejects.toThrow(
+        "invalid_private_key_format"
+      );
+
+      expect(derivedKeys.length).toBeGreaterThanOrEqual(1);
+      for (const d of derivedKeys) {
+        expect(
+          d.isAllPattern(NON_ZERO_PATTERN),
+          "guard against a trivial pass: the KEK must have held bytes at handoff"
+        ).toBe(false);
+        expect(
+          d.isAllZero(),
+          "importKey acquired the KEK, then let the parser throw outside its cleanup"
+        ).toBe(true);
+      }
+    });
+
+    it("zeroizes the KEK when the RNG throws on generateKey's private-key draw", async () => {
+      const { svc } = service();
+
+      // Throw ONLY on the private-key draw. `randomBytes` is also the single
+      // CSPRNG entry point for the KDF salt (16 bytes) and the IVs (12), so an
+      // ungated stub would fail this test for an unrelated reason. Gating on
+      // "32 bytes, after the KEK exists" names the private key unambiguously:
+      // the DEK is also 32 bytes but is drawn inside `sealPrivateKey`, which
+      // runs later and inside the operation's `try`.
+      const real = globalThis.crypto.getRandomValues.bind(globalThis.crypto);
+      vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation(
+        (<T extends ArrayBufferView | null>(arr: T): T => {
+          if (
+            arr instanceof Uint8Array &&
+            arr.byteLength === 32 &&
+            derivedKeys.length >= 1
+          ) {
+            throw new Error("rng_unavailable");
+          }
+          return real(arr as never) as T;
+        }) as typeof globalThis.crypto.getRandomValues
+      );
+
+      await expect(svc.generateKey("pw", "label")).rejects.toThrow(
+        "rng_unavailable"
+      );
+
+      expect(derivedKeys.length).toBeGreaterThanOrEqual(1);
+      for (const d of derivedKeys) {
+        expect(d.isAllPattern(NON_ZERO_PATTERN)).toBe(false);
+        expect(
+          d.isAllZero(),
+          "generateKey acquired the KEK, then drew the private key outside its cleanup"
+        ).toBe(true);
+      }
+    });
+
+    it("zeroizes the KEK when persisting a newly created envelope fails", async () => {
+      // A vault with no envelope, so the write creates one: `createEnvelope`
+      // succeeds and hands out a live KEK, then `saveEnvelope` rejects.
+      const { suite } = memoryStorage();
+      const failingSuite = {
+        ...suite,
+        local: {
+          ...suite.local,
+          async set<T>(key: string, value: T): Promise<void> {
+            if (key === "vaultEnvelope") throw new Error("storage_write_failed");
+            await suite.local.set<T>(key, value);
+          },
+        },
+      };
+      const svc = new KeyVaultService(
+        failingSuite as never,
+        fakeAead() as never,
+        fakeKdf() as never,
+        fakeSchnorr as never,
+        NobleSha256,
+        ScureBech32
+      );
+
+      await expect(svc.generateKey("pw", "k1")).rejects.toThrow(
+        "storage_write_failed"
+      );
+
+      expect(derivedKeys.length).toBeGreaterThanOrEqual(1);
+      for (const d of derivedKeys) {
+        expect(d.isAllPattern(NON_ZERO_PATTERN)).toBe(false);
+        expect(
+          d.isAllZero(),
+          "kekForWrite created the envelope, then persisted it outside its cleanup"
+        ).toBe(true);
+      }
+    });
+  });
+
   describe("encryptPrivateKey and revealKey", () => {
     it("zeroizes the derived key on the import path", async () => {
       const { svc } = service();

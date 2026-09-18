@@ -11,6 +11,7 @@ export class StateRpcHandler implements RpcModule {
     message: RpcRequest,
     context: ServiceContext
   ): Promise<RpcResponse> {
+    const method = message.type;
     switch (message.type) {
       case "state.getLock":
         return this.handleGetLock(context);
@@ -20,8 +21,8 @@ export class StateRpcHandler implements RpcModule {
 
       default:
         return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
-          details: (message as any).type,
-          method: (message as any).type,
+          details: method,
+          method,
         });
     }
   }

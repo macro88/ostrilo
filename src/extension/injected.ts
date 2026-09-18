@@ -225,6 +225,7 @@ export default defineUnlistedScript(() => {
       configurable: false,
       enumerable: true,
     });
+  // aislop-ignore-next-line ai-slop/silent-recovery -- reaching this catch means another extension defined a non-configurable `window.nostr` between the `in` check and here. Leaving it alone is the correct behavior: replacing it would hijack the user's chosen signer, and throwing would throw into the page. The caught value comes from the untrusted page realm and is deliberately not logged; a fixed warning string is emitted instead.
   } catch {
     // Already non-configurable, defined by something else between the `in`
     // check and here. Leave it alone rather than throwing into the page.

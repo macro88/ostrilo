@@ -7,6 +7,7 @@ import {
   policySetKindRule,
   policyClearSession,
   policyRemoveOrigin,
+  activityClear,
 } from "@/infrastructure/messaging/client";
 import {
   AppSettingsV1,
@@ -17,7 +18,6 @@ import {
 } from "@/domain/types";
 import { getEffectiveMediumAllowKinds } from "@/domain/policy/trust-definitions";
 import type { AppSettingsPatch } from "@/infrastructure/validation/schemas";
-import { activityClear } from "@/infrastructure/messaging/client";
 
 // Global settings store to prevent multiple fetches
 class SettingsStore {

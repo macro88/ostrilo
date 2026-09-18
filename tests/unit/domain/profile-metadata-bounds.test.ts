@@ -21,11 +21,13 @@ describe("remote URL allowlist", () => {
     expect(isAllowedRemoteUrl("file:///etc/passwd")).toBe(false);
     expect(isAllowedRemoteUrl("ws://example.com")).toBe(false);
     expect(isAllowedRemoteUrl("wss://example.com")).toBe(false);
+    expect(isAllowedRemoteUrl("ftp://example.com")).toBe(false);
   });
 
   it("rejects relative URLs and over-long values", () => {
     expect(isAllowedRemoteUrl("/relative/path.png")).toBe(false);
     expect(isAllowedRemoteUrl("example.com/a.png")).toBe(false);
+    expect(isAllowedRemoteUrl("not a url")).toBe(false);
     expect(isAllowedRemoteUrl("")).toBe(false);
     expect(isAllowedRemoteUrl(undefined)).toBe(false);
     expect(isAllowedRemoteUrl(42)).toBe(false);

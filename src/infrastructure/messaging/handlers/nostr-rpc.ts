@@ -38,6 +38,7 @@ const APPROVAL_BADGE_COLOR = "#5f50a0";
  * message went out on a wire a web page can read.
  */
 export const VAULT_LOCKED_ERRORS: readonly string[] = [
+  // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract: the service error string this handler recognises as "vault is locked". Not a deployment identifier or credential.
   "key_locked_or_missing",
   "no_unlocked_key",
 ];
@@ -56,6 +57,7 @@ export class NostrRpcHandler implements RpcModule {
     message: RpcRequest,
     context: ServiceContext
   ): Promise<RpcResponse> {
+    const method = message.type;
     switch (message.type) {
       case "nostr.getPublicKey":
         return this.handleGetPublicKey(message, context);
@@ -68,8 +70,8 @@ export class NostrRpcHandler implements RpcModule {
 
       default:
         return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
-          details: (message as any).type,
-          method: (message as any).type,
+          details: method,
+          method,
         });
     }
   }

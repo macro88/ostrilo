@@ -159,10 +159,14 @@ interface KeyManagerProviderProps {
 export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialising, setIsInitialising] = useState(true);
-  const [lockState, setLockState] = useState<UILockState>({
+  // Lazy initializer: `Date.now()` is impure, so the eager form re-ran it on
+  // every render to produce a value useState discards after mount. Evaluated
+  // once, at mount - which is the only point this timestamp is read, since the
+  // effect below overwrites `lastActivity` as soon as the load resolves.
+  const [lockState, setLockState] = useState<UILockState>(() => ({
     isLocked: true,
     lastActivity: Date.now(),
-  });
+  }));
   const [keys, setKeys] = useState<UIKeyInfo[]>([]);
 
   // Load initial state

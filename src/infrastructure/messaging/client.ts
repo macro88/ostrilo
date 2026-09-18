@@ -33,15 +33,46 @@ function isRpcErrorObject(error: unknown): error is RpcErrorObject {
   );
 }
 
+/**
+ * Narrows a value that crossed the extension message boundary to `RpcResponse`.
+ *
+ * `browser.runtime.sendMessage` is typed as returning `any`, so asserting its
+ * result straight into `RpcResponse` claimed a shape nothing had checked. This
+ * is that check. It is deliberately strict about the discriminant: `ok: true`
+ * carries the data, `ok: false` must carry a well-formed error object, and
+ * anything else is not an `RpcResponse` - which leaves the legacy string-error
+ * path below reachable, exactly as before.
+ */
+function isRpcResponse(value: unknown): value is RpcResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const ok = (value as { ok?: unknown }).ok;
+  if (ok === true) return true;
+  if (ok === false) return isRpcErrorObject((value as { error?: unknown }).error);
+  return false;
+}
+
+/**
+ * The status word the diagnostic below logs. Never the response body - see the
+ * incident recorded at the call site.
+ */
+function responseStatus(res: unknown): unknown {
+  if (typeof res === "object" && res !== null && "ok" in res) {
+    const r = res as {
+      ok?: unknown;
+      error?: { data?: { errorCode?: unknown } };
+    };
+    return r.ok ? "ok" : r.error?.data?.errorCode;
+  }
+  return "malformed";
+}
+
 export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
-  const method = (req as any)?.type ?? "unknown";
+  const method = req.type;
   console.log("[CLIENT] Sending RPC:", method);
 
   const attempt = async (): Promise<T> => {
     try {
-      const res = (await browser.runtime.sendMessage(req)) as
-        | RpcResponse
-        | undefined;
+      const res: unknown = await browser.runtime.sendMessage(req);
 
       // Status only, NEVER the response body.
       //
@@ -58,11 +89,7 @@ export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
         "[CLIENT] Received response for",
         method,
         ":",
-        res && typeof res === "object" && "ok" in res
-          ? (res as RpcResponse).ok
-            ? "ok"
-            : (res as Extract<RpcResponse, { ok: false }>).error?.data?.errorCode
-          : "malformed"
+        responseStatus(res)
       );
 
       // More detailed error diagnostics
@@ -74,15 +101,17 @@ export async function rpc<T = unknown>(req: RpcRequest): Promise<T> {
         throw new Error(`rpc:${method}:invalid_response_type`);
       }
 
-      if ((res as any).ok === true) {
-        return (res as any).data as T;
+      if (isRpcResponse(res)) {
+        if (res.ok) {
+          return res.data as T;
+        }
+        throw new RpcClientError(method, res.error);
       }
 
-      const err = (res as any)?.error;
-      if (isRpcErrorObject(err)) {
-        throw new RpcClientError(method, err);
-      }
-
+      // Not a well-formed RpcResponse. An older background could answer with a
+      // bare error string, so that shape is still translated rather than
+      // dropped; anything else becomes `unknown_error`.
+      const err = "error" in res ? res.error : undefined;
       const legacyError = typeof err === "string" ? err : "unknown_error";
       throw new Error(`rpc:${method}:${legacyError}`);
     } catch (e: any) {
