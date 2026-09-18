@@ -1,10 +1,12 @@
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { AUTO_LOCK_BOUNDS, normalizeAutoLockMinutes } from "@/domain/types";
+import { useDeferredSliderValue } from "@/hooks/useDeferredSliderValue";
 
 interface AutoLockSliderProps {
   value: number;
-  onChange: (value: number) => void;
+  /** Writes the value. Must reject if the password prompt is refused. */
+  onChange: (value: number) => Promise<unknown>;
   min?: number;
   max?: number;
   step?: number;
@@ -20,14 +22,10 @@ export function AutoLockSlider({
   step = 1,
   compact = false,
 }: AutoLockSliderProps) {
-  const handleChange = (values: number[]) => {
-    onChange(values[0]);
-  };
-
   // A stored 0 used to render as "Never", and nothing enforced the timeout, so
   // the label was true for the wrong reason. Both are gone: the value is
   // normalized for display exactly as the background normalizes it for use.
-  const minutes = normalizeAutoLockMinutes(value);
+  const { value: minutes, sliderProps } = useDeferredSliderValue(normalizeAutoLockMinutes(value), onChange);
 
   return (
     <div className="w-full space-y-2.5">
@@ -39,9 +37,13 @@ export function AutoLockSlider({
           {minutes} min
         </span>
       </div>
+      {/*
+        The drag updates the thumb; only letting go asks for the password.
+        `sliderProps` carries the whole of that - including the pointer-release
+        handling Radix cannot be trusted with here. See the hook.
+      */}
       <Slider
-        value={[minutes]}
-        onValueChange={handleChange}
+        {...sliderProps}
         max={max}
         min={min}
         step={step}

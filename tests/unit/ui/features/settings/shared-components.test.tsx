@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act } from "react";
+import { act, useEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactNode } from "react";
 import {
@@ -48,10 +48,23 @@ vi.mock("@/components/ui/select", () => ({
   }) => <option value={value}>{children}</option>,
 }));
 
+/*
+  A native range draws the same line Radix does: `input` fires on every step of
+  a drag, `change` only when the pointer is let go. Standing in for the real
+  Slider with that split is what lets these tests tell a drag apart from a
+  release - the distinction the password-gated sliders are built on.
+
+  React routes its synthetic `onChange` off the native `input` event and gives
+  no handler for the native `change`, hence the listener.
+*/
 vi.mock("@/components/ui/slider", () => ({
   Slider: ({
     value,
     onValueChange,
+    onValueCommit,
+    onPointerDown,
+    onPointerUp,
+    onPointerCancel,
     min = 0,
     max = 100,
     step = 1,
@@ -59,23 +72,43 @@ vi.mock("@/components/ui/slider", () => ({
   }: {
     value: number[];
     onValueChange: (value: number[]) => void;
+    onValueCommit?: (value: number[]) => void;
+    onPointerDown?: () => void;
+    onPointerUp?: () => void;
+    onPointerCancel?: () => void;
     min?: number;
     max?: number;
     step?: number;
     "aria-label"?: string;
-  }) => (
-    <input
-      aria-label={ariaLabel}
-      type="range"
-      min={min}
-      max={max}
-      step={step}
-      value={value[0]}
-      onChange={(event) =>
-        onValueChange([Number(event.currentTarget.value)])
-      }
-    />
-  ),
+  }) => {
+    const ref = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+      const input = ref.current;
+      if (!input || !onValueCommit) return;
+      const commit = () => onValueCommit([Number(input.value)]);
+      input.addEventListener("change", commit);
+      return () => input.removeEventListener("change", commit);
+    }, [onValueCommit]);
+
+    return (
+      <input
+        ref={ref}
+        aria-label={ariaLabel}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value[0]}
+        onChange={(event) =>
+          onValueChange([Number(event.currentTarget.value)])
+        }
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+      />
+    );
+  },
 }));
 
 vi.mock("@/components/ui/switch", () => ({
@@ -136,6 +169,36 @@ function changeInput(input: HTMLInputElement | HTMLSelectElement, value: string)
   });
 }
 
+/** One step of a drag: the pointer is still down, so no `change` yet. */
+function dragInput(input: HTMLInputElement, value: string) {
+  act(() => {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    );
+    descriptor?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function pressPointer(input: HTMLInputElement) {
+  act(() => {
+    input.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+  });
+}
+
+/**
+ * Letting go WITHOUT the native `change` that a leisurely drag would also
+ * produce. This is the quick flick: the browser delivers the release before
+ * React has committed the render carrying the moved value, so Radix's own
+ * commit never fires and the release is the only signal there is.
+ */
+function releasePointer(input: HTMLInputElement) {
+  act(() => {
+    input.dispatchEvent(new Event("pointerup", { bubbles: true }));
+  });
+}
+
 function changeTextInput(input: HTMLInputElement, value: string) {
   act(() => {
     const descriptor = Object.getOwnPropertyDescriptor(
@@ -169,7 +232,7 @@ describe("settings shared components", () => {
   });
 
   it("formats AutoLockSlider values and emits numeric changes", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn().mockResolvedValue(undefined);
     const container = render(
       <AutoLockSlider value={15} onChange={onChange} />
     );
@@ -181,6 +244,129 @@ describe("settings shared components", () => {
     changeInput(slider, "30");
 
     expect(onChange).toHaveBeenCalledWith(30);
+  });
+
+  /**
+   * Writing this setting costs a password, and the dialog that asks takes the
+   * pointer. Asking on every step of a drag therefore killed the drag on its
+   * first step: the slider could be moved once, to wherever that step landed,
+   * and no further. Nothing may be committed until the pointer is released.
+   */
+  it("does not commit AutoLockSlider changes until the drag is released", () => {
+    const onChange = vi.fn().mockResolvedValue(undefined);
+    const container = render(
+      <AutoLockSlider value={15} onChange={onChange} />
+    );
+    const slider = container.querySelector(
+      'input[aria-label="Auto-lock timeout"]'
+    ) as HTMLInputElement;
+
+    // Out to 45, then back to 30 - the overshoot-and-correct a real drag makes.
+    dragInput(slider, "22");
+    dragInput(slider, "45");
+    dragInput(slider, "30");
+
+    expect(onChange).not.toHaveBeenCalled();
+    // The thumb still has to follow, or there is nothing to aim with.
+    expect(container.textContent).toContain("30 min");
+
+    changeInput(slider, "30");
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(30);
+  });
+
+  /**
+   * The bug this guards is the one that survived the first fix.
+   *
+   * Radix decides a drag changed something by comparing the controlled value in
+   * its `onSlideEnd` closure against the value at slide start. `pointermove` is
+   * continuous-priority in React and `pointerup` discrete, so a quick flick
+   * arrives before the render carrying the new value has committed: both sides
+   * read as the starting value, and the commit is silently skipped. The thumb,
+   * driven by a synchronously-written draft, has already moved - leaving the
+   * control showing a timeout the vault is not using.
+   */
+  it("commits a flick that never produced a Radix commit", () => {
+    const onChange = vi.fn().mockResolvedValue(undefined);
+    const container = render(
+      <AutoLockSlider value={5} onChange={onChange} />
+    );
+    const slider = container.querySelector(
+      'input[aria-label="Auto-lock timeout"]'
+    ) as HTMLInputElement;
+
+    pressPointer(slider);
+    dragInput(slider, "7");
+    releasePointer(slider);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(7);
+  });
+
+  /**
+   * The unhurried drag fires both routes - our pointer release and the Radix
+   * commit just behind it. Two password dialogs for one gesture would be its
+   * own bug, so the second is absorbed.
+   */
+  it("asks once when a drag produces both a release and a Radix commit", () => {
+    const onChange = vi.fn().mockResolvedValue(undefined);
+    const container = render(
+      <AutoLockSlider value={5} onChange={onChange} />
+    );
+    const slider = container.querySelector(
+      'input[aria-label="Auto-lock timeout"]'
+    ) as HTMLInputElement;
+
+    pressPointer(slider);
+    dragInput(slider, "7");
+    releasePointer(slider);
+    changeInput(slider, "7");
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(7);
+  });
+
+  /** Letting go where you started is not a decision, so nothing is asked. */
+  it("asks nothing when a drag returns to the stored value", () => {
+    const onChange = vi.fn().mockResolvedValue(undefined);
+    const container = render(
+      <AutoLockSlider value={5} onChange={onChange} />
+    );
+    const slider = container.querySelector(
+      'input[aria-label="Auto-lock timeout"]'
+    ) as HTMLInputElement;
+
+    pressPointer(slider);
+    dragInput(slider, "12");
+    dragInput(slider, "5");
+    releasePointer(slider);
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The dragged value lives only in the component until the password is given,
+   * so a refused commit has to take it back. Left standing, the slider would
+   * sit there showing a timeout the vault is not using.
+   */
+  it("returns the AutoLockSlider thumb to the stored value when the commit is refused", async () => {
+    const onChange = vi.fn().mockRejectedValue(new Error("cancelled"));
+    const container = render(
+      <AutoLockSlider value={15} onChange={onChange} />
+    );
+    const slider = container.querySelector(
+      'input[aria-label="Auto-lock timeout"]'
+    ) as HTMLInputElement;
+
+    dragInput(slider, "45");
+    expect(container.textContent).toContain("45 min");
+
+    changeInput(slider, "45");
+    await act(async () => {});
+
+    expect(onChange).toHaveBeenCalledWith(45);
+    expect(container.textContent).toContain("15 min");
   });
 
   it("renders key state and calls selection actions", () => {

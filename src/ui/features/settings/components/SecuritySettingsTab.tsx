@@ -33,34 +33,28 @@ export function SecuritySettingsTab() {
   // Both timeouts are password-gated in the background. The gate is on the
   // change, not on the direction: reasoning about "only when it gets
   // weaker" is how gates end up with holes in them.
-  const changeAutoLock = async (minutes: number) => {
-    try {
-      await reauth.request(
-        {
-          action: `Change the auto-lock timeout to ${minutes} minutes.`,
-          consequence: "This controls how long an unattended vault stays open.",
-        },
-        (password) => updateAutoLockMinutes(minutes, password)
-      );
-    } catch {
-      // Cancelled. The stored timeout is unchanged.
-    }
-  };
+  //
+  // Neither swallows the cancel. The slider needs to hear it: it is showing a
+  // value the store has not accepted yet, and a rejection is what tells it to
+  // put the thumb back.
+  const changeAutoLock = (minutes: number) =>
+    reauth.request(
+      {
+        action: `Change the auto-lock timeout to ${minutes} minutes.`,
+        consequence: "This controls how long an unattended vault stays open.",
+      },
+      (password) => updateAutoLockMinutes(minutes, password)
+    );
 
-  const changeSessionTTL = async (minutes: number) => {
-    try {
-      await reauth.request(
-        {
-          action: `Change the session grant timeout to ${minutes} minutes.`,
-          consequence:
-            "A session grant signs for an origin without prompting until it expires.",
-        },
-        (password) => updateSessionTTLMinutes(minutes, password)
-      );
-    } catch {
-      // Cancelled.
-    }
-  };
+  const changeSessionTTL = (minutes: number) =>
+    reauth.request(
+      {
+        action: `Change the session grant timeout to ${minutes} minutes.`,
+        consequence:
+          "A session grant signs for an origin without prompting until it expires.",
+      },
+      (password) => updateSessionTTLMinutes(minutes, password)
+    );
 
   // The reset patch rewrites both timeouts, so it carries the same gate the
   // sliders do. It used to ask with `confirm()` and then send the patch with no

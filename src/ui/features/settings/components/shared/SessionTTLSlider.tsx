@@ -4,20 +4,18 @@ import {
   MAX_SESSION_TTL_MINUTES,
   resolveSessionTTLMinutes,
 } from "@/domain/policy/session-grants";
+import { useDeferredSliderValue } from "@/hooks/useDeferredSliderValue";
 
 interface SessionTTLSliderProps {
   value: number;
-  onChange: (value: number) => void;
+  /** Writes the value. Must reject if the password prompt is refused. */
+  onChange: (value: number) => Promise<unknown>;
 }
 
 export function SessionTTLSlider({ value, onChange }: SessionTTLSliderProps) {
-  const handleChange = (values: number[]) => {
-    onChange(values[0]);
-  };
-
   // "Until lock" is no longer offered: it read as a permanent grant whenever
   // the vault did not lock, which until now it never did.
-  const minutes = resolveSessionTTLMinutes(value);
+  const { value: minutes, sliderProps } = useDeferredSliderValue(resolveSessionTTLMinutes(value), onChange);
 
   return (
     <div className="w-full space-y-2.5">
@@ -29,9 +27,13 @@ export function SessionTTLSlider({ value, onChange }: SessionTTLSliderProps) {
           {minutes} min
         </span>
       </div>
+      {/*
+        The drag updates the thumb; only letting go asks for the password.
+        `sliderProps` carries the whole of that - including the pointer-release
+        handling Radix cannot be trusted with here. See the hook.
+      */}
       <Slider
-        value={[minutes]}
-        onValueChange={handleChange}
+        {...sliderProps}
         max={MAX_SESSION_TTL_MINUTES}
         min={1}
         step={5}

@@ -1,6 +1,7 @@
 import { test, expect } from "./fixtures/extension";
 import type { Page } from "./fixtures/extension";
 import { seedUnlockedVault, sendExtensionRpc, TEST_PASSWORD } from "./fixtures/agent";
+import { AUTO_LOCK_BOUNDS } from "@/domain/types";
 
 /**
  * Auto-lock and session lifetime, driven through the options UI.
@@ -195,6 +196,192 @@ test.describe("security settings", () => {
       type: "settings.get",
     });
     expect(after.theme).toBe("dark");
+  });
+
+
+  /**
+   * A drag is one decision, not one decision per pixel.
+   *
+   * These sliders are bound to the PERSISTED setting, and the write is gated
+   * behind a password dialog. Committing on `onValueChange` therefore opened
+   * that dialog on the first step of a drag; the dialog took focus and the
+   * pointer, the drag died, and the value never reached the one the user was
+   * aiming for. The control was usable only one step at a time.
+   *
+   * Note this cannot be fixed by moving to `onValueCommit` alone: Radix fires
+   * it only when the controlled value differs from what it was at slide start,
+   * and the persisted value cannot move until the password is given. Without
+   * local draft state the commit would never fire at all, so this asserts both
+   * halves - the thumb tracks the drag, and exactly one prompt arrives at the
+   * end naming where the thumb finished.
+   */
+  test("a drag asks once, on release, for the value it was released on", async ({
+    openPopup,
+    openOptions,
+  }) => {
+    const { options } = await openOptionsOnSecurity(openPopup, openOptions);
+    const passwordPrompt = options.getByRole("heading", {
+      name: "Confirm with your password",
+    });
+
+    const slider = options.getByRole("slider", { name: AUTO_LOCK_LABEL });
+    const thumb = await slider.boundingBox();
+    const track = await options
+      .locator('[data-slot="slider-track"]')
+      .first()
+      .boundingBox();
+    if (!thumb || !track) throw new Error("slider not laid out");
+
+    const y = thumb.y + thumb.height / 2;
+    const at = (fraction: number) => track.x + track.width * fraction;
+
+    await options.mouse.move(thumb.x + thumb.width / 2, y);
+    await options.mouse.down();
+
+    // Forward, well past where we intend to land.
+    await options.mouse.move(at(0.9), y, { steps: 12 });
+    await expect(passwordPrompt).toHaveCount(0);
+    const atFarEnd = Number(await slider.getAttribute("aria-valuenow"));
+    expect(atFarEnd).toBeGreaterThan(AUTO_LOCK_BOUNDS.default);
+
+    // ...and back again. Overshooting and correcting is the whole point.
+    await options.mouse.move(at(0.5), y, { steps: 12 });
+    await expect(passwordPrompt).toHaveCount(0);
+    const beforeRelease = Number(await slider.getAttribute("aria-valuenow"));
+    expect(beforeRelease).toBeLessThan(atFarEnd);
+
+    await options.mouse.up();
+
+    // One prompt, and it names where the thumb was let go - not the first step.
+    await expect(passwordPrompt).toBeVisible();
+    await expect(
+      options.getByText(
+        `Change the auto-lock timeout to ${beforeRelease} minutes.`
+      )
+    ).toBeVisible();
+  });
+
+  /**
+   * Cancelling mid-drag-value must put the thumb back. The draft state added
+   * above is the only thing showing the new value, so if it outlived a refused
+   * commit the slider would sit there claiming a timeout the vault is not
+   * using - the most dangerous way for this particular control to be wrong.
+   */
+  test("cancelling a dragged change returns the thumb to the stored value", async ({
+    openPopup,
+    openOptions,
+  }) => {
+    const { options } = await openOptionsOnSecurity(openPopup, openOptions);
+    const stored = (await currentSettings(options)).autoLockMinutes;
+
+    const slider = options.getByRole("slider", { name: AUTO_LOCK_LABEL });
+    const thumb = await slider.boundingBox();
+    const track = await options
+      .locator('[data-slot="slider-track"]')
+      .first()
+      .boundingBox();
+    if (!thumb || !track) throw new Error("slider not laid out");
+
+    const y = thumb.y + thumb.height / 2;
+    await options.mouse.move(thumb.x + thumb.width / 2, y);
+    await options.mouse.down();
+    await options.mouse.move(track.x + track.width * 0.7, y, { steps: 12 });
+    await options.mouse.up();
+
+    await expect(
+      options.getByRole("heading", { name: "Confirm with your password" })
+    ).toBeVisible();
+    await options.getByRole("button", { name: "Cancel" }).click();
+
+    await expect(slider).toHaveAttribute("aria-valuenow", String(stored));
+    expect((await currentSettings(options)).autoLockMinutes).toBe(stored);
+  });
+
+
+  /**
+   * The quick flick, which the first fix did not survive.
+   *
+   * Radix decides a drag changed something by comparing the controlled value in
+   * its `onSlideEnd` closure against the value at slide start. React treats
+   * `pointermove` as continuous priority and `pointerup` as discrete, so a fast
+   * gesture delivers the release before the render carrying the moved value has
+   * committed: both sides of that comparison read as the starting value and the
+   * commit is skipped. Meanwhile the thumb, driven by a draft written
+   * synchronously, has already moved - so the slider sat there showing a
+   * timeout the vault was not using, silently, until the user dragged again.
+   *
+   * Dispatching the move and the release in one task reproduces that exactly;
+   * Playwright's own mouse leaves a gap between events wide enough for React to
+   * render, so an ordinary `mouse.move` + `mouse.up` cannot catch this.
+   */
+  test("a flick that outruns React still asks, and asks once", async ({
+    openPopup,
+    openOptions,
+  }) => {
+    const { options } = await openOptionsOnSecurity(openPopup, openOptions);
+    const stored = (await currentSettings(options)).autoLockMinutes;
+
+    // CSS, not role: the dialog aria-hides the page behind it, so a role-based
+    // locator stops resolving the moment the prompt opens.
+    const thumb = options.locator('[data-slot="slider-thumb"]').first();
+    await expect(thumb).toHaveAttribute("aria-valuenow", String(stored));
+
+    await options.evaluate(() => {
+      const el = document.querySelector(
+        '[data-slot="slider-thumb"]'
+      ) as HTMLElement;
+      const track = document.querySelector(
+        '[data-slot="slider-track"]'
+      ) as HTMLElement;
+
+      // Pointer capture needs a real pointer behind it; stubbing these sends
+      // the dispatched events down the same path a hardware drag takes.
+      el.setPointerCapture = () => {};
+      el.releasePointerCapture = () => {};
+      el.hasPointerCapture = () => true;
+
+      const rect = track.getBoundingClientRect();
+      const clientY = rect.top + rect.height / 2;
+      const fire = (type: string, clientX: number) =>
+        el.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 1,
+            pointerType: "mouse",
+            clientX,
+            clientY,
+            buttons: type === "pointerup" ? 0 : 1,
+          })
+        );
+
+      const box = el.getBoundingClientRect();
+      const target = rect.left + rect.width * (6 / 59);
+      fire("pointerdown", box.left + box.width / 2);
+      // No await between these two: that is the whole point.
+      fire("pointermove", target);
+      fire("pointerup", target);
+    });
+
+    // Read from out here, not inside the evaluate: in there the render carrying
+    // the move has not happened yet, which is the very condition under test.
+    const landedOn = Number(await thumb.getAttribute("aria-valuenow"));
+    expect(landedOn).not.toBe(stored);
+
+    // Exactly one prompt, for where the thumb actually is.
+    await expect(
+      options.getByRole("heading", { name: "Confirm with your password" })
+    ).toHaveCount(1);
+    await expect(
+      options.getByText(`Change the auto-lock timeout to ${landedOn} minutes.`)
+    ).toBeVisible();
+
+    await options.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
+    await options.getByRole("button", { name: "Confirm" }).click();
+
+    await expect
+      .poll(async () => (await currentSettings(options)).autoLockMinutes)
+      .toBe(landedOn);
   });
 
   /**

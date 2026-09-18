@@ -53,19 +53,17 @@ export function BasicSettings() {
 
   // Same gate as the Security tab. The popup is the surface most likely to
   // be open on an unattended screen, so it is the one that most needs it.
-  const changeAutoLock = async (minutes: number) => {
-    try {
-      await reauth.request(
-        {
-          action: `Change the auto-lock timeout to ${minutes} minutes.`,
-          consequence: "This controls how long an unattended vault stays open.",
-        },
-        (password) => updateAutoLockMinutes(minutes, password)
-      );
-    } catch {
-      // Cancelled.
-    }
-  };
+  //
+  // The cancel is not swallowed here either: the slider is showing a value the
+  // store has not accepted, and the rejection is what sends the thumb back.
+  const changeAutoLock = (minutes: number) =>
+    reauth.request(
+      {
+        action: `Change the auto-lock timeout to ${minutes} minutes.`,
+        consequence: "This controls how long an unattended vault stays open.",
+      },
+      (password) => updateAutoLockMinutes(minutes, password)
+    );
 
   // Note: useAppSettings hook already handles storage changes internally via useWxtStorage
   // Settings components will re-render automatically when values change
