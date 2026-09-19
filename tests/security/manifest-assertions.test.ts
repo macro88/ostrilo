@@ -70,8 +70,23 @@ const FORBIDDEN_CSP_SOURCES = ["'unsafe-eval'", "wasm-unsafe-eval"];
  * `alarms` is listed but not required: `implement-session-auto-lock` adds it
  * for the idle timer. Listing it here means that change does not have to edit
  * this assertion to land, while an unreviewed permission still fails.
+ *
+ * `idle` is called, and here is the recorded decision. `gate-autosign-activity-on-idle`
+ * uses `browser.idle.queryState` at exactly one call site
+ * (`background.ts`, wired into `UserPresenceService`) to decide whether a
+ * signature produced without an approval prompt may postpone the auto-lock
+ * deadline. It is the only evidence of user presence a requesting page cannot
+ * fabricate. It returns one of three words about input recency - `active`,
+ * `idle`, `locked` - and discloses nothing about what was typed, which window
+ * had focus, or what is on screen.
  */
-const REVIEWED_PERMISSIONS = new Set(["storage", "windows", "sidePanel", "alarms"]);
+const REVIEWED_PERMISSIONS = new Set([
+  "storage",
+  "windows",
+  "sidePanel",
+  "alarms",
+  "idle",
+]);
 
 /** Permissions that must be present on every target. */
 const REQUIRED_PERMISSIONS = ["storage", "windows"];

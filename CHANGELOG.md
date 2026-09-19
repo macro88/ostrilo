@@ -158,6 +158,27 @@
   the one on the request you are being asked to sign.
 - The time remaining is never given to a web page, and a locked vault reports no
   deadline at all — so nothing discloses when your previous session ended.
+- **Signing from a site now counts as activity, but only while you are at your
+  computer.** Reacting to a post is signed without a prompt once you trust a
+  site, so a user working through a feed was generating nothing the extension
+  counted — react, read for six minutes, and the next reaction failed on a
+  locked vault. Signatures now postpone the lock the way using the extension
+  does.
+- **A site cannot keep your vault unlocked on its own.** The postponement
+  requires that your computer has had keyboard or mouse input during the
+  timeout window. Walk away and a client publishing on a timer in a pinned tab
+  will not hold the session open — it locks on schedule, and the next request
+  is refused until you unlock.
+- A locked screensaver or OS lock screen counts as away, not as present.
+- **This means an unlocked vault stays open longer while you are at your desk.**
+  If you sit at your machine with a Nostr client open in a background tab, the
+  vault will not time out. That is the intended trade — the timeout exists to
+  bound a vault nobody is watching — but it is a real change from locking five
+  minutes after you last touched the extension.
+- **New permission: `idle`.** It reports one of three words about whether your
+  computer has had recent input — active, idle, or locked — and nothing else.
+  It is what separates you being there from a page being busy. It does not
+  reveal what you type, which application you are using, or what is on screen.
 
 ### Other
 - Added the browser extension options page for advanced settings, with tabs for General, Keys & Identities, Security, Permissions, Activity Log, Relays, and Advanced settings.

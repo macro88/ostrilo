@@ -2,9 +2,7 @@
 
 ## Purpose
 Defines how the vault locks itself after a bounded period of inactivity, and how lock state is scheduled, enforced, reported, and failed closed across the extension.
-
 ## Requirements
-
 ### Requirement: Inactivity Locks The Vault
 
 The extension SHALL lock the vault once the configured `autoLockMinutes` inactivity window elapses without recorded activity. Locking SHALL zeroize all decrypted key material held in the background, clear session grants, and record locked lock state.
@@ -152,7 +150,7 @@ The extension SHALL report locked, and not denied, whenever a privileged operati
 
 ### Requirement: Recorded Activity Postpones The Lock
 
-The extension SHALL treat deliberate user action in an extension surface and completed privileged operations as activity that postpones the lock. Background bookkeeping, broadcast handling, relay traffic, and lock-state polling from a locked UI SHALL NOT count as activity. Activity reporting SHALL be throttled and MUST NOT keep the background worker alive for the sole purpose of tracking activity.
+The extension SHALL treat deliberate user action in an extension surface and completed privileged operations as activity that postpones the lock. Activity SHALL be recorded from the extension surfaces themselves, at the point of the deliberate action, and not only by a background method that no surface calls. Background bookkeeping, broadcast handling, relay traffic, lock-state polling from a locked UI, and rendering or updating a countdown display SHALL NOT count as activity. Activity reporting SHALL be throttled and MUST NOT keep the background worker alive for the sole purpose of tracking activity.
 
 #### Scenario: User action in an extension surface records activity
 
@@ -183,6 +181,22 @@ The extension SHALL treat deliberate user action in an extension surface and com
 - **THEN** the last-activity timestamp is not updated
 - **AND** the vault remains locked
 
+#### Scenario: Repeated interaction is throttled to one report
+
+- **GIVEN** the vault is unlocked
+- **AND** several extension surfaces are open
+- **WHEN** the user interacts repeatedly within the throttle window
+- **THEN** at most one activity report is sent per surface for that window
+- **AND** the inactivity deadline is postponed
+
+#### Scenario: Displaying the countdown does not postpone the lock
+
+- **GIVEN** the vault is unlocked
+- **AND** a surface is displaying the time remaining before auto-lock
+- **WHEN** that display updates with no user interaction
+- **THEN** the last-activity timestamp is not updated
+- **AND** the vault locks when the inactivity window elapses
+
 ### Requirement: Session End Leaves The Vault Locked
 
 The extension SHALL leave the vault locked after browser close, browser start, extension install, and extension update, and SHALL clear session grants in each case.
@@ -210,7 +224,7 @@ The extension SHALL leave the vault locked after browser close, browser start, e
 
 ### Requirement: Privileged RPC Methods Require An Unlocked Vault
 
-The extension SHALL refuse privileged RPC methods with the `locked` error code while the vault is locked, and SHALL enforce this in the background handlers rather than relying on UI gating. Privileged methods SHALL include `settings.update`, `policy.setOrigin`, `policy.setKindRule`, `policy.setSession`, `policy.clearSession`, `policy.removeOrigin`, `policy.evaluate`, `vault.select`, `vault.renameKey`, `vault.deleteKey`, `vault.sign`, `vault.export`, `vault.reveal`, `nostr.getPublicKey`, `nostr.signEvent`, `approval.resolve`, all `activity.*` methods, and all `profile.*` methods. Methods that SHALL remain reachable while locked are `vault.unlock`, `state.getLock`, `keys.list`, `crypto.evaluatePassword`, `crypto.parsePrivateKey`, and `settings.get`. While the vault is locked, `keys.list` SHALL return only the identifiers needed to determine that keys exist, and `settings.get` SHALL return only the fields needed to render the lock screen and first-run flow.
+The extension SHALL refuse privileged RPC methods with the `locked` error code while the vault is locked, and SHALL enforce this in the background handlers rather than relying on UI gating. Privileged methods SHALL include `settings.update`, `policy.setOrigin`, `policy.setKindRule`, `policy.setSession`, `policy.clearSession`, `policy.removeOrigin`, `policy.evaluate`, `vault.select`, `vault.renameKey`, `vault.deleteKey`, `vault.sign`, `vault.export`, `vault.reveal`, `nostr.getPublicKey`, `nostr.signEvent`, `approval.resolve`, all `activity.*` methods, and all `profile.*` methods. Methods that SHALL remain reachable while locked are `vault.unlock`, `state.getLock`, `keys.list`, `crypto.evaluatePassword`, `crypto.parsePrivateKey`, and `settings.get`. While the vault is locked, `keys.list` SHALL return only the identifiers needed to determine that keys exist, `settings.get` SHALL return only the fields needed to render the lock screen and first-run flow, and `state.getLock` SHALL return only the locked state itself, without the inactivity deadline.
 
 #### Scenario: Settings mutation is refused while locked
 
@@ -248,6 +262,14 @@ The extension SHALL refuse privileged RPC methods with the `locked` error code w
 - **WHEN** `settings.get` and `keys.list` are called
 - **THEN** no origin policy, relay list entry, key label, or public key is returned
 - **AND** the response still allows the UI to distinguish a first run from a locked vault with existing keys
+
+#### Scenario: Locked lock state carries no deadline
+
+- **GIVEN** the vault is locked
+- **AND** a last-activity timestamp is present in stored session state
+- **WHEN** `state.getLock` is called
+- **THEN** no inactivity deadline is returned
+- **AND** the response does not disclose when the previous session would have ended
 
 #### Scenario: A newly added privileged method is classified
 
@@ -310,3 +332,52 @@ The extension SHALL define one shipped default for `autoLockMinutes` in a single
 - **WHEN** a session grant is created and the vault later locks
 - **THEN** the grant is cleared
 - **AND** the grant does not apply after the next unlock
+
+### Requirement: The Inactivity Deadline Is Disclosed Only To Trusted Extension Surfaces
+
+The extension SHALL report the absolute inactivity deadline alongside lock state when the vault is unlocked, so that extension surfaces can display the time remaining without recomputing it. The reported deadline SHALL be derived from the same stored last-activity timestamp and the same normalized `autoLockMinutes` used to enforce the lock, from a single computation, so that the reported and enforced deadlines cannot diverge. The deadline SHALL NOT be reachable from a web page, and SHALL NOT be reported while the vault is locked.
+
+#### Scenario: Deadline is reported to an extension surface while unlocked
+
+- **GIVEN** the vault is unlocked
+- **AND** `autoLockMinutes` is `15`
+- **WHEN** an extension page calls `state.getLock`
+- **THEN** the response reports the vault as unlocked
+- **AND** the response carries an absolute deadline timestamp fifteen minutes after the last recorded activity
+
+#### Scenario: Deadline is withheld while locked
+
+- **GIVEN** the vault is locked
+- **WHEN** an extension page calls `state.getLock`
+- **THEN** the response reports the vault as locked
+- **AND** no deadline timestamp is present in the response
+
+#### Scenario: Deadline moves with recorded activity
+
+- **GIVEN** the vault is unlocked
+- **WHEN** the user performs an action that records activity
+- **AND** an extension page calls `state.getLock`
+- **THEN** the reported deadline is recomputed from the new last-activity timestamp
+
+#### Scenario: Deadline moves with a timeout change
+
+- **GIVEN** the vault is unlocked with `autoLockMinutes` of `30`
+- **WHEN** `autoLockMinutes` is changed to `5`
+- **AND** an extension page calls `state.getLock`
+- **THEN** the reported deadline is recomputed from the new timeout
+
+#### Scenario: Reported deadline agrees with enforcement
+
+- **GIVEN** the vault is unlocked
+- **AND** `state.getLock` reported a deadline
+- **WHEN** that deadline passes and any privileged operation is attempted
+- **THEN** the vault reports locked
+- **AND** the operation is refused with the `locked` error code
+
+#### Scenario: A web page cannot read the deadline
+
+- **GIVEN** the vault is unlocked
+- **WHEN** a web page attempts to reach `state.getLock` through the content script
+- **THEN** the call is refused
+- **AND** no deadline timestamp is disclosed to the page
+

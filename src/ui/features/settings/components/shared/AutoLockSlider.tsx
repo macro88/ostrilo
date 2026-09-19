@@ -52,8 +52,9 @@ export function AutoLockSlider({
       />
       {!compact && (
         <p className="text-[13px] leading-snug text-muted-foreground">
-          Measured from your last activity in the extension, not from when you
-          unlocked.
+          Measured from your last activity, not from when you unlocked. Using
+          the extension counts, and so does signing from a site while you are
+          at your computer.
         </p>
       )}
     </div>

@@ -3,9 +3,7 @@
 ## Purpose
 
 Define the browser extension options page, its popup split, local settings synchronization behavior, and validation expectations.
-
 ## Requirements
-
 ### Requirement: Options Page Entrypoint
 
 The extension SHALL provide a dedicated Options Page accessible via `browser.runtime.openOptionsPage()` that opens in a new browser tab for advanced settings configuration. The Options Page SHALL render the lock screen instead of any tab content while the vault is locked.
@@ -101,7 +99,7 @@ The extension's Options Page SHALL organize settings into logical tabs with clea
 
 ### Requirement: Basic Settings in Popup
 
-The extension SHALL provide a minimal BasicSettings component in the popup containing frequently accessed settings and a link to the Options Page.
+The extension SHALL provide a minimal BasicSettings component in the popup containing frequently accessed settings and a link to the Options Page. The component SHALL display the time remaining before the vault auto-locks as a radial countdown alongside its auto-lock slider.
 
 **Acceptance Criteria:**
 
@@ -110,6 +108,8 @@ The extension SHALL provide a minimal BasicSettings component in the popup conta
 - BasicSettings fits within popup dimensions
 - All settings mutations use shared settings/key hooks
 - Legacy SettingsView is not mounted by popup navigation
+- A radial countdown displays the time remaining before auto-lock, beside the auto-lock slider
+- The countdown fits within popup dimensions without displacing the existing controls
 
 #### Scenario: User accesses basic settings in popup
 
@@ -126,7 +126,13 @@ The extension SHALL provide a minimal BasicSettings component in the popup conta
 **And** setting is persisted to extension storage  
 **And** if Options Page is open, it updates to dark theme
 
----
+#### Scenario: Countdown accompanies the popup auto-lock slider
+
+- **GIVEN** the vault is unlocked
+- **AND** BasicSettings is displayed in the popup
+- **WHEN** the Settings view is rendered
+- **THEN** a radial countdown reporting the time remaining before auto-lock is displayed beside the auto-lock slider
+- **AND** the existing controls remain visible within popup dimensions
 
 ### Requirement: Shared Component Extraction
 
@@ -221,7 +227,7 @@ The Options Page SHALL provide a Keys & Identities tab for comprehensive multi-k
 
 ### Requirement: Security Settings Tab
 
-The Options Page SHALL provide a Security tab for authentication and session management. The auto-lock timeout offered by this tab SHALL be an enforced inactivity timeout within the accepted range, SHALL NOT offer a never-lock option, and SHALL require password re-authentication before a change is stored.
+The Options Page SHALL provide a Security tab for authentication and session management. The auto-lock timeout offered by this tab SHALL be an enforced inactivity timeout within the accepted range, SHALL NOT offer a never-lock option, and SHALL require password re-authentication before a change is stored. The tab SHALL display the time remaining before the vault auto-locks as a radial countdown alongside the auto-lock slider.
 
 **Acceptance Criteria:**
 
@@ -232,6 +238,8 @@ The Options Page SHALL provide a Security tab for authentication and session man
 - Session TTL slider offers `0` to `60`, where `0` is labeled as lasting until the vault locks
 - Changing the auto-lock or session grant timeout requires password re-authentication
 - Tab explains that the auto-lock timeout is measured from the last recorded activity
+- A radial countdown displays the time remaining before auto-lock, beside the auto-lock slider
+- The countdown is a readout only and offers no action
 
 #### Scenario: User configures auto-lock timeout
 
@@ -241,6 +249,7 @@ The Options Page SHALL provide a Security tab for authentication and session man
 - **THEN** slider value updates
 - **AND** setting is saved to extension storage
 - **AND** the inactivity deadline is recomputed from the new timeout
+- **AND** the countdown reports the remaining time computed from the new timeout
 
 #### Scenario: Auto-lock slider offers no never-lock option
 
@@ -256,7 +265,12 @@ The Options Page SHALL provide a Security tab for authentication and session man
 - **THEN** the change is refused
 - **AND** the stored timeout is unchanged
 
----
+#### Scenario: Countdown accompanies the auto-lock slider
+
+- **GIVEN** the vault is unlocked
+- **WHEN** Options Page Security tab is active
+- **THEN** a radial countdown reporting the time remaining before auto-lock is displayed beside the auto-lock slider
+- **AND** the countdown does not offer a control that changes or extends the session
 
 ### Requirement: Permissions Tab
 
@@ -353,3 +367,4 @@ The Options Page SHALL provide clear feedback that settings changes are automati
 **Then** footer shows "Changes are saved automatically"  
 **And** no manual save action is required  
 **And** change persists immediately to storage
+

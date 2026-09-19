@@ -10,6 +10,14 @@
  *
  * So the call sites are pinned here by name. Adding one is fine; it just has to
  * be a deliberate action, and adding it has to be deliberate too.
+ *
+ * There is now a second, narrower door. A signature produced without an
+ * approval prompt postpones the lock too - but only behind a presence check,
+ * because the page that asked for it is not evidence that anyone is there. The
+ * background half of this file pins that gate: a `touchActivity()` call on the
+ * signing path that is not wrapped in one is the unbounded-session hole, and
+ * every behavioural test would still pass with it in place, because signing
+ * WOULD postpone the lock - just always, rather than only when it should.
  */
 
 import { describe, it, expect } from "vitest";
@@ -133,5 +141,124 @@ describe("activity is reported only from deliberate action", () => {
     const body = bodyOf(source, "export function reportActivity(): void");
     expect(body).toContain("ACTIVITY_THROTTLE_MS");
     expect(body).toContain("return");
+  });
+});
+
+/**
+ * Files that may call `touchActivity()` at all, and on what terms.
+ *
+ * `state-rpc.ts` serves the UI's `state.touch`, which is reached only by the
+ * throttled reporter above - a deliberate action in a surface the user is
+ * looking at. `nostr-rpc.ts` serves pages, so its call is admissible only
+ * through the presence gate.
+ */
+const TOUCH_CALLERS: ReadonlyMap<string, "direct" | "presence-gated"> = new Map([
+  ["src/infrastructure/messaging/handlers/state-rpc.ts", "direct"],
+  ["src/infrastructure/messaging/handlers/nostr-rpc.ts", "presence-gated"],
+]);
+
+const VAULT_SERVICE = "src/application/services/key-vault.service.ts";
+
+/**
+ * Occurrences of a substring, ignoring whitespace entirely.
+ *
+ * Whitespace is stripped rather than collapsed: a formatter that wraps the
+ * call across lines leaves a space before the closing paren, and a check that
+ * merely collapses runs then fails on correct code - which is the worst
+ * outcome for a guard, because the fix is to loosen the guard.
+ */
+function countIn(source: string, needle: string): number {
+  const strip = (text: string) => text.replace(/\s+/g, "");
+  return strip(source).split(strip(needle)).length - 1;
+}
+
+describe("a page-originated signature postpones the lock only through the gate", () => {
+  function touchCallerFiles(): string[] {
+    return walk(SRC_DIR)
+      .filter((file) => relative(REPO_ROOT, file).split("\\").join("/") !== VAULT_SERVICE)
+      .filter((file) => /\.touchActivity\s*\(/.test(readFileSync(file, "utf8")))
+      .map((file) => relative(REPO_ROOT, file).split("\\").join("/"))
+      .sort();
+  }
+
+  it("is called from no file outside the named set", () => {
+    const unexpected = touchCallerFiles().filter((f) => !TOUCH_CALLERS.has(f));
+    expect(
+      unexpected,
+      "a new caller of touchActivity(): if it is reachable from a web page, it must " +
+        "go through UserPresenceService.recordIfPresent, then be added to TOUCH_CALLERS"
+    ).toEqual([]);
+  });
+
+  it("is still called from every site that is supposed to have one", () => {
+    expect(touchCallerFiles()).toEqual([...TOUCH_CALLERS.keys()].sort());
+  });
+
+  it("wraps every signing-path call in the presence gate", () => {
+    // The regression this exists for: drop the gate, keep the call, and the
+    // vault is held open by any origin trusted enough to auto-sign. Every
+    // behavioural test still passes, because signing still postpones the lock.
+    for (const [file, terms] of TOUCH_CALLERS) {
+      if (terms !== "presence-gated") continue;
+      const source = readFileSync(join(REPO_ROOT, file), "utf8");
+      const calls = countIn(source, ".touchActivity(");
+      const gated = countIn(
+        source,
+        "recordIfPresent(() => context.vault.touchActivity())"
+      );
+      expect(
+        gated,
+        `${file}: every touchActivity() must sit inside recordIfPresent()`
+      ).toBe(calls);
+      expect(calls).toBeGreaterThan(0);
+    }
+  });
+
+  it("consults presence rather than anything the request carries", () => {
+    // Origin, kind, frequency and trust level are all under the control of the
+    // thing the evidence is supposed to test, so none of them is admissible.
+    const presence = readFileSync(
+      join(SRC_DIR, "application", "services", "user-presence.service.ts"),
+      "utf8"
+    );
+    expect(presence).toContain("queryIdle");
+    for (const inadmissible of ["origin", "trustLevel", "kind"]) {
+      expect(
+        new RegExp(`\\b${inadmissible}\\b`).test(
+          presence.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "")
+        ),
+        `presence must not read ${inadmissible} as evidence a user is present`
+      ).toBe(false);
+    }
+  });
+
+  it("treats a failed or non-active idle state as absence", () => {
+    const presence = readFileSync(
+      join(SRC_DIR, "application", "services", "user-presence.service.ts"),
+      "utf8"
+    );
+    // Presence is the narrow case, absence the default: an equality test
+    // against "active", never an inequality against "idle" that a third state
+    // silently passes.
+    expect(presence).toContain('=== "active"');
+    expect(presence).not.toMatch(/!==\s*"idle"/);
+    expect(presence).toContain("catch");
+  });
+
+  it("keeps the approval branch off the presence path", () => {
+    // A user-resolved approval already records activity from the UI. A second,
+    // presence-gated report there would make a click conditional on the OS
+    // agreeing that the click happened.
+    const source = readFileSync(
+      join(SRC_DIR, "infrastructure", "messaging", "handlers", "nostr-rpc.ts"),
+      "utf8"
+    );
+    const approvalBranch = source.slice(
+      source.indexOf("if (requiresApproval)"),
+      source.indexOf("const signResult")
+    );
+    expect(approvalBranch.length).toBeGreaterThan(200);
+    expect(approvalBranch).not.toContain("recordIfPresent");
+    expect(approvalBranch).not.toContain("touchActivity");
   });
 });

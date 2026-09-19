@@ -8,6 +8,7 @@ import type { ActivityLogService } from "@/application/services/activity-log.ser
 import type { ProfileService } from "@/application/services/profile.service";
 import type { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
 import type { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
+import type { UserPresenceService } from "@/application/services/user-presence.service";
 
 /**
  * Service context passed to RPC handlers containing all application services
@@ -20,6 +21,13 @@ export interface ServiceContext {
   profile: ProfileService;
   unlockThrottle: UnlockThrottleService;
   disclosureRateLimit: DisclosureRateLimitService;
+  /**
+   * Answers whether a user is at the machine, for the one path that needs it:
+   * a signature produced without an approval prompt, asking to postpone the
+   * auto-lock deadline. Nothing else consults it - a click in an extension
+   * surface is already presence and needs no second opinion.
+   */
+  presence: UserPresenceService;
   /**
    * Called when a request from a WEB PAGE is refused because the vault is
    * locked, so the background can raise a toolbar marker.

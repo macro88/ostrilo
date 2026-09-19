@@ -136,7 +136,12 @@ export default defineConfig({
     // `alarms` backs the auto-lock deadline. A setTimeout cannot do this job:
     // an MV3 service worker is evicted after ~30s idle and the timer dies with
     // it, so a timer-only auto-lock silently never fires.
-    permissions: ["storage", "windows", "alarms"],
+    // `idle` reports whether the machine has had operating-system input
+    // recently - `active`, `idle`, or `locked`, and nothing else. It is what
+    // separates "a person is here" from "a page is doing things" when a
+    // silently-signed request asks to postpone the auto-lock deadline. A page
+    // cannot observe or forge it, which is the whole reason it is the evidence.
+    permissions: ["storage", "windows", "alarms", "idle"],
     content_security_policy: {
       extension_pages: extensionPagesCsp(env.command),
     },

@@ -502,6 +502,34 @@ export class NostrRpcHandler implements RpcModule {
         keyId: selectedKey.id,
       });
 
+      // Postpone the auto-lock, but only if a person is actually here.
+      //
+      // Reacting to a post is kind 7, which high trust signs without a prompt,
+      // so a user working through a feed generates no interaction the
+      // extension used to count - and got locked out mid-read. Counting every
+      // silent signature instead would let a pinned tab publishing a relay
+      // list on a timer hold an unattended vault open forever. The idle state
+      // is the only evidence here that the requesting page cannot fabricate.
+      //
+      // AFTER the signature, and deliberately not awaited into the result: the
+      // vault was unlocked and policy allowed this request, so the signature is
+      // owed regardless of where the user's mouse has been. A presence check
+      // must never become a way to refuse one.
+      // try/catch, not `.catch()`: a missing or misconfigured presence service
+      // throws on property access, before any promise exists, and a rejection
+      // handler would never see it. The event is already signed at this point,
+      // so anything that escapes here would convert a completed signature into
+      // an error response - the exact failure this whole block must not cause.
+      // Not recording is the safe outcome: the deadline stands and the vault
+      // locks on the old schedule.
+      try {
+        await context.presence.recordIfPresent(() =>
+          context.vault.touchActivity()
+        );
+      } catch (err) {
+        console.warn("[NostrRpcHandler] activity not recorded:", err);
+      }
+
       return {
         ok: true,
         data: { event: signedEvent },

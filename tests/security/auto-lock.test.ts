@@ -10,6 +10,12 @@ import {
 import type { StorageSuite } from "@/application/ports/storage";
 import { AUTO_LOCK_BOUNDS } from "@/domain/types";
 import { StateRpcHandler } from "@/infrastructure/messaging/handlers/state-rpc";
+import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
+import {
+  UserPresenceService,
+  type IdleState,
+} from "@/application/services/user-presence.service";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
 
 /**
@@ -551,6 +557,181 @@ describe("activity recorded through the state.touch RPC", () => {
       (await vault.getLockState()).isLocked,
       "polling an open surface must not postpone the lock"
     ).toBe(true);
+  });
+});
+
+describe("a signature postpones the lock only when someone is there", () => {
+  let suite: StorageSuite;
+  let maps: ReturnType<typeof memoryStorage>["maps"];
+  let vault: KeyVaultService;
+  let handler: NostrRpcHandler;
+  let idle: IdleState;
+  let idleQueries: number;
+  let presence: UserPresenceService;
+  let clock: number;
+
+  const ORIGIN = "https://nostrich.example";
+
+  /** Kind 7 is a reaction: unprotected, so `allow` signs it with no prompt. */
+  function reaction(content = "+") {
+    return {
+      type: "nostr.signEvent",
+      origin: ORIGIN,
+      event: {
+        kind: 7,
+        content,
+        tags: [],
+        created_at: Math.floor(clock / 1000),
+      },
+    } as never;
+  }
+
+  function context(): ServiceContext {
+    return {
+      vault,
+      presence,
+      policy: { async evaluate() { return { mode: "allow" }; } },
+      activityLog: { async addEntry() {} },
+    } as unknown as ServiceContext;
+  }
+
+  async function react() {
+    return handler.handleRequest(reaction(), context());
+  }
+
+  async function deadline(): Promise<number> {
+    return (await vault.getLockState()).lockAt ?? 0;
+  }
+
+  /** Moves the recorded activity back, as if the user had done nothing since. */
+  async function ageSessionBy(ms: number) {
+    const state = maps.session.get("lockState") as Record<string, unknown>;
+    maps.session.set("lockState", {
+      ...state,
+      lastActivity: (state.lastActivity as number) - ms,
+    });
+  }
+
+  beforeEach(async () => {
+    ({ suite, maps } = memoryStorage());
+    clock = 1_735_689_600_000;
+    idle = "active";
+    idleQueries = 0;
+    vault = new KeyVaultService(
+      suite,
+      WebCryptoAesGcm,
+      fastKdf as never,
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
+    );
+    handler = new NostrRpcHandler();
+    maps.sync.set("appSettings", {
+      __version: "settings.v1",
+      autoLockMinutes: 5,
+    });
+    presence = new UserPresenceService(
+      { async get() { return maps.sync.get("appSettings") as never; } } as never,
+      async () => {
+        idleQueries++;
+        return idle;
+      },
+      () => clock
+    );
+    await vault.generateKey(PASSWORD, "k1");
+    await vault.unlock(PASSWORD);
+  });
+
+  it("postpones the lock when the user is at the machine", async () => {
+    await ageSessionBy(4 * 60 * 1000);
+    const before = await deadline();
+
+    const res = await react();
+
+    expect(res.ok).toBe(true);
+    expect(await deadline()).toBeGreaterThan(before);
+  });
+
+  it("does not postpone the lock when the user is idle", async () => {
+    await ageSessionBy(4 * 60 * 1000);
+    idle = "idle";
+    const before = await deadline();
+
+    const res = await react();
+
+    // The signature is still produced - the vault was open and policy allowed
+    // it. What it does not buy is more time.
+    expect(res.ok).toBe(true);
+    expect(
+      await deadline(),
+      "SECURITY REGRESSION: a page held an unattended vault open"
+    ).toBe(before);
+  });
+
+  it("does not postpone the lock behind an operating-system lock screen", async () => {
+    await ageSessionBy(4 * 60 * 1000);
+    idle = "locked";
+    const before = await deadline();
+
+    await react();
+
+    expect(await deadline()).toBe(before);
+  });
+
+  it("lets a reader react, read, and react again without being locked out", async () => {
+    // The defect this whole change exists for. Reacting is kind 7, which is
+    // signed with no prompt, so a user working through a feed generates no
+    // interaction the extension counts - and used to get locked out mid-read.
+    expect((await react()).ok).toBe(true);
+
+    // Four minutes of reading against a five-minute timeout. The user is at
+    // the machine - scrolling a feed is input - so presence holds.
+    clock += 4 * 60 * 1000;
+    await ageSessionBy(4 * 60 * 1000);
+
+    const second = await react();
+
+    expect(second.ok, "the second reaction must not fail").toBe(true);
+    expect((await vault.getLockState()).isLocked).toBe(false);
+  });
+
+  it("locks anyway once the reader walks away", async () => {
+    idle = "idle";
+
+    // A client publishing on a timer, once a minute, for the whole window.
+    for (let minute = 0; minute < 5; minute++) {
+      await react();
+      clock += 60 * 1000;
+      await ageSessionBy(60 * 1000);
+    }
+
+    expect(
+      (await vault.getLockState()).isLocked,
+      "SECURITY REGRESSION: a signing origin held the vault open across an idle window"
+    ).toBe(true);
+
+    const refused = await react();
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect((refused.error as { data: { errorCode: string } }).data.errorCode).toBe(
+        RPC_ERROR_CODES.LOCKED
+      );
+    }
+  });
+
+  it("collapses a burst of signatures to one idle query and one postponement", async () => {
+    await ageSessionBy(4 * 60 * 1000);
+    const before = await deadline();
+
+    for (let i = 0; i < 20; i++) await react();
+
+    expect(idleQueries, "a signing loop must not drive one idle query per event").toBe(1);
+    const after = await deadline();
+    expect(after).toBeGreaterThan(before);
+
+    // And the throttled ones did not each push it further.
+    clock += 1;
+    expect(await deadline()).toBe(after);
   });
 });
 

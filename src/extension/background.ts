@@ -15,6 +15,7 @@ import { SettingsService } from "@/application/services/settings.service";
 import { ActivityLogService } from "@/application/services/activity-log.service";
 import { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
 import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
+import { UserPresenceService } from "@/application/services/user-presence.service";
 import { ProfileService } from "@/application/services/profile.service";
 import { RelayManager } from "@/infrastructure/relay";
 import {
@@ -269,6 +270,15 @@ export default defineBackground(() => {
   // alive. See the module comment.
   const disclosureRateLimit = new DisclosureRateLimitService();
 
+  // Separates "a person is here" from "a page is doing things" when a
+  // silently-signed request asks to postpone the auto-lock deadline. The idle
+  // query is passed in rather than reached for inside the service, so the
+  // decision can be tested without a browser and so the `browser.idle`
+  // dependency is visible at the one place it is wired.
+  const presence = new UserPresenceService(settings, (detectionSeconds) =>
+    browser.idle.queryState(detectionSeconds)
+  );
+
   const serviceContext = {
     vault,
     policy,
@@ -277,6 +287,7 @@ export default defineBackground(() => {
     profile,
     unlockThrottle,
     disclosureRateLimit,
+    presence,
     onLockedPageRequest: () => {
       void setLockedRequestPending(true, approvalQueue.count());
     },
