@@ -49,7 +49,7 @@ export function ActivityPendingApprovals({
             </Button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <ApprovalPrompt embedded />
+            <ApprovalPrompt embedded onDismiss={onCloseApprovalDialog} />
           </div>
         </div>
       )}

@@ -50,8 +50,7 @@ import {
  * The page, its React tree, its `browser.runtime` message listeners and its
  * narrow viewport are identical either way, so everything below exercises the
  * genuine panel code. What is NOT covered is Chrome's own panel chrome —
- * docking, and whether `window.close()` (see the note on the sign test) behaves
- * differently inside a real panel.
+ * docking, and how the real panel reacts to a document close.
  *
  * Measured sensitivity, so the next person knows what these tests are worth
  * rather than having to trust that they are worth something. Each mutation was
@@ -404,14 +403,21 @@ test.describe("side-panel approval delivery", () => {
       expect((await originPolicy(popup))?.rules?.["7"]).toBeUndefined();
       expect(watcher.urls()).toEqual([]);
 
-      // NOT asserted, deliberately: what the panel looks like afterwards.
-      // `ApprovalPrompt.handleAction` calls `window.close()` once the queue
-      // empties, which is right for a window and questionable for a panel —
-      // it closes the surface the user was reading. In this harness the panel
-      // is a tab, so whether Chrome honours that close differs from a docked
-      // panel and any assertion here would be about the harness. The queue
-      // state and the signature are surface-independent, so those are what is
-      // checked.
+      // NOT asserted here, deliberately: what the panel looks like afterwards.
+      // `ApprovalPrompt` used to call `window.close()` once the queue emptied,
+      // which is right for a window and wrong for a panel — it closed the
+      // surface the user had docked. That is now decided by `embedded`, and
+      // pinned where it can be pinned honestly:
+      // `tests/unit/ui/features/approval/approval-prompt-surface.test.tsx`
+      // asserts `window.close` is never called on the embedded surface and is
+      // still called on the window one.
+      //
+      // It stays out of this file because in this harness the panel is a tab,
+      // so whether Chrome honours a document close differs from a docked panel,
+      // and because `ActivityPendingApprovals` unmounts the overlay on its own
+      // once the count reaches zero — an "overlay is gone" assertion here would
+      // pass with the bug fully present. The queue state and the signature are
+      // surface-independent, so those are what is checked.
     } finally {
       watcher.stop();
     }

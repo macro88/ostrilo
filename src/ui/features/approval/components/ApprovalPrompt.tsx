@@ -123,9 +123,17 @@ function approvalPromptReducer(
 interface ApprovalPromptProps {
   /** See QueueListView.embedded: hosted under another surface's title. */
   embedded?: boolean;
+  /**
+   * Called instead of closing the document once the queue is done with.
+   * Required whenever `embedded` is set; see `dismissSurface` below.
+   */
+  onDismiss?: () => void;
 }
 
-export function ApprovalPrompt({ embedded = false }: ApprovalPromptProps = {}) {
+export function ApprovalPrompt({
+  embedded = false,
+  onDismiss,
+}: ApprovalPromptProps = {}) {
   const [state, dispatch] = useReducer(
     approvalPromptReducer,
     initialApprovalPromptState
@@ -212,6 +220,39 @@ export function ApprovalPrompt({ embedded = false }: ApprovalPromptProps = {}) {
     return map;
   }, [settingsLoading, settings.origins, state.requests]);
 
+  /**
+   * Ends the prompt when nothing is left to decide.
+   *
+   * In popup mode this component owns `approval.html`, a window that exists
+   * only to ask the question, so closing the document is the right ending.
+   * Embedded, the document is the side panel the user docked, and closing it
+   * takes that panel down - sign one event and the panel disappears. The host
+   * is asked to drop the overlay instead.
+   */
+  const dismissSurface = useCallback(() => {
+    if (embedded) {
+      onDismiss?.();
+      return;
+    }
+    window.close();
+  }, [embedded, onDismiss]);
+
+  /**
+   * Shared tail of both resolve paths: re-read the queue, then either end the
+   * prompt or drop back to the list so the next request can be read.
+   */
+  const settleAfterResolve = useCallback(async () => {
+    const [, { count }] = await Promise.all([
+      fetchRequests(),
+      getApprovalCount(),
+    ]);
+    if (count === 0) {
+      dismissSurface();
+    } else {
+      dispatch({ type: "showList" });
+    }
+  }, [fetchRequests, dismissSurface]);
+
   // Handle user action on selected request
   const handleAction = async (action: ApprovalAction) => {
     if (!state.selectedRequestId || state.isResolving) return;
@@ -221,17 +262,7 @@ export function ApprovalPrompt({ embedded = false }: ApprovalPromptProps = {}) {
       await resolveApprovalRequest(state.selectedRequestId, action);
       reportActivity();
 
-      const [, { count }] = await Promise.all([
-        fetchRequests(),
-        getApprovalCount(),
-      ]);
-      if (count === 0) {
-        // No more requests - close window
-        window.close();
-      } else {
-        // Return to list view
-        dispatch({ type: "showList" });
-      }
+      await settleAfterResolve();
     } catch (err) {
       dispatch({
         type: "loadError",
@@ -259,17 +290,7 @@ export function ApprovalPrompt({ embedded = false }: ApprovalPromptProps = {}) {
       );
       reportActivity();
 
-      const [, { count }] = await Promise.all([
-        fetchRequests(),
-        getApprovalCount(),
-      ]);
-      if (count === 0) {
-        // No more requests - close window
-        window.close();
-      } else {
-        // Return to list view
-        dispatch({ type: "showList" });
-      }
+      await settleAfterResolve();
     } catch (err) {
       dispatch({
         type: "loadError",
@@ -313,7 +334,7 @@ export function ApprovalPrompt({ embedded = false }: ApprovalPromptProps = {}) {
         mark={<MascotSeal />}
         title="No Pending Requests"
         description="This window opens when a site asks for a signature or your public key."
-        action={{ label: "Close", onClick: () => window.close() }}
+        action={{ label: "Close", onClick: dismissSurface }}
       />
     );
   }
