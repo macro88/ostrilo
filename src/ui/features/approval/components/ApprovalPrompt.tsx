@@ -5,6 +5,7 @@ import {
   resolveApprovalRequest,
   getApprovalCount,
   listKeys,
+  reportActivity,
 } from "@/infrastructure/messaging/client";
 import type { PendingRequest, ApprovalAction, KeyRecord } from "@/domain/types";
 import { isDisclosureRequest, isSigningRequest } from "@/domain/types";
@@ -218,6 +219,7 @@ export function ApprovalPrompt({ embedded = false }: ApprovalPromptProps = {}) {
     try {
       dispatch({ type: "resolveStart" });
       await resolveApprovalRequest(state.selectedRequestId, action);
+      reportActivity();
 
       const [, { count }] = await Promise.all([
         fetchRequests(),
@@ -255,6 +257,7 @@ export function ApprovalPrompt({ embedded = false }: ApprovalPromptProps = {}) {
       await Promise.all(
         requestIds.map((id) => resolveApprovalRequest(id, approvalAction))
       );
+      reportActivity();
 
       const [, { count }] = await Promise.all([
         fetchRequests(),

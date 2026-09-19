@@ -826,7 +826,11 @@ export class KeyVaultService {
    *      material - which happens on every MV3 worker eviction. The record is
    *      corrected on the way out so the two do not keep disagreeing.
    */
-  async getLockState(): Promise<{ isLocked: boolean; selectedKeyId?: string }> {
+  async getLockState(): Promise<{
+    isLocked: boolean;
+    selectedKeyId?: string;
+    lockAt?: number;
+  }> {
     let state: LockState | undefined;
     try {
       state = await this.storage.session.get<LockState>(LOCK_STATE_STORAGE);
@@ -841,8 +845,8 @@ export class KeyVaultService {
 
     // Deadline passed: locked. A future timestamp is treated as expired rather
     // than trusted, so a clock change cannot extend a session indefinitely.
-    const deadlinePassed = await this.isPastAutoLockDeadline(state);
-    if (deadlinePassed) {
+    const deadline = await this.autoLockDeadline(state);
+    if (this.isPastAutoLockDeadline(deadline)) {
       await this.lock();
       return { isLocked: true };
     }
@@ -859,17 +863,23 @@ export class KeyVaultService {
       return { isLocked: true };
     }
 
-    return { isLocked: false, selectedKeyId: state.selectedKeyId };
+    return { isLocked: false, selectedKeyId: state.selectedKeyId, lockAt: deadline };
   }
 
   /**
-   * True when `autoLockMinutes` has elapsed since the last recorded activity.
+   * The absolute epoch-ms instant the vault auto-locks, from the stored
+   * last-activity timestamp and the normalized `autoLockMinutes`.
    *
    * Derived from a stored timestamp checked on access rather than from a timer
    * firing, because a `setTimeout` in an MV3 service worker does not survive
    * worker eviction: a timer-only design would silently never lock.
+   *
+   * The one formula behind both enforcement and what `getLockState()` reports,
+   * so the deadline shown to the user cannot drift from the deadline applied.
+   * Unusable timestamps collapse to `0` - a deadline already past - so every
+   * fail-closed case stays closed when read as an instant.
    */
-  private async isPastAutoLockDeadline(state: LockState): Promise<boolean> {
+  private async autoLockDeadline(state: LockState): Promise<number> {
     const settings = await this.getSettings();
     // Normalized, not read raw: a stored 0 used to mean "never lock", and
     // that reading is exactly the fail-open this change removes. It is now
@@ -877,20 +887,32 @@ export class KeyVaultService {
     const minutes = normalizeAutoLockMinutes(settings?.autoLockMinutes);
 
     const last = typeof state.lastActivity === "number" ? state.lastActivity : 0;
-    if (last <= 0) return true;
+    if (last <= 0) return 0;
 
-    const now = Date.now();
     // A timestamp in the future means the clock moved or the record was
     // tampered with. Treat it as expired rather than as a long lease.
-    if (last > now) return true;
+    if (last > Date.now()) return 0;
 
-    return now - last >= minutes * 60 * 1000;
+    return last + minutes * 60 * 1000;
+  }
+
+  /** True when `autoLockMinutes` has elapsed since the last recorded activity. */
+  private isPastAutoLockDeadline(deadline: number): boolean {
+    return Date.now() >= deadline;
   }
 
   /** Records user activity and pushes the auto-lock deadline out. */
   async touchActivity(): Promise<void> {
     const state = await this.storage.session.get<LockState>(LOCK_STATE_STORAGE);
     if (!state || state.isLocked !== false) return; // never revive a locked vault
+
+    // A passed deadline is locked too - the record just has not been read yet,
+    // because the check is lazy and `state.touch` does not run it. The stored
+    // flag alone was a sufficient guard only while nothing called this; once
+    // the surfaces report activity, an expired session reached by a late
+    // report would be silently extended past a deadline that had already run
+    // out. Locked means the same thing here as it does in `getLockState()`.
+    if (this.isPastAutoLockDeadline(await this.autoLockDeadline(state))) return;
     await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
       ...state,
       lastActivity: Date.now(),

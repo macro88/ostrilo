@@ -10,6 +10,7 @@ import {
   SettingsTabHeader,
 } from "@/ui/features/settings/components/shared/SettingsLayout";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { AutoLockCountdown } from "@/components/common/AutoLockCountdown";
 import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
 import { useReauth } from "@/ui/hooks/useReauth";
 
@@ -88,11 +89,17 @@ export function SecuritySettingsTab() {
 
       <SettingsSection label="Timeouts">
         <div className="ink-card">
+          {/*
+            The ring sits beside the control it describes, so the abstract
+            number on the slider has a visible consequence. Readout only - the
+            slider stays the one thing on this row that changes anything.
+          */}
           <div className="ink-row">
             <AutoLockSlider
               value={settings.autoLockMinutes}
               onChange={changeAutoLock}
             />
+            <AutoLockCountdown size="lg" />
           </div>
           <div className="ink-row">
             <SessionTTLSlider

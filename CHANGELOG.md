@@ -132,6 +132,32 @@
   constant, and a page that gives up withdraws its request, so no signature
   is produced for a request nobody is waiting for. **BREAKING** for dapps
   depending on the old 30-second rejection.
+- **The auto-lock timeout now actually resets when you use the extension.** It
+  was supposed to be measured from your last activity — the slider has always
+  said so — but nothing recorded that activity, so the countdown ran from the
+  moment you unlocked and never moved. Unlocking, switching keys, answering an
+  approval and changing a setting now each postpone the lock.
+- **This means an unlocked vault will stay open longer than it used to under
+  active use.** That is the behaviour the setting always described, not a
+  relaxation of it: an idle window still locks on schedule, and "idle" now means
+  what it says. If you had come to rely on the vault locking a fixed time after
+  unlock regardless of what you were doing, lower the timeout or use Lock now.
+- Activity reports are throttled to one per surface every 30 seconds, so a burst
+  of clicking does not wake the extension repeatedly. The practical effect is
+  that the lock can fire up to 30 seconds earlier than your very last action.
+- **A ring beside the auto-lock slider shows how long the vault has left.** It
+  appears on the Options Security tab, in the popup Settings panel, and around
+  the lock button in the popup and side panel header. Under a minute it switches
+  to seconds and turns red.
+- The countdown is a readout only. It cannot extend your session, cannot end it,
+  and does not itself lock anything — the background decides that, and the ring
+  follows within a few seconds if the two ever disagree. Displaying it records no
+  activity, so leaving a window open with the countdown on screen does not keep
+  your vault unlocked.
+- There is deliberately no countdown on the approval window. The clock there is
+  the one on the request you are being asked to sign.
+- The time remaining is never given to a web page, and a locked vault reports no
+  deadline at all — so nothing discloses when your previous session ended.
 
 ### Other
 - Added the browser extension options page for advanced settings, with tabs for General, Keys & Identities, Security, Permissions, Activity Log, Relays, and Advanced settings.

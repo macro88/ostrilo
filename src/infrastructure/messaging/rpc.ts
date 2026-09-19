@@ -103,6 +103,19 @@ export type RpcRequest =
   | { type: "profile.update"; params: { metadata: unknown } }
   | { type: "profile.clearCache"; params?: { pubkey?: string } };
 
+/**
+ * What `state.getLock` reports.
+ *
+ * `lockAt` is the absolute epoch-ms inactivity deadline, present only while the
+ * vault is unlocked. It is optional rather than nullable so a caller that
+ * forgot to check `isLocked` cannot read a stale value as a live deadline.
+ */
+export type LockStatePayload = {
+  isLocked: boolean;
+  selectedKeyId?: string;
+  lockAt?: number;
+};
+
 // NIP-07 specific response types
 export type NostrGetPublicKeyResponse =
   | { ok: true; data: { pubkey: string } }

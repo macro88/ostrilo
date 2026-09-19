@@ -21,6 +21,7 @@ import {
   generateKey as rpcGenerateKey,
   importKey as rpcImportKey,
   selectKey as rpcSelectKey,
+  reportActivity,
   RpcClientError,
 } from "@/infrastructure/messaging/client";
 import type { KeyListEntry } from "@/infrastructure/messaging/handlers/vault-rpc";
@@ -106,6 +107,15 @@ export interface UILockState {
   isLocked: boolean;
   selectedKeyId?: string;
   lastActivity: number;
+  /**
+   * Absolute epoch-ms instant the vault auto-locks, as the background reports
+   * it. Never computed here: a deadline derived in the UI would be a second
+   * definition of when the session ends, and the two would disagree across a
+   * suspend, a clock change, or a timeout changed in another surface.
+   *
+   * Absent while locked, and cleared on every transition to locked.
+   */
+  lockAt?: number;
 }
 
 interface KeyManagerContextType {
@@ -121,6 +131,8 @@ interface KeyManagerContextType {
    * was about to show - see `OptionsGate`.
    */
   isInitialising: boolean;
+  /** The inactivity deadline, for surfaces that display the time remaining. */
+  lockAt?: number;
   selectedKeyInfo?: UIKeyInfo;
   keys: UIKeyInfo[];
   hasKeys: boolean;
@@ -183,6 +195,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
           isLocked: lockStateResult.isLocked,
           selectedKeyId: lockStateResult.selectedKeyId,
           lastActivity: Date.now(),
+          lockAt: lockStateResult.isLocked ? undefined : lockStateResult.lockAt,
         });
 
         // Convert KeyRecord to UIKeyInfo (remove sensitive fields)
@@ -222,17 +235,24 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
       try {
         const state = await getLockState();
         if (cancelled) return;
+        // `lockAt` is compared as well as `isLocked`, and both are usually
+        // unchanged: the deadline only moves when activity is recorded or the
+        // timeout changes. Returning `prev` on a match keeps the poll from
+        // re-rendering every consumer every five seconds.
+        const lockAt = state.isLocked ? undefined : state.lockAt;
         setLockState((prev) =>
-          prev.isLocked === state.isLocked
+          prev.isLocked === state.isLocked && prev.lockAt === lockAt
             ? prev
-            : { ...prev, isLocked: state.isLocked }
+            : { ...prev, isLocked: state.isLocked, lockAt }
         );
       } catch {
         // Unreachable background: assume locked. Failing closed here costs
         // the user a password; failing open costs them their key material.
         if (!cancelled) {
           setLockState((prev) =>
-            prev.isLocked ? prev : { ...prev, isLocked: true }
+            prev.isLocked && prev.lockAt === undefined
+              ? prev
+              : { ...prev, isLocked: true, lockAt: undefined }
           );
         }
       }
@@ -246,7 +266,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
         (message as { __event?: unknown }).__event ===
           BROADCAST_EVENTS.VAULT_LOCKED
       ) {
-        setLockState((prev) => ({ ...prev, isLocked: true }));
+        setLockState((prev) => ({ ...prev, isLocked: true, lockAt: undefined }));
       }
     };
 
@@ -274,7 +294,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     try {
       setIsLoading(true);
       await lockVault();
-      setLockState((prev) => ({ ...prev, isLocked: true }));
+      setLockState((prev) => ({ ...prev, isLocked: true, lockAt: undefined }));
     } catch (error) {
       console.error("Lock failed:", error);
     } finally {
@@ -286,11 +306,22 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     try {
       setIsLoading(true);
       const result = await unlockVault(password);
+      reportActivity();
+      // One read of the deadline on a deliberate action, so a surface that
+      // displays it has it as the vault opens rather than up to a poll
+      // interval later. A failure here leaves the deadline absent - the
+      // countdown's documented "not available" state, which the poll fills in
+      // - because it must not turn a successful unlock into a failed one.
+      const deadline = await getLockState().then(
+        (state) => state.lockAt,
+        () => undefined
+      );
       setLockState((prev) => ({
         ...prev,
         isLocked: false,
         selectedKeyId: result.selectedKeyId ?? prev.selectedKeyId,
         lastActivity: Date.now(),
+        lockAt: deadline,
       }));
       return { ok: true };
     } catch (error) {
@@ -357,6 +388,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     async (keyId: string) => {
       try {
         await rpcSelectKey(keyId);
+        reportActivity();
         setLockState((prev) => ({ ...prev, selectedKeyId: keyId }));
         await refreshKeys(); // Refresh to update isSelected flags
       } catch (error) {
@@ -385,6 +417,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
       isLocked: lockState.isLocked,
       isLoading,
       isInitialising,
+      lockAt: lockState.lockAt,
       selectedKeyInfo,
       keys,
       hasKeys: keys.length > 0,
@@ -399,6 +432,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     }),
     [
       lockState.isLocked,
+      lockState.lockAt,
       isLoading,
       isInitialising,
       selectedKeyInfo,

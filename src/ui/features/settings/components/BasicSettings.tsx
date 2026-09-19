@@ -7,6 +7,7 @@ import {
   ThemeSelector,
 } from "@/ui/features/settings/components/shared";
 import { useAppSettings } from "@/hooks/useAppSettings";
+import { AutoLockCountdown } from "@/components/common/AutoLockCountdown";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { openOptionsTab, type OptionsTab } from "@/ui/lib/open-options";
 
@@ -104,12 +105,18 @@ export function BasicSettings() {
               />
             </div>
 
+            {/*
+              The `sm` ring, not the settings-page `lg`: the panel is ~360px
+              and the slider row already carries a label, a value and a track.
+              The ring joins the row rather than displacing any of them.
+            */}
             <div className="ink-row">
               <AutoLockSlider
                 value={settings.autoLockMinutes}
                 onChange={changeAutoLock}
                 compact
               />
+              <AutoLockCountdown size="sm" />
             </div>
           </div>
         </section>

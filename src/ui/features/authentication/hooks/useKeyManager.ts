@@ -9,6 +9,7 @@ export function useKeyManager() {
     // State - only public information, no plaintext private keys
     isLocked: context.isLocked,
     isLoading: context.isLoading,
+    lockAt: context.lockAt,
     selectedUnlockedKey: context.selectedKeyInfo, // Renamed but same concept (public info only)
     keys: context.keys, // All available keys
     hasKeys: context.hasKeys,

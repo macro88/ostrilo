@@ -1,4 +1,4 @@
-import type { RpcRequest, RpcResponse } from "../rpc";
+import type { LockStatePayload, RpcRequest, RpcResponse } from "../rpc";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 
@@ -28,7 +28,7 @@ export class StateRpcHandler implements RpcModule {
   }
 
   private async handleGetLock(context: ServiceContext): Promise<RpcResponse> {
-    const data = await context.vault.getLockState();
+    const data: LockStatePayload = await context.vault.getLockState();
     return { ok: true, data };
   }
 

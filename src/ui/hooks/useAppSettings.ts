@@ -8,6 +8,7 @@ import {
   policyClearSession,
   policyRemoveOrigin,
   activityClear,
+  reportActivity,
 } from "@/infrastructure/messaging/client";
 import {
   AppSettingsV1,
@@ -109,6 +110,9 @@ export function useAppSettings() {
   const updateSettings = useCallback(
     async (updates: Partial<AppSettingsV1>, password?: string) => {
       await rpcUpdateSettings(updates, password);
+      // Every settings mutation funnels through here, so this one call site
+      // covers the whole surface area the spec names as a deliberate change.
+      reportActivity();
     },
     []
   );

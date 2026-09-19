@@ -1,8 +1,7 @@
 import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
-import { useAppSettings } from "@/hooks/useAppSettings";
-import { normalizeAutoLockMinutes } from "@/domain/types";
+import { AutoLockCountdown } from "@/components/common/AutoLockCountdown";
 import { KeySelector } from "./KeySelector";
 
 interface HeaderProps {
@@ -21,8 +20,6 @@ interface HeaderProps {
  */
 export function Header({ onAddKey }: HeaderProps) {
   const { lock } = useKeyManager();
-  const { settings } = useAppSettings();
-  const autoLockMinutes = normalizeAutoLockMinutes(settings.autoLockMinutes);
 
   return (
     // The bar is chrome and stays full-bleed; its contents are not. Home holds
@@ -35,16 +32,30 @@ export function Header({ onAddKey }: HeaderProps) {
     <header className="@container flex h-14 w-full shrink-0 border-b border-border bg-card">
       <div className="mx-auto flex w-full items-center justify-between gap-2 px-2 @min-[460px]:max-w-[428px]">
         <KeySelector onAddKey={onAddKey} />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-11 shrink-0 text-muted-foreground hover:text-foreground"
-          onClick={() => lock()}
-          aria-label="Lock extension"
-          title={`Lock now. Locks by itself after ${autoLockMinutes} min idle.`}
-        >
-          <Lock className="size-5" />
-        </Button>
+        {/*
+          The ring is drawn around the lock button's own 44px footprint rather
+          than taking a slot beside it - the header is the surface with the
+          least room, and the key selector is what it is for. The button stays
+          a distinct control: the ring renders no interactive element, and the
+          reading gives way to the button at the centre.
+
+          The tooltip no longer repeats the configured timeout. The ring is now
+          the thing that says how long is left, so the button's title says only
+          what the button does; two elements stating the same fact in 44px is
+          how header chrome gets noisy.
+        */}
+        <AutoLockCountdown size="sm">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-11 shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={() => lock()}
+            aria-label="Lock extension"
+            title="Lock now"
+          >
+            <Lock className="size-5" />
+          </Button>
+        </AutoLockCountdown>
       </div>
     </header>
   );

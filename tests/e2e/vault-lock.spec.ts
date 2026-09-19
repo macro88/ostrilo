@@ -86,6 +86,27 @@ async function createAndUnlock(page: Page) {
   });
 }
 
+/** Rewinds the recorded activity by `ms`, moving the deadline that much closer. */
+async function rewindActivity(page: Page, ms: number) {
+  await page.evaluate(async (offset) => {
+    const chromeApi = (globalThis as any).chrome;
+    const current = await chromeApi.storage.session.get("lockState");
+    const state = current.lockState ?? {};
+    await chromeApi.storage.session.set({
+      lockState: { ...state, lastActivity: Date.now() - offset },
+    });
+  }, ms);
+}
+
+/** The seconds the countdown is currently reporting, from its accessible name. */
+async function reportedSeconds(page: Page): Promise<number> {
+  const label =
+    (await page.getByRole("timer").first().getAttribute("aria-label")) ?? "";
+  const match = /(\d+) second/.exec(label);
+  expect(match, `countdown is not reporting seconds: "${label}"`).not.toBeNull();
+  return Number(match![1]);
+}
+
 /** Rewinds the recorded activity so the deadline has already passed. */
 async function expireSession(page: Page, minutesAgo = 120) {
   await page.evaluate(async (ms) => {
@@ -745,5 +766,156 @@ test.describe("locked-request badge", () => {
     await expect
       .poll(async () => (await readBadge(popup)).text, { timeout: 10_000 })
       .toBe("");
+  });
+});
+
+/**
+ * The auto-lock countdown, on the surfaces that carry it.
+ *
+ * The ring is a readout and never an authority: these assert that it appears
+ * while unlocked, drains against the real deadline, and is replaced by the
+ * lock screen when that deadline passes - and that a locked vault shows no
+ * countdown at all, because `lockAt` is withheld rather than sent as a past
+ * timestamp that would disclose when the previous session ended.
+ */
+test.describe("auto-lock countdown", () => {
+  test("renders in the popup header and drains against the deadline", async ({
+    openPopup,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const popup = await openPopup();
+    await createAndUnlock(popup);
+
+    const countdown = popup.getByRole("timer").first();
+    await expect(countdown).toBeVisible({ timeout: 15_000 });
+    await expect(countdown).toHaveAttribute(
+      "aria-label",
+      /Vault locks in \d+ minutes?/,
+      { timeout: 15_000 }
+    );
+
+    // The lock button is still its own control inside the ring.
+    await expect(popup.getByRole("button", { name: "Lock extension" })).toBeEnabled();
+
+    // Bring the deadline inside a minute so the reading is in seconds, then
+    // watch it fall. The poll carries the new deadline within 5s. Computed
+    // from the stored timeout rather than assumed: a fixed rewind against the
+    // shipped default expires the session outright instead of nearing it.
+    const { autoLockMinutes } = await rpcOk<{ autoLockMinutes: number }>(popup, {
+      type: "settings.get",
+    });
+    await rewindActivity(popup, autoLockMinutes * 60 * 1000 - 50_000);
+    await expect(countdown).toHaveAttribute(
+      "aria-label",
+      /Vault locks in \d+ seconds?/,
+      { timeout: 15_000 }
+    );
+
+    const first = await reportedSeconds(popup);
+    await popup.waitForTimeout(3_000);
+    const second = await reportedSeconds(popup);
+    expect(
+      second,
+      "the countdown is not draining - it is showing a value that does not move"
+    ).toBeLessThan(first);
+  });
+
+  test("appears beside the auto-lock slider on the options Security tab", async ({
+    openPopup,
+    openOptions,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const popup = await openPopup();
+    await createAndUnlock(popup);
+
+    const options = await openOptions();
+    await options.getByRole("tab", { name: "Security" }).click();
+
+    await expect(
+      options.getByRole("heading", { name: "Security" })
+    ).toBeVisible();
+    await expect(options.getByRole("timer").first()).toHaveAttribute(
+      "aria-label",
+      /Vault locks in/,
+      { timeout: 15_000 }
+    );
+  });
+
+  test("appears beside the auto-lock slider in the popup Settings panel", async ({
+    openPopup,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const popup = await openPopup();
+    await createAndUnlock(popup);
+
+    await popup.getByRole("button", { name: "Settings" }).click();
+    await expect(
+      popup.getByRole("heading", { name: "Settings" })
+    ).toBeVisible();
+
+    // Two rings on this surface: the header's and the slider row's.
+    await expect(popup.getByRole("timer")).toHaveCount(2, { timeout: 15_000 });
+  });
+
+  test("is replaced by the lock screen when the deadline passes", async ({
+    openPopup,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const popup = await openPopup();
+    await createAndUnlock(popup);
+    await expect(popup.getByRole("timer").first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await expireSession(popup);
+
+    // The ring does not lock anything - the poll reads the background, which
+    // is the only authority, and the surface follows it.
+    await expect(popup.getByLabel(/password/i).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(popup.getByRole("timer")).toHaveCount(0);
+  });
+
+  test("shows no countdown on the approval window", async ({
+    openPopup,
+    extensionContext,
+    extensionId,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const popup = await openPopup();
+    await seedUnlockedVault(popup, { label: "Countdown Approval Key" });
+
+    // The vault is unlocked and the ring is rendering elsewhere, so the
+    // assertion below is about placement rather than about there being
+    // nothing to place.
+    await expect(
+      popup.getByRole("timer", { name: /Vault locks/ }).first()
+    ).toBeVisible({ timeout: 15_000 });
+
+    const dapp = await openDapp(extensionContext);
+    await beginLockSignRequest(dapp, 7, "countdown placement check");
+
+    const approval = await waitForApprovalPage(extensionContext, extensionId);
+    await expect(
+      approval.getByTestId("approval-request-item").first()
+    ).toBeVisible({ timeout: 10_000 });
+
+    // The signing moment stays calm: no session clock on the decision. The
+    // request-expiry timer is a different thing and stays - it is about this
+    // request, not about how long the vault has left.
+    await expect(
+      approval.getByRole("timer", { name: /Vault locks/ })
+    ).toHaveCount(0);
   });
 });

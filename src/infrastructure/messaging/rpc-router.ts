@@ -140,6 +140,18 @@ const LOCKED_PROJECTIONS: ReadonlyMap<string, (data: unknown) => unknown> =
           : data,
     ],
     [
+      // The service already omits `lockAt` on every locked path. This is the
+      // second line: the projection reduces a locked response to the two
+      // fields the lock screen renders from, so a future field added to the
+      // unlocked response cannot reach a locked UI by being forgotten here.
+      "state.getLock",
+      (data: unknown) => {
+        if (!data || typeof data !== "object") return data;
+        const s = data as Record<string, unknown>;
+        return { isLocked: s.isLocked, selectedKeyId: s.selectedKeyId };
+      },
+    ],
+    [
       "settings.get",
       (data: unknown) => {
         if (!data || typeof data !== "object") return data;

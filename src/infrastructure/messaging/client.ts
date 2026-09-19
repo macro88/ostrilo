@@ -1,6 +1,11 @@
 import { browser } from "wxt/browser";
 import type { PasswordVerdict } from "@/domain/utils/password-policy";
-import type { RpcRequest, RpcResponse, RpcErrorObject } from "./rpc";
+import type {
+  RpcRequest,
+  RpcResponse,
+  RpcErrorObject,
+  LockStatePayload,
+} from "./rpc";
 import type {
   AppSettingsPatch,
   OriginPolicyPatch,
@@ -233,7 +238,7 @@ export async function deleteKey(id: string, password: string) {
 }
 
 export async function getLockState() {
-  return rpc<{ isLocked: boolean; selectedKeyId?: string }>({
+  return rpc<LockStatePayload>({
     type: "state.getLock",
   });
 }
@@ -241,6 +246,39 @@ export async function getLockState() {
 /** Records genuine user activity so the auto-lock deadline moves. */
 export async function touchActivity() {
   return rpc<null>({ type: "state.touch" });
+}
+
+/**
+ * The window within which repeated interaction collapses to one activity RPC.
+ *
+ * Chosen against the 1-minute auto-lock floor: worst case the recorded
+ * deadline is 30s staler than the interaction, which is inside the slack a
+ * 1-minute timeout already tolerates. The alternative - an RPC per
+ * interaction from every open surface - trades bounded staleness for
+ * unbounded wake-ups of the worker that enforces the lock.
+ */
+const ACTIVITY_THROTTLE_MS = 30_000;
+
+/** Per-surface, because each extension page loads its own copy of this module. */
+let lastActivityReportAt = 0;
+
+/**
+ * Reports deliberate user action, at most once per throttle window.
+ *
+ * Call this from the action itself - unlock, key selection, approval
+ * resolution, a settings change - never from polling, broadcast handling or
+ * countdown rendering, which are not the user doing anything. Fire-and-forget:
+ * no caller's flow should wait on, or fail from, activity bookkeeping.
+ */
+export function reportActivity(): void {
+  const now = Date.now();
+  if (now - lastActivityReportAt < ACTIVITY_THROTTLE_MS) return;
+  lastActivityReportAt = now;
+  void touchActivity().catch(() => {
+    // Reopen the window so the next deliberate action retries rather than
+    // waiting out a throttle spent on a report that never landed.
+    lastActivityReportAt = 0;
+  });
 }
 
 

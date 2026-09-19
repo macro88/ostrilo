@@ -9,6 +9,8 @@ import {
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
 import { AUTO_LOCK_BOUNDS } from "@/domain/types";
+import { StateRpcHandler } from "@/infrastructure/messaging/handlers/state-rpc";
+import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
 
 /**
  * Auto-lock, and the lock state it depends on.
@@ -297,6 +299,257 @@ describe("auto-lock deadline", () => {
     expect(
       (await vault.getLockState()).isLocked,
       "a settings write must not be able to buy an unbounded session"
+    ).toBe(true);
+  });
+});
+
+describe("the reported deadline", () => {
+  let suite: StorageSuite;
+  let maps: ReturnType<typeof memoryStorage>["maps"];
+  let vault: KeyVaultService;
+
+  beforeEach(async () => {
+    ({ suite, maps } = memoryStorage());
+    vault = new KeyVaultService(
+      suite,
+      WebCryptoAesGcm,
+      fastKdf as never,
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
+    );
+    await vault.generateKey(PASSWORD, "k1");
+  });
+
+  function setTimeout_(minutes: number) {
+    maps.sync.set("appSettings", {
+      __version: "settings.v1",
+      autoLockMinutes: minutes,
+    });
+  }
+
+  function lastActivity(): number {
+    return (maps.session.get("lockState") as { lastActivity: number })
+      .lastActivity;
+  }
+
+  it("reports the deadline while unlocked", async () => {
+    setTimeout_(15);
+    await vault.unlock(PASSWORD);
+
+    const state = await vault.getLockState();
+    expect(state.isLocked).toBe(false);
+    expect(state.lockAt).toBe(lastActivity() + 15 * 60 * 1000);
+  });
+
+  it("withholds the deadline while locked", async () => {
+    setTimeout_(15);
+    await vault.unlock(PASSWORD);
+    await vault.lock();
+
+    const state = await vault.getLockState();
+    expect(state.isLocked).toBe(true);
+    expect(
+      state.lockAt,
+      "a locked response must not disclose when the session would have ended"
+    ).toBeUndefined();
+  });
+
+  it("withholds the deadline on the path where the deadline itself locked", async () => {
+    setTimeout_(15);
+    await vault.unlock(PASSWORD);
+    const s = maps.session.get("lockState") as Record<string, unknown>;
+    maps.session.set("lockState", {
+      ...s,
+      lastActivity: Date.now() - 16 * 60 * 1000,
+    });
+
+    const state = await vault.getLockState();
+    expect(state.isLocked).toBe(true);
+    expect(state.lockAt).toBeUndefined();
+  });
+
+  it("withholds the deadline on the worker-eviction correction", async () => {
+    setTimeout_(15);
+    await vault.unlock(PASSWORD);
+
+    // A fresh service over the same storage holds no keys: worker eviction.
+    const restarted = new KeyVaultService(
+      suite,
+      WebCryptoAesGcm,
+      fastKdf as never,
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
+    );
+    const state = await restarted.getLockState();
+    expect(state.isLocked).toBe(true);
+    expect(state.lockAt).toBeUndefined();
+  });
+
+  it("recomputes the deadline after a timeout change", async () => {
+    setTimeout_(30);
+    await vault.unlock(PASSWORD);
+    expect((await vault.getLockState()).lockAt).toBe(
+      lastActivity() + 30 * 60 * 1000
+    );
+
+    setTimeout_(5);
+    expect(
+      (await vault.getLockState()).lockAt,
+      "the reported deadline must follow the stored timeout, not the one in force at unlock"
+    ).toBe(lastActivity() + 5 * 60 * 1000);
+  });
+
+  it("moves the reported deadline with recorded activity", async () => {
+    setTimeout_(15);
+    await vault.unlock(PASSWORD);
+    const s = maps.session.get("lockState") as Record<string, unknown>;
+    maps.session.set("lockState", {
+      ...s,
+      lastActivity: Date.now() - 10 * 60 * 1000,
+    });
+    const before = (await vault.getLockState()).lockAt ?? 0;
+
+    await vault.touchActivity();
+
+    expect((await vault.getLockState()).lockAt ?? 0).toBeGreaterThan(before);
+  });
+
+  it("reports a deadline that agrees with enforcement", async () => {
+    // The number shown and the number applied come from one formula, so the
+    // vault must not still report unlocked one millisecond past what it said.
+    setTimeout_(15);
+    await vault.unlock(PASSWORD);
+    const deadline = (await vault.getLockState()).lockAt ?? 0;
+
+    const s = maps.session.get("lockState") as Record<string, unknown>;
+    maps.session.set("lockState", {
+      ...s,
+      lastActivity: (s.lastActivity as number) - (deadline - Date.now()) - 1,
+    });
+
+    expect((await vault.getLockState()).isLocked).toBe(true);
+  });
+
+  it("normalizes the stored timeout before reporting it", async () => {
+    // A stored 0 once meant never-lock. The reported deadline must use the
+    // same normalized value enforcement uses, or the ring would promise a
+    // session the vault will not honour.
+    setTimeout_(0);
+    await vault.unlock(PASSWORD);
+    expect((await vault.getLockState()).lockAt).toBe(
+      lastActivity() + AUTO_LOCK_BOUNDS.default * 60 * 1000
+    );
+  });
+});
+
+describe("activity recorded through the state.touch RPC", () => {
+  let suite: StorageSuite;
+  let maps: ReturnType<typeof memoryStorage>["maps"];
+  let vault: KeyVaultService;
+  let handler: StateRpcHandler;
+
+  /** The handler's whole dependency here is the vault; the rest is unreached. */
+  function context(): ServiceContext {
+    return { vault } as unknown as ServiceContext;
+  }
+
+  async function touchOverRpc() {
+    return handler.handleRequest({ type: "state.touch" }, context());
+  }
+
+  beforeEach(async () => {
+    ({ suite, maps } = memoryStorage());
+    vault = new KeyVaultService(
+      suite,
+      WebCryptoAesGcm,
+      fastKdf as never,
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
+    );
+    handler = new StateRpcHandler();
+    maps.sync.set("appSettings", {
+      __version: "settings.v1",
+      autoLockMinutes: 15,
+    });
+    await vault.generateKey(PASSWORD, "k1");
+  });
+
+  it("slides the deadline when a surface reports activity", async () => {
+    // The gap this change closes: `state.touch` was reachable and correct,
+    // and no surface called it, so the deadline ran from unlock and never
+    // moved - while the shipped slider copy promised it moved with activity.
+    await vault.unlock(PASSWORD);
+    const s = maps.session.get("lockState") as Record<string, unknown>;
+    maps.session.set("lockState", {
+      ...s,
+      lastActivity: Date.now() - 14 * 60 * 1000,
+    });
+    const before = (await vault.getLockState()).lockAt ?? 0;
+
+    const res = await touchOverRpc();
+
+    expect(res.ok).toBe(true);
+    const after = (await vault.getLockState()).lockAt ?? 0;
+    expect(after).toBeGreaterThan(before);
+    // Postponed by roughly the whole window, not by some fraction of it.
+    expect(after - Date.now()).toBeGreaterThan(14 * 60 * 1000);
+  });
+
+  it("does not revive a locked vault", async () => {
+    await vault.unlock(PASSWORD);
+    await vault.lock();
+
+    const res = await touchOverRpc();
+
+    // The call is served - it is on the locked-reachable list - but it is a
+    // no-op, so a locked UI cannot hold a session open by reporting activity.
+    expect(res.ok).toBe(true);
+    const state = await vault.getLockState();
+    expect(
+      state.isLocked,
+      "SECURITY REGRESSION: state.touch reopened a locked vault"
+    ).toBe(true);
+    expect(state.lockAt).toBeUndefined();
+  });
+
+  it("does not revive a vault that locked because the deadline passed", async () => {
+    await vault.unlock(PASSWORD);
+    const s = maps.session.get("lockState") as Record<string, unknown>;
+    maps.session.set("lockState", {
+      ...s,
+      lastActivity: Date.now() - 16 * 60 * 1000,
+    });
+
+    await touchOverRpc();
+
+    expect(
+      (await vault.getLockState()).isLocked,
+      "an expired deadline must not be extendable by a late activity report"
+    ).toBe(true);
+  });
+
+  it("locks an idle surface on schedule with the reporter wired up", async () => {
+    // The countdown renders and the poll runs on an open surface; neither
+    // reports activity. With no deliberate action, the vault still locks.
+    await vault.unlock(PASSWORD);
+
+    // Five minutes of an open surface polling lock state, and nothing else.
+    for (let i = 0; i < 60; i++) {
+      expect((await vault.getLockState()).isLocked).toBe(false);
+    }
+
+    const s = maps.session.get("lockState") as Record<string, unknown>;
+    maps.session.set("lockState", {
+      ...s,
+      lastActivity: Date.now() - 15 * 60 * 1000,
+    });
+
+    expect(
+      (await vault.getLockState()).isLocked,
+      "polling an open surface must not postpone the lock"
     ).toBe(true);
   });
 });
