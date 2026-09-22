@@ -52,8 +52,8 @@ numbered reproduction steps, what you expected, and what happened instead.
 
 Scope follows the boundaries the README's
 [trust and control](README.md#trust-and-control) table already states. Ostrilo
-is a development version (`0.0.1`) built from source; there is no store release
-and no maintained release branch, so reports are assessed against the current
+is at version `1.0.0`, built from source; there is no store release yet and no
+maintained release branch, so reports are assessed against the current
 `main`. Chromium is the automated extension-test target and Firefox has a
 dedicated MV3 build without equivalent browser-runtime coverage; a
 Firefox-specific finding is in scope, so state the browser. Safari is not a

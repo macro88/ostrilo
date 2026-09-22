@@ -24,11 +24,18 @@ Ostrilo lets Nostr websites ask for your public key and request signatures throu
 and manage each site's permissions. Signing happens in the extension's background
 context; websites receive public keys and signed events, never your private key.
 
-> **Development version · 0.0.1**
-> Chromium is the automated extension-test target. Firefox has a dedicated MV3
-> build; that does not establish equivalent browser-runtime coverage. Safari is
-> not a verified target. The instructions below build from source, rather than
-> install a store release. Start with a disposable identity while evaluating it.
+> **Version 1.0.0**
+> `1.0.0` is a claim about interfaces, not about verification coverage. It means
+> the website-facing NIP-07 surface — `getPublicKey` and `signEvent` — and the
+> encrypted vault format are settled, and that changes to either follow semantic
+> versioning from here.
+>
+> It does not claim more than that. Chromium is the only automated
+> extension-test target. Firefox has a dedicated MV3 build, checked by the
+> manifest and bundle assertions but not by a browser-runtime suite. Safari is
+> not a verified target. There has been no independent security audit. The
+> instructions below build from source, rather than install a store release.
+> Start with a disposable identity while evaluating it.
 
 <p align="center">
   <picture>

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.0.0 — 2026-09-22
+
+First public release. There is no published predecessor, so the entries below
+cover the whole of Ostrilo's development rather than a single release cycle —
+which is why a 1.0.0 arrives with a changelog this long. The README states what
+this version number does and does not claim.
+
 ### Security
 
 - **BREAKING for dApps: `window.nostr.getPublicKey()` now requires your

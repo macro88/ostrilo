@@ -164,6 +164,12 @@ export default defineConfig({
       page: "options.html",
       open_in_tab: true,
     },
+    homepage_url: "https://github.com/macro88/ostrilo",
+    // Firefox needs an explicit add-on id for a stable AMO identity. Changing
+    // it later orphans every existing install, so it is fixed here once.
+    ...(env.browser === "firefox"
+      ? { browser_specific_settings: { gecko: { id: "ostrilo@macro88.github.io" } } }
+      : {}),
   }),
   zip: {
     // Belt and braces: production builds emit no source maps today (WXT only
