@@ -1,7 +1,23 @@
 # ui-theme Specification
 
 ## Purpose
-TBD - created by archiving change add-theme-auto-switching. Update Purpose after archive.
+
+Defines how Ostrilo resolves an effective theme from the user's `theme` setting
+and the system colour-scheme preference, and how that theme is applied to each
+extension UI surface.
+
+This spec covers theme *resolution mechanics* only: which of `light` or `dark`
+applies, and how it reaches the DOM. What those two themes look like — the token
+values, and the fact that the dark variant is the "Deep Ink" role reassignment
+rather than an inversion of the light one — is `docs/design/DESIGN_RULES.md` §3.
+The two do not overlap: nothing here names a colour.
+
+Implemented by `src/ui/lib/theme.ts` (`resolveEffectiveTheme`,
+`getSystemPrefersDark`, `applyThemeToDOM`) and `src/ui/hooks/useTheme.ts`, which
+each surface mounts once. The `dark` class is what
+`src/assets/tailwind.css` keys its dark variant on
+(`@custom-variant dark (&:is(.dark *))`).
+
 ## Requirements
 ### Requirement: Effective Theme Resolution
 
@@ -73,16 +89,18 @@ When `theme` is `system`, the extension SHALL update the applied theme when the 
 
 ### Requirement: User Override via Settings
 
-The extension SHALL allow users to override system theme behavior via the Settings page.
+The extension SHALL allow users to override system theme behavior via a theme
+selector. The selector appears both in the popup's Settings tab and on the
+options page's General tab; either one writes the same setting.
 
 #### Scenario: User selects explicit theme
-- **GIVEN** the Settings page theme selector is visible
+- **GIVEN** a theme selector is visible
 - **WHEN** the user selects `Light` or `Dark`
 - **THEN** the selection SHALL be persisted to settings
-- **AND** the UI SHALL update to the selected theme immediately
+- **AND** every open extension surface SHALL update to the selected theme, not only the one the change was made on
 
 #### Scenario: User selects System
-- **GIVEN** the Settings page theme selector is visible
+- **GIVEN** a theme selector is visible
 - **WHEN** the user selects `System`
 - **THEN** the selection SHALL be persisted to settings
 - **AND** the UI SHALL follow system/browser color-scheme preference
@@ -106,5 +124,10 @@ The extension SHALL apply the same effective theme behavior across all extension
 #### Scenario: Approval window uses the same theme behavior
 - **GIVEN** the user has selected a theme setting
 - **WHEN** the approval window UI renders
+- **THEN** it SHALL apply the effective theme using the same rules
+
+#### Scenario: Options page uses the same theme behavior
+- **GIVEN** the user has selected a theme setting
+- **WHEN** the options (settings) page UI renders
 - **THEN** it SHALL apply the effective theme using the same rules
 

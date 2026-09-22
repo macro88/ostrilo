@@ -7,8 +7,12 @@ Ostrilo supports managing multiple Nostr identities within a single extension. T
 The multi-key selector allows you to:
 - Switch between different Nostr identities with a single click
 - Add additional keys without leaving your current context
-- Manage key labels, rename, and delete keys from settings
-- View profile metadata (avatars and display names) for each key
+- Rename, delete and re-activate keys from the **Keys & Identities** tab on the settings page
+- See the display name from each key's Nostr profile
+
+Two surfaces are involved. The **key selector** in the extension header switches
+the active key and adds new ones. The **settings page** (a full browser tab, not
+the popup) is where keys are renamed and deleted.
 
 ## Switching Between Keys
 
@@ -19,12 +23,18 @@ The key selector is located in the extension header and displays your currently 
 1. Click on the key selector in the header (shows current key's avatar and name)
 2. A dropdown menu will appear showing all your available keys
 3. Each key displays:
-   - Profile avatar (if available)
+   - A seal avatar showing the first letter of its name
    - Display name or key label
    - Truncated npub (public key)
    - Checkmark (✓) next to the currently selected key
 4. Click any key to switch to it
 5. The dropdown closes automatically and all UI components update to reflect the new key
+
+**Why no profile pictures?** Ostrilo never loads the profile picture from your
+Nostr profile here. A picture URL points at a host chosen by whoever wrote the
+profile, and this is the screen where you confirm which identity is about to
+sign — fetching an image would tell that host your IP address every time you
+opened the menu. You get a local seal avatar instead.
 
 **Keyboard shortcuts:**
 - Press `Enter` or `Space` to open the dropdown
@@ -45,41 +55,59 @@ You can add new keys at any time, even after initial onboarding.
    - **Import Existing Key**: Import a key from nsec1 or hex format
 
 4. For **Create New Key**:
-   - Enter a label (optional) to identify this key
-   - The extension will generate a new keypair
-   - The new key is automatically selected
+   - Enter your **vault password**
+   - Enter a **key name**
+   - Click **Create Key**
 
 5. For **Import Existing Key**:
+   - Enter your **vault password**
    - Paste your private key (nsec1... or hex format)
-   - Enter a label (optional)
-   - The imported key is automatically selected
+   - Enter a **key name**
+   - Click **Import Key**
 
-### From Settings
+**The new key is not made active.** It is added to your vault and appears in the
+selector, but whichever key was signing before carries on signing. Open the
+selector and click the new key when you want to use it. This is deliberate:
+adding a key should never quietly change which identity signs your next request.
 
-1. Navigate to the **Settings** tab
-2. Scroll to the **Keys & Identities** section
+### From the settings page
+
+1. Open the **Settings** tab in the popup and click **Keys & identities** (or right-click the Ostrilo toolbar icon and choose Options)
+2. The settings page opens on the **Keys & Identities** tab
 3. Click the **"Add Key"** button
 4. Follow the same create or import flow as above
 
-**Note:** When the vault is unlocked, you don't need to re-enter your password to add keys. The current session password is reused automatically for security and convenience.
+**Note:** You must enter your vault password to add a key, even when the vault is
+already unlocked. Ostrilo keeps no copy of your password in memory to reuse, so
+there is nothing to fall back on — the password you type is used to encrypt the
+new key and is then discarded.
 
-## Managing Keys in Settings
+## Managing Keys on the Settings Page
 
-The Settings page provides comprehensive key management features.
+Key management lives on the settings page, which opens in its own browser tab.
+The popup's Settings tab is for quick controls only — theme, auto-lock and
+**Lock now** — and links out to the full page.
 
 ### Viewing All Keys
 
-1. Open the extension popup or sidepanel
-2. Click the **Settings** tab
-3. Navigate to the **Keys & Identities** section
+1. Open the extension popup and click the **Settings** tab
+2. Click **Keys & identities** (or right-click the Ostrilo toolbar icon and choose Options, then pick the **Keys & Identities** tab)
+
+The settings page asks for your password if the vault is locked, and tells you to
+create a key in the popup first if you have no vault yet.
 
 Each key is displayed with:
-- Profile avatar
+- A seal avatar showing the first letter of its name
 - Display name (from Nostr profile metadata if available)
 - Key label (your custom identifier)
-- Truncated npub (public key)
-- "Active" badge for the currently selected key
-- Management buttons (Set Active, Rename, Delete)
+- Truncated npub, with a copy button beside it
+- **ACTIVE** chip on the currently selected key
+- A **Set Active** button (on keys that are not already active), a rename (pencil) button and a delete (trash) button
+
+If a stored key's public key cannot be read, that row says **"Unreadable record:
+stored public key is not valid"** instead of showing an npub. Ostrilo will not
+display a guess: a made-up npub that looked real would be indistinguishable from
+your own identity.
 
 ### Renaming a Key
 
@@ -87,16 +115,18 @@ Key labels help you identify different identities (e.g., "Work", "Personal", "An
 
 **To rename a key:**
 
-1. In the **Keys & Identities** section, find the key you want to rename
-2. Click the **"Rename"** button next to that key
-3. The label becomes editable inline
+1. On the **Keys & Identities** tab, find the key you want to rename
+2. Click the pencil (rename) button on that row
+3. The label becomes an editable text box
 4. Type your new label (e.g., "Work Account")
-5. Click **"Save"** or press `Enter`
+5. Press `Enter`, or click the check button. Press `Escape` or click the ✕ to cancel
 6. The new label appears immediately throughout the UI
 
+Renaming does not ask for your password. It changes a label you chose and
+destroys nothing.
+
 **Label requirements:**
-- Maximum 64 characters
-- Cannot be empty
+- Maximum 100 characters
 - Any Unicode characters allowed
 
 ### Setting a Key as Active
@@ -106,41 +136,53 @@ If you're viewing settings and want to switch to a different key:
 1. Find the key you want to activate
 2. Click **"Set Active"** button
 3. The key becomes your active identity immediately
-4. The "Active" badge moves to this key
+4. The **ACTIVE** chip moves to this key
 
 This is equivalent to switching keys via the header dropdown.
 
 ### Deleting a Key
 
-**⚠️ Warning:** Key deletion is permanent and cannot be undone. Make sure you have backed up your key before deleting it.
+**⚠️ Warning:** Key deletion is permanent and cannot be undone. If the key was
+never backed up, the identity is gone for good — see the FAQ below on backing up,
+because Ostrilo can only back up a key during onboarding.
 
 **To delete a key:**
 
-1. In the **Keys & Identities** section, find the key to delete
-2. Click the **"Delete"** button
-3. A confirmation dialog appears with a warning about data loss
-4. Read the warning carefully
-5. Click **"Delete"** to confirm, or **"Cancel"** to abort
+1. On the **Keys & Identities** tab, find the key to delete
+2. Click the trash (delete) button on that row
+3. A dialog appears naming the key and stating the consequence, and asks for your **vault password**
+4. Type your vault password and click **Confirm**, or **Cancel** to abort
+
+Deleting a key needs your password even though the vault is already unlocked.
+Ostrilo refuses the deletion in the background without one, so cancelling the
+dialog — or getting the password wrong — leaves the key exactly where it was.
 
 **Important notes:**
-- You cannot delete your last remaining key
-- If you delete the currently active key, another key is automatically selected
-- The deleted key's private key material is securely overwritten in memory
-- All associated settings and policies for that key are removed
+- You cannot delete your last remaining key. Its delete button is disabled, and hovering it explains why
+- If you delete the currently active key, the first remaining key becomes active
+- The deleted key's private key material is overwritten in memory
+- Per-site permissions are stored per origin, not per key, so they are **not** removed when a key is deleted
+
+**Known issue:** if you delete a key that was added during the current session,
+the vault may lock itself immediately and ask you to unlock again. The deletion
+still happened. This is a defect, and it is pinned by a test so it cannot be
+lost.
 
 ## Profile Metadata Integration
 
 Ostrilo automatically fetches profile metadata for all your keys from Nostr relays.
 
 **What's displayed:**
-- **Profile Avatar**: Your profile picture from kind:0 events
-- **Display Name**: Your preferred name (display_name or name field)
-- **Fallback**: If no profile is found, shows your key label or "Unnamed Key"
+- **Display Name**: Your preferred name (the `display_name` or `name` field from your kind:0 profile event)
+- **Fallback**: If no profile is found, shows your key label, or "Unnamed Key" if there is no label
+
+**Not displayed:** your profile picture. Key lists always use the local seal
+avatar — see "Why no profile pictures?" above.
 
 **Caching:**
-- Profile data is cached for 5 minutes to reduce relay queries
+- Profile data is cached for one hour to reduce relay queries
 - Profiles are refreshed automatically when stale
-- Works offline by showing cached data
+- If the relays cannot be reached, the cached profile is shown even if it has expired
 
 **Privacy note:** Profile fetching queries Nostr relays for your public key. This is a standard Nostr operation and does not expose your private keys.
 
@@ -150,7 +192,7 @@ Ostrilo automatically fetches profile metadata for all your keys from Nostr rela
 
 - **Use descriptive labels**: "Work - Alice", "Personal", "Anon Blogger"
 - **Limit key count**: Recommended maximum of 10 keys for best UX
-- **Back up before deleting**: Export or write down private keys before removal
+- **Back up when you create**: Ostrilo offers an encrypted backup only while you are creating your first key during onboarding. There is no export on the settings page, so a key you add later cannot be backed up from within Ostrilo. If you import a key, keep your own copy of the nsec
 
 ### Security Considerations
 
@@ -161,7 +203,7 @@ Ostrilo automatically fetches profile metadata for all your keys from Nostr rela
 
 ### Performance Tips
 
-- **Profile loading**: First time loading shows key labels immediately, avatars load asynchronously
+- **Profile loading**: Key names and seal avatars render immediately. Display names from Nostr profiles arrive when the relay query resolves, and are cached for an hour afterwards
 - **Key switching**: Switching is instant; no network requests required
 - **Many keys**: If you have many keys, consider using fewer active ones
 
@@ -170,9 +212,13 @@ Ostrilo automatically fetches profile metadata for all your keys from Nostr rela
 All multi-key features are fully accessible via keyboard:
 
 - **Tab**: Navigate between interactive elements
-- **Enter/Space**: Activate buttons and select keys
+- **Enter/Space**: Activate buttons, and open the key selector. Opening it with the keyboard puts focus on the first key
 - **Arrow keys**: Navigate within the key dropdown
-- **Escape**: Close dropdown or cancel dialogs
+- **Escape**: Close the dropdown without changing the active key, or cancel a dialog. Focus returns to the selector
+
+On the settings page, the left/right and up/down arrow keys move between settings
+tabs, except when focus is inside a control that uses the arrows itself (such as
+the auto-lock slider).
 
 ## Troubleshooting
 
@@ -180,15 +226,16 @@ All multi-key features are fully accessible via keyboard:
 - Ensure you've completed onboarding and created/imported at least one key
 - Try unlocking the vault if it's locked
 
-### Profile avatar not showing
+### Display name not showing
 - Check your internet connection
 - Profile metadata may not exist on relays yet
-- Fallback avatar (first letter of name) is shown automatically
+- The key label (or "Unnamed Key") is shown instead
+- Avatars are always the local seal, so a missing picture is not a fault
 
 ### Can't delete a key
-- Verify it's not your last remaining key (last key cannot be deleted)
-- Check if delete button is enabled (should not be disabled)
-- Try refreshing the extension
+- Verify it's not your last remaining key (the last key cannot be deleted, and its delete button is disabled)
+- The deletion needs your vault password: if you cancelled the dialog or typed the wrong password, nothing was deleted
+- Deleting is only available on the settings page, not in the popup
 
 ### Switched key but UI hasn't updated
 - This is rare; try closing and reopening the popup
@@ -197,16 +244,34 @@ All multi-key features are fully accessible via keyboard:
 ## FAQ
 
 **Q: How many keys can I have?**  
-A: There's no hard limit, but we recommend 1-10 keys for optimal UX. More keys may require scrolling in the dropdown.
+A: There's no enforced limit, but we recommend 1-10 keys. More keys means
+scrolling in the dropdown, and every extra key is one more identity to keep
+track of before you sign.
 
 **Q: Do I need to re-enter my password when adding keys?**  
-A: No, when the vault is unlocked, new keys are encrypted with your current session password automatically.
+A: Yes. Every add-key form asks for your vault password, even when the vault is
+unlocked. Ostrilo does not keep your password in memory to reuse — the one you
+type encrypts the new key and is then discarded.
 
 **Q: What happens if I delete all my keys?**  
-A: You cannot delete your last key. The delete button is disabled when only one key remains.
+A: You cannot. The delete button is disabled when only one key remains, and the
+background refuses the request even if something else tries to send it.
 
 **Q: Can I export a key before deleting it?**  
-A: Currently, key export is not supported. Make sure you've saved your private key elsewhere before importing it into Ostrilo if you need a backup. Future versions will add explicit export functionality.
+A: No. Ostrilo offers an encrypted backup only during onboarding, while you are
+creating your very first key. There is no export on the settings page, so a key
+you created later cannot be exported at all. Keep your own copy of any key you
+import, and treat deletion of a later-added key as permanent loss of that
+identity.
+
+**Q: Does adding a key switch me to it?**  
+A: No. A new key is added to your vault but the key that was signing before keeps
+signing. Open the key selector and click the new key to switch.
+
+**Q: Is key management in the popup?**  
+A: No. The popup's Settings tab holds quick controls (theme, auto-lock, Lock
+now). Renaming and deleting keys is on the settings page, which opens in its own
+browser tab — the popup links to it.
 
 **Q: Will my keys sync across devices?**  
 A: No, keys are stored locally in the browser extension. Multi-device sync via NIP-46 is planned for a future release.

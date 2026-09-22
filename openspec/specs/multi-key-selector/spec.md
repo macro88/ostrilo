@@ -1,7 +1,17 @@
 # multi-key-selector Specification
 
 ## Purpose
-TBD - created by archiving change add-multi-key-selector. Update Purpose after archive.
+
+Defines how Ostrilo presents and manages more than one Nostr identity: the
+header key selector that switches the active key, the add-key flow, and the
+Keys & Identities tab on the settings page where keys are renamed and deleted.
+
+Implemented by `src/ui/components/layout/KeySelector.tsx` (header),
+`src/ui/features/settings/components/shared/KeySelectorCard.tsx` and
+`src/ui/features/settings/components/KeysIdentitiesTab.tsx` (settings page), and
+`src/ui/components/dialogs/AddKeyDialog.tsx`. Visual rules come from
+`docs/design/DESIGN_RULES.md`.
+
 ## Requirements
 ### Requirement: REQ-MKS-001 - Key Selector Component
 
@@ -13,11 +23,12 @@ The system SHALL provide a KeySelector component that displays all available key
 #### Acceptance Criteria
 - Component renders trigger button showing currently selected key
 - Clicking trigger opens dropdown with list of all keys
-- Each key displays avatar, display name, and truncated npub
+- Each key displays a seal avatar, display name, and truncated npub
 - Currently selected key has visual indicator (checkmark)
 - Clicking a key item switches to that key and closes dropdown
-- Component reads keys from KeyManagerContext
-- Component calls `selectKey(keyId)` RPC method for switching
+- Component reads keys from `KeyManagerContext`, via the `useKeyManager` wrapper
+- Component calls the `selectKey(id)` RPC wrapper for switching (wire message `vault.select`)
+- The trigger is disabled while a switch is in flight, and re-selecting the already-active key is a no-op
 
 #### Scenario: User switches active key
 **Given** the user has 3 keys in their vault (Alice, Bob, Charlie)  
@@ -29,41 +40,47 @@ The system SHALL provide a KeySelector component that displays all available key
 **And** the dropdown closes  
 **And** the UI updates to show Bob's key as active  
 **And** all components using the selected key see Bob's key
-**And** the browser window refreshes if the signer is connected to an app/site
 
 ---
 
 ### Requirement: REQ-MKS-002 - Profile-Aware Key Display
 
-The system SHALL integrate profile metadata for each key, displaying profile avatars and display names when available.
+The system SHALL integrate profile metadata for each key, displaying the profile
+display name when available. It SHALL NOT load relay-supplied profile pictures on
+any key-selection surface.
 
 **Priority:** High  
 **Category:** Integration
 
 #### Acceptance Criteria
-- KeySelector fetches profile metadata for all keys on mount
-- Profile avatar displayed if metadata.picture exists
-- Fallback avatar displayed if no profile picture available
-- Display name shown as: metadata.display_name || metadata.name || key.label
-- Npub shown as secondary text (truncated to 16 chars)
-- Avatar images load asynchronously without blocking UI
-- Failed avatar loads fall back to generated avatar
+- KeySelector requests profile metadata for all keys on mount, in parallel, keyed by hex public key
+- Display name shown as: `metadata.display_name || metadata.name || key.label || "Unnamed Key"`
+- Avatars are ALWAYS the local seal bearing the display name's first letter. `metadata.picture` MUST NOT be used as an image source on the header selector or the settings key list
+- Npub shown as secondary text, middle-truncated, in mono (`DESIGN_RULES` §7)
+- A failed profile fetch degrades to the label with no error UI
 
 #### Scenario: Key with profile metadata
 **Given** the user has a key with public key npub1abc...def  
-**And** that key has profile metadata with picture URL and display_name "Alice"  
+**And** that key has profile metadata with a picture URL and display_name "Alice"  
 **When** the KeySelector renders  
-**Then** the key shows Alice's profile picture as avatar  
+**Then** the key shows a seal avatar with the letter "A"  
+**And** no request is made to the picture URL's host  
 **And** the key shows "Alice" as the primary text  
-**And** the key shows "npub1abc...def" as secondary text
+**And** the key shows the truncated npub as secondary text
 
 #### Scenario: Key without profile metadata
 **Given** the user has a key with label "Work Account"  
 **And** that key has no profile metadata  
 **When** the KeySelector renders  
-**Then** the key shows a fallback avatar icon  
+**Then** the key shows a seal avatar with the letter "W"  
 **And** the key shows "Work Account" as the primary text  
 **And** the key shows the truncated npub as secondary text
+
+#### Scenario: Stored public key cannot be decoded
+**Given** a stored record whose public key is not valid hex  
+**When** the settings key list renders that record  
+**Then** the row states that the record is unreadable  
+**And** no npub is rendered for it
 
 ---
 
@@ -75,46 +92,52 @@ The system SHALL provide an "Add Key" action within the KeySelector that allows 
 **Category:** User Action
 
 #### Acceptance Criteria
-- "Add Key" button displayed at bottom of KeySelector dropdown
-- Clicking "Add Key" opens AddKeyDialog modal
-- Dialog offers choice between "Create Key" and "Import Key"
-- "Create Key" flow reuses OnboardingCreateKey component
-- "Import Key" flow reuses OnboardingImportKey component
-- Successful key creation/import automatically selects the new key
-- Dialog closes after successful operation
-- Errors shown inline in dialog (invalid input, duplicate key, etc.)
+- "Add Key" item displayed at the bottom of the KeySelector dropdown, below a separator, when an `onAddKey` callback is supplied
+- Activating it opens the AddKeyDialog modal, whose state is owned by `MainApp`
+- Dialog offers a choice between "Create New Key" and "Import Existing Key"
+- "Create New Key" uses `CreateKeyForm`; "Import Existing Key" uses `ImportKeyForm` (both in `src/ui/components/dialogs/`). Neither reuses the onboarding screens
+- Both forms REQUIRE the vault password, even when the vault is unlocked. The password is held in a ref and the input cleared afterwards; it is never placed in component state that outlives the dialog
+- A successfully added key is NOT made active. The vault selects a new key only when it held no keys at all
+- Dialog closes after a successful operation and the key list is refreshed
+- Errors shown inline in the dialog (invalid input, duplicate key, wrong password)
 
 #### Scenario: User creates new key via selector
 **Given** the user is on the Home view  
 **And** the user has 1 key currently selected  
 **When** the user clicks the KeySelector trigger  
-**And** clicks "Add Key"  
+**And** activates "Add Key"  
 **Then** the AddKeyDialog modal opens  
-**When** the user selects "Create Key"  
-**And** enters password "test123" and label "New Identity"  
-**And** clicks "Generate"  
+**When** the user selects "Create New Key"  
+**And** enters the vault password and the key name "New Identity"  
+**And** clicks "Create Key"  
 **Then** the system creates a new key with label "New Identity"  
-**And** automatically selects the new key as active  
+**And** the previously active key REMAINS active  
 **And** the dialog closes  
-**And** the KeySelector shows "New Identity" as the selected key
+**And** the KeySelector lists "New Identity" as an available key
 
 #### Scenario: User imports existing key via selector
 **Given** the user is on the Profile view  
 **And** the user has 2 keys in their vault  
-**When** the user opens the KeySelector and clicks "Add Key"  
+**When** the user opens the KeySelector and activates "Add Key"  
 **Then** the AddKeyDialog opens  
-**When** the user selects "Import Key"  
-**And** enters valid nsec1... private key, password, and label  
-**And** clicks "Import"  
+**When** the user selects "Import Existing Key"  
+**And** enters the vault password, a valid nsec1... private key, and a key name  
+**And** clicks "Import Key"  
 **Then** the system imports the key  
-**And** automatically selects the imported key as active  
+**And** the previously active key REMAINS active  
 **And** the dialog closes  
-**And** the KeySelector shows the imported key
+**And** the KeySelector lists the imported key
+
+#### Scenario: Add key with the wrong vault password
+**Given** the user has a vault with at least one key  
+**When** the user submits the create or import form with an incorrect password  
+**Then** the system refuses with `invalid_password`  
+**And** no key is added to the vault
 
 #### Scenario: Import fails with duplicate key
 **Given** the user has a key with public key npub1abc...def  
 **When** the user tries to import the same private key again  
-**Then** the system shows error "This key already exists in your vault"  
+**Then** the system refuses with `key_already_exists`  
 **And** does not create a duplicate key  
 **And** the dialog remains open for correction
 
@@ -122,47 +145,61 @@ The system SHALL provide an "Add Key" action within the KeySelector that allows 
 
 ### Requirement: REQ-MKS-004 - Settings Key Management
 
-The system SHALL provide a "Keys & Identities" section in Settings that lists all keys and allows rename/delete operations.
+The system SHALL provide a "Keys & Identities" tab on the options page that lists
+all keys and allows rename, delete and set-active operations.
 
 **Priority:** Medium  
 **Category:** Settings UI
 
 #### Acceptance Criteria
-- Settings page has new "Keys & Identities" section
-- Section lists all keys with avatar, display name, label, and npub
-- Currently selected key has "Active" badge
-- Each key has "Rename", "Delete", and "Set Active" buttons
-- Rename opens inline text input for label editing
-- Delete shows confirmation dialog with warning text
-- Last remaining key cannot be deleted (button disabled)
-- Set Active calls `selectKey(keyId)` to switch keys
+- The options page has a "Keys & Identities" tab, reachable at `#keys` and linked from the popup's Settings tab
+- Key management is NOT reproduced in the popup, which carries quick controls only
+- The tab lists all keys with a seal avatar, display name, label and npub, in one grouped card
+- The currently selected key carries a mint `ACTIVE` chip, not a tinted row (`DESIGN_RULES` §2)
+- Each row has a rename (pencil) icon button and a delete (trash) icon button; rows that are not active also have a "Set Active" button
+- Every icon button carries an `aria-label` naming both the action and the key
+- The npub has a copy affordance (`DESIGN_RULES` §7)
+- Rename swaps the row into an inline text input; Enter saves, Escape cancels
+- Delete requires the vault password, collected in a re-authentication dialog that names the key and states the consequence
+- The last remaining key cannot be deleted (button disabled, with a title explaining why)
+- Set Active calls `selectKey(id)` to switch keys
+- The tab is unreachable while the vault is locked: the options page renders the lock screen instead
 
 #### Scenario: User renames key in settings
 **Given** the user has a key with label "Old Label"  
-**When** the user navigates to Settings  
-**And** clicks "Rename" on that key  
+**When** the user opens the Keys & Identities tab  
+**And** activates the rename button on that key  
 **Then** an inline text input appears with "Old Label" pre-filled  
 **When** the user changes it to "New Label" and presses Enter  
 **Then** the system updates the key label to "New Label"  
-**And** the change is reflected in KeySelector immediately  
-**And** a success notification is shown
+**And** the change is reflected in the KeySelector  
+**And** NO password is requested
 
 #### Scenario: User deletes non-active key
 **Given** the user has 3 keys (Alice active, Bob, Charlie)  
-**When** the user navigates to Settings  
-**And** clicks "Delete" on Bob's key  
-**Then** a confirmation dialog appears with warning "This action cannot be undone"  
-**When** the user confirms deletion  
+**When** the user opens the Keys & Identities tab  
+**And** activates the delete button on Bob's key  
+**Then** a re-authentication dialog appears naming Bob's key  
+**And** it states that if the key is not backed up the identity is gone for good  
+**When** the user enters the correct vault password and confirms  
 **Then** the system deletes Bob's key from the vault  
 **And** the key disappears from the list  
-**And** the KeySelector no longer shows Bob's key  
-**And** a success notification is shown
+**And** the KeySelector no longer shows Bob's key
+
+#### Scenario: Deletion refused without a verified password
+**Given** the user has 3 keys  
+**When** the user activates delete and cancels the re-authentication dialog  
+**Then** no key is deleted  
+**When** the user activates delete and enters an incorrect password  
+**Then** the background refuses with `invalid_password`  
+**And** the key is still in the vault
 
 #### Scenario: Cannot delete last key
 **Given** the user has only 1 key in their vault  
-**When** the user navigates to Settings Keys section  
-**Then** the "Delete" button for that key is disabled  
-**And** hovering shows tooltip "Cannot delete last key"
+**When** the user opens the Keys & Identities tab  
+**Then** the delete button for that key is disabled  
+**And** its title reads "The only key in the vault cannot be deleted."  
+**And** the background refuses `vault.deleteKey` for it regardless of the UI
 
 ---
 
@@ -174,26 +211,31 @@ The system SHALL support full keyboard navigation for the KeySelector component.
 **Category:** Accessibility
 
 #### Acceptance Criteria
-- Tab key moves focus to KeySelector trigger
-- Enter or Space opens dropdown when trigger focused
-- Arrow Up/Down navigates through key list
-- Enter selects focused key and closes dropdown
-- Escape closes dropdown without changing selection
-- Tab moves to "Add Key" button at bottom of list
-- Focus visible with clear focus indicators (ring)
-- Focus trap active when dropdown is open
+- Tab key moves focus to the KeySelector trigger
+- Enter or Space opens the dropdown when the trigger is focused, placing focus on the first key
+- Arrow Up/Down moves through the key list, including the "Add Key" item
+- Enter activates the focused item and closes the dropdown
+- Escape closes the dropdown without changing the active key, and returns focus to the trigger
+- Focus is visible throughout (`focus-visible` ring; `DESIGN_RULES` §11)
+- The dropdown is a Radix menu, so focus is contained while it is open and restored to the trigger on close
 
 #### Scenario: Keyboard-only key switching
-**Given** the user has 3 keys in their vault  
+**Given** the user has 2 keys in their vault  
 **And** the KeySelector is closed  
 **When** the user presses Tab to focus the trigger  
 **And** presses Enter to open the dropdown  
-**Then** the dropdown opens with first key focused  
-**When** the user presses Arrow Down twice  
-**Then** the third key is focused (visible focus ring)  
+**Then** the dropdown opens with the first key focused  
+**When** the user presses Arrow Down  
+**Then** the second key is focused (visible focus ring)  
 **When** the user presses Enter  
-**Then** the third key becomes active  
-**And** the dropdown closes  
+**Then** the second key becomes active  
+**And** the dropdown closes
+
+#### Scenario: Escape does not commit the highlighted key
+**Given** the dropdown is open with a key other than the active one focused  
+**When** the user presses Escape  
+**Then** the dropdown closes  
+**And** the active key is unchanged  
 **And** focus returns to the trigger
 
 ---
@@ -206,22 +248,24 @@ The system SHALL provide proper ARIA attributes for screen reader accessibility.
 **Category:** Accessibility
 
 #### Acceptance Criteria
-- KeySelector dropdown has `role="listbox"`
+- KeySelector dropdown has `role="listbox"` and `aria-label="Available keys"`
 - Each key item has `role="option"`
 - Active key has `aria-selected="true"`
-- Trigger has `aria-label="Select active key"`
-- "Add Key" button has `aria-label="Add new key"`
-- Key descriptions use `aria-describedby` for npub
+- Trigger has `aria-label="Select active key"`, `aria-haspopup="listbox"` and `aria-controls="key-selector-listbox"`
+- "Add Key" item has `aria-label="Add new key"`
+- Each option carries ONE composed `aria-label` — display name, truncated npub, and "(currently selected)" on the active key. `aria-describedby` is NOT used for the npub
 - Dropdown state communicated via `aria-expanded`
+- The trigger is wrapped in an `<h2>` that points `aria-labelledby` at the key's name, so the screen's heading is the active key's name rather than "Select active key"
+- Decorative icons (chevron, check, plus) are `aria-hidden`
 
 #### Scenario: Screen reader announces key selection
 **Given** a screen reader user navigates to KeySelector  
 **When** the trigger receives focus  
 **Then** screen reader announces "Select active key, button, collapsed"  
 **When** the user activates the trigger  
-**Then** screen reader announces "Select active key, expanded, listbox with 3 items"  
-**When** the user navigates to second key  
-**Then** screen reader announces "Bob, Work Account, npub1xyz...123, option 2 of 3"
+**Then** the listbox is announced as expanded  
+**When** the user navigates to the second key  
+**Then** that option is announced with its display name and truncated npub
 
 ---
 
@@ -233,30 +277,36 @@ The system SHALL provide clear loading and error states for async operations.
 **Category:** UX
 
 #### Acceptance Criteria
-- Key switching shows loading spinner on trigger during RPC call
-- Profile avatars show skeleton loader while fetching
-- Failed profile fetch shows fallback avatar (no error UI)
-- Add key errors shown inline in dialog
-- RPC timeout shows toast notification "Failed to switch key"
-- Key list remains usable during profile metadata loading
+- While a key switch is in flight the trigger is disabled and shows a wait cursor at reduced opacity, and a second switch cannot be started
+- Seal avatars render synchronously, so there is no avatar loading state
+- A failed profile fetch degrades to the key's label with no error UI
+- Add-key errors are shown inline in the dialog
+- A failed key switch is written to the console only. The extension ships no toast system, so there is no user-visible error for it
+
+> Known gap: a failed switch is silent to the user beyond the key not changing.
+> Any fix needs a notification surface, which does not exist yet.
 
 #### Scenario: Key switching with slow RPC
 **Given** the user clicks a different key in the selector  
-**And** the `selectKey` RPC call takes 2 seconds  
-**When** the user clicks the key  
-**Then** the dropdown shows loading spinner immediately  
-**And** the clicked key is visually marked as "switching"  
-**And** other keys are disabled during the switch  
+**And** the `selectKey` RPC call is slow  
+**Then** the trigger is disabled and shows a wait cursor  
+**And** a further switch cannot be started until it settles  
 **When** the RPC completes successfully  
-**Then** the loading spinner disappears  
-**And** the new key is active  
+**Then** the new key is active  
 **And** the dropdown closes
+
+#### Scenario: Key switch fails
+**Given** the `selectKey` RPC rejects  
+**When** the switch settles  
+**Then** the active key is unchanged  
+**And** the dropdown remains open  
+**And** the trigger is re-enabled
 
 #### Scenario: Profile fetch failure
 **Given** the user has 3 keys  
 **And** one key's profile metadata fetch fails (network error)  
 **When** the KeySelector renders  
-**Then** the failed key shows a fallback avatar (icon)  
+**Then** the failed key shows its seal avatar as usual  
 **And** the failed key shows its label as primary text  
 **And** no error message is displayed (graceful degradation)  
 **And** the user can still select that key normally
@@ -270,24 +320,26 @@ The system SHALL provide consistent visual design that works in both light and d
 **Priority:** Medium  
 **Category:** UI/UX
 
+`docs/design/DESIGN_RULES.md` is binding here; where it and this requirement
+disagree, DESIGN_RULES wins.
+
 #### Acceptance Criteria
 - Hover states for all interactive elements
-- Visible focus indicators (4px blue ring, WCAG 2.1 AA)
-- Color contrast meets WCAG AA (4.5:1 for text, 3:1 for UI)
-- Smooth transitions for dropdown open/close (200ms)
-- Dropdown has subtle shadow and border
-- Active key has checkmark icon in brand color
-- All colors adapt to light/dark theme
+- Visible focus indicators, drawn with the ring token — violet, not blue (`DESIGN_RULES` §7)
+- Colors come from the CSS variables in `src/assets/tailwind.css`. NO hex values in components (`DESIGN_RULES` §3, §12)
+- Color contrast meets WCAG AA (4.5:1 for text, 3:1 for UI). `--ink-3` is held to 3:1 and is never used for information (`DESIGN_RULES` §11)
+- Transitions are 120–160ms with `--ease-out`; no bounce, shimmer or infinite loops (`DESIGN_RULES` §11)
+- The dropdown is an overlay, so it is one of the few surfaces allowed a shadow (`DESIGN_RULES` §2, §7)
+- Active key has a checkmark icon in the violet accent
+- Avatars use the seal shape (`DESIGN_RULES` §5)
+- Both themes are supported: light, and the dark "Deep Ink" variant. Dark is not an inversion — it is its own token set
 
 #### Scenario: Dark theme rendering
-**Given** the user has dark theme enabled  
+**Given** the user has the dark ("Deep Ink") theme applied  
 **When** the KeySelector renders  
-**Then** the trigger background is dark gray (#1a1a1a)  
-**And** text is light gray (#e0e0e0)  
-**And** dropdown background is dark gray with subtle border  
-**And** hover states use lighter gray (#2a2a2a)  
-**And** focus ring is visible blue (#3b82f6)  
-**And** all text meets 4.5:1 contrast ratio
+**Then** every surface, text and accent colour resolves from the theme's tokens  
+**And** no component supplies a literal colour value  
+**And** all text the user must read meets 4.5:1 contrast
 
 ---
 
@@ -301,10 +353,10 @@ The system SHALL render the key list and handle interactions with minimal latenc
 #### Acceptance Criteria
 - Key list renders in <100ms for up to 10 keys
 - Key switching completes in <500ms (excluding network)
-- Profile metadata fetched in parallel (not sequential)
-- Component uses React.memo to prevent unnecessary re-renders
-- Avatar images lazy-loaded with IntersectionObserver
-- Dropdown open/close animation is 60fps smooth
+- Profile metadata for all keys is requested in parallel, and one failure does not sink the rest
+- `KeySelector` is wrapped in `React.memo` to prevent unnecessary re-renders
+- No avatar images are loaded, so no image lazy-loading is required
+- Dropdown open/close animation is smooth
 
 #### Scenario: Fast rendering with multiple keys
 **Given** the user has 10 keys in their vault  
@@ -317,35 +369,46 @@ The system SHALL render the key list and handle interactions with minimal latenc
 
 ### Requirement: REQ-MKS-010 - Delete Key Safety
 
-The system SHALL protect users from accidental key deletion with confirmation and restrictions.
+The system SHALL protect users from accidental or unauthorised key deletion by
+re-verifying the vault password and by refusing to delete the last key.
 
 **Priority:** High  
 **Category:** Security/UX
 
 #### Acceptance Criteria
-- Delete button requires confirmation dialog
-- Confirmation shows warning "This action cannot be undone. Your key will be permanently deleted."
-- Last remaining key cannot be deleted (button disabled)
-- Deleting active key auto-selects another key first
-- Deleted key material is zeroized from memory
-- Deletion logged in ActivityLog with timestamp
+- Deletion requires the vault password, re-verified in the BACKGROUND. An unlocked vault is not sufficient authority
+- The re-authentication dialog names the key and states the consequence: if the key is not backed up, the identity is gone for good
+- There is no separate native confirmation in front of the password dialog; the password prompt IS the confirmation step
+- The last remaining key cannot be deleted — the button is disabled AND the background refuses the request
+- If the active key is deleted, the first remaining key is selected afterwards
+- The key's unlocked in-memory material is zeroized
+- Deletion is NOT recorded in the activity log; that log covers signing and identity-disclosure decisions only
 
-#### Scenario: Delete with confirmation
+#### Scenario: Delete with re-authentication
 **Given** the user has 2 keys (Alice active, Bob)  
-**When** the user clicks "Delete" on Bob's key in Settings  
-**Then** a confirmation dialog appears  
-**And** dialog shows warning text about permanent deletion  
-**When** the user clicks "Cancel"  
+**When** the user activates delete on Bob's key on the Keys & Identities tab  
+**Then** a re-authentication dialog appears naming Bob's key and its consequence  
+**When** the user cancels  
 **Then** the dialog closes and Bob's key is not deleted  
-**When** the user clicks "Delete" again and confirms  
+**When** the user activates delete again and enters the correct vault password  
 **Then** Bob's key is permanently deleted  
-**And** the deletion is logged in ActivityLog  
-**And** a success notification appears
+**And** the response does not echo the password  
+**And** the password is not remembered for the next action
 
-#### Scenario: Delete active key auto-switches
+#### Scenario: Delete active key promotes another
 **Given** the user has 2 keys (Alice active, Bob)  
-**When** the user deletes Alice's key  
-**Then** the system automatically selects Bob's key first  
-**And** then deletes Alice's key  
-**And** Bob remains active after deletion
+**When** the user deletes Alice's key with a verified password  
+**Then** Alice's record is removed first  
+**And** the first remaining key (Bob) is then selected  
+**And** the response reports Bob's id as the new selected key
+
+#### Scenario: Deleting the session's only unlocked key
+**Given** a key was added during this session, so the vault holds two records but only one key's unlocked material  
+**When** the user deletes the key whose material is unlocked  
+**Then** the deletion succeeds  
+**And** the vault locks, requiring the user to unlock again
+
+> Defect, pinned deliberately by `tests/e2e/multi-key-selector.spec.ts`: emptying
+> the unlocked map reads to `getLockState` as an evicted worker. The deletion is
+> not lost, but the lock is not intended behaviour.
 
