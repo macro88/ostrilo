@@ -91,8 +91,9 @@ proposals are written against.
 
 **What does not need a proposal:** typo and documentation fixes, a test for
 existing behaviour, a dependency bump, or an obvious bug fix that changes no
-specified requirement. If you are unsure, open an issue and ask — that is
-cheaper than writing either artifact twice.
+specified requirement. If you are unsure, open a draft pull request containing
+just the proposal's `## Why` section and ask there — a paragraph is cheaper than
+writing either artifact twice, and the issue tracker takes bug reports only.
 
 ## The verification gate
 

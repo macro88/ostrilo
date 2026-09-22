@@ -25,11 +25,20 @@ advisory form exists precisely so that none is needed.
 Private vulnerability reporting is a repository setting rather than a file in
 this checkout, so this document cannot confirm from the source tree that it is
 switched on. If the link above returns a 404, or shows no form for submitting a
-report, the setting has not been enabled yet. In that case, open a public issue
-that says only that you are holding a security report and are asking for the
-private channel to be opened — no details, no proof of concept, no affected file
-or function names — and wait for the advisory to be opened before sending
-anything substantive.
+report, the setting has not been enabled yet.
+
+In that case, do not fall back to the issue tracker. Blank issues are disabled,
+and the one issue form that exists requires you to affirm that what you are
+filing is *not* a security vulnerability, so there is deliberately no public
+route for this. Hold the details — no summary, no proof of concept, no affected
+file or function names — and check the advisory link again; enabling the setting
+is a single change in repository settings and costs the maintainer nothing.
+Send anything substantive only once the private advisory is open.
+
+If the channel stays closed and you believe its absence is itself leaving users
+at risk, GitHub's own reporting tools at <https://github.com/contact/report-abuse>
+reach GitHub rather than the maintainer and depend on nothing configured in this
+repository.
 
 Do not open a public issue, pull request or discussion containing vulnerability
 details, and do not publish them elsewhere, until the process in
