@@ -107,14 +107,14 @@ This layer contains the React components that make up the user interface of the 
 
 As mentioned earlier, Ostrilo uses the Hexagonal Architecture pattern. This pattern allows the application to be independent of the UI, database, and other external services.
 
--   **Ports:** These are interfaces that define how the application interacts with the outside world. For example, the `IStorage` port in `src/application/ports/storage.ts` defines the methods for storing and retrieving data.
--   **Adapters:** These are the concrete implementations of the ports. For example, the `LocalStorageAdapter` in `src/infrastructure/storage/adapters.ts` is an adapter that implements the `IStorage` port using the browser's `localStorage` API.
+-   **Ports:** These are interfaces that define how the application interacts with the outside world. For example, the `StoragePort` and `StorageSuite` interfaces in `src/application/ports/storage.ts` define the methods for storing and retrieving data across multiple storage areas.
+-   **Adapters:** These are the concrete implementations of the ports. For example, the `createStorageSuite()` function in `src/infrastructure/storage/adapters.ts` is an adapter that implements the `StoragePort` and `StorageSuite` interfaces using the `webextension-polyfill` library to access `browser.storage`.
 
-This separation of concerns makes the application more testable, maintainable, and flexible. For example, we could easily swap out the `LocalStorageAdapter` for a different storage mechanism without changing the application logic.
+This separation of concerns makes the application more testable, maintainable, and flexible. For example, we could easily swap out the `createStorageSuite()` implementation for a different storage mechanism without changing the application logic.
 
 ### Dependency Injection
 
-The application uses a simple form of dependency injection to provide the services with their dependencies. For example, the `KeyVaultService` receives an instance of the `IStorage` and `ICrypto` ports in its constructor. This makes it easy to replace the dependencies with mocks during testing.
+The application uses a simple form of dependency injection to provide the services with their dependencies. For example, the `KeyVaultService` receives instances of the `StorageSuite` port and individual crypto ports (`CryptoAead`, `CryptoKdf`, `Schnorr`, `CryptoHash`, `Bech32Codec`) in its constructor. This makes it easy to replace the dependencies with mocks during testing.
 
 ## State Management
 
