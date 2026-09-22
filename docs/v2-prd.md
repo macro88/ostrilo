@@ -1,10 +1,10 @@
 # Ostrilo v2 Product Requirements Document
 ## Roadmap Toward a Trustworthy Nostr Signing Extension
 
-- **Document Version:** 2.2
+- **Document Version:** 2.3
 - **Created:** 2025-12-09
-- **Last Status Reconciliation:** 2026-09-17
-- **Document Status:** Roadmap Status Draft - reconciled against `main` at `0d2c429`
+- **Last Status Reconciliation:** 2026-09-22
+- **Document Status:** Roadmap Status Draft - reconciled against `main` at `3468860`
 
 ---
 
@@ -683,6 +683,7 @@ All requirements include specific OpenSpec prompts in their respective tables ab
 | 2.0 | 2025-12-09 | Copilot Agent | Initial v2 PRD with comprehensive requirements, RTM, MoSCoW, Epics, and roadmap |
 | 2.1 | 2026-06-12 | Codex | Reconciled roadmap and requirement statuses against the current implementation; added multi-session progress workflow |
 | 2.2 | 2026-09-17 | Claude Opus 5 | Reconciled against `main` at `a32c33e`: refreshed the stale reconciliation dates (the security narrative had been written on 2026-09-14 under a June date), recorded the E2E journey coverage, the agent E2E loop, the dual-theme and populated-state design review and the defects it closed; SEC-004 🔄 → ✅ now that the built-output assertions run in CI, PERF-002 ⬜ → 🔄 for the single lazy boundary |
+| 2.3 | 2026-09-22 | Claude Sonnet 5 | Reconciled against `main` at `3468860`: retired the stale `openspec/prd.md` (its traceability matrix had drifted to claim PBKDF2 instead of the actual Argon2id vault KDF) and rewrote the executive summary, vision statement, and strategic goals out of marketing voice ("world's best", "fortress", "trusted by everyone") into the README's hedged, evidence-based register |
 
 ---
 
