@@ -857,8 +857,8 @@ check must never be able to convert a completed signature into an error.
 
 **File:** `src/application/services/activity-log.service.ts`
 
-Every terminal outcome of the path above is written to the activity log, using
-one method:
+Four outcomes of the path above are written to the activity log, using one
+method:
 
 ```typescript
 // src/application/services/activity-log.service.ts
@@ -880,6 +880,13 @@ await context.activityLog.addEntry({
   keyId: selectedKey.id,
 });
 ```
+
+Those four are the whole of it. A request refused before any decision was
+reached writes no entry — a malformed event, a bad origin, a locked vault, no
+selected key — and neither does one that fails after a decision was sought: a
+rate-limited origin, an approval window that could not open, or a signing
+failure. The log is therefore a record of the decisions the user made, not an
+audit trail of everything an origin attempted.
 
 The log is a ring buffer, newest first, bounded so it cannot grow without limit
 in extension storage:
