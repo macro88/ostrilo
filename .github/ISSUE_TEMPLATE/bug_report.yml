@@ -1,0 +1,132 @@
+name: Bug report
+description: Report incorrect behaviour in Ostrilo. Not for security vulnerabilities.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Stop here if this is a security issue
+
+        Ostrilo holds private keys. If this bug lets someone reach key material,
+        sign without approval, learn a public key without consent, or bypass the
+        lock, **do not file it here.** Report it privately:
+        [report a vulnerability](https://github.com/macro88/ostrilo/security/advisories/new),
+        and read [SECURITY.md](https://github.com/macro88/ostrilo/blob/main/SECURITY.md)
+        first.
+
+        ## Never paste key material
+
+        Issues are public and permanent. Do not include an `nsec`, a hex private
+        key, a vault password, a backup passphrase, a vault file, or a key-backup
+        file — not in text, not in a log, not in a screenshot. Reproduce with a
+        throwaway test identity.
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Before you file
+      options:
+        - label: This is not a security vulnerability. (If it is, use the private advisory link above.)
+          required: true
+        - label: This report contains no private keys, `nsec` values, passphrases, vault files or backup files, including in logs and screenshots.
+          required: true
+        - label: I searched existing issues and this is not already reported.
+          required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      description: Chromium is the automated test target; Firefox has a dedicated MV3 build without equivalent runtime coverage. Safari is not a verified target.
+      options:
+        - Chrome (Chromium MV3 build)
+        - Edge, Brave, Arc or another Chromium browser
+        - Firefox (Firefox MV3 build)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: browser-version
+    attributes:
+      label: Browser version
+      description: From `chrome://version` or `about:support`.
+      placeholder: "Chrome 141.0.7390.55"
+    validations:
+      required: true
+
+  - type: input
+    id: revision
+    attributes:
+      label: Source revision
+      description: The commit you built. Run `git rev-parse --short HEAD` in your checkout. Ostrilo is installed by building from source, so "latest" is not a revision.
+      placeholder: "8f1386e"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: build
+    attributes:
+      label: How did you build it?
+      options:
+        - pnpm run build (Chromium MV3, production)
+        - pnpm run build:firefox (Firefox MV3, production)
+        - pnpm run dev or pnpm run dev:firefox (development mode)
+        - Other or unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Numbered steps, starting from a state someone else can reach. Name the surface (popup, side panel, options tab, approval window) and, if a website is involved, the origin and the event kind.
+      placeholder: |
+        1. Build and load the unpacked extension in Chrome.
+        2. Complete onboarding with a new test identity.
+        3. Open https://example.com and request a signature for kind 1.
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What you expected to happen, and why — a documented requirement, a README statement, or a reasonable assumption.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: What happened instead. Include any RPC error code you saw, such as `denied`, `disclosure_refused`, `locked` or `rate_limited`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console or service-worker output
+      description: Optional. From the page console, the extension surface's console, or the background service worker. Scrub it before pasting.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15.6, Windows 11, Ubuntu 24.04"
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Optional. Screenshots (with key material removed), whether the vault was locked or unlocked, the site's trust level, or how often it reproduces.
+    validations:
+      required: false

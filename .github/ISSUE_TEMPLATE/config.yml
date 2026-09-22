@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/macro88/ostrilo/security/advisories/new
+    about: Ostrilo signs Nostr events with private keys. Report anything affecting key material, signing approval, consent or the vault lock privately here, never in a public issue.
+  - name: Security policy
+    url: https://github.com/macro88/ostrilo/blob/main/SECURITY.md
+    about: What is in scope, what is a documented trade-off rather than a bug, and what happens to your report.
+  - name: Propose a change
+    url: https://github.com/macro88/ostrilo/blob/main/CONTRIBUTING.md#start-with-a-proposal-not-a-pull-request
+    about: New or changed behaviour starts as an OpenSpec proposal under openspec/changes/, not as an issue or a pull request.

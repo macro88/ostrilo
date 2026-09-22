@@ -202,6 +202,12 @@ security audit or proof of bit-for-bit reproducible releases.
 
 ## Contributing
 
+Read [CONTRIBUTING.md](CONTRIBUTING.md) first. It covers setup, the blocking
+verification gate, and the workflow that is easiest to get wrong: substantive
+changes start as an OpenSpec proposal under `openspec/changes/`, not as a pull
+request. [AGENTS.md](AGENTS.md) states the same rules in the form coding agents
+read. Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 Start with the [development standards](docs/development-standards.md),
 [architecture](docs/architecture_primer.md) and
 [developer guide](docs/developers_readme.md). Keep cryptography behind the existing
@@ -218,8 +224,9 @@ addition to the required verification checks. Fix findings without weakening
 rules. Maintainers review proposed changes; no separate governance or release
 signing policy is documented here.
 
-A dedicated private vulnerability-reporting channel is not documented in this
-checkout. Do not put private keys or sensitive exploit details in public issues.
+Security vulnerabilities go to [SECURITY.md](SECURITY.md), which uses GitHub's
+private vulnerability reporting rather than a published address. Do not put
+private keys or sensitive exploit details in public issues.
 
 ## License
 
