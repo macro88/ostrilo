@@ -33,11 +33,13 @@ Four jobs, none using `continue-on-error`:
   and key-handling-bundle assertions against the built output with
   `OSTRILO_REQUIRE_BUILD_OUTPUT=1`.
 - **`audit`** — `pnpm audit --audit-level high`.
-- **`secrets`** — `gitleaks/gitleaks-action` over the full history
-  (`fetch-depth: 0`), so a credential committed anywhere in the branch fails the
-  gate rather than only one committed in the final diff. PR commenting is
-  disabled so the workflow keeps its read-only token; findings are reported
-  through the job's exit code and run log.
+- **`secrets`** — `gitleaks/gitleaks-action` over the commits the current push or
+  pull request introduces. On both of those triggers the action passes
+  `--log-opts=--no-merges --first-parent <base>^..<head>`, so the scan covers
+  that commit range and not the repository's whole history. `fetch-depth: 0` on
+  the checkout is what gives git the ancestry needed to resolve that range; a
+  shallow clone cannot. PR commenting is disabled so the workflow keeps its
+  read-only token; findings are reported through the job's exit code and run log.
 
 `--frozen-lockfile` is not only about reproducibility. It also runs the
 supply-chain policy declared in `pnpm-workspace.yaml`, so a lockfile containing

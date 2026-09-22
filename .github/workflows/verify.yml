@@ -1,5 +1,6 @@
 # Verification gate: typecheck, lint, the unit/integration/security suites, both
-# extension builds, a dependency audit, and a full-history secret scan.
+# extension builds, a dependency audit, and a secret scan of the commits each
+# push or pull request introduces.
 #
 # E2E is deliberately NOT here. The Playwright suite builds the extension,
 # starts a fixture server and drives a persistent Chromium extension context
@@ -112,6 +113,10 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
+          # On push and pull_request the action scans `<base>^..<head>`, not the
+          # whole history. Full depth is what lets git resolve that ancestor
+          # range at all - a shallow clone has no merge base, and the scan would
+          # silently cover the wrong commits.
           fetch-depth: 0
       # gitleaks-action v2 requires a paid GITLEAKS_LICENSE for repositories
       # owned by an ORGANIZATION account; personal accounts need none.
