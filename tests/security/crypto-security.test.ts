@@ -59,7 +59,7 @@ describe("Security Testing", () => {
     // a bounded statistical smoke check - lives in tests/security/entropy.test.ts.
 
     it("uses unique salts and IVs for encryption", async () => {
-      const password = "encryption-test-456";
+      const password = "encryption-test-456"; // gitleaks:allow
       
       // Create multiple keys with same password
       const key1 = await keyVault.generateKey(password, "Test 1");
@@ -93,7 +93,7 @@ describe("Security Testing", () => {
     });
 
     it("creates secure non-deterministic signatures", async () => {
-      const password = "signature-test-789";
+      const password = "signature-test-789"; // gitleaks:allow
       const messageHash = "0123456789abcdef".repeat(4); // 32 bytes as hex
       
       const keyRecord = await keyVault.generateKey(password, "Signature Test");

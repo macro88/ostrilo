@@ -23,7 +23,7 @@ import type { StorageSuite } from "@/application/ports/storage";
  * backup step keeps working and nothing else in the suite notices.
  */
 
-const PASSWORD = "correct-horse-battery-staple-42";
+const PASSWORD = "correct-horse-battery-staple-42"; // gitleaks:allow
 
 function memoryStorage(): StorageSuite {
   const make = () => {

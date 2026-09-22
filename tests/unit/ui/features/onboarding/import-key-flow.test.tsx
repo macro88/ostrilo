@@ -6,7 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 const NSEC = "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5";
-const PASSWORD = "correct-horse-battery-staple-42";
+const PASSWORD = "correct-horse-battery-staple-42"; // gitleaks:allow
 
 const importKey = vi.fn();
 const unlockVault = vi.fn();
