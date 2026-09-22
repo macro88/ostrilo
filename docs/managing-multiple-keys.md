@@ -120,10 +120,17 @@ Key labels help you identify different identities (e.g., "Work", "Personal", "An
 3. The label becomes an editable text box
 4. Type your new label (e.g., "Work Account")
 5. Press `Enter`, or click the check button. Press `Escape` or click the ✕ to cancel
-6. The new label appears immediately throughout the UI
+6. Reload the page to see the new label
 
 Renaming does not ask for your password. It changes a label you chose and
 destroys nothing.
+
+**Known issue:** the new label is saved straight away, but the row you just
+edited keeps showing the old one, and so does the key selector in the popup.
+Nothing tells the open screens that the name changed. Reload the settings page
+(and reopen the popup) and the new label is there. The rename did work — you
+just cannot see it yet. This is a defect, and it is pinned by a test so it
+cannot be lost.
 
 **Label requirements:**
 - Maximum 100 characters

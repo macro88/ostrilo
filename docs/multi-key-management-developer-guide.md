@@ -462,15 +462,24 @@ async renameKey(id: string, label: string): Promise<void>
 **Purpose:** Updates the label for an existing key.
 
 **Workflow:**
-1. Validate keyId exists
-2. Validate label (non-empty, max 64 chars)
-3. Update label in vault
-4. Persist to storage
-5. Broadcast update
+1. Validate `id` is a UUID and the label passes `LabelSchema` (handler)
+2. Find the record; throw `key_not_found` if there is none
+3. Replace the label on that record
+4. Persist the whole key list to `browser.storage.local`
 
 **Validation (`LabelSchema`, `src/infrastructure/validation/schemas.ts`):**
 - Maximum 100 characters
 - Any Unicode characters allowed
+- The label is `.optional()` with no `.min()`, so an empty label is accepted
+
+**No broadcast, and no refresh.** Nothing notifies open surfaces that a key
+changed. `KeysIdentitiesTab.handleRename` calls the RPC and stops there, so the
+row — and the header selector — keep rendering the old label until the surface
+is reloaded. See the defect note under REQ-MKS-004 in
+`openspec/specs/multi-key-selector/spec.md`; it is pinned by
+`tests/e2e/multi-key-selector.spec.ts`, which reloads before asserting the new
+label. If you make the tab refresh after a rename, delete this paragraph and the
+test's two pinned assertions.
 
 **Error Cases:**
 - `invalid_params`: `id` is not a UUID, or the label is too long
@@ -944,8 +953,14 @@ locked and a "create a key in the popup first" message when there is no vault.
 **Issue:** Keys not appearing in selector  
 **Solution:** Check vault unlock state, verify keys exist in storage
 
-**Issue:** Profile avatars not loading  
-**Solution:** Check relay connectivity, verify profile metadata exists
+**Issue:** Display names not loading (keys show their label instead)  
+**Solution:** Check relay connectivity, verify profile metadata exists. Avatars
+are always the local seal, so a missing picture is not a fault — see "Local
+avatars only" above
+
+**Issue:** A renamed key still shows its old label  
+**Solution:** Expected, and a known defect. Nothing refreshes the key list after
+a rename; reload the surface. See the `renameKey` section
 
 **Issue:** Key switch fails  
 **Solution:** Check console for RPC errors, verify keyId is valid

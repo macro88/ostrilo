@@ -159,7 +159,7 @@ all keys and allows rename, delete and set-active operations.
 - Each row has a rename (pencil) icon button and a delete (trash) icon button; rows that are not active also have a "Set Active" button
 - Every icon button carries an `aria-label` naming both the action and the key
 - The npub has a copy affordance (`DESIGN_RULES` §7)
-- Rename swaps the row into an inline text input; Enter saves, Escape cancels
+- Rename swaps the row into an inline text input; Enter saves, Escape cancels. A saved label SHOULD reach every open surface without a reload — it currently does not; see the defect note below
 - Delete requires the vault password, collected in a re-authentication dialog that names the key and states the consequence
 - The last remaining key cannot be deleted (button disabled, with a title explaining why)
 - Set Active calls `selectKey(id)` to switch keys
@@ -171,9 +171,17 @@ all keys and allows rename, delete and set-active operations.
 **And** activates the rename button on that key  
 **Then** an inline text input appears with "Old Label" pre-filled  
 **When** the user changes it to "New Label" and presses Enter  
-**Then** the system updates the key label to "New Label"  
-**And** the change is reflected in the KeySelector  
-**And** NO password is requested
+**Then** the system persists the key label as "New Label"  
+**And** NO password is requested  
+**And** the row and the KeySelector continue to show "Old Label" until the surface is reloaded
+
+> Defect, pinned deliberately by `tests/e2e/multi-key-selector.spec.ts`:
+> `KeysIdentitiesTab.handleRename` calls the rename RPC and never refreshes the
+> key list, and nothing broadcasts key changes. The user's evidence that a
+> rename worked is the label they can see, and it says the rename did nothing.
+> The intended behaviour is that the new label reaches every open surface
+> without a reload; when that lands, this note and the test's two pinned
+> assertions go.
 
 #### Scenario: User deletes non-active key
 **Given** the user has 3 keys (Alice active, Bob, Charlie)  
