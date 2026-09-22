@@ -1,0 +1,18 @@
+[extend]
+useDefault = true
+
+[[rules]]
+  id = "generic-api-key"
+  [rules.allowlist]
+    paths = [
+      '''tests/.*''',               # test files with test data and vectors
+      '''test-results/.*''',        # test artifacts (Chrome browser data)
+      '''pnpm-lock\.yaml''',        # integrity hashes
+    ]
+
+[[rules]]
+  id = "private-key"
+  [rules.allowlist]
+    paths = [
+      '''test-results/.*''',        # test artifacts (e.g., self-signed TLS keys)
+    ]
