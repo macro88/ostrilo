@@ -1,30 +1,29 @@
 # Ostrilo v2 Product Requirements Document
-## The World's Best Nostr Signing Extension
+## Roadmap Toward a Trustworthy Nostr Signing Extension
 
 - **Document Version:** 2.2
 - **Created:** 2025-12-09
-- **Original Target Release:** Q2 2025
 - **Last Status Reconciliation:** 2026-09-17
-- **Document Status:** Roadmap Status Draft - reconciled against `main` at `a32c33e`
+- **Document Status:** Roadmap Status Draft - reconciled against `main` at `0d2c429`
 
 ---
 
 ## Executive Summary
 
-Ostrilo v2 aims to become the **world's best Nostr signing extension** by delivering unparalleled security, exceptional user experience, comprehensive protocol support, and outstanding developer ergonomics. Building on the solid foundation of v1, this PRD outlines a strategic roadmap to position Ostrilo as the definitive choice for Nostr users across all skill levels.
+Ostrilo v2 aims to be a Nostr signing extension that a security-conscious user can reasonably trust by default, that stays straightforward to use as its protocol coverage grows, and that is pleasant to build against as a developer. Building on the v1 implementation, this document lays out the roadmap toward that goal. It is a target, not a scorecard - the traceability matrix and status notes below are what track what has actually shipped.
 
 ### Vision Statement
 
-**"Ostrilo: Your fortress for Nostr identity—secure by default, delightful by design, and trusted by everyone."**
+Ostrilo is working toward being a dependable home for a Nostr identity - secure by default, considerate of the person using it, and worth the trust it asks for. That trust has to be earned through verifiable behavior; this statement is a goal, not a claim that the goal has been met.
 
 ### Strategic Goals
 
-1. **Security First:** Industry-leading cryptographic practices with defense-in-depth
-2. **Universal Accessibility:** Support all major Nostr use cases and protocols
-3. **Developer Delight:** Best-in-class APIs and integration experience
-4. **User Empowerment:** Intuitive controls for complete sovereignty
-5. **Performance Excellence:** Sub-5ms signing, instant UI responses
-6. **Cross-Platform Leadership:** Seamless experience across all browsers and devices
+1. **Security first:** Work toward defense-in-depth cryptographic practices that are verified, not just asserted.
+2. **Broad protocol coverage:** Support the Nostr use cases and NIPs that matter in practice, expanding coverage deliberately rather than all at once.
+3. **Developer-friendly integration:** Aim for clear, well-documented APIs and a straightforward integration experience.
+4. **User control:** Give people intuitive controls over their own keys and decisions.
+5. **Responsive performance:** Keep signing latency and UI responsiveness low enough to stay out of the user's way, and measure that rather than assert it.
+6. **Cross-platform reach:** Support the major browsers well, and extend further only where coverage can be verified.
 
 ---
 
