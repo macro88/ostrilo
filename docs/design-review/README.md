@@ -75,8 +75,8 @@ invisible in the empty-vault set.
 Every finding in this review was closed by the polish round of 2026-09-17, which
 also rebuilt each surface against Phantom 26.30.1 as an external bar. The
 findings are kept as written so the record shows what was wrong and why; the
-short notes under each say how it was closed. The screenshots in this file are
-the post-polish captures.
+short notes under each say how it was closed. The captures behind this review
+were the post-polish ones.
 
 ### How the polish round worked
 
@@ -200,8 +200,8 @@ Build reviewed: production (`.output/chrome-mv3`), both themes, populated vault.
 
 The new `AutoLockCountdown` ring on its three surfaces: the popup and side panel
 header, the popup Settings panel, and the Options Security tab. Captured with the
-full runner, both invocations, so every shot below is a populated vault — the
-condition the June review missed a clipping bug under.
+full runner, both invocations, so every surface named below was captured from a
+populated vault — the condition the June review missed a clipping bug under.
 
 The change's design note left one question open for this review, quoted from
 `design.md`: *"Does the `sm` header variant survive a populated vault at popup width

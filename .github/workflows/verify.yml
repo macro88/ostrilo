@@ -1,5 +1,5 @@
-# Verification gate: typecheck, the unit/integration/security suites, both
-# extension builds, and a dependency audit.
+# Verification gate: typecheck, lint, the unit/integration/security suites, both
+# extension builds, a dependency audit, and a full-history secret scan.
 #
 # E2E is deliberately NOT here. The Playwright suite builds the extension,
 # starts a fixture server and drives a persistent Chromium extension context
@@ -113,6 +113,16 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+      # gitleaks-action v2 requires a paid GITLEAKS_LICENSE for repositories
+      # owned by an ORGANIZATION account; personal accounts need none.
+      # macro88/ostrilo is personal, so no license is required today - revisit
+      # this if the repository is ever transferred to an organization.
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_ENABLE_COMMENTS defaults to true, which makes the action
+          # post a PR comment on a finding - that needs `pull-requests: write`,
+          # which this workflow deliberately does not grant. Disabled so the
+          # gate stays read-only; a finding still fails the job and is readable
+          # in the run log.
+          GITLEAKS_ENABLE_COMMENTS: "false"

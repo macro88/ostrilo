@@ -6,8 +6,12 @@
 
 First public release. There is no published predecessor, so the entries below
 cover the whole of Ostrilo's development rather than a single release cycle —
-which is why a 1.0.0 arrives with a changelog this long. The README states what
-this version number does and does not claim.
+which is why a 1.0.0 arrives with a changelog this long. They were written as
+the work landed, against the development builds in use at the time, so some are
+phrased as changes to existing behaviour and address people already running
+those builds; if this release is your first Ostrilo, read those as descriptions
+of how 1.0.0 behaves. The README states what this version number does and does
+not claim.
 
 ### Security
 

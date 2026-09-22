@@ -9,7 +9,7 @@ Ostrilo is a secure browser extension that provides Nostr key management and sig
 - Implement NIP-07 standard with `window.nostr.getPublicKey()` and `signEvent()` methods
 - Support multiple keys with per-origin trust policies and permissions
 - Maintain zero-trust security: keys never leave the extension context unencrypted
-- Support cross-browser deployment (Chrome MV3, Firefox MV2, Safari)
+- Support cross-browser deployment on Manifest V3 for both Chrome and Firefox; Safari is not a verified target
 
 ## Tech Stack
 
@@ -19,13 +19,13 @@ Ostrilo is a secure browser extension that provides Nostr key management and sig
 - **TypeScript 6.0.3** - Type safety and strict compilation
 - **React 19.2.7** - UI framework for extension interfaces
 - **Vite 7.3.5** - Direct workspace Vite dependency; WXT manages its own internal build pipeline
-- **Node.js 24.x in current development environment** - Keep toolchain changes verified against WXT and Playwright
+- **Node.js 22.x in current development environment** - Matches `.nvmrc` and the `node-version` used by every CI job; keep toolchain changes verified against WXT and Playwright
 
 ### Cryptography
 - **@noble/curves 2.0.0** - secp256k1 schnorr signatures (NIP-01 standard)
-- **@noble/hashes 2.0.0** - SHA-256 hashing
+- **@noble/hashes 2.0.0** - SHA-256 hashing and Argon2id key derivation (`argon2idAsync`)
 - **@scure/base 2.0.0** - bech32 encoding/decoding for nsec/npub keys
-- **Web Crypto API** - AES-GCM encryption, PBKDF2 key derivation
+- **Web Crypto API** - AES-GCM encryption. New vaults derive the key-encryption key with Argon2id (`m=19456, t=2, p=1`, per `KDF_DEFAULTS` in `src/domain/types.ts`); PBKDF2-HMAC-SHA256 survives only as the legacy read path and as a recorded KDF variant. See `docs/vault-storage-format.md`.
 
 ### UI & Styling
 - **Tailwind CSS 4.3.0** - Utility-first styling framework
@@ -275,7 +275,7 @@ Ostrilo implements key management for the Nostr protocol, a decentralized social
 - `chrome.storage.local` - Encrypted key and settings persistence
 - `chrome.runtime.sendMessage` - RPC communication between contexts
 - `chrome.sidePanel` - Side panel UI (Chrome only)
-- Web Crypto API - AES-GCM encryption, PBKDF2 key derivation
+- Web Crypto API - AES-GCM encryption; PBKDF2 derivation for legacy records and records whose recorded variant is `pbkdf2-sha256` (new vaults use Argon2id via `@noble/hashes`)
 
 **Cryptographic Libraries:**
 - `@noble/curves/secp256k1` - Schnorr signatures per NIP-01
@@ -293,8 +293,11 @@ Ostrilo implements key management for the Nostr protocol, a decentralized social
 - Playwright browser automation - E2E testing
 - Vitest - Test runner with browser environment support
 
-**No External Services:**
-- Extension operates entirely offline
+**Network Behavior:**
 - No telemetry or analytics
-- No remote relay connections (profile hydration planned as opt-in)
-- No external API calls for core functionality
+- Key storage, unlock and event signing are local to the extension and make no
+  network requests
+- Profile requests disclose a public key to configured relays; profile images can
+  contact their hosts. Profile publication and optional image uploads also leave
+  the device. These operations are not anonymous. See the Network row of the
+  security-model table in `README.md`.

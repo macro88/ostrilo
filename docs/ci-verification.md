@@ -19,16 +19,25 @@ without anyone noticing.
 | Verify | `verify.yml` | pull request, push to `main` | Yes (see below) |
 | E2E | `e2e.yml` | nightly 03:00 UTC, dispatch, push to `main`, PR labelled `run-e2e` | No |
 | React Doctor | `react-doctor.yml` | pull request, push to `main` | No |
+| aislop | `aislop.yml` | pull request, push to `main` | No |
 
 ### Verify
 
-Three jobs, none using `continue-on-error`:
+Four jobs, none using `continue-on-error`:
 
-- **`verify`** — `pnpm install --frozen-lockfile`, `pnpm run compile`, `pnpm run test`.
-  One Vitest invocation collects `tests/unit`, `tests/integration` and
-  `tests/security`; `vitest.config.ts` excludes only `tests/e2e`.
-- **`build`** — `pnpm run build` and `pnpm run build:firefox`.
+- **`verify`** — `pnpm install --frozen-lockfile`, `pnpm run compile`,
+  `pnpm run lint`, `pnpm run test`. One Vitest invocation collects `tests/unit`,
+  `tests/integration` and `tests/security`; `vitest.config.ts` excludes only
+  `tests/e2e`.
+- **`build`** — `pnpm run build` and `pnpm run build:firefox`, then the manifest
+  and key-handling-bundle assertions against the built output with
+  `OSTRILO_REQUIRE_BUILD_OUTPUT=1`.
 - **`audit`** — `pnpm audit --audit-level high`.
+- **`secrets`** — `gitleaks/gitleaks-action` over the full history
+  (`fetch-depth: 0`), so a credential committed anywhere in the branch fails the
+  gate rather than only one committed in the final diff. PR commenting is
+  disabled so the workflow keeps its read-only token; findings are reported
+  through the job's exit code and run log.
 
 `--frozen-lockfile` is not only about reproducibility. It also runs the
 supply-chain policy declared in `pnpm-workspace.yaml`, so a lockfile containing
