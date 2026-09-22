@@ -119,9 +119,9 @@ The known-answer vector suite SHALL be green before any change that merges, repl
 - **WHEN** the BIP-340 and NIP-01 known-answer suites are absent or failing
 - **THEN** consolidation does not proceed
 
-#### Scenario: Both implementations satisfy the same vectors
+#### Scenario: Exactly one implementation per primitive stays vector-proven
 
-- **GIVEN** the duplicate signing and event-id code paths in `src/domain/utils/crypto.ts` and `src/infrastructure/crypto/adapters.ts`
-- **WHEN** the vector suite runs
-- **THEN** every retained path is exercised against the same vectors
-- **AND** any divergence between the paths fails a test
+- **GIVEN** `tests/security/crypto-single-implementation.test.ts` enforces that every cryptographic primitive has exactly one implementing module under `src/`
+- **WHEN** the vector suite and the single-implementation test both run
+- **THEN** the one retained path for each primitive is exercised against the known-answer vectors
+- **AND** a second implementation introduced for any primitive is caught by the single-implementation test before it could silently diverge from the vectors

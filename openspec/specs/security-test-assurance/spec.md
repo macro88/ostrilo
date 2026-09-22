@@ -14,7 +14,7 @@ Tests in `tests/security/` SHALL NOT replace, stub, or spy away the function or 
 
 - **GIVEN** a test that claims to verify memory zeroization
 - **WHEN** the suite runs
-- **THEN** it calls the real `zeroize` from `src/domain/utils/crypto.ts`
+- **THEN** it calls the real `zeroize` from `src/domain/utils/memory.ts`
 - **AND** it does NOT install a module mock that replaces `zeroize` with a no-op
 - **AND** its assertions are about buffer contents, not about how many times a spy was invoked
 
@@ -160,9 +160,9 @@ Files under `tests/` that no test runner collects SHALL either be converted into
 
 #### Scenario: Uncollected script is resolved
 
-- **GIVEN** `tests/test-crypto.ts` has no `.test.`/`.spec.` filename infix, is never collected by Vitest, and is imported by nothing in the repository
-- **WHEN** this change completes
-- **THEN** the file is either a collected test with real assertions or it no longer exists
+- **GIVEN** a script under `tests/` has no `.test.`/`.spec.` filename infix, is never collected by Vitest, and is imported by nothing in the repository
+- **WHEN** such a script is found
+- **THEN** it is either converted into a collected test with real assertions or removed so it no longer exists
 - **AND** no console-logging development script remains under `tests/` presenting itself as a test
 
 #### Scenario: Documented test counts match the runner

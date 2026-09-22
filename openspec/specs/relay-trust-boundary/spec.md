@@ -94,7 +94,7 @@ The extension SHALL validate every relay-supplied event against a NIP-01 event s
 
 ### Requirement: Relay Event Signature Verification
 
-The extension SHALL recompute the NIP-01 event ID and verify the Schnorr signature of every relay-supplied event before the event is delivered to any subscription callback. Verification SHALL use the existing `verifyEventSignature` helper in `src/domain/utils/crypto.ts`.
+The extension SHALL recompute the NIP-01 event ID and verify the Schnorr signature of every relay-supplied event before the event is delivered to any subscription callback. Verification SHALL use the existing `verifyEventSignature` helper in `src/application/crypto/event-id.ts`.
 
 #### Scenario: Event ID recomputed and compared
 
