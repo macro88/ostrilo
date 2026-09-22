@@ -4,9 +4,11 @@ Date: 2026-09-16 (review), 2026-09-17 (polish round)
 Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §6 (banned patterns) and §12 (PR checklist)
 Build reviewed: production (`.output/chrome-mv3`), per the AGENTS.md rule that UI is judged on the production build, never the agent build.
 
+The screenshots behind this review (and the auto-lock review below) were reviewed visually at the time of capture. They are not vendored in this repository — reproduce them locally with the commands below.
+
 ## Scope
 
-All 23 fresh-vault surfaces plus 13 populated-state surfaces, captured in **both themes** — 36 screenshots per theme, 72 total.
+All 23 fresh-vault surfaces plus 13 populated-state surfaces were captured in **both themes** — 36 screenshots per theme, 72 total.
 
 The previous review (2026-06-11) covered light only. DESIGN_RULES §12 requires every
 surface to hold up in light *and* dark, and §3 is explicit that Deep Ink is not an
@@ -67,22 +69,6 @@ trust, signed and denied activity from `nostrich.org` and `snort.social`
 two-site approval queue. These captures exist because a layout bug (home cards
 shrinking and clipping their rows once three activity entries existed) was
 invisible in the empty-vault set.
-
-| Surface | Light | Deep Ink (dark) |
-|---|---|---|
-| Home, populated | ![](screenshots/23-popup-home-populated.png) | ![](screenshots/dark/23-popup-home-populated.png) |
-| Activity, populated | ![](screenshots/24-popup-activity-populated.png) | ![](screenshots/dark/24-popup-activity-populated.png) |
-| Profile, populated | ![](screenshots/25-popup-profile-populated.png) | ![](screenshots/dark/25-popup-profile-populated.png) |
-| Quick settings, long key name | ![](screenshots/26-popup-settings-populated.png) | ![](screenshots/dark/26-popup-settings-populated.png) |
-| Key selector open | ![](screenshots/27-key-selector-open.png) | ![](screenshots/dark/27-key-selector-open.png) |
-| Side panel home, populated | ![](screenshots/28-sidepanel-home-populated.png) | ![](screenshots/dark/28-sidepanel-home-populated.png) |
-| Options keys, two keys | ![](screenshots/29-options-keys-populated.png) | ![](screenshots/dark/29-options-keys-populated.png) |
-| Options permissions, three sites | ![](screenshots/30-options-permissions-populated.png) | ![](screenshots/dark/30-options-permissions-populated.png) |
-| Options permissions, one site expanded | ![](screenshots/30b-options-permissions-site-expanded.png) | ![](screenshots/dark/30b-options-permissions-site-expanded.png) |
-| Options relays, three relays | ![](screenshots/31-options-relays-populated.png) | ![](screenshots/dark/31-options-relays-populated.png) |
-| Approval queue, two sites | ![](screenshots/32-approval-queue-populated.png) | ![](screenshots/dark/32-approval-queue-populated.png) |
-| Approval detail, identity disclosure | ![](screenshots/33-approval-detail-disclosure.png) | ![](screenshots/dark/33-approval-detail-disclosure.png) |
-| Lock screen, wrong password | ![](screenshots/34-lock-screen-error.png) | ![](screenshots/dark/34-lock-screen-error.png) |
 
 ## Status: the findings below were fixed
 
@@ -201,53 +187,6 @@ Worth recording, because most of the redesign is intact:
   was modified, so `pnpm run lint`, `pnpm run doctor` and the Firefox build were not
   re-run; the findings above are reported, not fixed.
 
-## Screenshots
-
-### Onboarding
-
-| Surface | Light | Deep Ink (dark) |
-|---|---|---|
-| Onboarding welcome | ![Onboarding welcome, light](screenshots/01-onboarding-welcome.png) | ![Onboarding welcome, dark](screenshots/dark/01-onboarding-welcome.png) |
-| Onboarding create key | ![Onboarding create key, light](screenshots/03-onboarding-create-key.png) | ![Onboarding create key, dark](screenshots/dark/03-onboarding-create-key.png) |
-| Onboarding backup | ![Onboarding backup, light](screenshots/04-onboarding-backup.png) | ![Onboarding backup, dark](screenshots/dark/04-onboarding-backup.png) |
-| Onboarding backup revealed | ![Onboarding backup revealed, light](screenshots/04b-onboarding-backup-revealed.png) | ![Onboarding backup revealed, dark](screenshots/dark/04b-onboarding-backup-revealed.png) |
-### Popup and side panel
-
-| Surface | Light | Deep Ink (dark) |
-|---|---|---|
-| Popup home | ![Popup home, light](screenshots/05-popup-home.png) | ![Popup home, dark](screenshots/dark/05-popup-home.png) |
-| Sidepanel home | ![Sidepanel home, light](screenshots/06-sidepanel-home.png) | ![Sidepanel home, dark](screenshots/dark/06-sidepanel-home.png) |
-| Popup profile | ![Popup profile, light](screenshots/07-popup-profile.png) | ![Popup profile, dark](screenshots/dark/07-popup-profile.png) |
-| Popup profile edit | ![Popup profile edit, light](screenshots/08-popup-profile-edit.png) | ![Popup profile edit, dark](screenshots/dark/08-popup-profile-edit.png) |
-| Popup activity | ![Popup activity, light](screenshots/09-popup-activity.png) | ![Popup activity, dark](screenshots/dark/09-popup-activity.png) |
-| Popup quick settings | ![Popup quick settings, light](screenshots/10-popup-quick-settings.png) | ![Popup quick settings, dark](screenshots/dark/10-popup-quick-settings.png) |
-| Add key dialog | ![Add key dialog, light](screenshots/11-add-key-dialog.png) | ![Add key dialog, dark](screenshots/dark/11-add-key-dialog.png) |
-### Options
-
-| Surface | Light | Deep Ink (dark) |
-|---|---|---|
-| Options general | ![Options general, light](screenshots/12-options-general.png) | ![Options general, dark](screenshots/dark/12-options-general.png) |
-| Options keys | ![Options keys, light](screenshots/13-options-keys.png) | ![Options keys, dark](screenshots/dark/13-options-keys.png) |
-| Options security | ![Options security, light](screenshots/14-options-security.png) | ![Options security, dark](screenshots/dark/14-options-security.png) |
-| Options permissions | ![Options permissions, light](screenshots/15-options-permissions.png) | ![Options permissions, dark](screenshots/dark/15-options-permissions.png) |
-| Options activity log | ![Options activity log, light](screenshots/16-options-activity-log.png) | ![Options activity log, dark](screenshots/dark/16-options-activity-log.png) |
-| Options relays | ![Options relays, light](screenshots/17-options-relays.png) | ![Options relays, dark](screenshots/dark/17-options-relays.png) |
-| Options advanced | ![Options advanced, light](screenshots/18-options-advanced.png) | ![Options advanced, dark](screenshots/dark/18-options-advanced.png) |
-### Approval
-
-| Surface | Light | Deep Ink (dark) |
-|---|---|---|
-| Approval empty | ![Approval empty, light](screenshots/19-approval-empty.png) | ![Approval empty, dark](screenshots/dark/19-approval-empty.png) |
-| Approval, one request on arrival | ![Approval on arrival, light](screenshots/20-approval-queue.png) | ![Approval on arrival, dark](screenshots/dark/20-approval-queue.png) |
-| Approval queue, reached by back | ![Approval queue, light](screenshots/20b-approval-queue-via-back.png) | ![Approval queue, dark](screenshots/dark/20b-approval-queue-via-back.png) |
-| Approval detail | ![Approval detail, light](screenshots/21-approval-detail.png) | ![Approval detail, dark](screenshots/dark/21-approval-detail.png) |
-| Approval raw JSON | ![Approval raw JSON, light](screenshots/21b-approval-payload.png) | ![Approval raw JSON, dark](screenshots/dark/21b-approval-payload.png) |
-### Locked
-
-| Surface | Light | Deep Ink (dark) |
-|---|---|---|
-| Lock screen | ![Lock screen, light](screenshots/22-lock-screen.png) | ![Lock screen, dark](screenshots/dark/22-lock-screen.png) |
-
 ---
 
 # Review: auto-lock countdown
@@ -337,20 +276,9 @@ animation is the exception, rather than the other way round.
 
 ## Surfaces
 
-| Surface | Light | Deep Ink (dark) |
-|---|---|---|
-| Popup header, populated | ![](screenshots/23-popup-home-populated.png) | ![](screenshots/dark/23-popup-home-populated.png) |
-| Popup Settings, ring beside the slider | ![](screenshots/26-popup-settings-populated.png) | ![](screenshots/dark/26-popup-settings-populated.png) |
-| Options Security, `lg` ring | ![](screenshots/14-options-security.png) | ![](screenshots/dark/14-options-security.png) |
-| Key selector open over the header | ![](screenshots/27-key-selector-open.png) | ![](screenshots/dark/27-key-selector-open.png) |
-| Side panel header, populated | ![](screenshots/28-sidepanel-home-populated.png) | ![](screenshots/dark/28-sidepanel-home-populated.png) |
-| Lock screen — no countdown | ![](screenshots/22-lock-screen.png) | ![](screenshots/dark/22-lock-screen.png) |
-| Approval queue — no countdown | ![](screenshots/32-approval-queue-populated.png) | ![](screenshots/dark/32-approval-queue-populated.png) |
+The ring was captured across seven surfaces, both themes: the popup header, the side panel header, the popup Settings panel (ring beside the slider), the Options Security tab (`lg` ring), the key selector open over the header, the lock screen, and the approval queue.
 
-The last two are the negative cases the spec requires: a locked vault reports no
-deadline at all, so there is nothing to render, and the signing moment deliberately
-carries no session clock. The request-expiry timer on the approval surface is a
-different thing and stays.
+The lock screen and approval queue are the negative cases the spec requires: a locked vault reports no deadline at all, so there is nothing to render, and the signing moment deliberately carries no session clock. The request-expiry timer on the approval surface is a different thing and stays.
 
 ## Verification
 
