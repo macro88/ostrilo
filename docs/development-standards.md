@@ -5,7 +5,7 @@ These standards are binding for all code changes. They summarize the conventions
 ## Source Documents
 
 - `docs/architecture_primer.md` and `docs/developers_readme.md` define the layered, ports-and-adapters architecture.
-- `docs/ostrilo-signer-requirements.md` and `docs/v2-prd.md` define product, protocol, security, and privacy contracts.
+- `docs/ostrilo-signer-requirements.md` and `docs/roadmap.md` define product, protocol, security, and privacy contracts.
 - `docs/rpc-architecture.md` and `docs/rpc-error-codes.md` define messaging structure and dApp-facing error behavior.
 - `docs/design/DESIGN_RULES.md` defines the canonical Inkline UI system.
 - `docs/TESTING.md` defines the verification strategy and available test commands.

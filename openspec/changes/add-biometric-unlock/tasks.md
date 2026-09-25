@@ -118,7 +118,7 @@ Separate change `pin-extension-id`. The public key is read off the existing Chro
 
 - [ ] 13.1 Document the `vaultBiometric` record, its AAD, and the no-version-bump rationale in `docs/vault-storage-format.md`, plus the rule that an envelope write deletes the wrapping.
 - [ ] 13.2 Add the six methods and their lock dispositions to the privilege table in `docs/rpc-architecture.md`, and the two codes to `docs/rpc-error-codes.md`.
-- [ ] 13.3 Rewrite SEC-009 at `docs/v2-prd.md:266` with the platform matrix the spike actually produced, replacing "fingerprint, Face ID" with the honest sentence drafted in 1.6.
+- [ ] 13.3 Rewrite SEC-009 in `docs/roadmap.md` with the platform matrix the spike actually produced, replacing "fingerprint, Face ID" with the honest sentence drafted in 1.6.
 - [ ] 13.4 Add capture steps to `docs/design-review/capture-screenshots.mjs` for: the lock screen with the affordance, and in its cancelled, refused, rehearsal-due, restart-pending and unusable-factor states; the Security tab enrolled, not enrolled and capability-failed; and the ceremony document itself.
 - [ ] 13.5 Run the review as two separate invocations, one per theme, against a **populated** vault, and record it in `docs/design-review/README.md`. A fresh vault has hidden a shipped layout bug before.
 - [ ] 13.6 Rebase against `openspec/changes/add-auto-lock-countdown`, which targets the same Security tab, the same `session-auto-lock` spec and the same `ui-options-page` spec. Classify its `lockAt` disclosure and this change's `biometricStatus` in one pass.

@@ -1,6 +1,6 @@
 ## Why
 
-PRD requirement SEC-009 (`docs/v2-prd.md:266`) asks for WebAuthn biometric unlock "as an alternative or supplement to password-based unlock". Today there is exactly one credential-to-KEK producer in the product: `openEnvelope` (`src/application/services/key-vault.service.ts:183-207`), which runs Argon2id at `m=19456, t=2, p=1` — 611 ms in the MV3 service worker, measured in `openspec/changes/archive/2026-09-17-harden-vault-key-derivation/kdf-measurements.md` — against a long master password typed into the popup lock screen many times a day. That is the highest-frequency secret exposure Ostrilo has, and it is the one the product has no defence for: a password observed once by a shoulder, a camera, a keylogger or a malicious IME is full authority over a Nostr identity forever.
+Roadmap requirement SEC-009 (`docs/roadmap.md`) asks for WebAuthn biometric unlock "as an alternative or supplement to password-based unlock". Today there is exactly one credential-to-KEK producer in the product: `openEnvelope` (`src/application/services/key-vault.service.ts:183-207`), which runs Argon2id at `m=19456, t=2, p=1` — 611 ms in the MV3 service worker, measured in `openspec/changes/archive/2026-09-17-harden-vault-key-derivation/kdf-measurements.md` — against a long master password typed into the popup lock screen many times a day. That is the highest-frequency secret exposure Ostrilo has, and it is the one the product has no defence for: a password observed once by a shoulder, a camera, a keylogger or a malicious IME is full authority over a Nostr identity forever.
 
 Every vault change so far has deliberately fenced this off rather than solved it. `harden-vault-key-derivation` lists "No WebAuthn, biometric, or hardware-backed unlock" in its Non-Goals (`openspec/changes/archive/2026-09-17-harden-vault-key-derivation/design.md:32`); `implement-session-auto-lock` does the same. `grep -i biometric openspec/specs/` returns nothing. This change is the named owner of that ground.
 
@@ -38,7 +38,7 @@ Not in this change: biometric re-authentication, biometric reveal, biometric key
 Task group 1 is a measurement spike, following the `kdf-measurements.md` precedent of measuring before committing to a parameter. It is written into the proposal so a reviewer can hold the work to it rather than rationalising whatever the spike returns:
 
 - **If no authenticator class returns 32 PRF bytes for a `chrome-extension://<id>` relying-party identifier on any target platform**, this change is withdrawn. It is not narrowed, and the owned-HTTPS-domain route is re-opened as a different change with its own argument about `host_permissions`.
-- **If PRF works on Windows and Linux but no macOS platform authenticator answers**, the change ships narrowed as security-key-first, and `docs/v2-prd.md:266` is rewritten to drop "fingerprint, Face ID" for the honest matrix in the same change.
+- **If PRF works on Windows and Linux but no macOS platform authenticator answers**, the change ships narrowed as security-key-first, and the SEC-009 row in `docs/roadmap.md` is rewritten to drop "fingerprint, Face ID" for the honest matrix in the same change.
 - **If no ceremony host satisfies Chrome's visible-`WebContents` requirement**, the change is withdrawn; there is no remaining surface to run it in.
 
 ## Capabilities
@@ -73,4 +73,4 @@ Task group 1 is a measurement spike, following the `kdf-measurements.md` precede
 - Extension: new `src/extension/unlock/`, and `wxt.config.ts` for the per-target entrypoint filter.
 - UI: `LockScreen`, `KeyManagerContext` (`UnlockResult`, `UNLOCK_FAILURE_COPY`), `SecuritySettingsTab`, `ReauthDialog`, and `key-handling-documents.ts`.
 - Tests: four new security suites, a Playwright CDP virtual-authenticator fixture (`tests/e2e/fixtures/` has no CDP usage today), and edits to `tests/security/key-handling-bundle.test.ts` and `tests/security/manifest-assertions.test.ts`.
-- Docs: `docs/vault-storage-format.md`, `docs/rpc-architecture.md`, `docs/rpc-error-codes.md`, `docs/design-review/`, and the SEC-009 row at `docs/v2-prd.md:266`.
+- Docs: `docs/vault-storage-format.md`, `docs/rpc-architecture.md`, `docs/rpc-error-codes.md`, `docs/design-review/`, and the SEC-009 row in `docs/roadmap.md`.

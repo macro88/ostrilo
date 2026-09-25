@@ -65,7 +65,7 @@ review captures, not a live demonstration or a new security assessment.
 The website provider implements **`getPublicKey` and `signEvent` only**.
 `getRelays`, `nip04.*` and `nip44.*` are absent, so applications can detect that
 those features are unavailable. Remote signing, seed phrases and multi-device
-sync are roadmap work; the [requirements](docs/v2-prd.md) are not a list of shipped
+sync are roadmap work; the [roadmap](docs/roadmap.md) is not a list of shipped
 capabilities.
 
 ## Get started
