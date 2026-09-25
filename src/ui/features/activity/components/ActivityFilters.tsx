@@ -32,7 +32,7 @@ export function ActivityFilters({
     return null;
   }
 
-  const active = Boolean(originFilter || kindFilter);
+  const active = Boolean(originFilter) || kindFilter !== undefined;
 
   return (
     <div className="flex shrink-0 items-center gap-2">
@@ -55,7 +55,7 @@ export function ActivityFilters({
       </Select>
 
       <Select
-        value={kindFilter?.toString() || "all"}
+        value={kindFilter === undefined ? "all" : String(kindFilter)}
         onValueChange={onKindChange}
       >
         <SelectTrigger

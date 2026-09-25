@@ -70,7 +70,7 @@ export function ActivityView() {
   );
   const { settings } = useAppSettings();
 
-  const { entries, loading, hasMore, loadMore } = useActivityLog({
+  const { entries, loading, error, hasMore, loadMore, refresh } = useActivityLog({
     origin: state.originFilter,
     kind: state.kindFilter,
   });
@@ -169,7 +169,9 @@ export function ActivityView() {
     dispatch({ type: "clearFilters" });
   };
 
-  const hasFilters = Boolean(state.originFilter || state.kindFilter);
+  // Kind 0 (profile metadata) is a real filter, so test for presence, not truthiness.
+  const hasFilters =
+    Boolean(state.originFilter) || state.kindFilter !== undefined;
 
   // A column that fills the tab, so the empty state can sit in the middle of
   // the space the list would occupy instead of hugging the title.
@@ -210,6 +212,8 @@ export function ActivityView() {
         <ActivityEntryList
           entries={entries}
           loading={loading}
+          failed={error !== null}
+          onRetry={refresh}
           hasMore={hasMore}
           hasFilters={hasFilters}
           onLoadMore={loadMore}

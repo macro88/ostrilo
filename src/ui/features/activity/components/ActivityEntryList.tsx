@@ -8,10 +8,12 @@ import { Activity, Check, Loader2, X } from "lucide-react";
 interface ActivityEntryListProps {
   entries: ActivityLogEntry[];
   loading: boolean;
+  failed: boolean;
   hasMore: boolean;
   hasFilters: boolean;
   onLoadMore: () => void;
   onClearFilters: () => void;
+  onRetry: () => void;
 }
 
 function formatRelativeTime(timestamp: number): string {
@@ -30,10 +32,12 @@ const SKELETON_ROWS = ["first", "second", "third"];
 export function ActivityEntryList({
   entries,
   loading,
+  failed,
   hasMore,
   hasFilters,
   onLoadMore,
   onClearFilters,
+  onRetry,
 }: ActivityEntryListProps) {
   const isEmpty = entries.length === 0;
 
@@ -57,7 +61,22 @@ export function ActivityEntryList({
         </div>
       )}
 
-      {!loading && isEmpty && (
+      {!loading && failed && (
+        <div
+          role="alert"
+          className="flex shrink-0 flex-col items-center px-6 pb-6 pt-6 text-center"
+        >
+          <p className="text-base font-bold">Could not load activity</p>
+          <p className="mt-1 max-w-[28ch] text-[13px] text-muted-foreground">
+            The activity log could not be read.
+          </p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {!loading && !failed && isEmpty && (
         <div className="flex flex-1 flex-col items-center justify-center px-6 pb-10 pt-6 text-center">
           <SealMark icon={Activity} tone="muted" size="lg" />
           <p className="mt-3 text-base font-bold">
