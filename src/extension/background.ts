@@ -22,7 +22,7 @@ import {
   RpcRouter,
   createRpcMessageListener,
 } from "@/infrastructure/messaging/rpc-router";
-import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
+import { BROADCAST_EVENTS, DOCKED_STORAGE_KEY } from "@/infrastructure/messaging/events";
 import {
   RPC_ERROR_CODES,
   createRpcErrorResponse,
@@ -397,8 +397,8 @@ export default defineBackground(() => {
 
   // Side panel behavior management
   async function apply() {
-    const result = await browser.storage.sync.get("isDocked");
-    const docked = result.isDocked || false;
+    const result = await browser.storage.sync.get(DOCKED_STORAGE_KEY);
+    const docked = result[DOCKED_STORAGE_KEY] === true;
     const sp: any = (browser as any).sidePanel;
     if (!sp || typeof sp.setPanelBehavior !== "function") return;
     try {
@@ -483,7 +483,7 @@ export default defineBackground(() => {
       syncRelayManager(changes.appSettings.newValue as RelaySettings);
     }
 
-    if ("isDocked" in changes) {
+    if (DOCKED_STORAGE_KEY in changes) {
       apply();
     }
 

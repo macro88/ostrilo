@@ -94,23 +94,14 @@ function subscribeKey(key: string, callback: Subscriber) {
   return () => {
     set!.delete(callback);
     if (set!.size === 0) {
-      // Cleanup subscriber set
       subscribers.delete(key);
-      // Optional memory hygiene: clear caches/flags when no subscribers
+      // A queued write is a user decision: it still flushes and settles its
+      // promise after the last consumer unmounts, and needs its cached value.
+      if (pendingPromises.has(key)) return;
       cache.delete(key);
       hasValue.delete(key);
       ready.delete(key);
       defaultCache.delete(key);
-      // Cancel pending timer for this key
-      const t = writeTimers.get(key);
-      if (t !== undefined) {
-        clearTimeout(t);
-        writeTimers.delete(key);
-      }
-      // Drop pending values/promises
-      pendingValues.delete(key);
-      pendingPromises.delete(key);
-      pendingResolvers.delete(key);
     }
   };
 }
@@ -150,9 +141,17 @@ async function flushWrite(k: string) {
 }
 
 export function useWxtStorage<T>(key: string, defaultValue: T) {
+  // Must be stable: React resubscribes whenever `subscribe` changes identity, and
+  // a lone consumer's resubscribe would pass through zero subscribers and wipe
+  // the cache and any queued write.
+  const subscribe = useCallback(
+    (cb: Subscriber) => subscribeKey(key, cb),
+    [key]
+  );
+
   // Value snapshot with stable identity (returns cached reference or the same defaultValue reference)
   const value = useSyncExternalStore(
-    (cb) => subscribeKey(key, cb),
+    subscribe,
     () =>
       hasValue.has(key)
         ? (cache.get(key) as T)
@@ -163,7 +162,7 @@ export function useWxtStorage<T>(key: string, defaultValue: T) {
 
   // Ready flag snapshot as a primitive boolean
   const isReady = useSyncExternalStore(
-    (cb) => subscribeKey(key, cb),
+    subscribe,
     () => ready.has(key),
     () => true
   );

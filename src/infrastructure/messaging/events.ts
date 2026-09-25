@@ -10,6 +10,13 @@ export const BROADCAST_EVENTS = {
   VAULT_LOCKED: "ostrilo.vault.locked",
 } as const;
 
+/**
+ * The `storage.sync` key holding whether the extension opens in the side panel.
+ * The options page writes it and the background reapplies it on every service
+ * worker start, so both must read this one constant.
+ */
+export const DOCKED_STORAGE_KEY = "isDocked";
+
 export type BroadcastEventName =
   (typeof BROADCAST_EVENTS)[keyof typeof BROADCAST_EVENTS];
 

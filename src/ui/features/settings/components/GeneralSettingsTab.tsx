@@ -18,6 +18,7 @@ import {
 import { SealMark } from "@/ui/components/common/SealMark";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { useWxtStorage } from "@/hooks/useWxtStorage";
+import { DOCKED_STORAGE_KEY } from "@/infrastructure/messaging/events";
 import { useSidePanelDock } from "@/hooks/useSidePanelDock";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { normalizeAutoLockMinutes } from "@/domain/types";
@@ -95,24 +96,26 @@ function AtAGlance() {
 /**
  * Where the extension opens: the toolbar popup or the browser's side panel.
  *
- * Makes the same three writes `OpenInSelector` does - the legacy
- * `sync:isDocked` flag, the `sidePanel` setting, and the browser's panel
- * behaviour - but as a row with the value on the right (DESIGN_RULES §7).
+ * Makes three writes: the docked flag the background reapplies on every
+ * service worker start, the `sidePanel` setting, and the browser's panel
+ * behaviour. Shown as a row with the value on the right (DESIGN_RULES §7).
  */
 function OpenInRow() {
-  const [, setIsDocked] = useWxtStorage("sync:isDocked", false);
+  const [, setIsDocked] = useWxtStorage(DOCKED_STORAGE_KEY, false);
   const { supported, enableDocking, disableDocking } = useSidePanelDock();
   const { settings, updateSidePanel } = useAppSettings();
 
   // Shown while the writes are in flight, so the value does not snap back
   // between the click and the background's settings-changed notification.
   const [pending, setPending] = useState<DisplayMode | null>(null);
+  const [failed, setFailed] = useState(false);
   const mode: DisplayMode =
     pending ?? (settings.sidePanel ? "sidepanel" : "popup");
 
   const handleModeChange = async (next: string) => {
     if (!isDisplayMode(next)) return;
     setPending(next);
+    setFailed(false);
     const dock = next === "sidepanel";
     try {
       const writes: Promise<unknown>[] = [
@@ -123,6 +126,8 @@ function OpenInRow() {
         writes.push(dock ? enableDocking(true) : disableDocking());
       }
       await Promise.all(writes);
+    } catch {
+      setFailed(true);
     } finally {
       setPending(null);
     }
@@ -140,6 +145,11 @@ function OpenInRow() {
         {!supported && mode === "sidepanel" && (
           <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
             Side panel is not supported in this browser
+          </p>
+        )}
+        {failed && (
+          <p className="mt-0.5 text-[13px] leading-snug text-destructive">
+            Could not change where Ostrilo opens. Try again.
           </p>
         )}
       </div>
