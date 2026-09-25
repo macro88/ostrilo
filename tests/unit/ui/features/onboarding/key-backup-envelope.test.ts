@@ -186,9 +186,8 @@ describe("encrypted key backup envelope", () => {
   });
 
   it("recovers a key sealed without a name as an unnamed key", async () => {
-    const unnamed: KeyBackupPayload = JSON.parse(
-      JSON.stringify({ nsec: PAYLOAD.nsec, hex: PAYLOAD.hex })
-    );
+    // What a backup sealed without a name decodes to; the type requires one.
+    const unnamed = { nsec: PAYLOAD.nsec, hex: PAYLOAD.hex } as KeyBackupPayload;
     const envelope = await createKeyBackup(unnamed, PASSPHRASE);
 
     await expect(openKeyBackup(envelope, PASSPHRASE)).resolves.toEqual({

@@ -19,6 +19,7 @@ export const selectModule = {
     children: ReactNode;
   }) => (
     <select
+      aria-label="native select stand-in"
       value={value}
       onChange={(event) => onValueChange(event.currentTarget.value)}
     >

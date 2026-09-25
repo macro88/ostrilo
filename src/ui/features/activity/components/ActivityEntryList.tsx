@@ -29,6 +29,55 @@ function formatRelativeTime(timestamp: number): string {
 
 const SKELETON_ROWS = ["first", "second", "third"];
 
+/** What the list says instead of rows: the log failed to load, or holds nothing to show. */
+function ActivityListNotice({
+  failed,
+  hasFilters,
+  onRetry,
+  onClearFilters,
+}: {
+  failed: boolean;
+  hasFilters: boolean;
+  onRetry: () => void;
+  onClearFilters: () => void;
+}) {
+  if (failed) {
+    return (
+      <div
+        role="alert"
+        className="flex shrink-0 flex-col items-center px-6 pb-6 pt-6 text-center"
+      >
+        <p className="text-base font-bold">Could not load activity</p>
+        <p className="mt-1 max-w-[28ch] text-[13px] text-muted-foreground">
+          The activity log could not be read.
+        </p>
+        <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-6 pb-10 pt-6 text-center">
+      <SealMark icon={Activity} tone="muted" size="lg" />
+      <p className="mt-3 text-base font-bold">
+        {hasFilters ? "No matching activity" : "No activity yet"}
+      </p>
+      <p className="mt-1 max-w-[28ch] text-[13px] text-muted-foreground">
+        {hasFilters
+          ? "Nothing in the log matches these filters."
+          : "Sign events to see your activity history here"}
+      </p>
+      {hasFilters && (
+        <Button variant="outline" size="sm" className="mt-4" onClick={onClearFilters}>
+          Show all activity
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function ActivityEntryList({
   entries,
   loading,
@@ -61,43 +110,13 @@ export function ActivityEntryList({
         </div>
       )}
 
-      {!loading && failed && (
-        <div
-          role="alert"
-          className="flex shrink-0 flex-col items-center px-6 pb-6 pt-6 text-center"
-        >
-          <p className="text-base font-bold">Could not load activity</p>
-          <p className="mt-1 max-w-[28ch] text-[13px] text-muted-foreground">
-            The activity log could not be read.
-          </p>
-          <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
-            Try again
-          </Button>
-        </div>
-      )}
-
-      {!loading && !failed && isEmpty && (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 pb-10 pt-6 text-center">
-          <SealMark icon={Activity} tone="muted" size="lg" />
-          <p className="mt-3 text-base font-bold">
-            {hasFilters ? "No matching activity" : "No activity yet"}
-          </p>
-          <p className="mt-1 max-w-[28ch] text-[13px] text-muted-foreground">
-            {hasFilters
-              ? "Nothing in the log matches these filters."
-              : "Sign events to see your activity history here"}
-          </p>
-          {hasFilters && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={onClearFilters}
-            >
-              Show all activity
-            </Button>
-          )}
-        </div>
+      {!loading && (failed || isEmpty) && (
+        <ActivityListNotice
+          failed={failed}
+          hasFilters={hasFilters}
+          onRetry={onRetry}
+          onClearFilters={onClearFilters}
+        />
       )}
 
       {!isEmpty && (
