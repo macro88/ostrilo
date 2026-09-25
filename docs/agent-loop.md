@@ -185,10 +185,6 @@ regeneration, kill the listener and rerun.
 does not. Check `node -v` before trusting a timing or a failure that looks like a
 runtime difference.
 
-**`docs/TESTING.md` counts have drifted** from the suite. Run the commands rather
-than trusting the numbers there, and note that a substantial share of the E2E
-suite is currently skipped.
-
 **`docs/design-review/capture-screenshots.mjs` serves over `https://localhost`**,
 not plain HTTP, specifically so the `https://*/*`-only content script picks up
 `window.nostr` — see the script's own comments near its `https.createServer` call.

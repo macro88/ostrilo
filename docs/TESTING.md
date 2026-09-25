@@ -1,32 +1,21 @@
-# Testing Infrastructure Documentation
+# Testing
 
-## Overview
+Ostrilo is tested with **Vitest** (unit, integration and security suites) and
+**Playwright** (end-to-end journeys against the built Chromium extension).
 
-Ostrilo uses a comprehensive testing strategy with multiple layers of validation to ensure security, reliability, and maintainability. The testing infrastructure is built on **Vitest** for unit and integration testing, and **Playwright** for end-to-end testing.
+## Current counts
 
-## Test Coverage Status
-
-Run the commands below to get the current figures. Suites are added
-continuously, so any number written into this document is a snapshot that
-starts rotting the moment it is committed - re-run the commands rather than
-trusting a figure here.
+This document carries no test counts, because written counts go stale. Ask the
+runners instead:
 
 ```bash
-pnpm test                     # Vitest: unit + integration + security
-npx playwright test --list    # Playwright: E2E inventory, without running it
+pnpm test                             # Vitest: unit + integration + security
+pnpm exec playwright test --list      # Playwright: E2E inventory, without running it
 ```
 
-Vitest covers `tests/unit`, `tests/integration` and `tests/security`. Playwright
-covers `tests/e2e`, run separately via `pnpm run test:e2e`. Vitest excludes
-`tests/e2e/**`, so the two totals never overlap.
-
-Counts are deliberately absent from this document. Run the two commands above:
-they take seconds and they cannot be wrong. Every figure previously written
-here rotted, twice.
-
-An earlier version of this document claimed "73 passing across 8 test files".
-That figure was never reproducible from the runners and had drifted far from
-reality; the commands above are now the source of truth.
+Vitest covers `tests/unit`, `tests/integration` and `tests/security`, and
+excludes `tests/e2e/**`. Playwright covers `tests/e2e`. The two totals never
+overlap.
 
 ## Test Structure
 
@@ -66,10 +55,11 @@ that does nothing; reading the bytes is not.
 **`entropy.test.ts`** - key generation entropy, in three parts of
 deliberately different strength, each labelled as such in the file:
 
-- _Known-answer tests._ PBKDF2-HMAC-SHA256 at the shipped parameters
+- _Known-answer tests._ PBKDF2-HMAC-SHA256 at the legacy vault's parameters
   (c = 100,000, dkLen = 32) against expected values computed once with OpenSSL,
-  an implementation independent of the code under test. These are real proofs
-  of correctness and carry most of the value.
+  an implementation independent of the code under test. New vaults use
+  Argon2id; PBKDF2 survives only to read vaults written before that change, and
+  these vectors pin that read path.
 - _Source assertions._ A spy on `crypto.getRandomValues` proves the private key
   is exactly the bytes the platform returned, and that generation throws rather
   than falling back to any other source when the CSPRNG is unavailable. This is
@@ -173,8 +163,10 @@ pnpm run test:e2e:debug
 pnpm run test:e2e:ui
 ```
 
-The Playwright harness builds the WXT Chrome extension before tests, starts the
-local fixture page on `127.0.0.1:8765`, and loads `.output/chrome-mv3` into a
+The Playwright harness builds the WXT Chrome extension before tests, serves the
+fixture page over HTTPS at `https://localhost:8765` (the provider is injected
+into `https://` pages only; see `docs/local-https-development.md`), and loads
+`.output/chrome-mv3` into a
 persistent Chromium extension context. It runs headless by default using
 Playwright's bundled Chromium channel. Set `OSTRILO_E2E_HEADED=1` or use
 `pnpm run test:e2e:headed` when you need to watch the browser.
@@ -191,291 +183,71 @@ These screenshots are generated review artifacts rather than committed golden
 snapshots. They are suitable for human inspection or multimodal agent
 comparison while behavioral assertions keep the test deterministic.
 
-## Test Configuration
+## Configuration
 
-### Vitest Configuration
+### Vitest
 
-**Performance Optimizations:**
+`vitest.config.ts`:
 
-- Test timeout: 10 seconds (for crypto operations)
-- Thread pool: 1-4 threads
-- Isolated tests: enabled (`isolate: true`), to avoid worker-thread bleed
-- Custom path aliases for clean imports
+- Node environment, with `vitest.setup.ts` installing Node's WebCrypto only when
+  `globalThis.crypto.subtle` is missing. `tests/security/test-seam-safety.test.ts`
+  holds that setup to exactly that.
+- 10-second test, hook and teardown timeouts, for the key-derivation paths.
+- `isolate: true` on a thread pool of up to 4 workers.
+- `@/` path aliases into `src/`.
 
-**Coverage Configuration:**
+### Coverage
 
-- Provider: V8
-- Formats: text, HTML, LCOV
-- Thresholds: 80% lines/functions, 70% branches
-- Excludes: tests, UI components, configs
+`pnpm run test:coverage` reports V8 coverage of `src/` as text, HTML
+(`coverage/index.html`) and LCOV. Extension entry points (`src/extension/`) and
+the shadcn primitives (`src/ui/components/ui/`) are excluded.
 
-**Setup:**
+The configured thresholds are 80% lines, functions and statements and 70%
+branches. **The suite does not currently meet them**, so the command exits
+non-zero; read the report rather than the exit code. Coverage is not a merge
+gate: CI runs `pnpm run test`, not the coverage command. The security suite,
+not a percentage, is what protects keys.
 
-- WebCrypto polyfill for Node.js environment
-- Global test utilities available
-- Automatic test discovery
+### Playwright
 
-### Playwright Configuration
+`playwright.config.ts` defines the `chromium-extension` project that
+`pnpm run test:e2e` runs, and the `agent-scratch` project behind the
+`agent:*` scripts. Chromium is the only browser the E2E suite drives. The
+Firefox build is checked by `pnpm run build:firefox` and the built-output
+assertions in `pnpm run test:build-output`, not by browser tests.
 
-**Browser Support:**
+## Writing a security test
 
-- Chromium extension context (primary automated E2E target)
-- Firefox and Safari/WebKit are covered by build validation and lower-level tests
-
-**Extension Testing:**
-
-- Custom persistent Chromium extension fixture
-- Automated WXT extension build and loading
-- Named screenshot artifacts for autonomous visual review
-- Browser context isolation
-
-## Test Patterns and Guidelines
-
-### Unit Test Patterns
-
-**Service Testing:**
+Uniqueness and format assertions are not security tests; a counter satisfies
+both. Assert the source or the effect, without mocking the function under test:
 
 ```typescript
-describe("ServiceName", () => {
-  let service: ServiceName;
-  let mockStorage: StorageSuite;
+it("takes the private key from the platform CSPRNG", () => {
+  const platform = globalThis.crypto.getRandomValues.bind(globalThis.crypto);
+  const draws: Uint8Array[] = [];
+  vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation(
+    ((array) => {
+      const filled = platform(array);
+      draws.push(new Uint8Array(filled).slice());
+      return filled;
+    }) as typeof globalThis.crypto.getRandomValues
+  );
 
-  beforeEach(() => {
-    mockStorage = createMemoryStorage();
-    service = new ServiceName(mockStorage, ...dependencies);
-  });
+  const key = generatePrivateKey();
 
-  it("should handle specific behavior", async () => {
-    // Arrange
-    const input = "test-data";
-
-    // Act
-    const result = await service.method(input);
-
-    // Assert
-    expect(result).toBeDefined();
-    expect(result.property).toBe(expectedValue);
-  });
+  expect(draws).toHaveLength(1);
+  expect(draws[0]).toHaveLength(32);
+  expect(Array.from(key)).toEqual(Array.from(draws[0]));
 });
 ```
 
-**Domain Testing:**
-
-```typescript
-describe("Utility Function", () => {
-  it("should validate input correctly", () => {
-    expect(validateInput("valid")).toBe(true);
-    expect(validateInput("invalid")).toBe(false);
-    expect(() => validateInput(null)).toThrow();
-  });
-});
-```
-
-### Integration Test Patterns
-
-**Cross-Service Testing:**
-
-```typescript
-describe("Service Integration", () => {
-  let services: { vault: KeyVaultService; policy: PolicyService };
-
-  beforeEach(() => {
-    const storage = createMemoryStorage();
-    services = {
-      vault: new KeyVaultService(storage, ...cryptoAdapters),
-      policy: new PolicyService(storage),
-    };
-  });
-
-  it("should coordinate between services", async () => {
-    // Test realistic workflows across services
-    const key = await services.vault.generateKey("password", "label");
-    await services.policy.setOriginPolicy("origin", { trustLevel: "high" });
-
-    // Verify cross-service state consistency
-    const context = await services.policy.loadContext();
-    expect(context.unlocked).toBe(false); // Vault initially locked
-  });
-});
-```
-
-### Security Test Patterns
-
-**Cryptographic Testing:**
-
-Uniqueness and format assertions are not security tests - a counter satisfies
-both. Assert the source of the material instead, without mocking the function
-under test:
-
-```typescript
-describe("Crypto Security", () => {
-  it("takes the private key from the platform CSPRNG", () => {
-    const platform = globalThis.crypto.getRandomValues.bind(globalThis.crypto);
-    const draws: Uint8Array[] = [];
-    vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation(
-      ((array) => {
-        const filled = platform(array);
-        draws.push(new Uint8Array(filled).slice());
-        return filled;
-      }) as typeof globalThis.crypto.getRandomValues
-    );
-
-    const key = generatePrivateKey();
-
-    expect(draws).toHaveLength(1);
-    expect(draws[0]).toHaveLength(32);
-    expect(Array.from(key)).toEqual(Array.from(draws[0]));
-  });
-});
-```
-
-**Memory Security Testing:**
-
-```typescript
-describe("Memory Security", () => {
-  it("should clear sensitive data", async () => {
-    await vault.unlock("password");
-    const signature = await vault.signEvent(unsignedEvent);
-    expect(signature).toBeDefined();
-
-    await vault.lock();
-    await expect(vault.signEvent(unsignedEvent)).rejects.toThrow();
-  });
-});
-```
-
-## Test Data Management
-
-### In-Memory Storage
-
-Tests use in-memory storage adapters to avoid filesystem dependencies:
-
-```typescript
-function createMemoryStorage(): StorageSuite {
-  const maps = {
-    local: new Map<string, any>(),
-    sync: new Map<string, any>(),
-    session: new Map<string, any>(),
-  };
-  // ... implementation
-}
-```
-
-### Test Isolation
-
-- Each test gets fresh storage instances
-- No shared state between tests
-- Cryptographic operations use deterministic test data where appropriate
-- Random data generation for security-critical tests
-
-## Coverage Requirements
-
-**Minimum Coverage Thresholds:**
-
-- Lines: 80%
-- Functions: 80%
-- Branches: 70%
-- Statements: 80%
-
-**Coverage Exclusions:**
-
-- Test files themselves
-- Browser extension entrypoints
-- Third-party UI components (shadcn/ui)
-- Configuration files
-
-## CI/CD Integration
-
-**Continuous Integration:**
-
-```bash
-pnpm run test:ci  # Generates JUnit XML + coverage reports
-```
-
-**Coverage Reporting:**
-
-- HTML reports for local development
-- LCOV format for CI/CD systems
-- Text summary for quick feedback
-
-**Performance Monitoring:**
-
-- Test execution time tracking
-- Memory usage monitoring during crypto operations
-- Timeout detection for hanging tests
-
-## Security Testing Strategy
-
-### Cryptographic Validation
-
-1. **Entropy Testing**: Verify cryptographic randomness
-2. **Key Isolation**: Ensure keys are properly separated
-3. **Signature Security**: Validate signature uniqueness and format
-4. **Password Security**: Test password handling and storage
-
-### Attack Vector Testing
-
-1. **Input Validation**: Test boundary conditions and invalid inputs
-2. **Memory Leaks**: Verify sensitive data clearing
-3. **Storage Security**: Ensure proper encryption at rest
-4. **Session Management**: Test isolation between sessions
-
-### Security Test Maintenance
-
-- Regular review of threat models
-- Update tests when new security features are added
-- Benchmark crypto operations for performance regression
-- Validate against known attack patterns
+Service tests wire real services to an in-memory `StorageSuite`; see
+`createMemoryStorage` in `tests/integration/cross-layer.test.ts` for the pattern.
 
 ## Troubleshooting
 
-### Common Issues
-
-**Test Timeouts:**
-
-- Crypto operations can be slow, configure appropriate timeouts
-- Use `{ timeout: 10000 }` for individual slow tests
-
-**WebCrypto Issues:**
-
-- Ensure `vitest.setup.ts` properly configures crypto polyfill
-- Use Node.js 18+ for native WebCrypto support
-
-**Import Path Issues:**
-
-- Verify path aliases in `vitest.config.ts`
-- Use `@/` prefix for src directory imports
-
-**Memory Issues:**
-
-- Large test suites may need increased Node.js memory
-- Use `--max-old-space-size=4096` if needed
-
-### Debugging
-
-**Test Debugging:**
-
-```bash
-# Run single test file
-npx vitest run tests/unit/specific.test.ts
-
-# Debug with inspect
-node --inspect-brk node_modules/vitest/vitest.mjs run
-
-# Use console.log in tests (will show in output)
-console.log("Debug info:", variable);
-```
-
-**Coverage Debugging:**
-
-```bash
-# Generate detailed coverage
-pnpm run test:coverage
-
-# Open HTML coverage report
-# ./coverage/index.html
-```
-
----
-
-This testing infrastructure provides comprehensive coverage while maintaining fast feedback loops and ensuring security requirements are met at every layer of the application.
+- **Timeouts in crypto tests.** Key derivation is deliberately slow. Raise a
+  single test's budget with `{ timeout: 20000 }` rather than the global default.
+- **Node version.** Use the version in `.nvmrc`; CI pins it.
+- **Run one file:** `pnpm exec vitest run tests/unit/specific.test.ts`.
+- **Debug with the inspector:** `node --inspect-brk node_modules/vitest/vitest.mjs run`.

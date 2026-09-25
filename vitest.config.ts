@@ -32,7 +32,7 @@ export default defineConfig({
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "**/tests/**",
-        "**/entrypoints/**", // Browser extension entrypoints
+        "src/extension/**",
         "**/components/ui/**", // shadcn/ui components
         "**/*.config.*",
         "**/node_modules/**",
