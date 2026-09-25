@@ -3,7 +3,6 @@ import { useCallback, useLayoutEffect, useReducer, useRef } from "react";
 import { useEncryptedBackupImport } from "../backup/useEncryptedBackupImport";
 import type { KeyBackupPayload } from "../backup/key-backup-envelope";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
-import { useOnboarding } from "../hooks/useOnboarding";
 import {
   importKey as rpcImportKey,
   unlockVault,
@@ -164,7 +163,6 @@ export function OnboardingImportKey({
   onComplete,
 }: OnboardingImportKeyProps) {
   const { isLoading } = useKeyManager();
-  const { markOnboardingComplete } = useOnboarding();
   const [state, dispatch] = useReducer(
     importKeyReducer,
     initialImportKeyState
@@ -335,11 +333,6 @@ export function OnboardingImportKey({
     }
   };
 
-  const handleComplete = async () => {
-    await markOnboardingComplete();
-    onComplete();
-  };
-
   const currentStepIndex = importSteps.indexOf(state.currentStep);
 
   return (
@@ -406,7 +399,7 @@ export function OnboardingImportKey({
         {state.currentStep === "success" && (
           <OnboardingImportSuccessStep
             keyName={state.keyName}
-            onStart={handleComplete}
+            onStart={onComplete}
           />
         )}
       </div>

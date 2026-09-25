@@ -24,13 +24,8 @@ import {
   unmountAll,
 } from "./dom";
 
-const markOnboardingComplete = vi.hoisted(() => vi.fn());
 
 vi.mock("wxt/browser", async () => (await import("./fake-background")).wxtBrowserModule);
-
-vi.mock("@/ui/features/onboarding/hooks/useOnboarding", () => ({
-  useOnboarding: () => ({ markOnboardingComplete }),
-}));
 
 const NSEC = "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5";
 const HEX = "67dea2ed018072d675f5415ecfaed7d2597555e202d85b3d65ea4e58d2d92ffa";
@@ -101,7 +96,6 @@ async function sealedBackup(name = "From backup") {
 beforeEach(() => {
   silenceConsole();
   background.reset();
-  markOnboardingComplete.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -263,8 +257,6 @@ describe("onboarding import completes through the vault", () => {
     expect(container.querySelector("input")).toBeNull();
 
     await click(button(container, "Get Started"));
-
-    expect(markOnboardingComplete).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 

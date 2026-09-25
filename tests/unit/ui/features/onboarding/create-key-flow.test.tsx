@@ -12,7 +12,6 @@ const PASSWORD = "correct-horse-battery-staple-42"; // gitleaks:allow
 const revealKey = vi.fn();
 const generateKey = vi.fn();
 const unlockVault = vi.fn();
-const markOnboardingComplete = vi.fn();
 
 vi.mock("@/infrastructure/messaging/client", () => ({
   revealKey: (...args: unknown[]) => revealKey(...args),
@@ -29,12 +28,6 @@ vi.mock("@/infrastructure/messaging/client", () => ({
 
 vi.mock("@/ui/features/authentication/hooks/useKeyManager", () => ({
   useKeyManager: () => ({ isLoading: false }),
-}));
-
-vi.mock("@/ui/features/onboarding/hooks/useOnboarding", () => ({
-  useOnboarding: () => ({
-    markOnboardingComplete: () => markOnboardingComplete(),
-  }),
 }));
 
 import { OnboardingCreateKey } from "@/ui/features/onboarding/components/OnboardingCreateKey";
@@ -108,7 +101,6 @@ beforeEach(() => {
   revealKey.mockResolvedValue({ nsec: NSEC, hex: HEX });
   generateKey.mockResolvedValue({ id: "k1" });
   unlockVault.mockResolvedValue(undefined);
-  markOnboardingComplete.mockResolvedValue(undefined);
   Object.defineProperty(globalThis.navigator, "clipboard", {
     value: { writeText: vi.fn().mockResolvedValue(undefined) },
     configurable: true,
@@ -221,7 +213,6 @@ describe("create-key flow drops key material on every exit", () => {
 
     await click(button(container, "Finish"));
     expect(onComplete).not.toHaveBeenCalled();
-    expect(markOnboardingComplete).not.toHaveBeenCalled();
 
     setValue(
       container.querySelector<HTMLInputElement>("#backupVerification")!,
@@ -229,8 +220,6 @@ describe("create-key flow drops key material on every exit", () => {
     );
     await click(button(container, "Check"));
     await click(button(container, "Finish"));
-
-    expect(markOnboardingComplete).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(container.innerHTML).not.toContain(NSEC);
   });

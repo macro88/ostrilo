@@ -105,8 +105,7 @@ describe("onboarding container routes between the flows", () => {
     await click(button(container, "Get Started"));
     await settle(() => onComplete.mock.calls.length > 0);
 
-    expect(order.at(-1)).toBe("completed");
-    expect(order.indexOf("marked")).toBeLessThan(order.indexOf("completed"));
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    // Once: the container owns the write, and the child flow only reports back.
+    expect(order).toEqual(["marked", "completed"]);
   });
 });

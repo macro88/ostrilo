@@ -11,7 +11,6 @@ const PASSWORD = "correct-horse-battery-staple-42"; // gitleaks:allow
 const importKey = vi.fn();
 const unlockVault = vi.fn();
 const parsePrivateKey = vi.fn();
-const markOnboardingComplete = vi.fn();
 
 vi.mock("@/infrastructure/messaging/client", () => ({
   importKey: (...args: unknown[]) => importKey(...args),
@@ -28,12 +27,6 @@ vi.mock("@/infrastructure/messaging/client", () => ({
 
 vi.mock("@/ui/features/authentication/hooks/useKeyManager", () => ({
   useKeyManager: () => ({ isLoading: false }),
-}));
-
-vi.mock("@/ui/features/onboarding/hooks/useOnboarding", () => ({
-  useOnboarding: () => ({
-    markOnboardingComplete: () => markOnboardingComplete(),
-  }),
 }));
 
 import { OnboardingImportKey } from "@/ui/features/onboarding/components/OnboardingImportKey";
@@ -116,7 +109,6 @@ beforeEach(() => {
   parsePrivateKey.mockResolvedValue({ valid: true });
   importKey.mockResolvedValue({ id: "k1" });
   unlockVault.mockResolvedValue(undefined);
-  markOnboardingComplete.mockResolvedValue(undefined);
 });
 
 afterEach(() => {

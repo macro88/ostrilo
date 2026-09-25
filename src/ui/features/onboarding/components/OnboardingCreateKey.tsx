@@ -7,7 +7,6 @@ import {
   evaluatePasswordStrength,
   revealKey,
 } from "@/infrastructure/messaging/client";
-import { useOnboarding } from "../hooks/useOnboarding";
 import { OnboardingCreateKeyBackupStep } from "./OnboardingCreateKeyBackupStep";
 import { OnboardingCreateKeyInputStep } from "./OnboardingCreateKeyInputStep";
 import { OnboardingStepDots } from "./OnboardingStepDots";
@@ -145,7 +144,6 @@ export function OnboardingCreateKey({
 }: OnboardingCreateKeyProps) {
   const { isLoading } = useKeyManager();
   const [state, dispatch] = useReducer(createKeyReducer, initialCreateKeyState);
-  const { markOnboardingComplete } = useOnboarding();
   const clipboard = useExpiringClipboard();
 
   // Use refs for ephemeral sensitive data (not useState)
@@ -307,7 +305,6 @@ export function OnboardingCreateKey({
     await clipboard.clearNow();
     dropKeyMaterial();
     dispatch({ type: "clearSensitiveState" });
-    await markOnboardingComplete();
     onComplete();
   };
 

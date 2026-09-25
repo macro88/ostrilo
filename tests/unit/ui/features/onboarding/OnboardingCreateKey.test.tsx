@@ -25,13 +25,8 @@ import {
   unmountAll,
 } from "./dom";
 
-const markOnboardingComplete = vi.hoisted(() => vi.fn());
 
 vi.mock("wxt/browser", async () => (await import("./fake-background")).wxtBrowserModule);
-
-vi.mock("@/ui/features/onboarding/hooks/useOnboarding", () => ({
-  useOnboarding: () => ({ markOnboardingComplete }),
-}));
 
 const NSEC = "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5";
 const HEX = "67dea2ed018072d675f5415ecfaed7d2597555e202d85b3d65ea4e58d2d92ffa";
@@ -86,7 +81,6 @@ beforeEach(() => {
     ok: true,
     data: { nsec: NSEC, hex: HEX },
   }));
-  markOnboardingComplete.mockResolvedValue(undefined);
   writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(globalThis.navigator, "clipboard", {
     value: { writeText },
@@ -302,7 +296,6 @@ describe("create key backup verified by the file it just wrote", () => {
     expect(finish(container).disabled).toBe(false);
 
     await click(finish(container));
-    expect(markOnboardingComplete).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(writeText).not.toHaveBeenCalled();
   });
