@@ -163,6 +163,8 @@ class OstrichViewer {
                      });
                  }
              });
+         }, undefined, (error) => {
+             console.warn("Mascot texture failed to load; rendering untextured:", error);
          });
       }
 
@@ -204,6 +206,9 @@ class OstrichViewer {
       }
       
       this.updateModelTransform();
+    }, undefined, (error) => {
+      // The poster image behind the canvas stays visible, so nothing else is needed.
+      console.warn("Mascot model failed to load; showing the poster:", error);
     });
   }
 

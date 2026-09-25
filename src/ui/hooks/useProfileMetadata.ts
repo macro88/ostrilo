@@ -4,18 +4,22 @@ import type { ProfileMetadata } from "@/domain/profile/types";
 
 const EMPTY_PROFILES = new Map<string, ProfileMetadata>();
 
+interface FetchedProfiles {
+  signature: string;
+  profiles: Map<string, ProfileMetadata>;
+}
+
 /**
- * Hook for fetching profile metadata for multiple public keys
+ * Fetches profile metadata for a set of public keys.
+ *
+ * Loading is derived from whether the last completed fetch was for the current
+ * key set, so a fetch abandoned when the set changes cannot leave it stuck.
  *
  * @param pubkeys - Array of hex public keys to fetch profiles for
  * @returns Map of pubkey -> ProfileMetadata and loading state
  */
 export function useProfileMetadata(pubkeys: string[]) {
-  const [profiles, setProfiles] = useState<Map<string, ProfileMetadata>>(
-    new Map()
-  );
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fetched, setFetched] = useState<FetchedProfiles | null>(null);
   const pubkeySignature = pubkeys.join("\u0000");
 
   useEffect(() => {
@@ -27,53 +31,42 @@ export function useProfileMetadata(pubkeys: string[]) {
     const requestedPubkeys = pubkeySignature.split("\u0000");
 
     const fetchProfiles = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+      // allSettled never rejects: a failed lookup is simply absent from the map.
+      const results = await Promise.allSettled(
+        requestedPubkeys.map(async (pubkey) => {
+          const data = await rpc<ProfileMetadata | null>({
+            type: "profile.get",
+            params: { pubkey, forceFetch: false },
+          });
+          return { pubkey, data };
+        })
+      );
 
-        const results = await Promise.allSettled(
-          requestedPubkeys.map(async (pubkey) => {
-            const data = await rpc<ProfileMetadata | null>({
-              type: "profile.get" as any,
-              params: { pubkey, forceFetch: false },
-            } as any);
-            return { pubkey, data };
-          })
-        );
+      if (cancelled) return;
 
-        if (cancelled) return;
-
-        const profileMap = new Map<string, ProfileMetadata>();
-        results.forEach((result) => {
-          if (result.status === "fulfilled" && result.value.data) {
-            profileMap.set(result.value.pubkey, result.value.data);
-          }
-        });
-
-        setProfiles(profileMap);
-      } catch (err) {
-        if (!cancelled) {
-          console.error("Failed to fetch profiles:", err);
-          setError(
-            err instanceof Error ? err.message : "Failed to fetch profiles"
-          );
+      const profiles = new Map<string, ProfileMetadata>();
+      results.forEach((result) => {
+        if (result.status === "fulfilled" && result.value.data) {
+          profiles.set(result.value.pubkey, result.value.data);
         }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
+      });
+
+      setFetched({ signature: pubkeySignature, profiles });
     };
 
-    fetchProfiles();
+    void fetchProfiles();
 
     return () => {
       cancelled = true;
     };
   }, [pubkeySignature]);
 
-  const visibleProfiles =
-    pubkeySignature.length === 0 ? EMPTY_PROFILES : profiles;
+  if (pubkeySignature.length === 0) {
+    return { profiles: EMPTY_PROFILES, isLoading: false };
+  }
 
-  return { profiles: visibleProfiles, isLoading, error };
+  return {
+    profiles: fetched?.profiles ?? EMPTY_PROFILES,
+    isLoading: fetched?.signature !== pubkeySignature,
+  };
 }

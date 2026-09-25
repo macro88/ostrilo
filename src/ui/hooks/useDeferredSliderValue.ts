@@ -49,6 +49,7 @@ export function useDeferredSliderValue(
   commit: (value: number) => Promise<unknown>
 ) {
   const [draft, setDraft] = useState<number | null>(null);
+  const [draftBasis, setDraftBasis] = useState(stored);
   const draftRef = useRef<number | null>(null);
   const storedRef = useRef(stored);
   const inFlightRef = useRef<number | null>(null);
@@ -63,11 +64,17 @@ export function useDeferredSliderValue(
     back to the old value until that landed: a visible bounce, on the one
     control where "did that actually take?" is the question you least want to
     leave a user asking.
+
+    The state reset happens during render, so the retired draft is never
+    painted; the refs follow in an effect, since render must not write them.
   */
+  if (stored !== draftBasis) {
+    setDraftBasis(stored);
+    setDraft(null);
+  }
   useEffect(() => {
     storedRef.current = stored;
     draftRef.current = null;
-    setDraft(null);
   }, [stored]);
 
   const send = useCallback(
