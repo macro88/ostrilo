@@ -189,7 +189,9 @@ runtime difference.
 than trusting the numbers there, and note that a substantial share of the E2E
 suite is currently skipped.
 
-**`docs/design-review/capture-screenshots.mjs` is probably broken.** It drives an
-`http://127.0.0.1` origin while the content script matches `https://*/*` only, and
-its backup-step selectors predate the transcription-verification gate. Prefer
-`pnpm run agent:screens`. Not verified.
+**`docs/design-review/capture-screenshots.mjs` serves over `https://localhost`**,
+not plain HTTP, specifically so the `https://*/*`-only content script picks up
+`window.nostr` — see the script's own comments near its `https.createServer` call.
+It is the required tool for design-review captures (`AGENTS.md`); `pnpm run
+agent:screens` is a separate Playwright-based loop for driving the extension
+generally, not a replacement for it.
