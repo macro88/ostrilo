@@ -508,8 +508,6 @@ Understanding extension health, usage patterns, and error rates enables data-dri
 
 ## Implementation Roadmap
 
-For multi-session execution workflow and build order, use `docs/session-workflow.md`.
-
 Treat this PRD as the progress ledger: every completed OpenSpec slice must update affected requirement statuses, the Current Implementation Snapshot, and roadmap gap lists before archival. Mark a requirement `✅` only when the full row wording is satisfied and verified; use `🔄` for narrower shipped slices.
 
 ### Status Legend
