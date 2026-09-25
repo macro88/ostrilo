@@ -1,0 +1,14 @@
+{
+  "ignore": {
+    // Build output and generated reports, not source. Bundled dependencies in
+    // .output/ otherwise dominate the score; CI never has these directories.
+    "files": [".output/**", ".wxt/**", "coverage/**", "test-results/**"],
+    "overrides": [
+      {
+        // Reviewed as correct: see .react-doctor/false-positives.md.
+        "files": ["src/ui/components/ui/slider.tsx"],
+        "rules": ["react-doctor/no-array-index-as-key"]
+      }
+    ]
+  }
+}

@@ -31,14 +31,14 @@ log retention), so folding the value into the key remounted the thumb on every
 step of a drag, dropping DOM focus from the element the user was arrow-keying.
 Keying on data made a reorder-safety rule pass while breaking the control.
 
-**Why it is not suppressed in config instead.** `react-doctor rules disable`
-is repository-wide, and this rule earns its place on the genuine lists
-elsewhere in the UI. React Doctor has no per-file or inline suppression
-(an `oxlint-disable-next-line` comment was tried and does not apply), so the
-warning is left visible and answered here. It is a warning, so it does not gate
-the PR.
+**How it is suppressed.** `react-doctor rules disable` is repository-wide, and
+this rule earns its place on the genuine lists elsewhere in the UI, so it is not
+disabled. An inline `oxlint-disable-next-line` comment was tried and does not
+apply. Instead `doctor.config.jsonc` carries an `ignore.overrides` entry scoped
+to this one rule in this one file, pointing back here. If any predicate above
+stops holding, delete that override along with this entry.
 
 **Also:** `key={index}` is the upstream shadcn/ui form of this component.
 Keeping it keeps future shadcn updates diffable.
 
-**Reviewed:** 2026-09-16, against react-doctor 0.9.14.
+**Reviewed:** 2026-09-16, against react-doctor 0.9.14. Override added 2026-09-25.
