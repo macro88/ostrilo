@@ -8,3 +8,13 @@ useDefault = true
       '''tests/vectors/.*''',          # published BIP-340 and cross-implementation NIP-01 vectors
       '''pnpm-lock\.yaml''',           # integrity hashes
     ]
+    # Vault passwords used as test fixtures, allowlisted by exact value rather
+    # than by path, so a real-looking secret added under tests/ still fails.
+    # Within one allowlist, paths and regexes are alternatives (OR).
+    regexes = [
+      '''^Violet-Harbor-Quill-8472-otter$''',
+      '''^correct-horse-battery-staple-42$''',
+      '''^Umbral-Pinecone-Drizzle-47$''',
+      '''^encryption-test-456$''',
+      '''^signature-test-789$''',
+    ]
