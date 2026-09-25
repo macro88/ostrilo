@@ -10,6 +10,7 @@ code is the final authority where the two disagree.
 | --- | --- |
 | [Managing multiple keys](managing-multiple-keys.md) | Adding, switching, renaming and deleting keys |
 | [Key backup](key-backup.md) | Saving and restoring an encrypted backup; the plaintext-backup migration warning |
+| [Privacy policy](../PRIVACY.md) | What the extension stores, what it sends to relays, and what browser sync copies |
 
 ## Building a dApp against Ostrilo
 

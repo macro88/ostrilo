@@ -143,6 +143,10 @@ background signing. You still trust the installed extension, its dependencies,
 your browser and operating system. An encrypted vault does not protect an
 unlocked session from a compromised device.
 
+What Ostrilo stores, what it sends to relays, and what your browser's sync
+copies is set out in the [privacy policy](PRIVACY.md). Nothing is sent to the
+developer.
+
 | Boundary | Current behavior and limits |
 | --- | --- |
 | Keys at rest | Private keys are encrypted in local extension storage with AES-GCM. New vaults use Argon2id; versioned records carry their derivation parameters. See the [vault format](docs/vault-storage-format.md) for legacy migration and validation. |
