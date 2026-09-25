@@ -394,31 +394,10 @@ await rpcClient.send('profile.clearCache', {});
 The UI is built using React and styled with Tailwind CSS. We use `shadcn/ui` for some of the basic UI components.
 
 -   **Component Organization:** Components are organized by feature in the `src/ui/features` directory. Common, reusable components are placed in the `src/ui/components/common` directory.
--   **Styling:** We use Tailwind CSS for styling. The `tailwind.config.js` file contains the configuration for Tailwind. We also use `clsx` and `tailwind-merge` to conditionally apply classes.
+-   **Styling:** Tailwind CSS v4, configured in CSS rather than a JavaScript config file: `src/assets/tailwind.css` holds the theme tokens. `clsx` and `tailwind-merge` apply classes conditionally. `docs/design/DESIGN_RULES.md` governs what the styles may be.
 
 ## Contributing
 
-We welcome contributions from the community! If you'd like to contribute to Ostrilo, please follow these steps:
-
-1.  **Fork the repository.**
-2.  **Create a new branch for your feature or bug fix.**
-3.  **Make your changes.**
-4.  **Write tests for your changes.**
-5.  **Run the tests and make sure they pass.**
-6.  **Submit a pull request.**
-
-### Running the tests
-
-To run the tests, use the following command:
-
-```bash
-pnpm test
-```
-
-This will run all the unit and integration tests. To run the end-to-end tests, use the following command:
-
-```bash
-pnpm run test:e2e
-```
-
-We hope this guide has been helpful. If you have any questions, please don't hesitate to open an issue on GitHub.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for setup, the blocking verification
+gate and the OpenSpec workflow, and [TESTING.md](TESTING.md) for the test
+suites.

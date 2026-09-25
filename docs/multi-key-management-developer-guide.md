@@ -971,16 +971,7 @@ a rename; reload the surface. See the `renameKey` section
 **Issue:** Delete does nothing and no error appears  
 **Solution:** The re-auth dialog was cancelled, or the password was wrong. The background refuses the deletion without a verified password; check the console for the RPC error code
 
-## Future Enhancements
-
-Potential improvements tracked in openspec:
-
-- **Key export functionality**: Export encrypted backup files
-- **Key grouping/tagging**: Organize keys with custom tags
-- **Key reordering**: Drag-and-drop to reorder keys in selector
-- **Key health indicators**: Show last used date, relay connectivity
-- **Multi-device sync**: NIP-46 remote signer integration
-- **Keyboard shortcuts**: Global hotkey for quick key switching
+## Design history
 
 The original design notes are archived at
 `openspec/changes/archive/2025-12-17-add-multi-key-selector/design.md`. The live

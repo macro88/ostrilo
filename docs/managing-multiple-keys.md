@@ -198,7 +198,6 @@ avatar — see "Why no profile pictures?" above.
 ### Organizing Multiple Identities
 
 - **Use descriptive labels**: "Work - Alice", "Personal", "Anon Blogger"
-- **Limit key count**: Recommended maximum of 10 keys for best UX
 - **Back up when you create**: Ostrilo offers an encrypted backup only while you are creating your first key during onboarding. There is no export on the settings page, so a key you add later cannot be backed up from within Ostrilo. If you import a key, keep your own copy of the nsec
 
 ### Security Considerations
@@ -212,7 +211,6 @@ avatar — see "Why no profile pictures?" above.
 
 - **Profile loading**: Key names and seal avatars render immediately. Display names from Nostr profiles arrive when the relay query resolves, and are cached for an hour afterwards
 - **Key switching**: Switching is instant; no network requests required
-- **Many keys**: If you have many keys, consider using fewer active ones
 
 ## Keyboard Accessibility
 
@@ -290,14 +288,13 @@ A:
 
 ## Related Documentation
 
-- [Onboarding Guide](./ostrilo-onboarding-requirements.md) - Initial setup and first key creation
-- [Settings & Permissions](./ostrilo-settings-permissions-v1.md) - Per-origin policies and settings
-- [Signer Requirements](./ostrilo-signer-requirements.md) - Security requirements and threat model boundaries
+- [Key backup](./key-backup.md) - Saving and restoring an encrypted backup
+- [Onboarding requirements](./ostrilo-onboarding-requirements.md) - What first-run setup must do
+- [Settings & permissions requirements](./ostrilo-settings-permissions-v1.md) - Per-origin policies and settings
+- [Signer requirements](./ostrilo-signer-requirements.md) - Security requirements and threat model boundaries
 
-## Support
+## Reporting a problem
 
-If you encounter issues or have questions:
-1. Check the troubleshooting section above
-2. Review the FAQ
-3. File an issue on GitHub with detailed reproduction steps
-4. Include your Ostrilo version and browser information
+Open a bug report from the repository's issue templates. Never paste an `nsec`,
+a vault file or a backup file into an issue. Report anything security-sensitive
+privately, as described in [SECURITY.md](../SECURITY.md).
