@@ -84,9 +84,14 @@ export class SettingsService {
       // displayed it back as though it were configured. Dropping it here
       // makes the stored list and the connected list the same list.
       const sanitized = sanitizeRelayUrls(next.relays);
-      if (
-        sanitized.length !== (next.relays?.length ?? 0) ||
-        sanitized.some((relay, i) => relay !== next.relays?.[i])
+      if (!Array.isArray(next.relays)) {
+        // No list at all. An empty array is kept as stored: removing the last
+        // relay is something the user can choose to do.
+        next.relays = [...DEFAULT_RELAY_URLS];
+        changed = true;
+      } else if (
+        sanitized.length !== next.relays.length ||
+        sanitized.some((relay, i) => relay !== next.relays[i])
       ) {
         // Never leave the user with no relays at all: an empty list means
         // no profile metadata anywhere, which reads as the product being

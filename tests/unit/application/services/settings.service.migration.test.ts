@@ -48,6 +48,24 @@ describe("SettingsService relay and legacy-record migration", () => {
     expect((await stored())?.relays).toEqual([...DEFAULT_RELAY_URLS]);
   });
 
+  it("gives a v1 record with no relay list the default relays", async () => {
+    const { relays: _dropped, ...withoutRelays } = v1([]);
+    await storage.sync.set("appSettings", withoutRelays);
+
+    const settings = await service.get();
+
+    expect(settings?.relays).toEqual([...DEFAULT_RELAY_URLS]);
+    expect((await stored())?.relays).toEqual([...DEFAULT_RELAY_URLS]);
+  });
+
+  it("keeps a relay list the user emptied", async () => {
+    await storage.sync.set("appSettings", v1([]));
+
+    const settings = await service.get();
+
+    expect(settings?.relays).toEqual([]);
+  });
+
   it("carries known fields over from a record without the v1 marker", async () => {
     const origins = [{ origin: "https://a.example", trustLevel: "low", rules: {}, updatedAt: 1 }];
     await storage.sync.set("appSettings", {
