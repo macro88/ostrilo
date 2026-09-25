@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useLayoutEffect, useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NO_AUTOFILL_PROPS } from "@/components/ui/password-input";
@@ -7,6 +7,8 @@ import { parsePrivateKey } from "@/infrastructure/messaging/client";
 import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
 import { Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { KeyFormActions } from "./KeyFormActions";
+import { userFacingError } from "@/ui/lib/user-facing-error";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
 interface ImportKeyFormProps {
   onBack: () => void;
@@ -25,6 +27,17 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState("");
+
+  // A layout effect: React detaches the refs before passive cleanups run, so a
+  // passive teardown would leave the nsec and password in the detached inputs.
+  useLayoutEffect(() => {
+    const privateKeyInput = privateKeyRef.current;
+    const passwordInput = passwordRef.current;
+    return () => {
+      if (privateKeyInput) privateKeyInput.value = "";
+      if (passwordInput) passwordInput.value = "";
+    };
+  }, []);
 
   const handleImportKey = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +80,19 @@ export function ImportKeyForm({ onBack, onSuccess }: ImportKeyFormProps) {
       onSuccess();
     } catch (error) {
       console.error("Failed to import key:", error);
-      setError(error instanceof Error ? error.message : "Failed to import key");
+      // The password goes, the key stays so a typo can be corrected - the same
+      // rule onboarding's import step follows.
+      if (passwordRef.current) {
+        passwordRef.current.value = "";
+      }
+      setError(
+        userFacingError(error, "Could not import the key. Try again.", {
+          [RPC_ERROR_CODES.INVALID_KEY_INPUT]: "That is not a valid private key. Paste an nsec1 key or 64 hex characters.",
+          [RPC_ERROR_CODES.KEY_ALREADY_EXISTS]: "This key is already in your vault.",
+          [RPC_ERROR_CODES.INVALID_PASSWORD]: "That is not your vault password.",
+          [RPC_ERROR_CODES.LOCKED]: "The vault is locked. Unlock it and try again.",
+        })
+      );
     } finally {
       setIsImporting(false);
     }

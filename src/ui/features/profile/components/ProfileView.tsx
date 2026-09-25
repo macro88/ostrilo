@@ -4,6 +4,8 @@ import type { ProfileMetadata } from "@/domain/profile/types";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { ProfileEditForm } from "./ProfileEditForm";
 import { ProfileSummary, type ProfileEditField } from "./ProfileSummary";
+import { userFacingError } from "@/ui/lib/user-facing-error";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
 function createProfileFormData(
   profile: ProfileMetadata | null
@@ -84,7 +86,10 @@ export function ProfileView() {
     } catch (err) {
       console.error("Failed to save profile:", err);
       setSaveError(
-        err instanceof Error ? err.message : "Failed to save profile"
+        userFacingError(err, "Could not save the profile. Try again.", {
+          [RPC_ERROR_CODES.INVALID_PARAMS]:
+            "Some fields are not valid. Image and website links must start with https://.",
+        })
       );
     } finally {
       setIsSaving(false);

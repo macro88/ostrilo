@@ -21,6 +21,7 @@ import { SealMark } from "@/components/common/SealMark";
 import { useAppSettings } from "@/ui/hooks/useAppSettings";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 import { cn } from "@/lib/utils";
+import { userFacingError } from "@/ui/lib/user-facing-error";
 
 interface ApprovalPromptState {
   requests: PendingRequest[];
@@ -162,7 +163,7 @@ export function ApprovalPrompt({
     } catch (err) {
       dispatch({
         type: "loadError",
-        error: err instanceof Error ? err.message : "Failed to load requests",
+        error: userFacingError(err, "Could not load the requests."),
       });
     }
   }, []);
@@ -266,7 +267,7 @@ export function ApprovalPrompt({
     } catch (err) {
       dispatch({
         type: "loadError",
-        error: err instanceof Error ? err.message : "Failed to process action",
+        error: userFacingError(err, "Could not complete that action. Try again."),
       });
     } finally {
       dispatch({ type: "resolveEnd" });
@@ -294,7 +295,7 @@ export function ApprovalPrompt({
     } catch (err) {
       dispatch({
         type: "loadError",
-        error: err instanceof Error ? err.message : "Failed to process batch",
+        error: userFacingError(err, "Could not complete that action for every request. Try again."),
       });
     } finally {
       dispatch({ type: "resolveEnd" });

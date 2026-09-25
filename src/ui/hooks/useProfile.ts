@@ -2,6 +2,7 @@ import { useReducer, useEffect, useCallback } from "react";
 import { rpc } from "@/infrastructure/messaging/client";
 import type { ProfileMetadata } from "@/domain/profile/types";
 import { RELAY_BOUNDS } from "@/domain/relay";
+import { userFacingError } from "@/ui/lib/user-facing-error";
 
 interface ProfileState {
   profile: ProfileMetadata | null;
@@ -94,7 +95,7 @@ export function useProfile(pubkey: string | null) {
         console.error("Failed to fetch profile:", err);
         dispatch({
           type: "failure",
-          error: err instanceof Error ? err.message : "Failed to fetch profile",
+          error: userFacingError(err, "Could not load the profile."),
         });
       } finally {
         window.clearTimeout(settle);
@@ -127,7 +128,7 @@ export function useProfile(pubkey: string | null) {
         console.error("Failed to update profile:", err);
         dispatch({
           type: "failure",
-          error: err instanceof Error ? err.message : "Failed to update profile",
+          error: userFacingError(err, "Could not update the profile."),
         });
         throw err;
       }

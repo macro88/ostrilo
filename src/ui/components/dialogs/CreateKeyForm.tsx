@@ -1,9 +1,11 @@
-import { useState, useRef } from "react";
+import { useLayoutEffect, useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NO_AUTOFILL_PROPS } from "@/components/ui/password-input";
 import { useKeyManagerContext } from "@/ui/state/KeyManagerContext";
 import { KeyFormActions } from "./KeyFormActions";
+import { userFacingError } from "@/ui/lib/user-facing-error";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
 interface CreateKeyFormProps {
   onBack: () => void;
@@ -20,6 +22,14 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
   const [keyName, setKeyName] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
+
+  // A layout effect: React detaches the ref before passive cleanups run.
+  useLayoutEffect(() => {
+    const passwordInput = passwordRef.current;
+    return () => {
+      if (passwordInput) passwordInput.value = "";
+    };
+  }, []);
 
   const handleGenerateKey = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,8 +57,14 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
       onSuccess();
     } catch (error) {
       console.error("Failed to generate key:", error);
+      if (passwordRef.current) {
+        passwordRef.current.value = "";
+      }
       setError(
-        error instanceof Error ? error.message : "Failed to generate key"
+        userFacingError(error, "Could not create the key. Try again.", {
+          [RPC_ERROR_CODES.INVALID_PASSWORD]: "That is not your vault password.",
+          [RPC_ERROR_CODES.LOCKED]: "The vault is locked. Unlock it and try again.",
+        })
       );
     } finally {
       setIsGenerating(false);

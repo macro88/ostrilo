@@ -17,6 +17,8 @@ import {
   useExpiringClipboard,
 } from "../backup/useExpiringClipboard";
 import type { KeyBackupPayload } from "../backup/key-backup-envelope";
+import { userFacingError } from "@/ui/lib/user-facing-error";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
 interface OnboardingCreateKeyProps {
   onBack: () => void;
@@ -246,7 +248,9 @@ export function OnboardingCreateKey({
     } catch (error) {
       dispatch({
         type: "setPasswordError",
-        value: error instanceof Error ? error.message : "Failed to generate key",
+        value: userFacingError(error, "Could not create the key. Try again.", {
+          [RPC_ERROR_CODES.INVALID_PASSWORD]: "That password was not accepted. Use at least 12 characters, and avoid common passwords and patterns.",
+        }),
       });
     } finally {
       dispatch({ type: "setGenerating", value: false });
@@ -271,7 +275,10 @@ export function OnboardingCreateKey({
       privateKeyRef.current = null;
       dispatch({
         type: "setRevealError",
-        value: error instanceof Error ? error.message : "Failed to reveal key",
+        value: userFacingError(error, "Could not reveal the key. Try again.", {
+          [RPC_ERROR_CODES.INVALID_PASSWORD]: "That is not your vault password.",
+          [RPC_ERROR_CODES.LOCKED]: "The vault is locked. Unlock it and try again.",
+        }),
       });
     }
   };

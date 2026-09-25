@@ -4,6 +4,7 @@ import { Label } from "@/ui/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
 import { isAllowedRemoteUrl } from "@/domain/profile/types";
+import { userFacingError } from "@/ui/lib/user-facing-error";
 
 interface ImageUploadFieldProps {
   id: string;
@@ -149,7 +150,7 @@ export function ImageUploadField({
     } catch (err) {
       console.error("Image upload error:", err);
       setUploadError(
-        err instanceof Error ? err.message : "Failed to upload image"
+        userFacingError(err, "Could not upload the image. Try again.")
       );
       setUploadProgress(0);
     } finally {

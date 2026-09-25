@@ -14,6 +14,8 @@ import { OnboardingImportKeyStep } from "./OnboardingImportKeyStep";
 import { OnboardingImportPasswordStep } from "./OnboardingImportPasswordStep";
 import { OnboardingImportSuccessStep } from "./OnboardingImportSuccessStep";
 import { OnboardingStepDots } from "./OnboardingStepDots";
+import { userFacingError } from "@/ui/lib/user-facing-error";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
 interface OnboardingImportKeyProps {
   onBack: () => void;
@@ -243,7 +245,7 @@ export function OnboardingImportKey({
       dispatch({
         type: "setImportError",
         value:
-          error instanceof Error ? error.message : "Invalid private key format",
+          userFacingError(error, "That is not a valid private key. Paste an nsec1 key or 64 hex characters."),
       });
       dispatch({ type: "setHasParsedKey", value: false });
       return false;
@@ -324,7 +326,11 @@ export function OnboardingImportKey({
       dispatch({ type: "clearSensitiveState" });
       dispatch({
         type: "setPasswordError",
-        value: error instanceof Error ? error.message : "Failed to import key",
+        value: userFacingError(error, "Could not import the key. Try again.", {
+          [RPC_ERROR_CODES.INVALID_KEY_INPUT]: "That is not a valid private key. Paste an nsec1 key or 64 hex characters.",
+          [RPC_ERROR_CODES.KEY_ALREADY_EXISTS]: "This key is already in your vault.",
+          [RPC_ERROR_CODES.INVALID_PASSWORD]: "That password was not accepted. Use at least 12 characters, and avoid common passwords and patterns.",
+        }),
       });
     }
   };
