@@ -29,13 +29,13 @@ Any extension document that can hold a private key or a master password SHALL lo
 
 ### Requirement: Key Handling Documents Are Declared In One Place
 
-The set of extension documents allowed to hold key material SHALL be declared once as shared constants, and both the UI and the build guard SHALL read that declaration rather than hard-coding document names.
+The set of extension documents allowed to hold key material SHALL be declared once as shared constants. Every guard that inspects those documents SHALL read that declaration rather than hard-coding document names, and UI code SHALL NOT repeat the document names as literals.
 
-#### Scenario: UI and build guard read the same declaration
+#### Scenario: Both guards read the same declaration
 
-- **WHEN** the UI determines whether a surface is permitted to render key-handling steps
-- **THEN** it SHALL consult the shared key-handling document constants
-- **AND** the build guard SHALL enumerate the documents to inspect from the same constants
+- **WHEN** the build-output guard enumerates the documents whose module graphs it inspects
+- **THEN** it SHALL read them from the shared key-handling document constants
+- **AND** a source guard SHALL fail when a shipped extension document is missing from the same constants
 
 #### Scenario: Adding a document requires updating the declaration
 
