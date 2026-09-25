@@ -278,10 +278,11 @@ export class NostrRpcHandler implements RpcModule {
       );
 
       this.openApprovalPopup(pendingRequest.id).catch((err) => {
-        // Popup failed: deny. A disclosure that cannot be asked about must not
-        // be granted.
-        this.approvalQueue!.resolve(pendingRequest.id, "deny");
+        // A disclosure that cannot be asked about must not be granted. Reject
+        // first: resolving the queue entry settles this promise with "deny",
+        // which would report a prompt the user never saw as their refusal.
         reject(new Error(`Failed to open approval popup: ${err.message}`));
+        this.approvalQueue!.resolve(pendingRequest.id, "deny");
       });
     });
   }
@@ -633,9 +634,10 @@ export class NostrRpcHandler implements RpcModule {
           "[NostrRpcHandler] Popup open failed, denying request:",
           err
         );
-        // If popup fails to open, reject the request
-        this.approvalQueue!.resolve(pendingRequest.id, "deny");
+        // Reject before clearing the queue entry, whose resolver would
+        // otherwise settle this as the user's "deny".
         reject(new Error(`Failed to open approval popup: ${err.message}`));
+        this.approvalQueue!.resolve(pendingRequest.id, "deny");
       });
     });
   }
