@@ -203,6 +203,76 @@ describe("clipboard copies of a private key expire", () => {
     ).toBeUndefined();
   });
 
+  it("reports a failed copy when the Clipboard API is missing", async () => {
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: undefined,
+      configurable: true,
+    });
+    const hook = mountHook();
+
+    let result: boolean | undefined;
+    await act(async () => {
+      result = await hook.current.copy(NSEC);
+    });
+
+    expect(result).toBe(false);
+    expect(hook.current.status).toBe("copy-failed");
+  });
+
+  it("reports a failed clear when the Clipboard API has gone away", async () => {
+    const hook = mountHook();
+    await act(async () => {
+      await hook.current.copy(NSEC);
+    });
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: undefined,
+      configurable: true,
+    });
+
+    await act(async () => {
+      await hook.current.clearNow();
+    });
+
+    expect(hook.current.status).toBe("clear-failed");
+  });
+
+  it("falls back to a single space when an empty write is rejected", async () => {
+    const hook = mountHook();
+    await act(async () => {
+      await hook.current.copy(NSEC);
+    });
+    writeText.mockImplementation(async (text: string) => {
+      if (text === "") throw new Error("empty writes unsupported");
+    });
+
+    await act(async () => {
+      await hook.current.clearNow();
+    });
+
+    expect(writeText).toHaveBeenLastCalledWith(" ");
+    expect(hook.current.status).toBe("cleared");
+  });
+
+  it("disarms on reset, so neither the timer nor unmount clears later", async () => {
+    const hook = mountHook();
+    await act(async () => {
+      await hook.current.copy(NSEC);
+    });
+
+    act(() => {
+      hook.current.reset();
+    });
+    expect(hook.current.status).toBe("idle");
+    expect(hook.current.secondsRemaining).toBe(0);
+
+    writeText.mockClear();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CLIPBOARD_CLEAR_MS * 2);
+    });
+    unmountAll();
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
   it("bounds the window at no more than 60 seconds", () => {
     expect(CLIPBOARD_CLEAR_MS).toBeLessThanOrEqual(60_000);
     expect(CLIPBOARD_CLEAR_MS).toBeGreaterThanOrEqual(30_000);

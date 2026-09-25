@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 const appSettingsMock = vi.hoisted(() => ({
+  isLoading: false,
   settings: {
     __version: "settings.v1",
     theme: "light",
@@ -63,7 +64,7 @@ const keyManagerMock = vi.hoisted(() => ({
 vi.mock("@/hooks/useAppSettings", () => ({
   useAppSettings: () => ({
     settings: appSettingsMock.settings,
-    isLoading: false,
+    isLoading: appSettingsMock.isLoading,
     updateTheme: appSettingsMock.updateTheme,
     updateAutoLockMinutes: appSettingsMock.updateAutoLockMinutes,
     updateSessionTTLMinutes: appSettingsMock.updateSessionTTLMinutes,
@@ -304,6 +305,7 @@ async function clickByTextAsync(container: HTMLElement, text: string) {
 
 beforeEach(() => {
   resetSettings();
+  appSettingsMock.isLoading = false;
   for (const value of Object.values(appSettingsMock)) {
     if (typeof value === "function") {
       (value as { mockReset?: () => void }).mockReset?.();
@@ -439,5 +441,73 @@ describe("options page tab components", () => {
     clickByText(container, "Medium kind toggles");
 
     expect(appSettingsMock.updateMediumAllowKinds).toHaveBeenCalledWith([]);
+  });
+
+  it.each([
+    ["Relays", RelaysTab],
+    ["Advanced", AdvancedTab],
+    ["Activity Log", ActivityLogTab],
+  ] as const)(
+    "shows only the loading message on the %s tab while settings load",
+    (_name, Tab) => {
+      appSettingsMock.isLoading = true;
+      const container = render(<Tab />);
+
+      expect(container.textContent).toBe("Loading settings...");
+    }
+  );
+
+  it("adds a newly enabled kind to the medium trust defaults", () => {
+    appSettingsMock.settings.mediumAllowKinds = [];
+    const container = render(<AdvancedTab />);
+
+    clickByText(container, "Medium kind toggles");
+
+    expect(appSettingsMock.updateMediumAllowKinds).toHaveBeenCalledWith([7]);
+  });
+
+  it("downloads the exported log as JSON and reports success", async () => {
+    vi.mocked(activityGetRecent).mockResolvedValueOnce({
+      entries: [],
+      total: 3,
+    });
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    const blobs: Blob[] = [];
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn((blob: Blob) => {
+        blobs.push(blob);
+        return "blob:ostrilo-activity";
+      }),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const container = render(<ActivityLogTab />);
+
+    await clickByTextAsync(container, "Export activity");
+    await act(async () => {});
+
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(blobs[0].type).toBe("application/json");
+    expect(JSON.parse(await blobs[0].text())).toMatchObject({ total: 3, entries: [] });
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      "Activity log exported as a local JSON file."
+    );
+  });
+
+  it("tells the user when the export fails", async () => {
+    vi.mocked(activityGetRecent).mockRejectedValueOnce(new Error("locked"));
+    const container = render(<ActivityLogTab />);
+
+    await clickByTextAsync(container, "Export activity");
+    await act(async () => {});
+
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      "Could not export the activity log. Try again from this page."
+    );
   });
 });

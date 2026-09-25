@@ -8,6 +8,7 @@ import {
   openKeyBackup,
   parseKeyBackupEnvelope,
   serializeKeyBackup,
+  type KeyBackupEnvelopeV1,
   type KeyBackupPayload,
 } from "@/ui/features/onboarding/backup/key-backup-envelope";
 
@@ -139,5 +140,78 @@ describe("encrypted key backup envelope", () => {
     ).toBeNull();
     expect(parseKeyBackupEnvelope("nsec1notjson")).toBeNull();
     expect(parseKeyBackupEnvelope("")).toBeNull();
+  });
+
+  it("refuses a header whose argon2id memory cost has been lowered", async () => {
+    const envelope = await createKeyBackup(PAYLOAD, PASSPHRASE);
+    const weakened = { ...envelope, kdf: { ...envelope.kdf, m: 8 } };
+
+    await expect(openKeyBackup(weakened, PASSPHRASE)).rejects.toThrow(
+      BACKUP_DECRYPT_FAILURE_MESSAGE
+    );
+  });
+
+  it("refuses a header whose salt has been shortened", async () => {
+    const envelope = await createKeyBackup(PAYLOAD, PASSPHRASE);
+    const shortened = { ...envelope, kdf: { ...envelope.kdf, salt: btoa("abc") } };
+
+    await expect(openKeyBackup(shortened, PASSPHRASE)).rejects.toThrow(
+      BACKUP_DECRYPT_FAILURE_MESSAGE
+    );
+  });
+
+  it(
+    "fails closed when the header names a different KDF than the one that sealed it",
+    { timeout: 30_000 },
+    async () => {
+      const envelope = await createKeyBackup(PAYLOAD, PASSPHRASE);
+      const swapped: KeyBackupEnvelopeV1 = {
+        ...envelope,
+        kdf: { alg: "pbkdf2-sha256", c: 600_000, salt: envelope.kdf.salt },
+      };
+
+      await expect(openKeyBackup(swapped, PASSPHRASE)).rejects.toThrow(
+        new KeyBackupError(BACKUP_DECRYPT_FAILURE_MESSAGE)
+      );
+    }
+  );
+
+  it("fails closed when the sealed payload is not a key", async () => {
+    const notAKey: KeyBackupPayload = JSON.parse('{"hex":"00","name":"k"}');
+    const envelope = await createKeyBackup(notAKey, PASSPHRASE);
+
+    await expect(openKeyBackup(envelope, PASSPHRASE)).rejects.toThrow(
+      new KeyBackupError(BACKUP_DECRYPT_FAILURE_MESSAGE)
+    );
+  });
+
+  it("recovers a key sealed without a name as an unnamed key", async () => {
+    const unnamed: KeyBackupPayload = JSON.parse(
+      JSON.stringify({ nsec: PAYLOAD.nsec, hex: PAYLOAD.hex })
+    );
+    const envelope = await createKeyBackup(unnamed, PASSPHRASE);
+
+    await expect(openKeyBackup(envelope, PASSPHRASE)).resolves.toEqual({
+      nsec: PAYLOAD.nsec,
+      hex: PAYLOAD.hex,
+      name: "",
+    });
+  });
+
+  it("declines values that are not envelope-shaped", async () => {
+    const envelope = await createKeyBackup(PAYLOAD, PASSPHRASE);
+
+    expect(isKeyBackupEnvelope(null)).toBe(false);
+    expect(isKeyBackupEnvelope("ostrilo-key-backup")).toBe(false);
+    expect(isKeyBackupEnvelope({ ...envelope, v: 2 })).toBe(false);
+    expect(isKeyBackupEnvelope({ ...envelope, ct: 7 })).toBe(false);
+    expect(isKeyBackupEnvelope({ ...envelope, cipher: {} })).toBe(false);
+    expect(isKeyBackupEnvelope({ ...envelope, kdf: { alg: "scrypt" } })).toBe(false);
+    expect(
+      isKeyBackupEnvelope({
+        ...envelope,
+        kdf: { alg: "pbkdf2-sha256", c: 600_000, salt: envelope.kdf.salt },
+      })
+    ).toBe(true);
   });
 });
