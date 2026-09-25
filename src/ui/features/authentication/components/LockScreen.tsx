@@ -127,7 +127,7 @@ export function LockScreen({
         className="my-auto flex w-full max-w-sm flex-col items-center pb-8"
       >
         <div className="relative h-28 w-28">
-          <Logo size="max" mode="model" alt="" />
+          <Logo size="max" alt="" />
           {/* The lock seal, ringed in the canvas colour so it reads as a
               badge pinned to the mascot rather than a mark floating beside it. */}
           <span className="seal absolute -bottom-0.5 right-0 flex h-10 w-10 items-center justify-center bg-background">

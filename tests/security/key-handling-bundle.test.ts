@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { KEY_HANDLING_DOCUMENTS } from "@/ui/components/logo/key-handling-documents";
+import { KEY_HANDLING_DOCUMENTS } from "@/infrastructure/messaging/key-handling-documents";
 import { buildOutputPresent } from "./build-output";
 
 /**
@@ -9,10 +9,11 @@ import { buildOutputPresent } from "./build-output";
  *
  * `tests/security/key-material-realm-isolation.test.tsx` asserts the source
  * rules. This file asserts what was actually emitted, because the defect class
- * here is precisely the gap between the two: `Logo.tsx` looked like a small
- * component, and the 892,763-byte `chunks/useTheme-BTnaTevW.js` it dragged into
- * every document - `popup.html`, `sidepanel.html`, `options.html` AND
- * `approval.html` - was visible only in `.output/`.
+ * here is precisely the gap between the two: a small-looking `Logo.tsx` once
+ * dragged an 892,763-byte three.js chunk into every one of `popup.html`,
+ * `sidepanel.html`, `options.html` and `approval.html`, visible only in
+ * `.output/`. three.js has since been removed; this file keeps it from
+ * returning.
  *
  * WHAT IT WALKS. For each key-handling document: the entry module named by
  * `<script type="module" src>`, every `<link rel="modulepreload">` hint, and
@@ -53,9 +54,8 @@ const FORBIDDEN_MARKERS = [
  *
  * The marker list is a denylist and therefore catches three.js and not the next
  * heavy dependency somebody adds. The ceiling is the backstop: an unnamed
- * 800 KB addition fails too. Today the largest key-handling document is
- * `popup.html` at roughly 636 KB, and the three.js chunk alone is 600 KB, so
- * this number both leaves working headroom and cannot be satisfied with a 3D
+ * heavy addition fails too. A three.js chunk alone is about 600 KB, so this
+ * number leaves working headroom for the app and cannot be satisfied with a 3D
  * engine in the graph.
  *
  * Raising it is a decision, not a formality: say in the commit message which
@@ -172,27 +172,5 @@ for (const target of TARGETS) {
         ).toBeLessThanOrEqual(DOCUMENT_BYTE_CEILING);
       }
     );
-
-    it("still ships the 3D model, reachable only behind a dynamic import", () => {
-      // The guarantee is isolation, not deletion. If the model chunk vanished
-      // entirely, every assertion above would pass for the wrong reason.
-      const chunkDir = path.join(outputDir, "chunks");
-      const modelChunk = readdirSync(chunkDir).find((file) =>
-        file.startsWith("LazyModel-")
-      );
-
-      expect(modelChunk, "the 3D model chunk is missing entirely").toBeDefined();
-      expect(
-        readFileSync(path.join(chunkDir, modelChunk!), "utf8")
-      ).toContain("WebGLRenderer");
-
-      for (const documentName of KEY_HANDLING_DOCUMENTS) {
-        const reachable = reachableChunks(outputDir, documentName);
-        expect(
-          reachable.some((chunk) => path.basename(chunk) === modelChunk),
-          `${documentName} statically reaches the 3D model chunk`
-        ).toBe(false);
-      }
-    });
   });
 }

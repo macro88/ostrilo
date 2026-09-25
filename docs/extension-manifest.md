@@ -90,12 +90,12 @@ On MV3 this governs the background context as well as the extension pages, so
 | Directive | Why this value |
 |---|---|
 | `default-src 'self'` | Closed fallback, so a directive nobody thought of does not silently default to permissive. |
-| `script-src 'self'` | Bundled code only. No `'unsafe-eval'`, no `'unsafe-inline'`, no remote origin. Nothing in `src/` calls `eval` or `new Function`, and there is no WebAssembly, so `'wasm-unsafe-eval'` — which Chrome's own default policy includes — is deliberately omitted. Three.js renders through WebGL, which CSP does not govern. |
+| `script-src 'self'` | Bundled code only. No `'unsafe-eval'`, no `'unsafe-inline'`, no remote origin. Nothing in `src/` calls `eval` or `new Function`, and there is no WebAssembly, so `'wasm-unsafe-eval'` — which Chrome's own default policy includes — is deliberately omitted. |
 | `object-src 'self'` | No plugin content. Both Chrome and the AMO validator expect the directive present and restrictive. |
 | `style-src 'self' 'unsafe-inline'` | **Load-bearing.** `react-style-singleton`, reached through `react-remove-scroll` and therefore through every Radix dialog, creates a `<style>` element at runtime. Without `'unsafe-inline'` dialogs lose scroll-lock styling — with no error. Injected CSS is not a script-execution vector and the extension pages have no untrusted CSS source, so the cost is bounded. |
-| `img-src 'self' data: https:` | Extension pages render relay-supplied `profile.picture` URLs, which are arbitrary and cannot be enumerated. `https:` is broad but excludes plaintext `http:`, so a relay cannot cause a cleartext request that tells a network observer which npub is being viewed. `data:` covers the bundled poster image and QR rendering. `validate-relay-and-remote-data` narrows this at the application layer; the directive is the backstop. |
-| `connect-src 'self' wss: https://nostr.build` | **`'self'` is load-bearing:** `GLTFLoader` fetches the bundled `.glb` over XHR, and removing `'self'` makes the 3D logo fail silently. `https://nostr.build` is the hardcoded profile-image upload host. `wss:` is discussed below. |
-| `font-src 'self'` | No `@font-face`, no Google Fonts, no `@import url(...)` anywhere in `src/`. Fonts are system stacks. |
+| `img-src 'self' data: https:` | Extension pages render relay-supplied `profile.picture` URLs, which are arbitrary and cannot be enumerated. `https:` is broad but excludes plaintext `http:`, so a relay cannot cause a cleartext request that tells a network observer which npub is being viewed. `data:` covers small inlined images and QR rendering. `validate-relay-and-remote-data` narrows this at the application layer; the directive is the backstop. |
+| `connect-src wss: https://nostr.build` | No `'self'`: nothing in an extension page fetches a bundled file, so the extension origin is not a network destination. `https://nostr.build` is the hardcoded profile-image upload host. `wss:` is discussed below. `tests/security/manifest-assertions.test.ts` asserts this directive exactly, so any widening fails. |
+| `font-src 'self'` | Archivo and JetBrains Mono are bundled from `@fontsource` and served from the extension itself. No Google Fonts, no remote `@import url(...)`. Fonts are never inlined as `data:` URIs (`assetsInlineLimit` in `wxt.config.ts`), so this directive needs no `data:` source. |
 | `frame-src 'none'` | The extension embeds no iframes. |
 | `base-uri 'none'` | No `<base>` element is needed, and closing it removes a class of injection escalation. |
 | `form-action 'none'` | Both `<form>` elements submit through React `onSubmit` handlers and never navigate. |
@@ -114,17 +114,16 @@ extension page may reach is the one upload host. A compromised dependency cannot
 open an arbitrary HTTPS exfiltration channel. The wildcard is confined to one
 scheme on one directive.
 
-### Two silent failure modes
+### A silent failure mode
 
-`style-src 'unsafe-inline'` and `connect-src 'self'` both fail *silently* when
-removed: a dialog loses its scroll lock, or the 3D logo never renders. Neither
-throws. Production builds also drop `console` output, so neither would log in a
-shipped build either.
+`style-src 'unsafe-inline'` fails *silently* when removed: a dialog loses its
+scroll lock, and nothing throws. Production builds also drop `console` output,
+so it would not log in a shipped build either.
 
-Both are asserted positively in `tests/security/manifest-assertions.test.ts` —
-the test fails if the source is *removed*, not only if something looser is added
-— and both are annotated in `wxt.config.ts`. Do not tighten either without
-re-running the page smoke below.
+It is asserted positively in `tests/security/manifest-assertions.test.ts` — the
+test fails if the source is *removed*, not only if something looser is added —
+and annotated in `wxt.config.ts`. Do not tighten it without re-running the page
+smoke below.
 
 ### Chrome enforces two policies at once
 
@@ -214,9 +213,8 @@ verification for a CSP change is:
 
 1. Load `.output/chrome-mv3` unpacked.
 2. Open `popup.html`, `options.html`, `sidepanel.html` and `approval.html`.
-3. Confirm the 3D logo renders (the `.glb` request must succeed — that is
-   `connect-src 'self'`), a Radix dialog opens with scroll locked (`style-src
-   'unsafe-inline'`), a relay avatar renders (`img-src https:`), key import and
+3. Confirm a Radix dialog opens with scroll locked (`style-src
+   'unsafe-inline'`), the bundled fonts load (`font-src 'self'`), a relay avatar renders (`img-src https:`), key import and
    key creation submit (`form-action 'none'`), and profile image upload reaches
    nostr.build (`connect-src https://nostr.build`).
 4. Confirm no `securitypolicyviolation` fires beyond the known `eval` pair

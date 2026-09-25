@@ -3,9 +3,7 @@
 ## Purpose
 
 Define the security-relevant declarations every generated browser extension manifest must carry, across all build targets. Covers the content security policy, permission set, background context, web-accessible resources, content-script host matches, and the automated test that asserts them.
-
 ## Requirements
-
 ### Requirement: Every Generated Manifest Declares A Content Security Policy
 
 Every generated manifest SHALL declare an explicit content security policy for extension pages. The extension MUST NOT rely on a browser default to restrict script execution, network destinations, or media sources.
@@ -39,7 +37,7 @@ Every generated manifest SHALL declare an explicit content security policy for e
 
 - **WHEN** either generated manifest is read
 - **THEN** the extension pages policy declares a `connect-src` directive
-- **AND** `connect-src` includes `'self'` so bundled assets such as the 3D model file can be fetched
+- **AND** `connect-src` does not include `'self'`: nothing in an extension page fetches a bundled file, so the extension origin is not a network destination
 - **AND** `connect-src` includes a secure WebSocket source so user-configured relays remain reachable
 - **AND** `connect-src` includes `https://nostr.build` so profile image upload continues to work
 - **AND** `connect-src` does not include a plaintext `ws:` or `http:` source
@@ -187,3 +185,4 @@ The test suite SHALL include a test that reads the generated manifest for every 
 
 - **WHEN** any generated manifest value contains a build-tool template placeholder
 - **THEN** the manifest assertion test fails and names the offending key
+

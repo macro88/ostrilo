@@ -109,7 +109,7 @@ These were removed in the redesign. **Do not reintroduce any of them:**
 ## 9. Mascot rules
 
 - Asset: the low-poly ostrich head (`public/icon.png` / SVG). Never redraw, recolor, skew, or "cutify" it.
-- **Hero** (≥72px): onboarding welcome, lock screen, success/empty states — at most one hero per flow. Hero moments may use the **3D model** (ModelViewer): static image as instant poster while it loads, motion only on interaction or slow idle drift, frozen under `prefers-reduced-motion`. The 3D model never appears in header chrome or popup critical paths — a 3D render at 28px costs WebGL startup for shading nobody can see.
+- **Hero** (≥72px): onboarding welcome, lock screen, success/empty states — at most one hero per flow. Always the static image: there is no 3D or animated mascot, and a WebGL library may not be loaded into any extension page (`openspec/specs/key-material-isolation/`).
 - **Mark** (24–28px): header chrome, next to the wordmark — always the static image.
 - The lock screen may compose a small ink seal-badge (with lock glyph) over the mascot's corner.
 - Minimum size 16px; don't place it on dark backgrounds without checking contrast of the dark facets.

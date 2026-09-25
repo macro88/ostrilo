@@ -9,12 +9,11 @@ import path from "path";
  * background context as well.
  *
  * Rationale for each directive lives in
- * `openspec/changes/harden-manifest-and-build/design.md` (Decision 1). The two
- * that look looser than they should be are deliberate and their failure modes
- * are silent, so do not tighten them without re-running the manual smoke:
+ * `openspec/changes/archive/2026-09-17-harden-manifest-and-build/design.md`
+ * (Decision 1). The one that looks looser than it should be is deliberate and
+ * its failure mode is silent, so do not tighten it without re-running the
+ * manual smoke:
  *
- * - `connect-src 'self'` — GLTFLoader fetches the bundled `.glb` over XHR.
- *   Remove `'self'` and the 3D logo silently fails to render.
  * - `style-src 'unsafe-inline'` — `react-style-singleton`, reached through
  *   every Radix dialog, injects a `<style>` element at runtime. Remove it and
  *   dialogs silently lose their scroll-lock styling.
@@ -28,7 +27,7 @@ const EXTENSION_PAGES_CSP = [
   "object-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
-  "connect-src 'self' wss: https://nostr.build",
+  "connect-src wss: https://nostr.build",
   "font-src 'self'",
   "frame-src 'none'",
   "base-uri 'none'",
@@ -213,7 +212,6 @@ export default defineConfig({
       // Tailwind Vite plugin currently expects PostCSS pipeline; LightningCSS lacks createIdResolver
       transformer: "postcss",
     },
-    assetsInclude: ["**/*.glb", "**/*.gltf"],
     resolve: {
       alias: {
         "@/components": path.resolve(__dirname, "./src/ui/components"),
@@ -251,7 +249,7 @@ export default defineConfig({
       },
     },
     optimizeDeps: {
-      include: ["@noble/curves", "@noble/hashes", "@scure/base", "three"],
+      include: ["@noble/curves", "@noble/hashes", "@scure/base"],
     },
   }),
 });

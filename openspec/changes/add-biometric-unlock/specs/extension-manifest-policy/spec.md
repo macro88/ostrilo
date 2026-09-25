@@ -91,7 +91,7 @@ Every generated manifest SHALL declare an explicit content security policy for e
 
 - **WHEN** either generated manifest is read
 - **THEN** the extension pages policy declares a `connect-src` directive
-- **AND** `connect-src` includes `'self'` so bundled assets such as the 3D model file can be fetched
+- **AND** `connect-src` does not include `'self'`: nothing in an extension page fetches a bundled file, so the extension origin is not a network destination
 - **AND** `connect-src` includes a secure WebSocket source so user-configured relays remain reachable
 - **AND** `connect-src` includes `https://nostr.build` so profile image upload continues to work
 - **AND** `connect-src` does not include a plaintext `ws:` or `http:` source

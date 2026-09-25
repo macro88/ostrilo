@@ -50,11 +50,10 @@ const REQUIRED_CSP_DIRECTIVES: Record<string, string[]> = {
   // dialog scroll-lock styling with no error of any kind.
   "style-src": ["'self'", "'unsafe-inline'"],
   "img-src": ["'self'", "data:", "https:"],
-  // 'self' is REQUIRED here: GLTFLoader fetches the bundled .glb over XHR, and
-  // connect-src governs it. Without 'self' the 3D logo silently fails to
-  // render - and production builds drop console output, so it is silent in the
-  // shipped extension too.
-  "connect-src": ["'self'", "wss:", "https://nostr.build"],
+  // No 'self': nothing in an extension page fetches a bundled file, so the
+  // extension origin is not a network destination. Relays need wss:, and
+  // profile image upload needs the one declared host.
+  "connect-src": ["wss:", "https://nostr.build"],
   "font-src": ["'self'"],
   "frame-src": ["'none'"],
   "base-uri": ["'none'"],
@@ -274,6 +273,15 @@ for (const target of TARGETS) {
           }
         }
       );
+
+      it("allows connect-src exactly the reviewed destinations, and no more", () => {
+        const csp = manifest.content_security_policy as Record<string, string> | string;
+        const policy = typeof csp === "string" ? csp : csp.extension_pages;
+        expect(
+          [...(parseCsp(policy).get("connect-src") ?? [])].sort(),
+          `SECURITY REGRESSION: \`connect-src\` in the ${target.label} manifest was widened. Every network destination is reviewed in wxt.config.ts.`
+        ).toEqual([...REQUIRED_CSP_DIRECTIVES["connect-src"]].sort());
+      });
 
       it("never carries a dev-server source into a shipped policy", () => {
         // The dev CSP is deliberately wider: `wxt dev` serves modules, styles,

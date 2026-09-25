@@ -109,11 +109,12 @@ not claim.
   to.
 - **The revealed `nsec` is no longer displayed in a `type="password"` field**,
   which is the signal password managers capture on.
-- **No document that can hold a key also loads a 3D engine.** An 892 KB WebGL
-  library was reachable from every extension page, including the one that
-  reveals your private key and the one that asks you to approve a signature.
-  The mascot now loads on demand and is refused outright on those pages. A build
-  check fails if it ever comes back.
+- **The 3D mascot and its WebGL engine are gone.** An 892 KB three.js library
+  was reachable from every extension page, including the one that reveals your
+  private key and the one that asks you to approve a signature. It is removed
+  entirely, along with the `connect-src 'self'` allowance that existed only so
+  it could fetch its model. A build check and a source check fail if a WebGL
+  library ever comes back.
 - **The extension now lands locked after this update, and after every
   browser restart.** Lock state previously read `!!state?.isLocked`, which
   is `false` when no state is stored — the situation on every restart — so

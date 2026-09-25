@@ -22,16 +22,8 @@ export function OnboardingWelcome({
       {/* One centred group: hero, heading, sentence, the two rows. The
           bottom padding lifts it a touch above true centre. */}
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center pb-6 text-center">
-        {/* Static, not `mode="model"`. This screen shares a document — and
-            therefore a JavaScript realm — with the create-key step that reveals
-            an nsec and with the lock screen that holds the master password.
-            Instantiating three.js here leaves a 892 KB third-party WebGL engine
-            resident in that realm for the rest of the document's life.
-            `Logo` enforces the same rule structurally; this is the honest
-            declaration of intent next to it. The 3D hero returns on
-            `welcome.html`, which has no key or password input at all. */}
         <div className="h-28 w-28">
-          <Logo size="max" mode="static" alt="" />
+          <Logo size="max" alt="" />
         </div>
 
         <h1 className="mt-5 text-[22px] font-bold leading-tight tracking-[-0.01em] text-foreground">

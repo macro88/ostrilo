@@ -102,13 +102,11 @@ The original release dates are now historical planning targets. The status marke
   managers, and requires the user to re-enter the last 8 characters of the nsec — or
   re-open the encrypted file — before Finish enables. The onboarding import path
   reads the envelope back. See `docs/ostrilo-onboarding-requirements.md`.
-- The 892 KB three.js chunk no longer sits in any document that can hold key
-  material. `Logo.tsx` loads the 3D mascot behind a `React.lazy` boundary with the
-  static poster as its fallback, and refuses `mode="model"` outright in any document
-  named by `src/ui/components/logo/key-handling-documents.ts` — which today is all
-  four. `tests/security/key-handling-bundle.test.ts` walks each built document's
-  module and `modulepreload` graph and fails on the WebGL markers or a transitive
-  byte ceiling.
+- No document that can hold key material loads a 3D engine: the three.js mascot
+  has been removed entirely. `tests/security/key-handling-bundle.test.ts` walks the
+  module and `modulepreload` graph of every document named in
+  `src/infrastructure/messaging/key-handling-documents.ts` and fails on WebGL
+  markers or a transitive byte ceiling, so it cannot come back unnoticed.
 - Playwright now covers the Tier-1 journeys the coverage audit named, rather than
   asserting that a page rendered: onboarding create and import, backup round-trip
   (the product reads back the file it writes) and backing out of the backup step,
@@ -236,11 +234,10 @@ The original release dates are now historical planning targets. The status marke
   completed, so UX-011 stays 🔄.
 - Relay/profile infrastructure exists, but NIP-specific protocol flows such as NIP-04, NIP-44, NIP-42, NIP-57 validation, NIP-65 publish workflows, and NIP-05 DNS verification remain unimplemented.
 - Settings use browser sync storage and synchronize between local extension contexts, but cross-device sync, conflict handling, and NIP-78/decentralized sync are deferred.
-- Code splitting exists at exactly one boundary and for a security reason, not a
-  performance one: the 3D mascot loads behind `React.lazy` so its chunk cannot enter a
-  document that handles key material. UI routes are not split, no route loads on demand,
-  and there is no CI bundle-size budget. PERF-002 moves from ⬜ to 🔄 on that one
-  boundary; PERF-003 and PERF-009 are untouched.
+- There is no code splitting: UI routes are not split, no route loads on demand, and
+  there is no CI bundle-size budget. The one lazy boundary that existed guarded the 3D
+  mascot, which has been removed, so PERF-002 is back to ⬜; PERF-003 and PERF-009 are
+  untouched.
 
 ---
 
@@ -388,7 +385,7 @@ Performance and reliability are non-negotiable for a signing extension. Slow or 
 | ID | Title | Priority | Status | Version | Epic | Description |
 |----|-------|----------|--------|---------|------|--------------------------|
 | PERF-001 | Sub-5ms Signing Operations | S | ⬜ | v2.0 | 5 | Optimize signing performance targeting ≤5ms P50 latency and ≤10ms P99 latency with benchmarks in CI measuring schnorr signature generation and event serialization |
-| PERF-002 | Lazy Loading & Code Splitting | S | 🔄 | v2.0 | 5 | Implement code splitting and lazy loading for UI routes reducing initial bundle size, loading components on-demand, and improving extension startup time |
+| PERF-002 | Lazy Loading & Code Splitting | S | ⬜ | v2.0 | 5 | Implement code splitting and lazy loading for UI routes reducing initial bundle size, loading components on-demand, and improving extension startup time |
 | PERF-003 | Background Script Optimization | M | ⬜ | v2.0 | 5 | Optimize background script bundle size to ≤150KB gzipped through tree-shaking, dependency optimization, and removing unused code, with CI size checks |
 | PERF-004 | Memory Leak Detection | M | ⬜ | v2.0 | 5 | Add automated memory leak detection in CI/CD using heap snapshots, monitoring for leaked event listeners, retained closures, and unbounded caches |
 | PERF-005 | Efficient Storage Patterns | S | 🔄 | v2.0 | 5 | Optimize storage access patterns with batching, debouncing, and strategic caching reducing chrome.storage API calls and improving responsiveness |

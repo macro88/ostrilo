@@ -3,10 +3,21 @@
   "description": "Nostr signer. Signs locally, never snoops",
   "private": true,
   "version": "1.0.0",
-  "repository": { "type": "git", "url": "git+https://github.com/macro88/ostrilo.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/macro88/ostrilo.git"
+  },
   "homepage": "https://github.com/macro88/ostrilo#readme",
-  "bugs": { "url": "https://github.com/macro88/ostrilo/issues" },
-  "keywords": ["nostr", "nip-07", "signer", "browser-extension", "wxt"],
+  "bugs": {
+    "url": "https://github.com/macro88/ostrilo/issues"
+  },
+  "keywords": [
+    "nostr",
+    "nip-07",
+    "signer",
+    "browser-extension",
+    "wxt"
+  ],
   "license": "MIT",
   "packageManager": "pnpm@11.5.2",
   "type": "module",
@@ -70,7 +81,6 @@
     "react-dom": "^19.2.7",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
-    "three": "^0.184.0",
     "webextension-polyfill": "^0.12.0",
     "zod": "^4.4.3"
   },
@@ -79,7 +89,6 @@
     "@types/node": "^25.9.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@types/three": "^0.184.1",
     "@types/webextension-polyfill": "^0.12.5",
     "@typescript-eslint/parser": "^8.70.0",
     "@vitest/coverage-v8": "^4.1.8",

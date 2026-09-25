@@ -29,7 +29,7 @@ import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
  * `chrome.runtime.onMessageExternal`; Ostrilo registers only `onMessage` and
  * declares no `externally_connectable`. The real attacker is code running
  * INSIDE an Ostrilo extension page - most plausibly a compromised npm
- * dependency, since those bundles pull in three.js and the Radix set.
+ * dependency, since those bundles pull in React, the Radix set and more.
  */
 
 const RUNTIME_ID = "abcdefghijklmnopabcdefghijklmnop";
