@@ -85,6 +85,35 @@ not claim.
   the password input element's own value is cleared when the page is hidden and
   when the screen goes away. This drops the extension's reference to what you
   typed; it does not erase the string, which JavaScript cannot do.
+- **The plaintext key download is gone.** "Download Backup" wrote
+  `{name, privateKey, privateKeyHex, createdAt}` to disk in the clear, with no
+  passphrase and no warning. If you ever used it, find that file and delete it,
+  and read [the migration warning](docs/key-backup.md#if-you-used-an-earlier-development-build)
+  before assuming deletion was enough. It is replaced by **Save encrypted
+  backup**, which writes a versioned `ostrilo-key-backup` file sealed with the
+  same Argon2id key derivation and AES-GCM encryption the vault itself uses.
+  There is no plaintext option, not behind a confirmation.
+- **The backup file has its own passphrase**, separate from your master
+  password on purpose, so forgetting one password does not lose the vault and
+  its backup together. Ostrilo cannot recover the backup passphrase.
+- **Copying your key to the clipboard now expires** after 45 seconds, with a
+  countdown and a "Clear now" button, and is cleared immediately if you leave or
+  close the window. Ostrilo overwrites the clipboard without reading it, so it
+  needs no clipboard permission — anything else you copy in those 45 seconds is
+  replaced too. If the copy fails, the key is shown in grouped blocks to write
+  down.
+- **Finishing onboarding now requires proof you recorded the key.** Finish
+  stays disabled until you re-enter the last 8 characters of your `nsec`, or
+  re-open the encrypted backup file with its passphrase. This defeats accidental
+  click-through; it cannot prove a key was written on paper, and does not claim
+  to.
+- **The revealed `nsec` is no longer displayed in a `type="password"` field**,
+  which is the signal password managers capture on.
+- **No document that can hold a key also loads a 3D engine.** An 892 KB WebGL
+  library was reachable from every extension page, including the one that
+  reveals your private key and the one that asks you to approve a signature.
+  The mascot now loads on demand and is refused outright on those pages. A build
+  check fails if it ever comes back.
 - **The extension now lands locked after this update, and after every
   browser restart.** Lock state previously read `!!state?.isLocked`, which
   is `false` when no state is stored — the situation on every restart — so

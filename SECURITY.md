@@ -122,7 +122,7 @@ about one of them will be closed with a pointer to this section.
    erased. That the plaintext is then observable in the UI or the clipboard is
    the intended behaviour of that flow. The separate, retired **Download Backup**
    flow that wrote unencrypted secret keys to a file is already disclosed in the
-   [plaintext-backup migration warning](docs/release-notes-secure-key-backup.md);
+   [plaintext-backup migration warning](docs/key-backup.md#if-you-used-an-earlier-development-build);
    it is a known issue, not a new finding.
 
 Also already documented, and likewise not new findings:

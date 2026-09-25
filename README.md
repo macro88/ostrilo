@@ -161,7 +161,7 @@ During new-key onboarding, **Save encrypted backup** creates a versioned
 installation, choose the file in onboarding's import step, enter that passphrase,
 and set the new vault password. Verify the restored public key before relying on
 it. The repository includes [backup tests](tests/unit/ui/features/onboarding/key-backup-envelope.test.ts)
-and a [backup flow guide](docs/release-notes-secure-key-backup.md).
+and a [key backup guide](docs/key-backup.md).
 
 - **Keep the passphrase separately.** An encrypted backup cannot help if you lose
   its passphrase too. A clipboard copy is not a durable backup.
@@ -181,7 +181,7 @@ and a [backup flow guide](docs/release-notes-secure-key-backup.md).
   registries, browser tooling and distribution rules remain dependencies.
 
 If you used an older **Download Backup** flow, read the
-[plaintext-backup migration warning](docs/release-notes-secure-key-backup.md#act-on-this-if-you-used-an-earlier-build).
+[plaintext-backup migration warning](docs/key-backup.md#if-you-used-an-earlier-development-build).
 Those files contained unencrypted secret keys; deleting one does not remove copies
 from cloud sync, backups or other devices.
 
