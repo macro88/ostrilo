@@ -1,12 +1,12 @@
 # Ostrilo Roadmap and Requirements
 
 What Ostrilo is working toward, and which of those requirements the current code
-satisfies. For what 1.0.0 actually ships, the README and `CHANGELOG.md` are the
-authority; this document tracks the rest.
+satisfies. For what the current release actually ships, the README and
+`CHANGELOG.md` are the authority; this document tracks the rest.
 
 The **Version** column holds planning tiers written before the first public
 release (`v1.x` for the signer foundation, `v2.0` onward for later work). They
-are not release numbers and not commitments: 1.0.0 is the first public release,
+are not release numbers and not commitments: 0.8.0 is the first public release,
 and a tier says only roughly where an item sat in the original ordering.
 
 ---
