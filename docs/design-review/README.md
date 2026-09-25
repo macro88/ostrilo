@@ -290,3 +290,36 @@ The lock screen and approval queue are the negative cases the spec requires: a l
 - `pnpm run slop:changes` — 98/100, 0 errors, and no finding on a changed line.
 - `tests/e2e/vault-lock.spec.ts` — 13 passed, including 5 new countdown tests.
 - Light capture — 37 screenshots. Dark capture — 37 screenshots.
+
+# Review: separate Display Name and Username fields
+
+Date: 2026-09-25
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §6 (banned patterns), §12 (PR checklist)
+Build reviewed: production (`.output/chrome-mv3`), both themes, populated vault.
+
+## What changed
+
+Kind 0 carries two names: NIP-01's `name` and NIP-24's `display_name`. The editor had
+one field, labelled "Display Name", that wrote `name`, while the summary showed
+`display_name` first. A user with both set saw no change after saving. The editor now
+has a Display Name field (`display_name`) and a Username field (`name`). The summary
+adds a Username row only when it differs from the name the Display Name row shows.
+
+## Findings
+
+- `08-popup-profile-edit.png`, both themes: the two fields read as a pair, with the
+  same header, counter and input treatment as About. No new component or colour.
+- `25-popup-profile-populated.png`, both themes: the seeded profile has both names, so
+  the Username row appears. It pushes Picture URL below the fold at 400×600. The row
+  scrolls under the sticky action row, which is how the layout handles long profiles
+  already (NIP-05 and Lightning rows do the same). Not a defect.
+- A profile with only `name` shows no Username row. Covered by
+  `tests/unit/ui/features/profile/profile-view.test.tsx`, not by the runner, which
+  seeds both.
+
+## Verification
+
+- `pnpm run compile` and `pnpm run lint` — passed.
+- `pnpm run doctor` — 100/100.
+- Profile and onboarding E2E specs — 18 passed.
+- Light capture — 37 screenshots. Dark capture — 37 screenshots.

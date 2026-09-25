@@ -6,8 +6,8 @@ import { RELAY_BOUNDS } from "@/domain/relay/constants";
  * All fields are optional per the specification.
  */
 export interface ProfileMetadata {
-  name?: string; // Display name
-  display_name?: string; // Alternative to 'name'
+  name?: string; // NIP-01 short name, shown as the username
+  display_name?: string; // NIP-24 display name, preferred over `name` when set
   about?: string; // Bio/description
   picture?: string; // Avatar URL
   banner?: string; // Header image URL

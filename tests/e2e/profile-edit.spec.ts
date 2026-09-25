@@ -481,7 +481,7 @@ test.describe("profile edit", () => {
 
     // A blank form is indistinguishable from a working one until the user saves
     // it, at which point every field they did not retype is published as empty.
-    await expect(popup.getByLabel("Display Name")).toHaveValue(
+    await expect(popup.getByLabel("Username")).toHaveValue(
       SEEDED_PROFILE.name
     );
     await expect(popup.getByLabel("About")).toHaveValue(SEEDED_PROFILE.about);
@@ -508,7 +508,7 @@ test.describe("profile edit", () => {
     const requestsBeforeSave = relay.requested.length;
 
     await openEditForm(popup);
-    await popup.getByLabel("Display Name").fill("Wren Halloway II");
+    await popup.getByLabel("Username").fill("Wren Halloway II");
     await popup
       .getByLabel("About")
       .fill("Now mapping decommissioned canals instead.");
@@ -591,7 +591,7 @@ test.describe("profile edit", () => {
     await openEditForm(popup);
 
     // The form stops at the bound while typing...
-    const name = popup.getByLabel("Display Name");
+    const name = popup.getByLabel("Username");
     await name.fill("");
     await name.pressSequentially("x".repeat(PROFILE_FIELD_BOUNDS.NAME + 10));
     await expect(name).toHaveValue("x".repeat(PROFILE_FIELD_BOUNDS.NAME));
@@ -645,7 +645,7 @@ test.describe("profile edit", () => {
     const key = await arriveAtProfile(popup, relay);
 
     await openEditForm(popup);
-    await popup.getByLabel("Display Name").fill("Discarded Name");
+    await popup.getByLabel("Username").fill("Discarded Name");
     await popup.getByLabel("About").fill("Discarded bio.");
     await popup.getByRole("button", { name: "Cancel" }).click();
 
@@ -661,7 +661,7 @@ test.describe("profile edit", () => {
     // Re-opening the form rebuilds it from the profile. If the abandoned draft
     // came back here, "cancel" would only mean "not yet".
     await openEditForm(popup);
-    await expect(popup.getByLabel("Display Name")).toHaveValue(
+    await expect(popup.getByLabel("Username")).toHaveValue(
       SEEDED_PROFILE.name
     );
     await expect(popup.getByLabel("About")).toHaveValue(SEEDED_PROFILE.about);
@@ -741,7 +741,7 @@ test.describe("profile edit", () => {
     const key = await arriveAtProfile(popup, relay);
 
     await openEditForm(popup);
-    await popup.getByLabel("Display Name").fill("Unpublished Name");
+    await popup.getByLabel("Username").fill("Unpublished Name");
     await popup.getByRole("button", { name: "Save Changes" }).click();
 
     // The failure is reported, and it names the relay rather than a machine
@@ -760,7 +760,7 @@ test.describe("profile edit", () => {
     await expect(
       popup.getByRole("heading", { name: "Edit Profile" })
     ).toBeVisible();
-    await expect(popup.getByLabel("Display Name")).toHaveValue(
+    await expect(popup.getByLabel("Username")).toHaveValue(
       "Unpublished Name"
     );
     await expect(

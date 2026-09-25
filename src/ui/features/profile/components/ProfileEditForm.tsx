@@ -93,20 +93,43 @@ export function ProfileEditForm({
         <div className="ink-card space-y-4 p-4">
           <div className="space-y-2">
             <FieldHeader
+              htmlFor="display_name"
+              count={formData.display_name?.length}
+              max={PROFILE_FIELD_BOUNDS.DISPLAY_NAME}
+            >
+              Display Name
+            </FieldHeader>
+            <Input
+              id="display_name"
+              value={formData.display_name || ""}
+              onChange={(e) => onChange("display_name", e.target.value)}
+              placeholder="The name apps show first"
+              maxLength={PROFILE_FIELD_BOUNDS.DISPLAY_NAME}
+              disabled={isSaving}
+              autoFocus={focusField === "display_name"}
+            />
+          </div>
+
+          {/*
+            Two fields because kind 0 carries two: NIP-01's `name` and NIP-24's
+            `display_name`. Apps show `display_name` when it is set, so editing
+            only `name` looked like a save that did nothing.
+          */}
+          <div className="space-y-2">
+            <FieldHeader
               htmlFor="name"
               count={formData.name?.length}
               max={PROFILE_FIELD_BOUNDS.NAME}
             >
-              Display Name
+              Username
             </FieldHeader>
             <Input
               id="name"
               value={formData.name || ""}
               onChange={(e) => onChange("name", e.target.value)}
-              placeholder="Your display name"
+              placeholder="A short handle"
               maxLength={PROFILE_FIELD_BOUNDS.NAME}
               disabled={isSaving}
-              autoFocus={focusField === "name"}
             />
           </div>
 

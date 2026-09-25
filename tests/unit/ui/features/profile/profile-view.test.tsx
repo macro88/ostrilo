@@ -169,6 +169,17 @@ describe("ProfileView summary", () => {
     expect(buttonByText("Edit Profile")?.disabled).toBe(false);
   });
 
+  it.each([
+    ["differs from the display name", PUBLISHED, true],
+    ["matches the display name", { ...PUBLISHED, name: "Alice" }, false],
+    ["is the only name", { name: "alice" }, false],
+  ])("shows a Username row only when the username %s", async (_case, profile, shown) => {
+    stored = profile;
+    await mount();
+    const headings = Array.from(container.querySelectorAll("h3"), (h) => h.textContent);
+    expect(headings.includes("Username")).toBe(shown);
+  });
+
   it("invites publishing when nothing is published", async () => {
     stored = null;
     await mount();
@@ -225,6 +236,20 @@ describe("ProfileView editing", () => {
     expect(field("name").getAttribute("maxLength")).toBe("50");
   });
 
+  it("edits display_name and name as the two fields they are", async () => {
+    await mount();
+    await click(buttonByText("Edit Profile")!);
+    expect(field("display_name").value).toBe("Alice");
+    expect(field("name").value).toBe("alice");
+
+    type("display_name", "Alice Liddell");
+    await click(buttonByText("Save Changes")!);
+
+    const metadata = requests("profile.update")[0].params.metadata;
+    expect(metadata?.display_name).toBe("Alice Liddell");
+    expect(metadata?.name).toBe("alice");
+  });
+
   it("opens on the field whose Add row was pressed", async () => {
     stored = null;
     await mount();
@@ -233,7 +258,7 @@ describe("ProfileView editing", () => {
   });
 
   it.each([
-    ["Add Display Name", "name"],
+    ["Add Display Name", "display_name"],
     ["Add About", "about"],
     ["Add Picture URL", "picture"],
   ])("focuses the matching input from %s", async (label, id) => {

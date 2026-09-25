@@ -7,7 +7,7 @@ import { ProfileField, ProfileTextField } from "./ProfileField";
 import { RemoteUrlField } from "./RemoteUrlField";
 
 /** A field of the published profile, as the summary addresses it. */
-export type ProfileEditField = "name" | "about" | "website" | "picture";
+export type ProfileEditField = "display_name" | "about" | "website" | "picture";
 
 interface ProfileSummaryProps {
   profile: ProfileMetadata | null;
@@ -16,6 +16,17 @@ interface ProfileSummaryProps {
   npub: string;
   onEdit: (field?: ProfileEditField) => void;
   onRefresh: () => void;
+}
+
+/**
+ * The `name` field, when the Display Name row is not already showing it.
+ *
+ * That row prefers `display_name`, so a profile with both would otherwise hide
+ * its username entirely, and editing it would look like a save that did nothing.
+ */
+function distinctUsername(profile: ProfileMetadata | null): string | undefined {
+  const name = profile?.name;
+  return profile?.display_name && name && name !== profile.display_name ? name : undefined;
 }
 
 /**
@@ -89,6 +100,7 @@ export function ProfileSummary({
   // Same preference as the key switcher in the header, so the two never name
   // the same identity differently.
   const profileName = profile?.display_name || profile?.name || "";
+  const username = distinctUsername(profile);
   const isUnpublished =
     !showLoadingField &&
     !profileName &&
@@ -140,8 +152,11 @@ export function ProfileSummary({
                 label="Display Name"
                 loading={showLoadingField}
                 value={profileName}
-                onAdd={() => onEdit("name")}
+                onAdd={() => onEdit("display_name")}
               />
+              {username && (
+                <ProfileField label="Username" loading={false} value={username} />
+              )}
               <ProfileTextField
                 label="About"
                 loading={showLoadingField}
