@@ -219,7 +219,8 @@ Start with the [development standards](docs/development-standards.md),
 [architecture](docs/architecture_primer.md) and
 [developer guide](docs/developers_readme.md). Keep cryptography behind the existing
 ports and adapters, and follow the [Inkline design rules](docs/design/DESIGN_RULES.md)
-for UI work.
+for UI work. Every document, including the security design notes, is indexed in
+[docs/README.md](docs/README.md).
 
 Bug reports should include the browser, source revision, reproduction steps and
 expected result, with keys and personal data removed. Documentation corrections,
