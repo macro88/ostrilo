@@ -10,6 +10,16 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/macro88/ostrilo/actions/workflows/verify.yml"><img src="https://github.com/macro88/ostrilo/actions/workflows/verify.yml/badge.svg?branch=main" alt="Verify"></a>
+  <a href="https://github.com/macro88/ostrilo/actions/workflows/e2e.yml"><img src="https://github.com/macro88/ostrilo/actions/workflows/e2e.yml/badge.svg?branch=main" alt="E2E"></a>
+  <a href="docs/TESTING.md"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmacro88%2Fostrilo%2Fbadges%2Fcoverage.json" alt="Line coverage"></a>
+  <a href="AGENTS.md#aislop-verification"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmacro88%2Fostrilo%2Fbadges%2Faislop.json" alt="aislop score"></a>
+  <a href="AGENTS.md#react-doctor-verification"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmacro88%2Fostrilo%2Fbadges%2Freact-doctor.json" alt="React Doctor score"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/package-json/v/macro88/ostrilo?label=version" alt="Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+</p>
+
+<p align="center">
   <a href="#get-started">Get started</a> ·
   <a href="#what-works-today">Current status</a> ·
   <a href="#trust-and-control">Trust &amp; control</a> ·

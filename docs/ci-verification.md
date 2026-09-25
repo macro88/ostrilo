@@ -20,6 +20,7 @@ without anyone noticing.
 | E2E | `e2e.yml` | nightly 03:00 UTC, dispatch, push to `main`, PR labelled `run-e2e` | No |
 | React Doctor | `react-doctor.yml` | pull request, push to `main` | No |
 | aislop | `aislop.yml` | pull request, push to `main` | No |
+| Badges | `badges.yml` | push to `main`, dispatch | No |
 
 ### Verify
 
@@ -60,6 +61,22 @@ new place.
 Promotion criteria: individual specs may become required once they have
 demonstrated a stable pass rate across several weeks of nightly runs. Promote
 per-spec, not wholesale. The suite must be green before a release tag.
+
+### Badges
+
+The README's coverage, aislop and React Doctor badges read shields.io endpoint
+files from the `badges` branch, which `badges.yml` rewrites on every push to
+`main`. The branch holds one orphan commit, force-pushed each run, so it carries
+the latest numbers and no history.
+
+It is the only workflow with `contents: write`, and it is split so that the
+write token never meets third-party code. The `measure` job installs
+dependencies and runs the tools with a read-only token and without persisted
+checkout credentials. The `publish` job holds the write token, installs
+nothing, and refuses any value from `measure` that is not an integer.
+
+It reports and does not gate: the thresholds live in `verify.yml` and
+`aislop.yml`, and React Doctor is deliberately never a gate.
 
 ## Audit threshold
 
@@ -182,6 +199,10 @@ require these status checks:
 Also enable "Require branches to be up to date before merging".
 
 Do **not** add `Playwright extension suite` or `React Doctor`.
+
+Scope the rule to `main` only. The `badges` branch is force-pushed by
+`badges.yml`, so a rule matching it (for example `*`) must allow force pushes
+from GitHub Actions, or the badges stop updating.
 
 Verify the gate works by opening a pull request that deliberately breaks a
 security test and confirming it cannot merge.

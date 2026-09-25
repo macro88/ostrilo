@@ -1,0 +1,112 @@
+# README badges: line coverage, the aislop score and the React Doctor score,
+# measured on main and published as shields.io endpoint files on the `badges`
+# branch. The README reads them through img.shields.io/endpoint, so a badge
+# shows what main measured last, not a number someone typed.
+#
+# Two jobs, because publishing needs `contents: write` and installing
+# dependencies runs third-party code. `measure` installs and runs the tools
+# with a read-only token. `publish` holds the write token, installs nothing,
+# and accepts only integers from `measure`.
+#
+# Not a gate. verify.yml and aislop.yml enforce the thresholds; this only
+# reports what they measured.
+
+name: Badges
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: badges
+  cancel-in-progress: true
+
+jobs:
+  measure:
+    name: Measure
+    runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.scores.outputs.coverage }}
+      aislop: ${{ steps.scores.outputs.aislop }}
+      doctor: ${{ steps.scores.outputs.doctor }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # A threshold failure still produces the summary, and a badge that
+      # reports a regression is the point, so neither step fails the job.
+      - run: pnpm exec vitest run --coverage --coverage.reporter=json-summary || true
+      - run: node_modules/.bin/aislop ci > aislop.json || true
+      - run: node_modules/.bin/react-doctor --score -y > doctor.txt || true
+
+      - id: scores
+        run: |
+          coverage=$(node -p "Math.floor(require('./coverage/coverage-summary.json').total.lines.pct)")
+          aislop=$(node -p "require('./aislop.json').score")
+          doctor=$(tail -n 1 doctor.txt)
+          for value in "$coverage" "$aislop" "$doctor"; do
+            [[ "$value" =~ ^[0-9]{1,3}$ ]] || { echo "not a score: $value"; exit 1; }
+          done
+          {
+            echo "coverage=$coverage"
+            echo "aislop=$aislop"
+            echo "doctor=$doctor"
+          } >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish
+    needs: measure
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Re-validated here: this job holds the write token, so it trusts the
+      # other job's outputs no further than their shape.
+      - env:
+          COVERAGE: ${{ needs.measure.outputs.coverage }}
+          AISLOP: ${{ needs.measure.outputs.aislop }}
+          DOCTOR: ${{ needs.measure.outputs.doctor }}
+        run: |
+          for value in "$COVERAGE" "$AISLOP" "$DOCTOR"; do
+            [[ "$value" =~ ^[0-9]{1,3}$ ]] || { echo "not a score: $value"; exit 1; }
+          done
+          mkdir badges
+          badge() {
+            # Green at or above the first bound, yellow at or above the
+            # second, red below.
+            local color=red
+            if (( $3 >= $4 )); then color=brightgreen; elif (( $3 >= $5 )); then color=yellow; fi
+            printf '{"schemaVersion":1,"label":"%s","message":"%s%s","color":"%s"}\n' \
+              "$2" "$3" "$6" "$color" > "badges/$1.json"
+          }
+          # Coverage bounds match the CI bar in vitest.config.ts; the aislop
+          # yellow bound matches ci.failBelow in .aislop/config.yml.
+          badge coverage coverage "$COVERAGE" 90 80 "%"
+          badge aislop aislop "$AISLOP" 85 70 "/100"
+          badge react-doctor "react doctor" "$DOCTOR" 90 75 "/100"
+          cat badges/*.json
+
+      # One orphan commit, force-pushed: the branch holds the current numbers
+      # and no history, so it never grows.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          cd badges
+          git init -q -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -q -m "Badges for ${GITHUB_SHA::7}"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" badges
