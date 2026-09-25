@@ -26,9 +26,12 @@ without anyone noticing.
 Four jobs, none using `continue-on-error`:
 
 - **`verify`** — `pnpm install --frozen-lockfile`, `pnpm run compile`,
-  `pnpm run lint`, `pnpm run test`. One Vitest invocation collects `tests/unit`,
-  `tests/integration` and `tests/security`; `vitest.config.ts` excludes only
-  `tests/e2e`.
+  `pnpm run lint`, `pnpm run test:coverage`. One Vitest invocation collects
+  `tests/unit`, `tests/integration` and `tests/security`; `vitest.config.ts`
+  excludes only `tests/e2e`. It fails below 80% lines, functions and statements
+  or 70% branches overall, and below 90% (80% branches) in each of `src/domain`,
+  `src/application` and `src/infrastructure`, where keys and the RPC boundary
+  live.
 - **`build`** — `pnpm run build` and `pnpm run build:firefox`, then the manifest
   and key-handling-bundle assertions against the built output with
   `OSTRILO_REQUIRE_BUILD_OUTPUT=1`.

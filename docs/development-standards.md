@@ -52,7 +52,7 @@ If these documents conflict, prefer the most specific current document for the a
 - Run `pnpm run build` when changes affect extension entry points, manifests, bundling, assets, or runtime wiring. Add `pnpm run build:firefox` when cross-browser behavior could be affected.
 - After code edits, run the pinned local React Doctor with `pnpm run doctor` and address the findings in the files you changed. Report the score; do not gate on it, and do not disable rules to lower the count. Never invoke it via `npx`, `pnpm dlx`, or `@latest`: that executes an unpinned dependency tree on a machine holding signing keys.
 - If React Doctor cannot run, first try `pnpm install --frozen-lockfile`. If it still cannot run, state the exact command and the verbatim failure. A security or quality tool that could not run is a failure to report, never a silent pass.
-- `pnpm run compile`, `pnpm run test`, both builds, and the dependency audit remain blocking regardless of the React Doctor result.
+- `pnpm run compile`, `pnpm run test:coverage` (the suites plus the coverage thresholds), both builds, and the dependency audit remain blocking regardless of the React Doctor result.
 - For docs-only changes, verify local links and references instead of running the application test suite unless the docs change also modifies executable examples or scripts.
 - If a required verification command cannot run, state the exact command, why it could not run, and what residual risk remains.
 

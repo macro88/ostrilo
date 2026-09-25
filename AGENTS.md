@@ -68,7 +68,7 @@ Never invoke aislop with `npx`, `pnpm dlx`, or an `@latest` specifier, for the s
 These stay blocking, and are not relaxed by the paragraph above:
 
 - `pnpm run compile`
-- `pnpm run test` (unit, integration and security suites)
+- `pnpm run test:coverage` (unit, integration and security suites, and the coverage thresholds in `vitest.config.ts`)
 - `pnpm run build` and `pnpm run build:firefox`
 - the dependency audit
 

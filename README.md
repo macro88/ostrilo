@@ -37,8 +37,9 @@ context; websites receive public keys and signed events, never your private key.
 > - A backup path for every key. Today only the first key, during onboarding, is
 >   offered an encrypted backup; a key added later cannot be backed up from
 >   within Ostrilo.
-> - Test coverage of at least 80% overall and 90% in the domain, application and
->   infrastructure layers, enforced in CI.
+>
+> Already met: test coverage of at least 80% overall and 90% in the domain,
+> application and infrastructure layers, enforced in CI.
 >
 > Beyond those: Chromium is the only automated
 > extension-test target. Firefox has a dedicated MV3 build, checked by the

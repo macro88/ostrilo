@@ -38,11 +38,16 @@ export default defineConfig({
         "**/node_modules/**",
         "**/dist/**",
       ],
+      // The key-holding layers carry a higher bar than the UI. CI runs this
+      // config via `pnpm run test:coverage`, so a drop below either fails.
       thresholds: {
         lines: 80,
         functions: 80,
         branches: 70,
         statements: 80,
+        "src/domain/**": { lines: 90, functions: 90, statements: 90, branches: 80 },
+        "src/application/**": { lines: 90, functions: 90, statements: 90, branches: 80 },
+        "src/infrastructure/**": { lines: 90, functions: 90, statements: 90, branches: 80 },
       },
     },
     // Performance optimizations

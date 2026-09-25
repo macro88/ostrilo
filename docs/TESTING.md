@@ -202,11 +202,15 @@ comparison while behavioral assertions keep the test deterministic.
 (`coverage/index.html`) and LCOV. Extension entry points (`src/extension/`) and
 the shadcn primitives (`src/ui/components/ui/`) are excluded.
 
-The configured thresholds are 80% lines, functions and statements and 70%
-branches. **The suite does not currently meet them**, so the command exits
-non-zero; read the report rather than the exit code. Coverage is not a merge
-gate: CI runs `pnpm run test`, not the coverage command. The security suite,
-not a percentage, is what protects keys.
+Coverage is a merge gate: CI runs `pnpm run test:coverage`, and it fails below
+80% lines, functions and statements or 70% branches overall, and below 90%
+lines, functions and statements or 80% branches in each of `src/domain`,
+`src/application` and `src/infrastructure`. Those three hold the vault, the
+signing path and the RPC boundary, so they carry the higher bar.
+
+A percentage is a floor, not the point. A test that executes code without being
+able to fail when that code is wrong adds coverage and no protection; the
+security-test rule above applies to every suite.
 
 ### Playwright
 

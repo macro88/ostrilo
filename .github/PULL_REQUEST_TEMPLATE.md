@@ -11,7 +11,7 @@ result to report, never a silent pass.
 
 - [ ] `pnpm run compile`
 - [ ] `pnpm run lint`
-- [ ] `pnpm run test`
+- [ ] `pnpm run test:coverage`
 - [ ] `pnpm run build`
 - [ ] `pnpm run build:firefox`
 - [ ] `pnpm audit --audit-level high`

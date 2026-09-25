@@ -58,8 +58,9 @@ jobs:
 
       # One Vitest invocation collects tests/unit, tests/integration and
       # tests/security; vitest.config.ts excludes only tests/e2e. That
-      # includes tests/security/crypto-single-implementation.test.ts.
-      - run: pnpm run test
+      # includes tests/security/crypto-single-implementation.test.ts. Run with
+      # coverage, so falling below the thresholds in vitest.config.ts fails.
+      - run: pnpm run test:coverage
 
   build:
     name: Extension builds

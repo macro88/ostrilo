@@ -103,7 +103,7 @@ These are blocking. Run them locally before you open a pull request; CI
 ```sh
 pnpm run compile            # tsc --noEmit
 pnpm run lint               # one rule: crypto libraries stay in the adapter directory
-pnpm run test               # unit, integration and security suites
+pnpm run test:coverage      # unit, integration and security suites, with the coverage bar
 pnpm run build              # Chromium MV3
 pnpm run build:firefox      # Firefox MV3
 pnpm audit --audit-level high
