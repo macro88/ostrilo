@@ -51,6 +51,23 @@ interface PartitionableRelay {
  * - Publish profile updates
  * - Manage cache lifecycle (expiration, eviction)
  */
+/** The profile could not be attributed to a key: none is selected, or it no longer exists. */
+export class ProfileKeyUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProfileKeyUnavailableError";
+  }
+}
+
+/** The profile was signed but no relay accepted it. */
+export class ProfilePublishError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : "No relay accepted the event");
+    this.name = "ProfilePublishError";
+    this.cause = cause;
+  }
+}
+
 export class ProfileService {
   private legacyPurge: Promise<void> | null = null;
 
@@ -151,12 +168,12 @@ export class ProfileService {
       this.keyVault.listKeys(),
     ]);
     if (!settings?.selectedKeyId) {
-      throw new Error("No key selected");
+      throw new ProfileKeyUnavailableError("No key selected");
     }
 
     const selectedKey = keys.find((k) => k.id === settings.selectedKeyId);
     if (!selectedKey) {
-      throw new Error("Selected key not found");
+      throw new ProfileKeyUnavailableError("Selected key not found");
     }
 
     // Construct unsigned kind:0 event
@@ -173,7 +190,9 @@ export class ProfileService {
 
     // Publish to relay and update cache optimistically
     await Promise.all([
-      this.relay.publish(signedEvent),
+      this.relay.publish(signedEvent).catch((error: unknown) => {
+        throw new ProfilePublishError(error);
+      }),
       this.cacheProfile(selectedKey.pubkey, validated, signedEvent.id),
     ]);
   }

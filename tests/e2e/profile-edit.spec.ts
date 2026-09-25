@@ -744,19 +744,15 @@ test.describe("profile edit", () => {
     await popup.getByLabel("Display Name").fill("Unpublished Name");
     await popup.getByRole("button", { name: "Save Changes" }).click();
 
-    // The failure is reported. The message it reports is the raw RPC code
-    // `rpc:profile.update:unknown_method` - the handler maps every thrown error
-    // onto UNKNOWN_METHOD, so a refused publish is announced to the user as a
-    // method that does not exist, and the relay's own reason is dropped. The
-    // pattern below matches that string and a message that actually names the
-    // relay, so fixing the code does not fail this test.
+    // The failure is reported, and it names the relay rather than a machine
+    // code: a refused publish maps to network_error, which the form explains.
     // Scoped to the alert: the form's own description now reads "Published to
     // your relays for anyone to read.", which the pattern below also matches,
     // so an unscoped getByText resolves to two elements.
     await expect(
       popup
         .getByRole("alert")
-        .filter({ hasText: /rpc:profile\.update|publish|relay/i })
+        .filter({ hasText: "No relay accepted the update" })
     ).toBeVisible({ timeout: 20_000 });
 
     // Still editing, with the user's text intact: a failed publish must not

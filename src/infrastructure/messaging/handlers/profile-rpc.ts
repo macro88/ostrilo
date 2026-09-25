@@ -2,6 +2,11 @@ import type { RpcRequest, RpcResponse } from "../rpc";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import { ProfileMetadataSchema } from "@/domain/profile/types";
+import {
+  ProfileKeyUnavailableError,
+  ProfilePublishError,
+} from "@/application/services/profile.service";
+import { isVaultLockedError } from "./nostr-rpc";
 
 /**
  * RPC handler for profile-related operations
@@ -116,8 +121,18 @@ export class ProfileRpcHandler implements RpcModule {
 
       return { ok: true, data: null };
     } catch (error) {
-      return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
-        details: error instanceof Error ? error.message : "Unknown error",
+      // Validation has passed by here, so the failure is the key, a locked
+      // vault, signing, or every relay refusing the publish.
+      const code =
+        error instanceof ProfilePublishError
+          ? RPC_ERROR_CODES.NETWORK_ERROR
+          : error instanceof ProfileKeyUnavailableError
+            ? RPC_ERROR_CODES.NO_KEY_SELECTED
+            : error instanceof Error && isVaultLockedError(error.message)
+              ? RPC_ERROR_CODES.LOCKED
+              : RPC_ERROR_CODES.SIGNING_FAILED;
+      return createRpcErrorResponse(code, {
+        details: error instanceof Error ? error.message : "Profile update failed",
         method: message.type,
       });
     }

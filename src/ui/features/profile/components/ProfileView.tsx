@@ -89,6 +89,10 @@ export function ProfileView() {
         userFacingError(err, "Could not save the profile. Try again.", {
           [RPC_ERROR_CODES.INVALID_PARAMS]:
             "Some fields are not valid. Image and website links must start with https://.",
+          [RPC_ERROR_CODES.NETWORK_ERROR]:
+            "No relay accepted the update. Your edits are still here; check your relays and try again.",
+          [RPC_ERROR_CODES.NO_KEY_SELECTED]: "Choose an active key before saving the profile.",
+          [RPC_ERROR_CODES.LOCKED]: "The vault is locked. Unlock it and save again.",
         })
       );
     } finally {

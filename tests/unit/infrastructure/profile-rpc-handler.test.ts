@@ -65,12 +65,12 @@ describe("profile.update", () => {
     expect(entry).toMatchObject({ origin: "extension://profile", kind: 0, decision: "allow" });
   });
 
-  it("reports a relay that refuses the event as a failure and logs nothing", async () => {
+  it("reports a relay that refuses the event as a network error and logs nothing", async () => {
     relay.failPublish = true;
 
     const res = await send({ type: "profile.update", params: { metadata: { name: "Alice" } } });
 
-    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.UNKNOWN_METHOD);
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.NETWORK_ERROR);
     expect(await activityLog.count()).toBe(0);
   });
 
@@ -79,7 +79,7 @@ describe("profile.update", () => {
 
     const res = await send({ type: "profile.update", params: { metadata: { name: "Alice" } } });
 
-    expect(res.ok).toBe(false);
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.LOCKED);
     expect(relay.published).toHaveLength(0);
   });
 });

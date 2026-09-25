@@ -68,7 +68,7 @@ const BACKUP_PASSPHRASE = "correct-horse-battery-staple-42";
  * this ever becomes a human-readable message the assertion should be updated to
  * the new text, not relaxed.
  */
-const REFUSED_KEY_MESSAGE = "rpc:crypto.parsePrivateKey:invalid_key_input";
+const REFUSED_KEY_MESSAGE = "That is not a valid private key. Paste an nsec1 key or 64 hex characters.";
 
 interface StoredKey {
   id: string;
