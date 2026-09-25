@@ -44,9 +44,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      # A threshold failure still produces the summary, and a badge that
-      # reports a regression is the point, so neither step fails the job.
-      - run: pnpm exec vitest run --coverage --coverage.reporter=json-summary || true
+      # A failing test or threshold still produces the summary
+      # (reportOnFailure), and a badge that reports a regression is the point,
+      # so none of these steps fails the job. The scores step below fails it
+      # if a tool produced no number at all.
+      - run: pnpm exec vitest run --coverage --coverage.reporter=json-summary --coverage.reportOnFailure || true
       - run: node_modules/.bin/aislop ci > aislop.json || true
       - run: node_modules/.bin/react-doctor --score -y > doctor.txt || true
 

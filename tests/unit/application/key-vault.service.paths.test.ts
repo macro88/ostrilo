@@ -22,6 +22,12 @@ import {
 import { bytesToHex, hexToBytes } from "@/domain/utils/hex";
 import { fastKdf, memoryStorage } from "../../helpers/vault";
 
+// Some of these run a real KDF at production cost, legacy PBKDF2 at 100,000
+// iterations among them. Under V8 coverage on a CI runner one such unlock
+// takes 15-25s, past the 10s default, so the timeout is raised here rather
+// than the cost lowered.
+vi.setConfig({ testTimeout: 60_000 });
+
 const broadcasts = vi.hoisted(() => [] as unknown[]);
 
 vi.mock("wxt/browser", () => ({

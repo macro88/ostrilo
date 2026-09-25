@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import {
   WebCryptoAesGcm,
@@ -9,6 +9,12 @@ import {
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
 import type { KeyRecord } from "@/domain/types";
+
+// Some of these run a real KDF at production cost, legacy PBKDF2 at 100,000
+// iterations among them. Under V8 coverage on a CI runner one such unlock
+// takes 15-25s, past the 10s default, so the timeout is raised here rather
+// than the cost lowered.
+vi.setConfig({ testTimeout: 60_000 });
 
 // Simple in-memory storage adapter to avoid webextension-polyfill in tests
 function createMemoryStorage(): StorageSuite {
