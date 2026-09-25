@@ -43,6 +43,13 @@ const SETTINGS_KEY = "appSettings";
  */
 const VERIFIER_PLAINTEXT = "ostrilo/vault-verifier/v1";
 
+/** An unversioned record carrying the salt its key was encrypted under. */
+type LegacyKeyRecord = KeyRecord & { salt: number[] };
+
+function isLegacyRecord(rec: KeyRecord): rec is LegacyKeyRecord {
+  return rec.v === undefined && Array.isArray(rec.salt);
+}
+
 type LockState = {
   isLocked: boolean;
   selectedKeyId?: string;
@@ -198,10 +205,10 @@ export class KeyVaultService {
       zeroize(pt);
       if (!ok) throw new Error("incorrect_password");
       return kek;
-    } catch (e) {
+    } catch {
+      // The version and KDF-floor refusals are thrown before the try, so
+      // anything caught here is the verifier failing to open.
       zeroize(kek);
-      if (e instanceof Error && e.message === "kdf_below_floor") throw e;
-      if (e instanceof Error && e.message === "vault_version_unsupported") throw e;
       throw new Error("incorrect_password");
     }
   }
@@ -316,7 +323,7 @@ export class KeyVaultService {
     // must be proven against a legacy record before an envelope is created -
     // otherwise a wrong password would silently create a second vault.
     const records = await this.listKeys();
-    const legacy = records.filter((r) => r.v === undefined && r.salt);
+    const legacy = records.filter(isLegacyRecord);
     if (legacy.length > 0) {
       await this.assertLegacyPassword(password, legacy);
     }
@@ -501,11 +508,9 @@ export class KeyVaultService {
     let newSelectedKeyId: string | undefined;
 
     if (settings?.selectedKeyId === id) {
-      // Auto-select the first remaining key
-      newSelectedKeyId = updatedRecords[0]?.id;
-      if (newSelectedKeyId) {
-        await this.selectKey(newSelectedKeyId);
-      }
+      // A key always remains: deleting the last one is refused above.
+      newSelectedKeyId = updatedRecords[0].id;
+      await this.selectKey(newSelectedKeyId);
     }
 
     return { newSelectedKeyId };
@@ -521,10 +526,9 @@ export class KeyVaultService {
    */
   private async assertLegacyPassword(
     password: string,
-    legacyRecords: KeyRecord[]
+    legacyRecords: LegacyKeyRecord[]
   ): Promise<void> {
     for (const rec of legacyRecords) {
-      if (!rec.salt) continue;
       const raw = await deriveLegacyKeyReadOnly(
         password,
         Uint8Array.from(rec.salt)
@@ -585,7 +589,7 @@ export class KeyVaultService {
       this.getEnvelope(),
     ]);
     let envelope = loadedEnvelope;
-    const legacyRecords = records.filter((r) => r.v === undefined && r.salt);
+    const legacyRecords = records.filter(isLegacyRecord);
 
     if (!envelope && records.length === 0) {
       // aislop-ignore-next-line ai-slop/meta-comment -- not build-plan narration: this records the security invariant that an empty vault must not open with any password. Deleting it invites the fail-open behavior back.
