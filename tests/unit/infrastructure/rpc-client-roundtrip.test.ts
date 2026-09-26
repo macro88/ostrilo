@@ -146,6 +146,23 @@ describe("key lifecycle through the client and the real background", () => {
     expect((await vault.listKeys()).map((k) => k.pubkey)).toEqual([PUBKEY_ONE]);
   });
 
+  it("changes the master password only with the current one", async () => {
+    const NEW_PASSWORD = "Lichen-Harbour-Quill-2026";
+    await client.importKey(SECRET_ONE, STRONG_PASSWORD);
+    await client.unlockVault(STRONG_PASSWORD);
+
+    const refused = await rejection(client.changePassword("wrong-password-here", NEW_PASSWORD));
+    expect(refused).toMatchObject({ errorCode: RPC_ERROR_CODES.INVALID_PASSWORD });
+
+    expect(await client.changePassword(STRONG_PASSWORD, NEW_PASSWORD)).toBeNull();
+    await client.lockVault();
+    await expect(client.unlockVault(STRONG_PASSWORD)).rejects.toMatchObject({
+      errorCode: RPC_ERROR_CODES.INVALID_PASSWORD,
+    });
+    await client.unlockVault(NEW_PASSWORD);
+    expect((await client.revealKey(NEW_PASSWORD)).hex).toBe(SECRET_ONE);
+  });
+
   it("redacts the key list to ids and refuses privileged calls while locked", async () => {
     const created = await client.importKey(SECRET_ONE, STRONG_PASSWORD, "labelled");
     await client.lockVault();

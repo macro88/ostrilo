@@ -237,6 +237,18 @@ export async function deleteKey(id: string, password: string) {
   });
 }
 
+/** Rejects with `invalid_password` or `rate_limited` for the current password. */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+) {
+  return rpc<null>({
+    type: "vault.changePassword",
+    currentPassword,
+    newPassword,
+  });
+}
+
 export async function getLockState() {
   return rpc<LockStatePayload>({
     type: "state.getLock",

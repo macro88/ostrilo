@@ -1,6 +1,7 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
 import { requireReauth } from "@/infrastructure/messaging/reauth";
 import { withPasswordThrottle } from "@/infrastructure/messaging/password-throttle";
+import { handleChangePassword, newPasswordPolicyError } from "./change-password";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
@@ -34,7 +35,7 @@ export interface KeyListEntry extends KeyRecord {
 
 /**
  * RPC handler for vault-related operations
- * Handles: vault.unlock, vault.lock, vault.generate, vault.import, vault.select, vault.reveal, keys.list
+ * Handles: vault.unlock, vault.lock, vault.generate, vault.import, vault.select, vault.reveal, keys.list, vault.changePassword
  *
  * Deliberately NOT handled:
  * - vault.export: returned the raw nsec with no password, no consent and no
@@ -79,6 +80,9 @@ export class VaultRpcHandler implements RpcModule {
       case "vault.deleteKey":
         return this.handleDeleteKey(message, context);
 
+      case "vault.changePassword":
+        return handleChangePassword(message, context);
+
       default:
         return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: method,
@@ -93,8 +97,9 @@ export class VaultRpcHandler implements RpcModule {
    *
    * Adding a second key re-enters the EXISTING vault password (it must match,
    * so the envelope verifier can open). Running a new-password policy there
-   * would tell a pre-existing user their own correct password is invalid, with
-   * no change-password flow to escape through.
+   * would tell a pre-existing user their own correct password is invalid. A
+   * user who wants a password that meets the policy changes it through
+   * `vault.changePassword`, which holds the new one to the same rule.
    *
    * Returns an error response to send, or null when the password is acceptable.
    */
@@ -106,24 +111,7 @@ export class VaultRpcHandler implements RpcModule {
   ): Promise<RpcResponse | null> {
     const existing = await context.vault.listKeys();
     if (existing.length > 0) return null; // not a new password
-
-    // Background-only import: the blocklist must not reach a UI bundle.
-    const [{ COMMON_PASSWORDS }, { makeNewPasswordSchema }] =
-      await Promise.all([
-        import("@/domain/utils/wordlists/common-passwords"),
-        import("@/infrastructure/validation/schemas"),
-      ]);
-    const schema = makeNewPasswordSchema(
-      COMMON_PASSWORDS,
-      label ? [label] : []
-    );
-    const result = schema.safeParse(password);
-    if (result.success) return null;
-
-    return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
-      details: result.error.issues[0]?.message ?? "Password does not meet the policy.",
-      method,
-    });
+    return newPasswordPolicyError(password, method, label ? [label] : []);
   }
 
   /**

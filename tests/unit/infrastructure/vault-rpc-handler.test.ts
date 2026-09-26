@@ -515,3 +515,76 @@ describe("vault.deleteKey", () => {
     expect(keys[0].isSelected).toBe(true);
   });
 });
+
+describe("vault.changePassword", () => {
+  const NEW_PASSWORD = "Lichen-Harbour-Quill-2026";
+  const change = (currentPassword: string, newPassword = NEW_PASSWORD) =>
+    send({ type: "vault.changePassword", currentPassword, newPassword });
+
+  beforeEach(async () => {
+    await importTwoKeys();
+    await vault.unlock(STRONG_PASSWORD);
+  });
+
+  it("rotates the password and reports success with no data", async () => {
+    expect(await change(STRONG_PASSWORD)).toEqual({ ok: true, data: null });
+    const unlocked = await vault.unlock(NEW_PASSWORD);
+    expect(unlocked.unlockedKeyIds).toHaveLength(2);
+  });
+
+  it("rejects an empty field before touching the vault", async () => {
+    expect(errorCodeOf(await change(""))).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
+    expect(errorCodeOf(await change(STRONG_PASSWORD, ""))).toBe(
+      RPC_ERROR_CODES.INVALID_PASSWORD
+    );
+  });
+
+  it("names damaged records by key id and changes nothing", async () => {
+    const records = await storedKeys();
+    records[1].wrappedDek!.ct[0] ^= 0xff;
+    await storage.local.set("encryptedKeys", records);
+
+    const res = await change(STRONG_PASSWORD);
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_RECORDS_DAMAGED);
+    if (!res.ok) expect(res.error.data.details).toContain(records[1].id);
+    expect(await storedKeys()).toEqual(records);
+  });
+
+  it("asks for a migration while a legacy record remains", async () => {
+    const records = await storedKeys();
+    await storage.local.set("encryptedKeys", [
+      ...records,
+      { ...records[0], id: "legacy-record", v: undefined, salt: [1, 2, 3] },
+    ]);
+
+    expect(errorCodeOf(await change(STRONG_PASSWORD))).toBe(
+      RPC_ERROR_CODES.VAULT_MIGRATION_PENDING
+    );
+  });
+
+  it("reports a vault with unacceptable parameters as unreadable, not a wrong password", async () => {
+    await tamperEnvelope((env) => ({ ...env, v: 99 }));
+    expect(errorCodeOf(await change(STRONG_PASSWORD))).toBe(
+      RPC_ERROR_CODES.VAULT_UNREADABLE
+    );
+  });
+
+  it("never echoes either password", async () => {
+    const res = await change("Wrong-Current-Password-1");
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
+    expect(JSON.stringify(res)).not.toContain("Wrong-Current-Password-1");
+    expect(JSON.stringify(res)).not.toContain(NEW_PASSWORD);
+  });
+  it("reports an empty vault as locked", async () => {
+    ({ context, storage, vault } = realContext());
+    expect(errorCodeOf(await change(STRONG_PASSWORD))).toBe(RPC_ERROR_CODES.LOCKED);
+  });
+
+  it("lets an unexpected service failure propagate rather than guessing a code", async () => {
+    context.vault.changePassword = async () => {
+      throw new Error("storage exploded");
+    };
+    await expect(change(STRONG_PASSWORD)).rejects.toThrow("storage exploded");
+  });
+});

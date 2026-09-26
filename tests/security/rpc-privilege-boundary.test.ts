@@ -330,6 +330,21 @@ describe("message listener enforces the boundary", () => {
     expect(reached).toHaveLength(0);
   });
 
+  it("blocks a password change from a content-script sender", async () => {
+    const { listener, reached } = await makeListener();
+    const res = await collect(
+      listener,
+      {
+        type: "vault.changePassword",
+        currentPassword: "Old-Harbour-Lantern-58",
+        newPassword: "New-Quartz-Meadow-2026",
+      },
+      { id: RUNTIME_ID, tab: { id: 1 }, frameId: 0, url: "https://evil.example/page" }
+    );
+    expect(res.code).toBe(RPC_ERROR_CODES.UNKNOWN_NAMESPACE);
+    expect(reached).toHaveLength(0);
+  });
+
   it("blocks a UI-only namespace when sender information is missing entirely", async () => {
     const { listener, reached } = await makeListener();
     const res = await collect(listener, { type: "vault.unlock" }, undefined);
