@@ -612,7 +612,9 @@ export class KeyVaultService {
         await this.saveEnvelope(envelope);
       }
 
-      this.unlocked.clear();
+      // A re-unlock over a live session replaces these keys; they are wiped,
+      // not merely dropped.
+      this.discardUnlockedKeys();
       const unlockedKeyIds: string[] = [];
       const damagedKeyIds: string[] = [];
       const migrated: KeyRecord[] = [];
@@ -765,41 +767,63 @@ export class KeyVaultService {
     }
   }
 
-  async lock(): Promise<void> {
-    // zeroize all unlocked private keys
+  /** Zeroizes every held private key, then forgets it. */
+  private discardUnlockedKeys(): void {
     this.unlocked.forEach((sk) => zeroize(sk));
     this.unlocked.clear();
+  }
 
+  async lock(): Promise<void> {
+    // The security-critical steps come first and do not depend on settings
+    // storage: the keys are gone, the state says locked, and the grants are
+    // revoked before anything else can fail.
+    this.discardUnlockedKeys();
     await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
       isLocked: true,
       selectedKeyId: undefined,
       lastActivity: Date.now(),
     });
-    // Clear session grants on lock
     await this.storage.session.remove("sessionGrants");
-    // Also clear any sessionGrantAll display flags in settings
-    const settings = (await this.getSettings()) ?? ({} as AppSettingsV1);
-    if (settings?.origins?.length) {
-      const next = {
-        ...settings,
-        origins: settings.origins.map((o) => ({
-          ...o,
-          sessionGrantAll: false,
-        })),
-      } satisfies AppSettingsV1;
-      await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
-      try {
-        const { browser } = await import("wxt/browser");
-        browser.runtime.sendMessage({ __event: SETTINGS_CHANGED_EVENT });
-      } catch {
-        // No listener is the normal case (no extension page open); the
-        // broadcast is best-effort and its failure changes nothing here.
-      }
+
+    // The listeners run in `finally`, because one of them denies the pending
+    // approvals: a sync write that throws (quota, sync disabled, a corrupt
+    // record) used to skip them, so a request the user walked away from could
+    // survive the lock. The error still reaches the caller, after them.
+    try {
+      await this.clearSessionDisplayFlags();
+    } finally {
+      await this.notifyLocked();
     }
-    // After the state is written and the keys are gone, so a listener sees a
-    // locked vault. Concurrent and settled, not sequential: the listeners are
-    // independent, and one that hangs or throws - a badge that will not clear,
-    // a broadcast with no listener - must not stop the vault from locking.
+  }
+
+  /** Clears the `sessionGrantAll` display flags that mirror the revoked grants. */
+  private async clearSessionDisplayFlags(): Promise<void> {
+    const settings = (await this.getSettings()) ?? ({} as AppSettingsV1);
+    if (!settings?.origins?.length) return;
+    const next = {
+      ...settings,
+      origins: settings.origins.map((o) => ({
+        ...o,
+        sessionGrantAll: false,
+      })),
+    } satisfies AppSettingsV1;
+    await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
+    try {
+      const { browser } = await import("wxt/browser");
+      browser.runtime.sendMessage({ __event: SETTINGS_CHANGED_EVENT });
+    } catch {
+      // No listener is the normal case (no extension page open); the
+      // broadcast is best-effort and its failure changes nothing here.
+    }
+  }
+
+  /**
+   * After the state is written and the keys are gone, so a listener sees a
+   * locked vault. Concurrent and settled, not sequential: the listeners are
+   * independent, and one that hangs or throws - a badge that will not clear,
+   * a broadcast with no listener - must not stop the others.
+   */
+  private async notifyLocked(): Promise<void> {
     const results = await Promise.allSettled(
       this.lockListeners.map((listener) => listener())
     );
