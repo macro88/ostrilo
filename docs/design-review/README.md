@@ -323,3 +323,45 @@ adds a Username row only when it differs from the name the Display Name row show
 - `pnpm run doctor` — 100/100.
 - Profile and onboarding E2E specs — 18 passed.
 - Light capture — 37 screenshots. Dark capture — 37 screenshots.
+
+# Review: change master password dialog
+
+Date: 2026-09-26
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §6 (banned patterns), §7 (components), §12 (PR checklist)
+Build reviewed: production (`.output/chrome-mv3`), both themes, populated vault.
+
+## What changed
+
+The Security tab gains a "Master password" section with one ghost "Change password"
+row, which opens a dialog with current, new and confirm fields. The runner gains a
+populated-phase step that photographs the dialog in four states:
+`35-change-password-empty`, `35b-change-password-error`,
+`35c-change-password-success` and `35d-change-password-throttled`. The throttled
+capture comes last and the step resets the shared throttle afterwards, so
+`34-lock-screen-error` still photographs a wrong password rather than a backoff.
+
+## Findings
+
+1. **A throttle wait rendered as a red error — §7 Warnings.** The first capture showed
+   "Too many failed attempts. Try again in 5 seconds." in the red failure panel.
+   A wait is not a failure, and §7 gives warnings the soft amber panel with a seal
+   mark. Fixed: `rate_limited` now renders amber with a warning `SealMark`. A
+   component test asserts the amber panel.
+2. **The wrong-password line was generic.** The error read "Incorrect password", the
+   throttle helper's default, which says nothing about *which* of the three fields
+   was wrong. Fixed at the source: the handler passes "That is not your current
+   password." to the throttle, so the wording survives the pause suffix a backoff
+   appends.
+3. **One notched primary per screen — §5.** The dialog's primary is the only notched
+   control while it is open. The tab behind it uses ghost and danger-ghost buttons.
+4. **Deep Ink checked, not inferred — §3.** The dark capture flips the primary to
+   violet, the success panel to mint-on-deep, and the amber wait keeps its contrast
+   on the dialog surface. The backdrop suppresses the tab behind it in both themes.
+5. **No banned pattern — §6.** No gradient, rail, icon plate, pill or emoji. The
+   success mark is a small seal, not a hero.
+
+## Verification
+
+- `tests/unit/ui/components/dialogs/ChangePasswordDialog.test.tsx` — 11 passed.
+- `tests/e2e/security-settings.spec.ts` — 11 passed, including the end-to-end change.
+- Light capture — 41 screenshots. Dark capture — 41 screenshots.

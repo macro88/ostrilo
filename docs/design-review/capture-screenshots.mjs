@@ -631,6 +631,51 @@ try {
     }
   });
 
+  // The change-password dialog in each state it can show. Order matters: the
+  // throttle is shared with unlock, so the throttled capture comes last and
+  // the counter is reset afterwards, or the lock-screen capture below would
+  // photograph a backoff instead of a wrong password.
+  await step("change password dialog", async () => {
+    // aislop-ignore-next-line security/hardcoded-secret -- throwaway replacement password for the same discarded screenshot vault as PASSWORD above. It unlocks nothing that exists outside this run.
+    const NEW_PASSWORD = "Lichen-Harbour-Quill-2026";
+    await safeClick(options.getByRole("tab", { name: "Security" }));
+    const openDialog = async () => {
+      await safeClick(options.getByRole("button", { name: "Change password", exact: true }));
+      return options.getByRole("dialog");
+    };
+    const submitWith = async (dialog, current, next) => {
+      await dialog.getByLabel("Current password", { exact: true }).fill(current);
+      await dialog.getByLabel("New password", { exact: true }).fill(next);
+      await dialog.getByLabel("Confirm new password", { exact: true }).fill(next);
+      await dialog.getByRole("button", { name: "Change password", exact: true }).click();
+    };
+
+    let dialog = await openDialog();
+    await screenshot(options, "35-change-password-empty");
+
+    await submitWith(dialog, "not-the-password", NEW_PASSWORD);
+    await dialog.getByRole("alert").waitFor({ timeout: 10000 });
+    await screenshot(options, "35b-change-password-error");
+
+    await submitWith(dialog, PASSWORD, NEW_PASSWORD);
+    await dialog.getByTestId("change-password-success").waitFor({ timeout: 15000 });
+    await screenshot(options, "35c-change-password-success");
+    await safeClick(dialog.getByRole("button", { name: "Done" }));
+
+    dialog = await openDialog();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await submitWith(dialog, "not-the-password", PASSWORD);
+      await dialog.getByRole("alert").waitFor({ timeout: 10000 });
+    }
+    await dialog.getByText(/Try again in \d+ seconds/).waitFor({ timeout: 10000 });
+    await screenshot(options, "35d-change-password-throttled");
+    await safeClick(dialog.getByRole("button", { name: "Cancel" }));
+
+    // Wait out the backoff, then clear the counter with a verified password.
+    await options.waitForTimeout(6000);
+    await rpc(popup, { type: "vault.unlock", password: NEW_PASSWORD });
+  });
+
   await step("approval queue populated", async () => {
     const queue = await context.newPage();
     await queue.setViewportSize({ width: 400, height: 600 });
