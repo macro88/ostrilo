@@ -136,8 +136,9 @@ export const PasswordSchema = z
  *
  * Split from PasswordSchema deliberately. Applying a new-password policy to
  * every path would tell an existing user, at unlock, that their own correct
- * password is invalid - with no change-password flow to escape through. So the
- * policy applies to creation only.
+ * password is invalid. So the policy applies to the passwords a user is
+ * choosing - vault creation and `vault.changePassword`'s new password - and
+ * never to one being verified.
  *
  * The blocklist lives in the background and is passed in, because the module is
  * large and must not reach a UI bundle. A verdict built without it is never
@@ -161,6 +162,16 @@ export function makeNewPasswordSchema(
     });
   });
 }
+
+/**
+ * Transport shape of `vault.changePassword`. Both fields are checked only for
+ * hygiene here: the current password is verified against the vault, and the
+ * new one against the creation policy with its blocklist, in the background.
+ */
+export const ChangePasswordRequestSchema = z.object({
+  currentPassword: PasswordSchema,
+  newPassword: PasswordSchema,
+});
 
 export const KeyInputSchema = z
   .string()

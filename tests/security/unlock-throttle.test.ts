@@ -248,6 +248,32 @@ describe("every master-password check shares the throttle", () => {
     expect(await failures()).toBe(0);
   });
 
+  it("charges a wrong current password on a password change", async () => {
+    const res = await send(vaultRpc, {
+      type: "vault.changePassword",
+      currentPassword: WRONG,
+      newPassword: "Lichen-Harbour-Quill-2026",
+    });
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
+    expect(await failures()).toBe(1);
+  });
+
+  it("refuses a password change during a backoff without deriving", async () => {
+    await exhaustFreeAttempts();
+    const before = await context.vault.getEnvelope();
+    const derive = vi.spyOn(fastKdf, "deriveKey");
+
+    const res = await send(vaultRpc, {
+      type: "vault.changePassword",
+      currentPassword: STRONG_PASSWORD,
+      newPassword: "Lichen-Harbour-Quill-2026",
+    });
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+    expect(derive).not.toHaveBeenCalled();
+    expect(await context.vault.getEnvelope()).toEqual(before);
+  });
+
   it("resets the count when re-authentication succeeds", async () => {
     await send(vaultRpc, { type: "vault.unlock", password: WRONG });
     await send(vaultRpc, { type: "vault.reveal", password: WRONG });

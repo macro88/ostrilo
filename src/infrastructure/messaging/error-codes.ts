@@ -71,6 +71,14 @@ export const RPC_ERROR_CODES = {
   /** The specified key ID was not found in the vault */
   KEY_NOT_FOUND: "key_not_found",
 
+  /** A password change was refused because a key record still has the
+   * pre-envelope (legacy) format; one unlock migrates it. */
+  VAULT_MIGRATION_PENDING: "vault_migration_pending",
+
+  /** A password change was refused because some key records do not open under
+   * the current password; `details` names their key ids. */
+  VAULT_RECORDS_DAMAGED: "vault_records_damaged",
+
   // Operation Errors
   /** Approval request exceeded time limit */
   TIMEOUT: "timeout",
@@ -141,6 +149,8 @@ export const RPC_NUMERIC_ERROR_CODES: Record<RpcErrorCode, number> = {
   [RPC_ERROR_CODES.NO_KEY_SELECTED]: -32011,
   [RPC_ERROR_CODES.KEY_ALREADY_EXISTS]: -32012,
   [RPC_ERROR_CODES.KEY_NOT_FOUND]: -32013,
+  [RPC_ERROR_CODES.VAULT_MIGRATION_PENDING]: -32014,
+  [RPC_ERROR_CODES.VAULT_RECORDS_DAMAGED]: -32015,
   [RPC_ERROR_CODES.RATE_LIMITED]: -32020,
   [RPC_ERROR_CODES.NETWORK_ERROR]: -32030,
   [RPC_ERROR_CODES.APPROVAL_FAILED]: -32040,
@@ -164,6 +174,8 @@ export const RPC_ERROR_MESSAGES: Record<RpcErrorCode, string> = {
   [RPC_ERROR_CODES.NO_KEY_SELECTED]: "No key selected",
   [RPC_ERROR_CODES.KEY_ALREADY_EXISTS]: "Key already exists",
   [RPC_ERROR_CODES.KEY_NOT_FOUND]: "Key not found",
+  [RPC_ERROR_CODES.VAULT_MIGRATION_PENDING]: "Vault migration pending",
+  [RPC_ERROR_CODES.VAULT_RECORDS_DAMAGED]: "Vault has damaged key records",
   [RPC_ERROR_CODES.TIMEOUT]: "Request timed out",
   [RPC_ERROR_CODES.UNKNOWN_METHOD]: "Unknown method",
   [RPC_ERROR_CODES.UNKNOWN_NAMESPACE]: "Unknown namespace",

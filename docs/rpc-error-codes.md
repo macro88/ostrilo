@@ -234,12 +234,13 @@ if (!originValidation.success) {
 
 #### `invalid_password`
 
-**When to Use**: A password fails validation rules during unlock or key generation.
+**When to Use**: A password fails validation rules during unlock or key generation, or a master-password check fails.
 
 **Examples**:
 - Password doesn't meet minimum length requirement
 - Password is empty or only whitespace
 - Password fails complexity checks
+- The current password given to `vault.changePassword` is wrong (charged to the unlock throttle), or its new password fails the creation policy
 
 **Handler Usage**:
 ```typescript
@@ -378,6 +379,27 @@ if (context.vault.hasKey(publicKey)) {
   };
 }
 ```
+
+---
+
+#### `vault_migration_pending`
+
+**When to Use**: `vault.changePassword` found a key record still in the
+pre-envelope (legacy) format. Rotating around it would strand it, so the change
+is refused with nothing written. One unlock migrates legacy records.
+
+**Numeric code**: `-32014`. UI-only: a web page can never receive it.
+
+---
+
+#### `vault_records_damaged`
+
+**When to Use**: `vault.changePassword` found key records that do not open, or
+do not match their public key, under the current password. The change is
+refused with nothing written, and `details` names the affected key ids -
+never a password. The user removes the damaged key, then tries again.
+
+**Numeric code**: `-32015`. UI-only: a web page can never receive it.
 
 ---
 
@@ -574,7 +596,7 @@ try {
 
 **Validation**: `invalid_event`, `invalid_origin`, `invalid_password`, `invalid_key_input`, `invalid_hash`, `invalid_request`
 
-**State**: `no_key_selected`, `key_already_exists`
+**State**: `no_key_selected`, `key_already_exists`, `vault_migration_pending`, `vault_records_damaged`
 
 **Operations**: `timeout`, `unknown_method`, `unknown_namespace`, `approval_failed`
 

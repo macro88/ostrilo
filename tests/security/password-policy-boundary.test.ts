@@ -148,8 +148,8 @@ describe("password policy at the RPC boundary", () => {
   it("does NOT apply the new-password policy once the vault has a key", async () => {
     // Adding a second key re-enters the EXISTING vault password. Running a
     // new-password policy here would tell a pre-existing user that their own
-    // correct password is invalid, with no change-password flow to escape
-    // through. So the policy is for creation only.
+    // correct password is invalid. So the policy is for passwords being
+    // chosen - creation, and the new half of a password change.
     const first = await generate("unmark thicket parcel", "k1");
     expect(first.ok).toBe(true);
 
@@ -166,6 +166,61 @@ describe("password policy at the RPC boundary", () => {
       second.ok,
       "an existing vault password must keep working for additional keys"
     ).toBe(true);
+  });
+
+  describe("vault.changePassword", () => {
+    const change = (currentPassword: string, newPassword: string) =>
+      handler.handleRequest(
+        { type: "vault.changePassword", currentPassword, newPassword } as never,
+        context
+      );
+
+    async function prePolicyVault(): Promise<string> {
+      // Created before the policy existed: eight characters. Seeded through
+      // the service, which - like every verification path - never applies it.
+      const legacyPassword = "Tr0ub4dr";
+      await context.vault.generateKey(legacyPassword, "MyTradingKey");
+      await context.vault.unlock(legacyPassword);
+      return legacyPassword;
+    }
+
+    it("refuses a weak new password without echoing it, and changes nothing", async () => {
+      const current = await prePolicyVault();
+      const before = await context.vault.getEnvelope();
+
+      const res = await change(current, "Aa1!");
+
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
+        expect(res.error.data.details).toBeTruthy();
+      }
+      expect(JSON.stringify(res)).not.toContain("Aa1!");
+      expect(JSON.stringify(res)).not.toContain(current);
+      expect(await context.vault.getEnvelope()).toEqual(before);
+    });
+
+    it("refuses a common or label-bearing new password", async () => {
+      const current = await prePolicyVault();
+      expect((await change(current, "Password123!")).ok).toBe(false);
+      expect((await change(current, "mytradingkeyvalue")).ok).toBe(false);
+    });
+
+    it("lets a pre-policy current password be replaced", async () => {
+      const current = await prePolicyVault();
+      const res = await change(current, "unmark thicket parcel");
+      expect(res.ok, JSON.stringify(res)).toBe(true);
+    });
+
+    it("refuses a new password equal to the current one", async () => {
+      await generate("unmark thicket parcel", "k1");
+      await context.vault.unlock("unmark thicket parcel");
+      const res = await change("unmark thicket parcel", "unmark thicket parcel");
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.INVALID_PARAMS);
+      }
+    });
   });
 
   it("keeps unlock on hygiene-only validation", async () => {

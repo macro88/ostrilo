@@ -31,6 +31,11 @@ export type RpcRequest =
   | { type: "vault.select"; id: string }
   | { type: "vault.renameKey"; id: string; label: string }
   | { type: "vault.deleteKey"; id: string; password: string }
+  | {
+      type: "vault.changePassword";
+      currentPassword: string;
+      newPassword: string;
+    }
   | { type: "vault.reveal"; keyId?: string; password: string }
   | { type: "keys.list" }
   | { type: "state.getLock" }

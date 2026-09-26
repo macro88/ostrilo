@@ -175,6 +175,27 @@ describe("locked behaviour at the message boundary", () => {
     }
   });
 
+  it("refuses a password change while locked, without reaching the handler", async () => {
+    let reached = false;
+    const res = await send(
+      {
+        type: "vault.changePassword",
+        currentPassword: "Old-Harbour-Lantern-58",
+        newPassword: "New-Quartz-Meadow-2026",
+      },
+      {
+        isLocked: true,
+        namespace: "vault",
+        onCall: () => {
+          reached = true;
+        },
+      }
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.LOCKED);
+    expect(reached).toBe(false);
+  });
+
   it("redacts keys.list while locked to bare identifiers", async () => {
     const records = [
       { id: "a", label: "Trading key", publicKey: "ab".repeat(32), isSelected: true },
