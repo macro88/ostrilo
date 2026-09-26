@@ -774,4 +774,55 @@ test.describe("Settings - per-origin policy", () => {
     expect(regranted?.rules?.["0"]).toBe("deny");
     await expect(disclosure).toContainText("This site can read your public key");
   });
+  test("an upgrade carries a synced high-trust grant into local storage and clears the synced copy", async ({
+    openPopup,
+    openOptions,
+    extensionContext,
+  }) => {
+    const popup = await openPopup();
+    await seedUnlockedVault(popup);
+
+    // Recreate what a pre-upgrade install left behind: the settings item in
+    // browser sync, holding a high-trust grant, and nothing in local storage.
+    await popup.evaluate(async (origin) => {
+      const chromeApi = (globalThis as any).chrome;
+      const { appSettings } = await chromeApi.storage.local.get("appSettings");
+      const origins = (appSettings.origins ?? []).filter(
+        (o: { origin: string }) => o.origin !== origin
+      );
+      origins.push({ origin, trustLevel: "high", rules: {}, updatedAt: 1 });
+      await chromeApi.storage.sync.set({ appSettings: { ...appSettings, origins } });
+      await chromeApi.storage.local.remove("appSettings");
+    }, DAPP_ORIGIN);
+
+    // Restart the background worker, as an update or an idle eviction does.
+    // Migration runs as the worker starts, before anything asks for settings.
+    const cdp = await extensionContext.newCDPSession(popup);
+    await cdp.send("ServiceWorker.enable");
+    await cdp.send("ServiceWorker.stopAllWorkers");
+    await cdp.detach();
+
+    const after = await openPopup();
+    await sendExtensionRpc(after, { type: "vault.unlock", password: TEST_PASSWORD });
+
+    const areas = async () =>
+      after.evaluate(async () => {
+        const chromeApi = (globalThis as any).chrome;
+        const local = await chromeApi.storage.local.get("appSettings");
+        const sync = await chromeApi.storage.sync.get("appSettings");
+        return { local: local.appSettings, sync: sync.appSettings };
+      });
+    await expect
+      .poll(async () => (await areas()).sync, { timeout: 10_000 })
+      .toBeUndefined();
+    const { local } = await areas();
+    expect(
+      local.origins.find((o: { origin: string }) => o.origin === DAPP_ORIGIN)?.trustLevel
+    ).toBe("high");
+
+    const options = await openPermissionsTab(openOptions);
+    await expect(
+      trustControl(options).getByRole("button", { name: "High", exact: true })
+    ).toHaveAttribute("aria-pressed", "true");
+  });
 });
