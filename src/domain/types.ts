@@ -65,6 +65,22 @@ export const KDF_FLOORS = {
   "pbkdf2-sha256": { c: 600_000 },
 } as const;
 
+/**
+ * Parameter ceilings. The floor stops a storage writer making the work factor
+ * cheap; the ceiling stops a crafted record or backup file making it ruinous.
+ * Parameters are read from untrusted input and handed straight to the KDF, so
+ * `m` in the gigabytes would stall or crash the context that opens it.
+ *
+ * Set well above anything the product writes - `m` is more than 13x the
+ * shipped default - so no legitimate record is refused. If the defaults are
+ * ever raised, these move with them; a test holds `KDF_DEFAULTS` between the
+ * two bounds.
+ */
+export const KDF_CEILINGS = {
+  argon2id: { m: 262_144, t: 10, p: 4 },
+  "pbkdf2-sha256": { c: 5_000_000 },
+} as const;
+
 /** Parameters used for newly written material. */
 export const KDF_DEFAULTS: KdfParams = {
   alg: "argon2id",
