@@ -311,11 +311,23 @@ describe("message listener enforces the boundary", () => {
     const { listener, reached } = await makeListener();
     const res = await collect(
       listener,
-      { type: "nostr.getPublicKey" },
-      { id: RUNTIME_ID, url: "https://app.example/page" }
+      { type: "nostr.getPublicKey", origin: "https://app.example" },
+      { id: RUNTIME_ID, tab: { id: 1 }, frameId: 0, url: "https://app.example/page" }
     );
     expect(res.ok).toBe(true);
     expect(reached).toContain("nostr.getPublicKey");
+  });
+
+  it("refuses a nostr request whose origin the sender does not attest, before any handler runs", async () => {
+    const { listener, reached } = await makeListener();
+    const res = await collect(
+      listener,
+      { type: "nostr.getPublicKey", origin: "https://trusted.example" },
+      { id: RUNTIME_ID, tab: { id: 1 }, frameId: 0, url: "https://app.example/page" }
+    );
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe(RPC_ERROR_CODES.INVALID_ORIGIN);
+    expect(reached).toHaveLength(0);
   });
 
   it("blocks a UI-only namespace when sender information is missing entirely", async () => {

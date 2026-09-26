@@ -385,6 +385,7 @@ describe("message listener boundary", () => {
     });
   const extensionPage = { id: RUNTIME_ID, url: `${ORIGIN}popup.html` };
   const contentScript = { id: RUNTIME_ID, url: "https://evil.example/page" };
+  const siteTab = { id: RUNTIME_ID, tab: { id: 1 }, frameId: 0, url: `${SITE}/page` };
 
   it("rejects messages with no usable type", async () => {
     for (const message of [null, "vault.unlock", {}, { type: "" }]) {
@@ -410,7 +411,7 @@ describe("message listener boundary", () => {
 
     const res = await call(
       { type: "nostr.signEvent", origin: SITE, event: { kind: 1, created_at: 1, tags: [], content: "" } },
-      contentScript
+      siteTab
     );
 
     expect(res.ok).toBe(false);
