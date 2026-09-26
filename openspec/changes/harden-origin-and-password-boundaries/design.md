@@ -109,4 +109,4 @@ No stored data changes shape. Existing `OriginPolicy` records that hold `rules` 
 ## Open Questions
 
 - ~~Should origin policies stay in `storage.sync`?~~ Decided 2026-09-26: no. See `localize-authority-settings`.
-- **Exact ceiling values.** Confirm against a measured Argon2id run at 256 MiB in the Chrome and Firefox service workers before merging. If it cannot finish within the responsiveness budget, lower `m`.
+- ~~**Exact ceiling values.**~~ Decided 2026-09-26: ship the proposed table without the measurement. See `kdf-ceiling-decision.md`.

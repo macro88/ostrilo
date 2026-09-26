@@ -115,6 +115,50 @@ RPC type today. But that allowlist lives in a different file from the thing it
 protects, and anyone adding a third forwarded method would inherit the whole
 privileged surface.
 
+### Page origin binding
+
+A `nostr` request carries the `origin` the content script read from
+`window.location.origin`. The background does not take that on trust: every
+per-origin decision - consent, trust level, rate limit, the origin the approval
+window shows - would otherwise rest on a value any code in the content-script
+process can write.
+
+`attestPageOrigin` (`src/infrastructure/messaging/sender-trust.ts`) runs in the
+listener, before the lock gate, and derives the origin from the
+browser-attested sender. The sender must:
+
+- report `sender.id === browser.runtime.id` (this extension's content script),
+- carry a `sender.tab` with `sender.frameId === 0` (the content script is
+  top-frame only),
+- have an `https:` `sender.url`, and
+- where the browser supplies `sender.origin` (Chromium; Firefox does not),
+  agree with that URL's origin.
+
+The derived origin must then equal the claimed `message.origin`. On success the
+listener overwrites `message.origin` with the derived value, so handlers only
+ever see what the browser vouched for. Any failure is `invalid_origin`, with no
+handler called, no rate limit charged and no locked-page marker raised.
+
+A mismatch is refused rather than silently corrected: the content script and
+the browser disagreeing about where a request came from means a navigation race
+or a tampered process. Same-document navigations (`pushState`, hash changes)
+keep the origin, so SPA routing is unaffected.
+
+### Commands outside the router
+
+`ostrilo.openApprovalWindow` is handled by a second `onMessage` listener
+(`approval-window-command.ts`), not by the router. It applies the same
+extension-page sender rule as a UI-only namespace and ignores anything else.
+
+### One throttle for every password check
+
+Every handler that verifies the master password - `vault.unlock`,
+`requireReauth`, `vault.reveal`, and `vault.generate` / `vault.import` against
+an existing vault - runs the check through `withPasswordThrottle`
+(`password-throttle.ts`). The throttle is consulted before any derivation, a
+wrong password is charged to one shared counter, and a verified password resets
+it on any path. Creating the first vault verifies nothing and is not charged.
+
 ### Methods that deliberately do not exist
 
 - **`vault.export`** - returned the raw nsec whenever the vault was unlocked,

@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Security
+
+- **BREAKING (RPC): `policy.setOrigin` accepts only `name`, `trustLevel` and
+  `identityDisclosure`.** A patch carrying `rules`, `sessionGrantAll` or
+  `updatedAt` is refused with `invalid_params`. Per-kind rules go through
+  `policy.setKindRule` and session grants through `policy.setSession`, both of
+  which already ask for the password where the value grants authority. The old
+  patch let one message write `{ "0": "allow" }` for a site with no password at
+  all. Setting `identityDisclosure: "allow"` through `setOrigin` now needs the
+  password too, like `high` trust; tightening to `ask` or `deny` stays free.
+- The background no longer believes the page origin a `nostr.*` message names.
+  It derives the origin from the browser-attested sender - this extension's
+  top-frame content script on an `https:` page - and refuses a request whose
+  claimed origin disagrees with `invalid_origin`, before any service runs.
+  Single-page apps that route with `history.pushState` are unaffected.
+- Every master-password check now shares the unlock throttle: re-authentication
+  for high-risk actions, revealing a key, and adding a key to an existing vault
+  count against the same backoff as unlocking, and a correct password on any of
+  them resets it. The password dialog shows a backoff as a wait with its
+  remaining time instead of as an incorrect password.
+- Unlocking an already-unlocked vault now zeroizes the private keys it replaces
+  instead of dropping them unerased.
+- Locking always denies pending approvals and clears the badge, even when the
+  settings write during lock fails; the failure is still reported.
+- KDF parameters read from the vault or from a backup file are bounded above as
+  well as below, so a crafted file cannot stall the page that opens it with an
+  enormous memory cost. An out-of-bounds backup fails with the same message as a
+  wrong passphrase.
+- The approval-window command answers only the extension's own pages; a web
+  page can no longer raise it.
+
 ## 0.8.0 — 2026-09-25
 
 First public release. There is no published predecessor, so the entries below

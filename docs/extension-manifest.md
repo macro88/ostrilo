@@ -140,10 +140,11 @@ Reviewed set, per target:
 
 | Permission | Chrome | Firefox | Why |
 |---|---|---|---|
-| `storage` | yes | yes | `storage.local` holds the encrypted vault; `storage.sync` holds the `isDocked` flag. |
+| `storage` | yes | yes | `storage.local` holds the encrypted vault, the unlock throttle and the activity log; `storage.session` holds the lock state and session grants; `storage.sync` holds the `isDocked` flag **and** the `appSettings` item, which includes origin policies, relays and security timeouts. See `localize-authority-settings` for moving `appSettings` off sync. |
 | `windows` | yes | yes | The approval window: create, focus, close, and `windows.onRemoved`. Six call sites. |
 | `sidePanel` | yes | no | `chrome.sidePanel.setPanelBehavior/setOptions/open` are called and Chrome requires the permission. It is **not** listed in `wxt.config.ts`: WXT adds it automatically for MV3 sidepanel entrypoints on Chromium. Listing it explicitly is what leaked `"sidePanel"` into the Firefox manifest, where it is not a valid permission name. Firefox uses `sidebar_action`, which needs no permission. |
-| `alarms` | pending | pending | Not requested yet. `implement-session-auto-lock` adds it for the idle timer. It is already in the assertion test's reviewed allowlist so that change does not have to edit the assertion to land. |
+| `alarms` | yes | yes | The auto-lock deadline. A `setTimeout` does not survive MV3 worker eviction; an alarm does, and wakes the worker to run the lock check (`AUTO_LOCK_ALARM` in `background.ts`). |
+| `idle` | yes | yes | `idle.queryState` answers whether a user is at the machine, for the one path that asks: a signature produced without a prompt, asking to postpone the auto-lock deadline (`UserPresenceService`). |
 
 No `host_permissions` on either target, and none should appear: the content
 script's own `matches` grant what the extension needs. WXT only injects host
