@@ -437,7 +437,7 @@ test.describe("Settings - Key Management", () => {
     await reauth.getByLabel("Password", { exact: true }).fill("not-the-password");
     await reauth.getByRole("button", { name: "Confirm" }).click();
     await expect(
-      reauth.getByText(/incorrect password|invalid_password/i)
+      reauth.getByText(/^Incorrect password/)
     ).toBeVisible();
     expect(
       await listStoredKeys(options),

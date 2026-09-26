@@ -384,7 +384,7 @@ test.describe("Settings - per-origin policy", () => {
     // a site sign silently forever.
     await trust.getByRole("button", { name: "High", exact: true }).click();
     await confirmReauth(options, "Wrong-Password-Entirely-2026!");
-    await expect(dialog.getByText(/invalid_password/)).toBeVisible({
+    await expect(dialog.getByText(/^Incorrect password/)).toBeVisible({
       timeout: 10_000,
     });
     // The dialog stays up for a retry rather than dropping the user back to
@@ -607,7 +607,7 @@ test.describe("Settings - per-origin policy", () => {
     //    profile rewrite silently forever.
     await row.getByRole("button", { name: "Allow", exact: true }).click();
     await confirmReauth(options, "Wrong-Password-Entirely-2026!");
-    await expect(dialog.getByText(/invalid_password/)).toBeVisible({
+    await expect(dialog.getByText(/^Incorrect password/)).toBeVisible({
       timeout: 10_000,
     });
     await expect(dialog).toBeVisible();

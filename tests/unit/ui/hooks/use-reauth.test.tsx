@@ -4,6 +4,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useReauth } from "@/ui/hooks/useReauth";
+import { RpcClientError } from "@/infrastructure/messaging/client";
+import { RPC_ERROR_CODES, type RpcErrorCode } from "@/infrastructure/messaging/error-codes";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -141,6 +143,56 @@ describe("useReauth", () => {
 
     expect(reauth().dialogProps.error).toBeUndefined();
     expect(outcome.state).toBe("resolved");
+  });
+
+  describe("a refusal from the background", () => {
+    const refusal = (errorCode: RpcErrorCode, details?: string) =>
+      new RpcClientError("policy.setOrigin", {
+        code: -32000,
+        message: "refused",
+        data: { errorCode, details, method: "policy.setOrigin" },
+      });
+
+    async function failWith(error: unknown): Promise<string | undefined> {
+      act(() => {
+        void reauth()
+          .request({ action: "Raise trust." }, () => Promise.reject(error))
+          .catch(() => undefined);
+      });
+      await act(async () => {
+        await reauth().dialogProps.onConfirm("pw");
+      });
+      return reauth().dialogProps.error;
+    }
+
+    it("shows the throttle's remaining wait rather than an incorrect password", async () => {
+      const shown = await failWith(
+        refusal(RPC_ERROR_CODES.RATE_LIMITED, "Too many failed attempts. Try again in 12 seconds.")
+      );
+      expect(shown).toBe("Too many failed attempts. Try again in 12 seconds.");
+    });
+
+    it("still reads as a wait when the refusal carries no countdown", async () => {
+      expect(await failWith(refusal(RPC_ERROR_CODES.RATE_LIMITED))).toMatch(
+        /too many failed attempts/i
+      );
+    });
+
+    it("shows the pause an incorrect password just earned", async () => {
+      const shown = await failWith(
+        refusal(
+          RPC_ERROR_CODES.INVALID_PASSWORD,
+          "Incorrect password. Further attempts are paused for 5 seconds."
+        )
+      );
+      expect(shown).toBe("Incorrect password. Further attempts are paused for 5 seconds.");
+    });
+
+    it("never shows the machine string", async () => {
+      const shown = await failWith(refusal(RPC_ERROR_CODES.INVALID_PARAMS, "patch.rules: x"));
+      expect(shown).not.toMatch(/^rpc:/);
+      expect(shown).toBe("Incorrect password");
+    });
   });
 
   it("falls back to a generic message when the failure carries none", async () => {

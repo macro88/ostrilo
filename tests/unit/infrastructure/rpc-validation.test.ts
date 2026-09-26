@@ -19,6 +19,7 @@ describe("RPC Validation", () => {
         selectKey: vi.fn().mockResolvedValue(undefined),
         sign: vi.fn().mockResolvedValue("signature"),
         listKeys: vi.fn().mockResolvedValue([]),
+        getEnvelope: vi.fn().mockResolvedValue(undefined),
         getLockState: vi.fn().mockResolvedValue({ isLocked: false }),
       },
       policy: {

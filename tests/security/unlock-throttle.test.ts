@@ -1,9 +1,21 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, beforeEach, vi } from "vitest";
 import {
   UnlockThrottleService,
   THROTTLE_POLICY,
 } from "@/application/services/unlock-throttle.service";
-import type { StoragePort } from "@/application/ports/storage";
+import type { StoragePort, StorageSuite } from "@/application/ports/storage";
+import { VaultRpcHandler } from "@/infrastructure/messaging/handlers/vault-rpc";
+import { PolicyRpcHandler } from "@/infrastructure/messaging/handlers/policy-rpc";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
+import type { RpcModule, ServiceContext } from "@/infrastructure/messaging/rpc-router";
+import { fastKdf } from "../helpers/vault";
+import {
+  SECRET_ONE,
+  SECRET_TWO,
+  STRONG_PASSWORD,
+  errorCodeOf,
+  realContext,
+} from "../unit/infrastructure/messaging-fixture";
 
 /**
  * Unlock throttling.
@@ -120,5 +132,136 @@ describe("unlock throttling", () => {
   it("never stores the password", async () => {
     await throttle.recordFailure();
     expect(JSON.stringify([...store.dump().entries()])).not.toContain("password");
+  });
+});
+
+/**
+ * The throttle used to guard `vault.unlock` alone. Re-authentication, reveal,
+ * and generate / import against an existing vault verified the same password
+ * with no backoff, and three of those are reachable while locked - so the
+ * lockout bounded guessing only on the path nobody needed to use. These drive
+ * the real handlers over the real throttle and vault.
+ */
+describe("every master-password check shares the throttle", () => {
+  const WRONG = "Wrong-Guess-Entirely-99";
+  let context: ServiceContext;
+  let vaultRpc: VaultRpcHandler;
+  let policyRpc: PolicyRpcHandler;
+  let throttleStore: StorageSuite["local"];
+
+  const send = (handler: RpcModule, message: Record<string, unknown>) =>
+    handler.handleRequest(message as never, context);
+
+  async function exhaustFreeAttempts(): Promise<void> {
+    for (let i = 0; i <= THROTTLE_POLICY.freeAttempts; i++) {
+      await send(vaultRpc, { type: "vault.unlock", password: WRONG });
+    }
+  }
+
+  async function failures(): Promise<number> {
+    return (
+      (await throttleStore.get<{ failures: number }>("unlockThrottle"))?.failures ?? 0
+    );
+  }
+
+  beforeEach(async () => {
+    const real = realContext();
+    context = real.context;
+    throttleStore = real.storage.local;
+    vaultRpc = new VaultRpcHandler();
+    policyRpc = new PolicyRpcHandler();
+    await real.vault.importKey(SECRET_ONE, STRONG_PASSWORD);
+    await real.vault.unlock(STRONG_PASSWORD);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("refuses re-authentication during a backoff without deriving", async () => {
+    await exhaustFreeAttempts();
+    const derive = vi.spyOn(fastKdf, "deriveKey");
+
+    const res = await send(policyRpc, {
+      type: "policy.setOrigin",
+      origin: "https://exchange.example",
+      patch: { trustLevel: "high" },
+      password: STRONG_PASSWORD,
+    });
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+    expect(JSON.stringify(res)).toMatch(/Try again in \d+ seconds/);
+    expect(derive, "a refused attempt must not spend a derivation").not.toHaveBeenCalled();
+  });
+
+  it("counts reveal failures toward the lockout that unlock obeys", async () => {
+    for (let i = 0; i <= THROTTLE_POLICY.freeAttempts; i++) {
+      const res = await send(vaultRpc, { type: "vault.reveal", password: WRONG });
+      expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
+    }
+
+    const unlock = await send(vaultRpc, { type: "vault.unlock", password: STRONG_PASSWORD });
+    expect(
+      errorCodeOf(unlock),
+      "SECURITY REGRESSION: reveal handed out guesses the unlock throttle never saw"
+    ).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+  });
+
+  it("throttles import into an existing vault and stores nothing", async () => {
+    await exhaustFreeAttempts();
+    const before = await context.vault.listKeys();
+
+    const res = await send(vaultRpc, {
+      type: "vault.import",
+      keyInput: SECRET_TWO,
+      password: STRONG_PASSWORD,
+    });
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+    expect(await context.vault.listKeys()).toEqual(before);
+  });
+
+  it("throttles generate against an existing vault", async () => {
+    await exhaustFreeAttempts();
+    const res = await send(vaultRpc, { type: "vault.generate", password: STRONG_PASSWORD });
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+  });
+
+  it("charges a wrong password on import into an existing vault", async () => {
+    const res = await send(vaultRpc, {
+      type: "vault.import",
+      keyInput: SECRET_TWO,
+      password: WRONG,
+    });
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
+    expect(await failures()).toBe(1);
+  });
+
+  it("does not charge creating the first vault", async () => {
+    const fresh = realContext();
+    context = fresh.context;
+    throttleStore = fresh.storage.local;
+
+    const res = await send(vaultRpc, { type: "vault.generate", password: STRONG_PASSWORD });
+
+    expect(res.ok, JSON.stringify(res)).toBe(true);
+    expect(await failures()).toBe(0);
+  });
+
+  it("resets the count when re-authentication succeeds", async () => {
+    await send(vaultRpc, { type: "vault.unlock", password: WRONG });
+    await send(vaultRpc, { type: "vault.reveal", password: WRONG });
+    expect(await failures()).toBe(2);
+
+    const res = await send(policyRpc, {
+      type: "policy.setKindRule",
+      origin: "https://exchange.example",
+      kind: 1,
+      mode: "allow",
+      password: STRONG_PASSWORD,
+    });
+
+    expect(res.ok, JSON.stringify(res)).toBe(true);
+    expect(await failures()).toBe(0);
   });
 });

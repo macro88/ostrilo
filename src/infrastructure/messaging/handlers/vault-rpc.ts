@@ -1,5 +1,6 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
 import { requireReauth } from "@/infrastructure/messaging/reauth";
+import { withPasswordThrottle } from "@/infrastructure/messaging/password-throttle";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
@@ -125,6 +126,36 @@ export class VaultRpcHandler implements RpcModule {
     });
   }
 
+  /**
+   * Runs a key write, charging the shared password throttle when it proves an
+   * existing vault password.
+   *
+   * Adding a key to an existing vault re-enters that vault's password, and a
+   * wrong one is a guess like any other. Creating the first vault verifies
+   * nothing - there is no password yet to be wrong about - so it is not
+   * charged.
+   */
+  private async writeUnderThrottle<T>(
+    context: ServiceContext,
+    method: string,
+    write: () => Promise<T>
+  ): Promise<RpcResponse> {
+    const [keys, envelope] = await Promise.all([
+      context.vault.listKeys(),
+      context.vault.getEnvelope(),
+    ]);
+    if (keys.length === 0 && !envelope) {
+      return { ok: true, data: await write() };
+    }
+    const result = await withPasswordThrottle(
+      context,
+      method,
+      write,
+      "Incorrect password. Please use the same password as your existing keys."
+    );
+    return result.ok ? { ok: true, data: result.value } : result.response;
+  }
+
   private async handleUnlock(
     message: Extract<RpcRequest, { type: "vault.unlock" }>,
     context: ServiceContext
@@ -138,40 +169,16 @@ export class VaultRpcHandler implements RpcModule {
       });
     }
 
-    // Checked BEFORE any derivation: deriving first would let an attacker
-    // spend the defender's CPU on every attempt regardless of the lockout.
-    const waitMs = await context.unlockThrottle.check();
-    if (waitMs > 0) {
-      return createRpcErrorResponse(RPC_ERROR_CODES.RATE_LIMITED, {
-        details: `Too many failed attempts. Try again in ${Math.ceil(
-          waitMs / 1000
-        )} seconds.`,
-        method: message.type,
-      });
-    }
-
     try {
-      const data = await context.vault.unlock(message.password);
-      await context.unlockThrottle.recordSuccess();
-      return { ok: true, data };
+      const result = await withPasswordThrottle(context, message.type, () =>
+        context.vault.unlock(message.password)
+      );
+      return result.ok ? { ok: true, data: result.value } : result.response;
     } catch (error) {
       if (error instanceof Error) {
         // A wrong password and a damaged vault are different problems and must
-        // not be reported identically. Previously every unlock failure surfaced
-        // as "incorrect password", so a corrupt record sent the user hunting
-        // for a password that was never wrong.
-        if (error.message === "incorrect_password") {
-          const delay = await context.unlockThrottle.recordFailure();
-          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
-            details:
-              delay > 0
-                ? `Incorrect password. Further attempts are paused for ${Math.ceil(
-                    delay / 1000
-                  )} seconds.`
-                : "Incorrect password",
-            method: message.type,
-          });
-        }
+        // not be reported identically. The throttle maps only
+        // `incorrect_password`; everything below is a vault problem.
         if (error.message === "vault_not_created") {
           return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
             details:
@@ -233,27 +240,15 @@ export class VaultRpcHandler implements RpcModule {
     if (policyError) return policyError;
 
     try {
-      const data = await context.vault.generateKey(
-        message.password,
-        message.label
+      return await this.writeUnderThrottle(context, message.type, () =>
+        context.vault.generateKey(message.password, message.label)
       );
-      return { ok: true, data };
     } catch (error) {
-      // Translate service errors to RPC codes
-      if (error instanceof Error) {
-        if (error.message === "password_required") {
-          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
-            details: "Password is required",
-            method: message.type,
-          });
-        }
-        if (error.message === "incorrect_password") {
-          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
-            details:
-              "Incorrect password. Please use the same password as your existing keys.",
-            method: message.type,
-          });
-        }
+      if (error instanceof Error && error.message === "password_required") {
+        return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
+          details: "Password is required",
+          method: message.type,
+        });
       }
       throw error; // Re-throw unexpected errors
     }
@@ -301,12 +296,9 @@ export class VaultRpcHandler implements RpcModule {
     if (importPolicyError) return importPolicyError;
 
     try {
-      const data = await context.vault.importKey(
-        message.keyInput,
-        message.password,
-        message.label
+      return await this.writeUnderThrottle(context, message.type, () =>
+        context.vault.importKey(message.keyInput, message.password, message.label)
       );
-      return { ok: true, data };
     } catch (error) {
       // Translate service errors to RPC codes
       if (error instanceof Error) {
@@ -314,13 +306,6 @@ export class VaultRpcHandler implements RpcModule {
         if (error.message === "key_already_exists") {
           return createRpcErrorResponse(RPC_ERROR_CODES.KEY_ALREADY_EXISTS, {
             details: "A key with this public key already exists",
-            method: message.type,
-          });
-        }
-        if (error.message === "incorrect_password") {
-          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
-            details:
-              "Incorrect password. Please use the same password as your existing keys.",
             method: message.type,
           });
         }
@@ -377,23 +362,16 @@ export class VaultRpcHandler implements RpcModule {
     }
 
     try {
-      const data = await context.vault.revealKey(
-        message.password,
-        message.keyId
+      const result = await withPasswordThrottle(context, message.type, () =>
+        context.vault.revealKey(message.password, message.keyId)
       );
-      return { ok: true, data };
+      return result.ok ? { ok: true, data: result.value } : result.response;
     } catch (error) {
       // Translate service errors to RPC codes
       if (error instanceof Error) {
         if (error.message === "password_required") {
           return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
             details: "Password is required",
-            method: message.type,
-          });
-        }
-        if (error.message === "incorrect_password") {
-          return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
-            details: "Incorrect password",
             method: message.type,
           });
         }
