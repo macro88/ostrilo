@@ -100,6 +100,7 @@ export async function seedUnlockedVault(
     type: "policy.setOrigin",
     origin: DAPP_ORIGIN,
     patch: { identityDisclosure: "allow" },
+    password,
   });
   await sendExtensionRpc(page, {
     type: "settings.update",

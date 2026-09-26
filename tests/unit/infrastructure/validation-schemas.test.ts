@@ -423,7 +423,7 @@ describe("Validation Schemas", () => {
       const result2 = OriginPolicyPatchSchema.safeParse({
         name: "Example Site",
         trustLevel: "high",
-        sessionGrantAll: true,
+        identityDisclosure: "allow",
       });
       expect(result2.success).toBe(true);
     });
@@ -443,22 +443,17 @@ describe("Validation Schemas", () => {
       expect(result.success).toBe(false);
     });
 
-    it("should accept valid rules", () => {
-      const result = OriginPolicyPatchSchema.safeParse({
-        rules: {
-          "1": "allow",
-          "6": "deny",
-          "1984": "ask",
-        },
-      });
-      expect(result.success).toBe(true);
+    it.each([
+      ["per-kind rules", { rules: { "1": "allow" } }],
+      ["the session display flag", { sessionGrantAll: true }],
+      ["updatedAt", { updatedAt: 1 }],
+    ])("refuses %s, which have their own paths", (_name, patch) => {
+      expect(OriginPolicyPatchSchema.safeParse(patch).success).toBe(false);
     });
 
-    it("should reject invalid rule values", () => {
+    it("should reject invalid disclosure decisions", () => {
       const result = OriginPolicyPatchSchema.safeParse({
-        rules: {
-          "1": "invalid",
-        },
+        identityDisclosure: "maybe",
       });
       expect(result.success).toBe(false);
     });

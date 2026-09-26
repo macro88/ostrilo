@@ -158,6 +158,7 @@ test.describe("Agent extension smoke", () => {
       type: "policy.setOrigin",
       origin: DAPP_ORIGIN,
       patch: { identityDisclosure: "allow" },
+      password: PASSWORD,
     });
 
     const dapp = await extensionContext.newPage();

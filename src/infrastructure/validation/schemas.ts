@@ -38,21 +38,22 @@ export const EventKindSchema = z
   .min(0)
   .max(65535, "Invalid event kind");
 
-// Event kind authorisation (mapping from kind number to authorisation)
-const NostrEventKindAuthorisationSchema = z.record(
-  z.string().regex(/^\d+$/).transform(Number), // Keys should be numeric strings
-  AuthorisationSchema
-);
-
-// Origin policy patch schema - allows partial updates
+/**
+ * The fields `policy.setOrigin` may write, and nothing else.
+ *
+ * Per-kind rules and session grants are NOT here. Each has its own method -
+ * `policy.setKindRule` and `policy.setSession` - which asks for the password
+ * where the value grants authority. When this patch also accepted `rules`, one
+ * message could write `{ "0": "allow" }` with no password at all, walking
+ * around the gate `setKindRule` enforces. `updatedAt` is the service's to set.
+ *
+ * Strict, so a removed field is `invalid_params` rather than silently dropped.
+ */
 export const OriginPolicyPatchSchema = z
   .strictObject({
     name: z.string().optional(),
     trustLevel: TrustLevelSchema.optional(),
-    rules: NostrEventKindAuthorisationSchema.optional(),
-    sessionGrantAll: z.boolean().optional(),
     identityDisclosure: AuthorisationSchema.optional(),
-    updatedAt: z.number().int().nonnegative().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided for patch",

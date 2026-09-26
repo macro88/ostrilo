@@ -16,6 +16,12 @@ import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import { AUTO_LOCK_BOUNDS } from "@/domain/types";
 import type { StorageSuite } from "@/application/ports/storage";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
+import {
+  ORIGIN_PATCH_AUTHORITY_FIELDS,
+  ORIGIN_PATCH_INERT_FIELDS,
+  patchGrantsAuthority,
+} from "@/infrastructure/messaging/reauth";
+import { OriginPolicyPatchSchema } from "@/infrastructure/validation/schemas";
 
 /**
  * Re-authentication for high-risk actions, enforced at the message boundary.
@@ -218,6 +224,83 @@ describe("high-risk actions require a verified password", () => {
         const res = await setOrigin(level, undefined, `https://${level}.example`);
         expect(res.ok, `${level} trust must not require a password`).toBe(true);
       }
+    });
+  });
+
+  describe("the origin patch has one path per authority", () => {
+    const ORIGIN = "https://exchange.example";
+    const patchOrigin = (patch: Record<string, unknown>, password?: string) =>
+      policyRpc.handleRequest(
+        { type: "policy.setOrigin", origin: ORIGIN, patch, password } as never,
+        context
+      );
+    const stored = async () =>
+      (await settings.get())?.origins?.find((o) => o.origin === ORIGIN);
+
+    it("refuses per-kind rules, even with the password, and stores nothing", async () => {
+      for (const password of [undefined, PASSWORD]) {
+        const res = await patchOrigin({ rules: { "0": "allow", "3": "allow" } }, password);
+        expect(
+          res.ok,
+          "SECURITY REGRESSION: setOrigin wrote per-kind rules around setKindRule's password gate"
+        ).toBe(false);
+        if (!res.ok) expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.INVALID_PARAMS);
+      }
+      expect(await stored()).toBeUndefined();
+    });
+
+    it("refuses the session display flag and creates no grant", async () => {
+      const res = await patchOrigin({ sessionGrantAll: true });
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.INVALID_PARAMS);
+      expect(await stored()).toBeUndefined();
+      expect(await policy.getSessionGrants()).not.toHaveProperty(ORIGIN);
+    });
+
+    it("refuses disclosure consent without the password", async () => {
+      for (const password of [undefined, WRONG]) {
+        const res = await patchOrigin({ identityDisclosure: "allow" }, password);
+        expect(
+          res.ok,
+          "SECURITY REGRESSION: disclosure consent was granted with no password"
+        ).toBe(false);
+        if (!res.ok && password === undefined) {
+          expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
+        }
+      }
+      expect(await policy.getIdentityDisclosure(ORIGIN)).toBeUndefined();
+    });
+
+    it("grants disclosure consent under the password", async () => {
+      const res = await patchOrigin({ identityDisclosure: "allow" }, PASSWORD);
+      expect(res.ok, JSON.stringify(res)).toBe(true);
+      expect(await policy.getIdentityDisclosure(ORIGIN)).toBe("allow");
+    });
+
+    it("does not gate tightening disclosure consent", async () => {
+      await patchOrigin({ identityDisclosure: "allow" }, PASSWORD);
+      for (const decision of ["ask", "deny"] as const) {
+        const res = await patchOrigin({ identityDisclosure: decision });
+        expect(res.ok, `${decision} must not require a password`).toBe(true);
+        expect(await policy.getIdentityDisclosure(ORIGIN)).toBe(decision);
+      }
+    });
+
+    it("classifies every patch field as authority-granting or inert", () => {
+      const classified = new Set<string>([
+        ...ORIGIN_PATCH_AUTHORITY_FIELDS,
+        ...ORIGIN_PATCH_INERT_FIELDS,
+      ]);
+      for (const field of Object.keys(OriginPolicyPatchSchema.shape)) {
+        expect(
+          classified.has(field),
+          `SECURITY REGRESSION: "${field}" was added to the origin patch without deciding whether it needs the password`
+        ).toBe(true);
+      }
+      // And the authority-granting fields are exactly the ones that gate.
+      expect(patchGrantsAuthority({ trustLevel: "high" })).toBe(true);
+      expect(patchGrantsAuthority({ identityDisclosure: "allow" })).toBe(true);
+      expect(patchGrantsAuthority({ trustLevel: "medium", identityDisclosure: "deny" })).toBe(false);
     });
   });
 

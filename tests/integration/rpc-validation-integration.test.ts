@@ -25,7 +25,7 @@ describe("RPC Validation Integration", () => {
     it("should enforce OriginPolicyPatch types at compile time", () => {
       // These should be valid TypeScript - no runtime test needed
       const validPatch1 = { trustLevel: "high" as const };
-      const validPatch2 = { name: "Test Site", sessionGrantAll: true };
+      const validPatch2 = { name: "Test Site", identityDisclosure: "ask" as const };
 
       // Validate the patches work with the validation function
       expect(validateOriginPolicyPatch(validPatch1).success).toBe(true);
@@ -71,9 +71,8 @@ describe("RPC Validation Integration", () => {
       const validPolicyPatches = [
         { trustLevel: "low" },
         { name: "My Site" },
-        { sessionGrantAll: true },
-        { rules: { "1": "allow", "6": "deny" } },
-        { trustLevel: "high", name: "Trusted Site", sessionGrantAll: true },
+        { identityDisclosure: "deny" },
+        { trustLevel: "high", name: "Trusted Site", identityDisclosure: "allow" },
       ];
 
       // All valid patches should pass validation
@@ -99,7 +98,9 @@ describe("RPC Validation Integration", () => {
       const invalidPolicyPatches = [
         {}, // Empty patch
         { trustLevel: "invalid" }, // Invalid trust level
-        { rules: { "1": "invalid" } }, // Invalid rule
+        { rules: { "1": "allow" } }, // Per-kind rules go through setKindRule
+        { sessionGrantAll: true }, // Session grants go through setSession
+        { updatedAt: 1 }, // The service sets updatedAt
         { unknownField: "value" }, // Unknown property
       ];
 
@@ -130,12 +131,7 @@ describe("RPC Validation Integration", () => {
       const testPolicyPatch = {
         name: "Test Application",
         trustLevel: "medium" as const,
-        sessionGrantAll: false,
-        rules: {
-          "0": "ask" as const,
-          "1": "allow" as const,
-          "4": "deny" as const,
-        },
+        identityDisclosure: "ask" as const,
       };
 
       // Both should validate successfully
