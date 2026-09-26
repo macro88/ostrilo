@@ -42,7 +42,7 @@ Source code under `src/` SHALL reference browser-synced storage only through the
 
 ### Requirement: Existing Settings Migrate Once Without Loss
 
-On the first settings read after upgrade, and eagerly at browser startup and at extension install or update, the extension SHALL copy an existing synced `appSettings` item into local storage when local storage holds none, preserving every field including trust levels, rules and disclosure decisions. When local storage already holds settings, the synced item SHALL be ignored. The migration SHALL be idempotent under concurrent reads. The synced copy SHALL NOT be deleted by this version.
+On the first settings read after upgrade, and eagerly when the background starts and at extension install or update, the extension SHALL copy an existing synced `appSettings` item into local storage when local storage holds none, preserving every field including trust levels, rules and disclosure decisions. When local storage already holds settings, the synced item SHALL be ignored. The migration SHALL be idempotent under concurrent reads. Once local storage has been read back holding settings, the eager migration SHALL remove the synced `appSettings` item. A settings read SHALL never remove it, so a synced-storage failure cannot prevent settings from loading.
 
 #### Scenario: Upgrade carries every grant
 
@@ -74,10 +74,27 @@ On the first settings read after upgrade, and eagerly at browser startup and at 
 - **THEN** default settings are written to local storage
 - **AND** nothing is written to synced storage
 
-#### Scenario: The synced copy is kept for older installs
+#### Scenario: The synced copy is removed after migration
 
-- **WHEN** migration completes
-- **THEN** the synced `appSettings` item is still present and unchanged
+- **GIVEN** a synced settings item and no local settings
+- **WHEN** the eager migration runs
+- **THEN** local storage holds the synced item's content
+- **AND** the synced `appSettings` item no longer exists
+
+#### Scenario: A settings read never removes the synced copy
+
+- **GIVEN** a synced settings item and no local settings
+- **WHEN** settings are read, without the eager migration
+- **THEN** local storage holds the synced item's content
+- **AND** the synced `appSettings` item is still present
+
+#### Scenario: A copy written later by an older install is swept
+
+- **GIVEN** local storage holds settings
+- **AND** synced storage holds an `appSettings` item written by an older version on another device
+- **WHEN** the eager migration runs
+- **THEN** the synced `appSettings` item no longer exists
+- **AND** local storage is unchanged
 
 ### Requirement: Local Settings Changes Still Reach Background Consumers
 

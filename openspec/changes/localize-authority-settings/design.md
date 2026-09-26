@@ -21,7 +21,6 @@ The product decision this change implements was taken on 2026-09-26 after the co
 **Non-Goals:**
 
 - Cross-device sync of any kind. SYNC-005 (encrypted, key-authored settings events) is the path for grants. PROTO-009 (NIP-65) is the path for relays. Both authenticate their author, which browser sync cannot.
-- Deleting the stale sync copy in this release (see Decision 3).
 - Changing the shape of `AppSettingsV1`, its normalisation, or any policy semantics.
 - Defending local storage against a compromised renderer. That is out of scope here, as it is in `harden-origin-and-password-boundaries`.
 
@@ -56,7 +55,7 @@ A security test, `tests/security/settings-locality.test.ts`, scans `src/` in the
 
 *Alternative: flip `storage.sync` to `storage.local` at each call site.* It is smaller today, but it leaves twelve call sites each deciding the area, and the next one added will copy whichever it sees first.
 
-### 3. Migrate by copying; delete the old copy later
+### 3. Migrate by copying, then delete the synced copy in this release
 
 `SettingsStore.read()`:
 
@@ -64,9 +63,21 @@ A security test, `tests/security/settings-locality.test.ts`, scans `src/` in the
 2. Otherwise read `appSettings` from sync. If present, write it to local as-is and return it. Existing normalisation in `SettingsService.get()` then runs on it, as it would have.
 3. Otherwise return `undefined`, and `SettingsService` writes defaults to local as it writes them to sync today.
 
-The background also calls it on `runtime.onStartup` and `onInstalled`, so the migration completes before the first page request, not on first use. The step is idempotent: two concurrent first reads both write the same value.
+`read()` never deletes anything. It is on the hot path of every settings consumer, and a sync failure there must not stop settings from loading.
 
-The sync copy is **not removed** in this release. `storage.sync` is shared by every device on the account, and some of them are still running the old version. Removing the item would propagate: an old-version device would lose every grant, and a device that upgrades later would migrate an empty object. Both fail safe (more prompts, never fewer), but multi-browser users would pay for it for no gain. The new version never reads the sync copy after the first migration, so leaving it has no security cost. It does keep the site list at the browser vendor until removed. A follow-up release deletes it once this version has been the only supported one long enough (the roadmap row carries the rule). `PRIVACY.md` says so plainly.
+Deletion is a separate `migrate()`:
+
+1. `read()`, which copies sync to local if local is empty.
+2. Read the local item back. Only if it is present, remove `appSettings` from sync.
+
+The background calls `migrate()` when the worker starts and on `runtime.onStartup` and `onInstalled`, so the migration completes before the first page request, not on first use, and a removal that failed once is retried on the next start. Both steps are idempotent: two concurrent first reads write the same value, and removing an absent item is a no-op.
+
+**The sync copy is removed in this release** (product-owner decision, 2026-09-26, reversing the earlier proposal to keep it for one release). What that costs, stated plainly:
+
+- `storage.sync` is shared by every device on the account. When the first device upgrades and removes the item, a device on the same account still running the old version reads no settings, falls back to defaults, and prompts again for every site. A device that upgrades later migrates whatever the old version wrote since, so its pre-upgrade grants are gone. Both fail safe: more prompts, never fewer.
+- The sweep also removes a copy an old-version device writes after the first deletion, for as long as the staggered update lasts.
+
+What it buys: the site list stops living at the browser vendor now rather than one release later, and no follow-up release has to remember to delete it. The new version never reads the sync copy after migration, so the choice has no bearing on the security property either way.
 
 Migrated grants are copied exactly, trust levels included. A grant already planted through sync before the upgrade survives migration. The threat this change closes is injection from then on, and re-prompting every user for every site in order to cover a hypothetical earlier injection is the worse trade. The design says so rather than implying otherwise.
 
@@ -78,17 +89,17 @@ The background listener is already area-agnostic, and the UI updates from the RP
 
 - **[Users with several browsers lose sync they may rely on]** → That is the product decision. It is stated in the CHANGELOG as a behaviour change, and PRIVACY.md and the Settings copy say settings are per browser. Grants are re-approved once per browser, with the same prompts as a new site.
 - **[A later write path bypasses the store]** → The locality security test fails CI.
-- **[The stale sync copy lingers]** → It is inert for the new version, disclosed in PRIVACY.md, and removal is tracked. A user who wants it gone at once can turn off extension sync in the browser, which PRIVACY.md already explains.
+- **[Removing the sync copy resets older installs on the same account]** → Accepted by the product owner. Fails safe, and is stated in the CHANGELOG.
+- **[The removal fails, leaving the copy]** → It is inert for the new version, and `migrate()` retries on every worker start.
 - **[A migration read races an old-version write on the same device]** → Cannot happen: one device runs one version of the extension.
 - **[The local item grows without the sync quota's back-pressure]** → `storage.local` allows 10 MB. Origin records are bounded by user decisions, and the existing retention caps bound the activity log. No action is needed now; the SYNC-001 note about the 8 KB item quota becomes moot.
 
 ## Migration Plan
 
-1. Ship the store, the migration and the call-site changes together.
-2. Next release or later: delete `appSettings` from `storage.sync`, and track it on the roadmap.
-3. Rollback: reverting makes the old version read the sync copy, which still exists (Decision 3) but misses changes made since the upgrade. Grants made after the upgrade would be lost on rollback, and prompts would return; that fails safe.
+1. Ship the store, the migration (including removal of the sync copy) and the call-site changes together.
+2. Rollback: the sync copy no longer exists, so a reverted build reads no settings and starts from defaults. Every site prompts again, the relay list and timeouts return to their defaults, and onboarding may show again for an existing vault. That fails safe, but it is a visible reset, and a rollback should be announced as one.
 
 ## Open Questions
 
-- **Should theme sync via its own key?** It is cheap to add later, on the docked-flag pattern. Left out unless asked for.
-- **When should the stale copy be deleted?** Proposed rule: the first release shipped 30 or more days after this one. That is long enough for Chrome and Firefox auto-update to have reached effectively every active install.
+- ~~**When should the stale copy be deleted?**~~ Decided 2026-09-26: in this release. See Decision 3.
+- ~~**Should theme sync via its own key?**~~ Decided 2026-09-26: no; theme stays local with the rest.
