@@ -335,7 +335,7 @@ async function preconfigureRelay(
 ): Promise<void> {
   await page.evaluate(async (url) => {
     const chromeApi = (globalThis as any).chrome;
-    await chromeApi.storage.sync.set({ appSettings: { relays: [url] } });
+    await chromeApi.storage.local.set({ appSettings: { relays: [url] } });
   }, relay.url);
 }
 
