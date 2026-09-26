@@ -63,15 +63,15 @@ the rows as they stand.
 
 | Priority | Total | ✅ | 🔄 | ⬜ | ❌ |
 |----------|-------|----|----|----|----|
-| Must     | 33    | 11 | 12 | 10 | 0  |
+| Must     | 33    | 12 | 12 | 9  | 0  |
 | Should   | 54    | 1  | 14 | 38 | 1  |
 | Could    | 31    | 0  | 0  | 31 | 0  |
 | Won't    | 1     | 0  | 0  | 0  | 1  |
-| **Total**| **119** | **12** | **26** | **79** | **2** |
+| **Total**| **119** | **13** | **26** | **78** | **2** |
 
 ### Current Implementation Snapshot
 
-- **Status date:** 2026-09-25. Every row was re-verified against the code at commit `71b53d1`; see [Status Reconciliation](#status-reconciliation-2026-09-25) for what changed and what each 🔄 row still needs. Updated 2026-09-26 as `harden-origin-and-password-boundaries` landed (no row changed status) and as `localize-authority-settings` landed (SYNC-001 ✅, SYNC-006 ❌).
+- **Status date:** 2026-09-25. Every row was re-verified against the code at commit `71b53d1`; see [Status Reconciliation](#status-reconciliation-2026-09-25) for what changed and what each 🔄 row still needs. Updated 2026-09-26 as `harden-origin-and-password-boundaries` landed (no row changed status), as `localize-authority-settings` landed (SYNC-001 ✅, SYNC-006 ❌), and as `add-master-password-change` landed (KEYMGMT-007 ✅).
 - **Source of truth:** current `src/`, `tests/`, `openspec/specs/`, archived OpenSpec changes, and project docs in this repository.
 
 The original release dates are now historical planning targets. The status markers in this document describe the current codebase, not the original plan.
@@ -95,6 +95,7 @@ The original release dates are now historical planning targets. The status marke
 - Light/dark/system theme selection with live system-preference updates across popup, side panel, approval window, and options page.
 - WXT Chrome/Firefox build targets, Playwright extension E2E tests (Chromium only; Firefox is checked by the manifest and bundle assertions, not a browser-runtime suite), smoke screenshot flow, the aislop quality gate, and React Doctor CI.
 - A privacy policy (`PRIVACY.md`) covering what the extension stores and what it sends to relays.
+- The master password can be changed from Settings → Security with the current password. The check shares the unlock throttle, the new password meets the creation policy, the session stays unlocked, and the rotation re-wraps every key under a new KEK through a single-item journal that the next unlock recovers from, so an interrupted change never leaves a vault neither password opens.
 - Settings are device-local. Origin policies, relays, timeouts and preferences live in extension local storage behind one settings store; browser sync carries only the side-panel preference, and a synced settings item changes nothing. Upgrading moves the old synced copy into local storage and then deletes it from sync. `tests/security/settings-locality.test.ts` fails on any other use of synced storage.
 - Unlock throttling lives in the background and persists in `storage.local`, so reopening the popup does not reset it; a failed unlock reports its reason. Every master-password check shares that one counter - unlock, re-authentication, reveal, and adding a key to an existing vault - so no path is an unthrottled guessing oracle, and the re-authentication dialog shows a backoff as a wait rather than as a wrong password. Pending approvals are denied and the badge cleared when the vault locks, even when the settings write during lock fails.
 - The background binds every `nostr.*` request to the browser-attested sender: the origin handlers see is derived from `sender.url` for this extension's top-frame content script, and a claimed origin that disagrees is refused with `invalid_origin` before any service is reached. `policy.setOrigin` accepts only `name`, `trustLevel` and `identityDisclosure`, and asks for the password for `high` trust or a disclosure `allow`; per-kind rules and session grants have their own password-gated methods. KDF parameters read from storage or a backup file are bounded above as well as below.
@@ -345,7 +346,7 @@ A review of nostr-wot-extension v0.8.3 against Ostrilo produced these roadmap ch
   - `unlock()` clearing keys unzeroized (the SEC-001 remainder above).
   - `lock()` skipping its listeners when the settings write fails.
   - No ceiling on KDF parameters read from backup files or storage.
-- `add-master-password-change`: KEYMGMT-007.
+- `add-master-password-change` (landed 2026-09-26): KEYMGMT-007.
 
 | ID | Change |
 |----|--------|
@@ -581,7 +582,7 @@ Sophisticated users need advanced key management features like hierarchical keys
 | KEYMGMT-004 | Key Compromise & Revocation | S | ⬜ | v2.1 | 8 | Add key revocation flow publishing revocation event, notifying followers, providing guidance for key compromise scenarios |
 | KEYMGMT-005 | Emergency Access & Dead Man's Switch | C | ⬜ | v2.3 | 8 | Implement emergency access system allowing trusted contact to recover account after specified inactivity period (Shamir's Secret Sharing) |
 | KEYMGMT-006 | Key Strength Indicator | S | ⬜ | v2.1 | 8 | Display key security strength in UI showing encryption algorithm, key length, last rotation date, and recommendations for upgrades |
-| KEYMGMT-007 | Master Password Change | M | ⬜ | v2.0 | 8 | Implement secure master password change requiring current password, re-encrypting all stored keys with new password-derived key |
+| KEYMGMT-007 | Master Password Change | M | ✅ | v2.0 | 8 | Implement secure master password change requiring current password, re-encrypting all stored keys with new password-derived key. Shipped 2026-09-26 by `add-master-password-change`: Settings → Security changes it with the current password, throttled like unlock; the new one meets the creation policy; every DEK is re-wrapped under a new KEK (key ciphertexts untouched) and committed through a single-item journal, so an interrupted change never loses the vault. |
 | KEYMGMT-008 | Import/Export with Standard Formats | S | 🔄 | v2.1 | 8 | Support standard import/export formats: nsec, hex, encrypted JSON, NIP-XX key export format for interoperability with other clients |
 | KEYMGMT-009 | NIP-49 ncryptsec Import | S | ⬜ | v2.0 | 8 | Accept a NIP-49 `ncryptsec` (scrypt + XChaCha20-Poly1305) at import, with its own passphrase, so a user moving from another signer does not have to expose a bare nsec to do it. Import only; `ncryptsec` export belongs to KEYMGMT-008, and seed-phrase restoration stays SYNC-004. Needs scrypt and XChaCha20-Poly1305 behind crypto ports, and a KDF-parameter ceiling on untrusted input. Added from the 2026-09-25 competitor review. |
 

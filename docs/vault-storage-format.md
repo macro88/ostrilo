@@ -7,7 +7,9 @@ Established by the OpenSpec change `harden-vault-key-derivation`.
 
 ## The shape
 
-Two keys in `browser.storage.local`.
+Two keys in `browser.storage.local`, plus a third, `vaultRotation`, that exists
+only while a password change is being committed (see
+[Password change](#password-change)).
 
 ### `vaultEnvelope`
 
@@ -76,9 +78,11 @@ constant, raising the work factor means guessing how each existing record was
 encrypted, and a wrong guess makes a key unreadable. With them recorded, the
 cost can be raised per record, lazily, with no migration risk.
 
-On read, parameters are checked against `KDF_FLOORS` in `src/domain/types.ts`
-and **refused** if below it. Without that check, an attacker able to write
-extension storage could rewrite the stored cost to something trivially cheap.
+On read, parameters are checked against `KDF_FLOORS` and `KDF_CEILINGS` in
+`src/domain/types.ts` and **refused**, before any derivation, if outside them.
+Without the floor, an attacker able to write extension storage could rewrite the
+stored cost to something trivially cheap; without the ceiling, to something that
+stalls or crashes the worker on every unlock (`kdf_above_ceiling`).
 
 ## AAD: what binds a ciphertext to its record
 
@@ -124,6 +128,53 @@ An unlock against a vault with no envelope and no records throws
 `vault_not_created`. It previously resolved and marked the session unlocked,
 because `Promise.all` over zero records resolves immediately — so an empty vault
 opened with any password.
+
+## Password change
+
+`vault.changePassword` rotates the KEK, not the keys:
+
+1. Open the envelope with the current password (through the shared unlock
+   throttle), giving the old KEK.
+2. Refuse, with nothing written, if any record is legacy
+   (`vault_migration_pending`) or does not open and match its pubkey under the
+   old KEK (`vault_records_damaged`, naming the ids).
+3. Derive a new KEK under a fresh salt and the current `KDF_DEFAULTS`, which
+   also upgrades a vault on an older work factor, and seal a new verifier.
+4. Re-wrap every record's DEK under the new KEK with a fresh IV and
+   `ostrilo/vault-dek` AAD bound to the new parameters, then open each candidate
+   and check its pubkey before anything is written. `ct` and `iv` are carried
+   over byte for byte: `ostrilo/vault-sk` does not bind the KDF.
+5. Commit through the journal, then zeroize both KEKs.
+
+### `vaultRotation`: the commit journal
+
+The envelope and the records are separate items, and neither browser documents
+a multi-key write as atomic. So the commit is:
+
+1. Write `vaultRotation = { from: { envelope, records }, to: { envelope, records } }`
+   as **one** item - single-item writes are atomic.
+2. Write `vaultEnvelope = to.envelope`.
+3. Write `encryptedKeys = to.records`.
+4. Remove `vaultRotation`. Success is reported only after this.
+
+Every contents field is ciphertext under a password-derived KEK, exactly as in
+the live items. The journal lives only between steps 1 and 4.
+
+**Recovery.** `unlock`, `verifyPassword`, `changePassword` and adding a key all
+check for a journal first. If the typed password opens `to.envelope`, the whole
+`to` state is written and the journal removed (roll forward: the new password is
+a credential the user chose, and the rotation was otherwise complete). If it opens
+`from.envelope`, the whole `from` state is written (roll back: the user was never
+told the change succeeded). Otherwise nothing happens and unlock reports
+`incorrect_password`. Writing whole states makes recovery correct whichever live
+write was interrupted, and idempotent if recovery itself is interrupted. A
+journal that does not parse is ignored. `tests/security/password-rotation-durability.test.ts`
+injects a fault at every commit and recovery write.
+
+All vault writes - generate, import, rename, select, delete, unlock (which can
+migrate and recover) and password change - run one at a time behind an in-memory
+lock in `KeyVaultService`, so no record is sealed under a KEK a concurrent
+rotation is replacing. The background worker is the only writer.
 
 ## Legacy migration
 

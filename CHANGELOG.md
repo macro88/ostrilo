@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- **Change your master password** from Settings → Security. It asks for the
+  current password - counted against the same backoff as unlocking - and a new
+  one that meets the same rules as creating a vault. Your keys are re-encrypted
+  under the new password without being exported or re-imported, and this browser
+  stays unlocked. If the browser closes or storage fails part-way through, the
+  next unlock finishes or undoes the change: whichever password you type, old or
+  new, opens a vault with every key intact. Encrypted backup files keep their own
+  passphrase and are not affected.
+
 ### Behaviour changes
 
 - **Settings, site permissions and relays no longer sync between browsers.**
