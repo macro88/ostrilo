@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Behaviour changes
+
+- **Settings, site permissions and relays no longer sync between browsers.**
+  They were kept in browser sync storage, so a permission you granted under
+  this vault's password - `high` trust, an `allow` rule, sharing your public
+  key, a longer auto-lock - took effect on every other browser signed into the
+  same account, without that browser's password and even if it held a
+  different vault. Anyone with access to your browser account could have
+  granted their own site silent signing on your devices. Everything is now
+  stored on the device; only the side-panel preference still syncs.
+- On upgrade your existing settings are copied to the device unchanged, and the
+  copy in browser sync is then deleted. If you use Ostrilo in more than one
+  browser, set each one up separately from now on. A browser on the same
+  account that has not yet updated loses its synced settings when another one
+  updates, and asks again for each site until it updates too.
+
 ### Security
 
 - **BREAKING (RPC): `policy.setOrigin` accepts only `name`, `trustLevel` and

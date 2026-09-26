@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective:** 25 September 2026 · **Applies to:** Ostrilo 0.8.0 and later
+**Effective:** 26 September 2026 · **Applies to:** Ostrilo 0.8.0 and later
 
 Ostrilo is a browser extension that stores Nostr keys and signs Nostr events on
 your device. This policy covers what the extension stores, what it sends and
@@ -14,9 +14,9 @@ where it sends it.
   device. Websites receive your public key and signed events, never a private key.
 - The extension makes network connections to Nostr relays, which you choose. The
   default is `wss://relay.primal.net`.
-- If you use your browser's built-in sync, your settings are synced by your
-  browser, including the list of sites you have given permissions to. Your keys
-  never are.
+- Your settings, including the list of sites you have given permissions to,
+  stay on this device. Browser sync copies only one preference: whether Ostrilo
+  opens in the side panel. Your keys never leave the device.
 
 ## What stays on your device
 
@@ -29,6 +29,7 @@ These are kept in the browser's local extension storage, which is not synced:
 | Activity log | For each request a site made: the time, the site's origin, the event kind, whether it was allowed or denied, the key used, and the first 100 characters of the event's content. It keeps 50 entries by default, and at most 500. |
 | Profile cache | Public Nostr profiles (kind 0 metadata) fetched from relays for your keys. |
 | Relay partition salt | A random value that decides which relay is asked about which of your keys. See [Relays](#what-is-sent-to-nostr-relays). |
+| Settings | Site permissions (each site's origin, trust level, per-event-kind rules and whether it may read your public key), your relay addresses, the image upload endpoint, auto-lock and session-grant durations, the activity log size, theme, which key is active (an internal ID, not the key), and whether onboarding is complete. |
 
 Unlocked keys are held only in the extension's memory and are erased when the
 vault locks. Session storage, which the browser clears when it closes, holds the
@@ -36,23 +37,20 @@ lock state and any time-limited permissions you granted a site.
 
 ## What your browser may sync
 
-Settings are kept in the browser's sync storage. If you have turned on sync in
-your browser, for example Chrome Sync, your browser copies them to your browser
-account and to your other signed-in devices. The sync service is run by the
-browser vendor, not by Ostrilo, and is subject to its privacy policy.
+One preference: whether Ostrilo opens in the browser's side panel. If you have
+turned on sync in your browser, for example Chrome Sync, your browser copies
+that single on/off value to your browser account and your other signed-in
+devices. The sync service is run by the browser vendor, not by Ostrilo, and is
+subject to its privacy policy.
 
-The synced settings are:
+Everything else stays on the device, including your site permissions and relays.
+They used to be synced too; they are not, because a permission you grant with
+this vault's password should not take effect on another browser without it. The
+copy an earlier version kept in browser sync is deleted when you update. If you
+use Ostrilo in more than one browser, you now set up each one separately.
 
-- **Site permissions:** the origin (for example `https://example.com`) of each
-  site you have made a decision for, its trust level and its per-event-kind rules.
-- **Relays:** the relay addresses you have configured.
-- **Preferences:** theme, popup or side panel, auto-lock and session-grant
-  durations, the activity log size, which key is active (an internal ID, not the
-  key), and whether onboarding is complete.
-
-Private keys, public keys, the master password and the activity log are never
-put in sync storage. If you do not want your site list to leave the device, turn
-off extension sync in your browser's sync settings.
+Private keys, public keys, the master password and the activity log have never
+been put in sync storage.
 
 ## What is sent to Nostr relays
 
@@ -123,8 +121,8 @@ including the Limited Use requirements.
 ## Deleting your data
 
 Uninstalling Ostrilo removes its local and session storage from your browser.
-Synced settings are removed from your browser account according to your
-browser's sync behaviour. Anything published to Nostr relays, such as your
+The synced side-panel preference is removed from your browser account according
+to your browser's sync behaviour. Anything published to Nostr relays, such as your
 profile, is outside Ostrilo's control and cannot be deleted by uninstalling.
 
 Make sure you have a backup of every key before you uninstall: Ostrilo holds the

@@ -347,7 +347,7 @@ async selectKey(id: string): Promise<void>
 **Implementation:** `src/application/services/key-vault.service.ts`
 
 **Workflow:**
-1. Write `selectedKeyId` into settings (`storage.sync`)
+1. Write `selectedKeyId` into settings (`storage.local`, through `SettingsStore`)
 2. Re-mark `isSelected` across the stored key list (`storage.local`)
 3. Update `selectedKeyId` on the session lock state if the vault is unlocked
 4. `KeyManagerContext.selectKey` then calls `refreshKeys()`, and every `useKeyManager` consumer re-renders
@@ -773,7 +773,7 @@ ciphertext to its record (`src/domain/crypto/aad.ts`) so a ciphertext cannot be
 moved between entries.
 
 **Storage:** `browser.storage.local` for the encrypted key list and the vault
-envelope, `browser.storage.sync` for settings (including `selectedKeyId`), and
+envelope, `browser.storage.local` for settings (including `selectedKeyId`, via `SettingsStore`), and
 `browser.storage.session` for lock state. Not IndexedDB.
 
 **Implementation:** `src/infrastructure/crypto/adapters.ts`.

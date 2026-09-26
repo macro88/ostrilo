@@ -98,7 +98,7 @@ On the first settings read after upgrade, and eagerly when the background starts
 
 ### Requirement: Local Settings Changes Still Reach Background Consumers
 
-A change to the local `appSettings` item SHALL re-arm the auto-lock alarm against the new deadline and SHALL rebuild the relay manager from the new relay list, as a synced change did before.
+A change to the local `appSettings` item SHALL re-arm the auto-lock alarm against the new deadline and SHALL rebuild the relay manager from the new relay list, as a synced change did before. A change to a synced `appSettings` item SHALL do neither.
 
 #### Scenario: Auto-lock timeout change re-arms the alarm
 
@@ -110,3 +110,9 @@ A change to the local `appSettings` item SHALL re-arm the auto-lock alarm agains
 
 - **WHEN** the relay list is changed in local settings
 - **THEN** the relay manager is rebuilt with the new relays
+
+#### Scenario: A synced settings change reaches no consumer
+
+- **WHEN** another device writes an `appSettings` item with a different relay list to synced storage
+- **THEN** the relay manager is not rebuilt
+- **AND** the auto-lock alarm is not re-armed

@@ -64,14 +64,14 @@ the rows as they stand.
 | Priority | Total | ✅ | 🔄 | ⬜ | ❌ |
 |----------|-------|----|----|----|----|
 | Must     | 33    | 11 | 12 | 10 | 0  |
-| Should   | 54    | 0  | 15 | 39 | 0  |
+| Should   | 54    | 1  | 14 | 38 | 1  |
 | Could    | 31    | 0  | 0  | 31 | 0  |
 | Won't    | 1     | 0  | 0  | 0  | 1  |
-| **Total**| **119** | **11** | **27** | **80** | **1** |
+| **Total**| **119** | **12** | **26** | **79** | **2** |
 
 ### Current Implementation Snapshot
 
-- **Status date:** 2026-09-25. Every row was re-verified against the code at commit `71b53d1`; see [Status Reconciliation](#status-reconciliation-2026-09-25) for what changed and what each 🔄 row still needs. Updated 2026-09-26 as `harden-origin-and-password-boundaries` landed; no row changed status.
+- **Status date:** 2026-09-25. Every row was re-verified against the code at commit `71b53d1`; see [Status Reconciliation](#status-reconciliation-2026-09-25) for what changed and what each 🔄 row still needs. Updated 2026-09-26 as `harden-origin-and-password-boundaries` landed (no row changed status) and as `localize-authority-settings` landed (SYNC-001 ✅, SYNC-006 ❌).
 - **Source of truth:** current `src/`, `tests/`, `openspec/specs/`, archived OpenSpec changes, and project docs in this repository.
 
 The original release dates are now historical planning targets. The status markers in this document describe the current codebase, not the original plan.
@@ -94,7 +94,8 @@ The original release dates are now historical planning targets. The status marke
 - Structured JSON-RPC-compatible error responses with canonical machine codes and numeric mappings inside the extension. The page boundary and `docs/rpc-error-codes.md` lag behind; see DEV-001.
 - Light/dark/system theme selection with live system-preference updates across popup, side panel, approval window, and options page.
 - WXT Chrome/Firefox build targets, Playwright extension E2E tests (Chromium only; Firefox is checked by the manifest and bundle assertions, not a browser-runtime suite), smoke screenshot flow, the aislop quality gate, and React Doctor CI.
-- A privacy policy (`PRIVACY.md`) covering what the extension stores, what it sends to relays, and which settings browser sync copies.
+- A privacy policy (`PRIVACY.md`) covering what the extension stores and what it sends to relays.
+- Settings are device-local. Origin policies, relays, timeouts and preferences live in extension local storage behind one settings store; browser sync carries only the side-panel preference, and a synced settings item changes nothing. Upgrading moves the old synced copy into local storage and then deletes it from sync. `tests/security/settings-locality.test.ts` fails on any other use of synced storage.
 - Unlock throttling lives in the background and persists in `storage.local`, so reopening the popup does not reset it; a failed unlock reports its reason. Every master-password check shares that one counter - unlock, re-authentication, reveal, and adding a key to an existing vault - so no path is an unthrottled guessing oracle, and the re-authentication dialog shows a backoff as a wait rather than as a wrong password. Pending approvals are denied and the badge cleared when the vault locks, even when the settings write during lock fails.
 - The background binds every `nostr.*` request to the browser-attested sender: the origin handlers see is derived from `sender.url` for this extension's top-frame content script, and a claimed origin that disagrees is refused with `invalid_origin` before any service is reached. `policy.setOrigin` accepts only `name`, `trustLevel` and `identityDisclosure`, and asks for the password for `high` trust or a disclosure `allow`; per-kind rules and session grants have their own password-gated methods. KDF parameters read from storage or a backup file are bounded above as well as below.
 - Explicit manifest policy on both build targets: a declared `content_security_policy.extension_pages` (closed `default-src`, `script-src 'self'` with no `unsafe-eval`, no plaintext `http:`/`ws:` source), a reviewed permission set of `storage`, `windows`, `alarms` and `idle` plus Chrome's `sidePanel`, `use_dynamic_url` on the injected NIP-07 provider so pages cannot probe a fixed extension URL, the Firefox target moved from MV2 to MV3 so no target keeps a persistent background page holding decrypted keys, and `console` output stripped from production bundles. `tests/security/manifest-assertions.test.ts` asserts all of it against the generated manifests, which is what caught — and now fences — the placeholder `sidebar_action` block Firefox had been shipping. SEC-004 is now ✅: `verify.yml`'s `build` job runs `manifest-assertions.test.ts` and `key-handling-bundle.test.ts` against freshly built Chrome and Firefox output with `OSTRILO_REQUIRE_BUILD_OUTPUT=1`, so an absent `.output/` fails the job instead of skipping the suite. Stated precisely, the gate asserts the shipped manifests' CSP - no `unsafe-eval` or `wasm-unsafe-eval`, no `unsafe-inline` in `script-src`, no remote script origin, no plaintext transport, a closed `default-src` - plus build-output hygiene: no source-map files, no inline source-map comments, no `console` call in any production bundle. It does not grep bundle text for `eval(`; the asserted CSP is what forbids evaluation at runtime. See `docs/extension-manifest.md` and `docs/ci-verification.md`.
@@ -256,7 +257,7 @@ The original release dates are now historical planning targets. The status marke
   sliders are labelled and keyboard-operable. No repo-wide WCAG 2.1 AA audit has been
   completed, so UX-011 stays 🔄.
 - Relay/profile infrastructure exists, but NIP-specific protocol flows such as NIP-44, NIP-42, NIP-57 validation, NIP-65 relay lists, and NIP-05 DNS verification remain unimplemented. Kinds 9734, 22242 and 27235 are protected kinds that always prompt, but that is policy gating, not an implementation of NIP-57, NIP-42 or NIP-98. The relay adapter drops NIP-42 `AUTH` challenges. NIP-04 is out of scope (PROTO-001 ❌). NIP-05 verification would also need a reviewed widening of `connect-src`, which today allows only `wss:` and `https://nostr.build`.
-- Settings, including theme, auto-lock and origin policies, live in one `appSettings` item in `storage.sync`; keys stay in `storage.local`. When the user has browser sync enabled, the vendor already copies those settings to other devices, as `PRIVACY.md` states. What is missing is everything that makes that safe: there is no conflict resolution (a whole-object write from one device can overwrite a policy set on another), no handling of the 8 KB per-item sync quota that an unbounded origin list will eventually hit, and no exclusion of device-local fields such as `selectedKeyId` and `onboardingCompleted`. Open UI pages also do not refresh on a remote change. NIP-78/decentralized sync is deferred.
+- Settings, including theme, auto-lock and origin policies, live in one `appSettings` item in `storage.local`, owned by a single settings store (since `localize-authority-settings`, 2026-09-26). They used to live in `storage.sync`, where browser sync applied a grant made under one browser's password on every other synced browser; that, the 8 KB item quota and the leaking of device-local fields are gone with it. Cross-device sync now waits for a mechanism that authenticates its author (SYNC-005, PROTO-009). NIP-78/decentralized sync is deferred.
 - There is no code splitting: UI routes are not split and no route loads on demand. The
   one lazy boundary that existed guarded the 3D mascot, which has been removed, so
   PERF-002 is back to ⬜. CI does enforce an 800 KB uncompressed transitive-JS ceiling on
@@ -318,7 +319,6 @@ when the full row wording is met, 🔄 for a narrower shipped slice.
 | PERF-005 | A 5-second settings cache in the UI client, a debounced write for the docked-panel flag, an in-memory activity log, parallel policy reads. | A background settings/policy cache; stop rewriting the whole `appSettings` object on every change; batch background writes. |
 | PERF-006 | Per-relay adapters reuse an open socket, reconnect with jittered backoff, give up after 5 attempts; one shared `RelayManager`. | Rebuild adapters only when the relay list changes (today any `appSettings` write disconnects every relay); a keepalive/idle policy; metrics. |
 | PERF-008 | Lock state and session grants in `storage.session`, the deadline in `chrome.alarms`, the unlock throttle in `storage.local`; key material fails closed on eviction by design. | Persist or deliberately drop the approval queue and rate-limit counters, which are lost on eviction; reword the row, which asks for the vault to stay unlocked across restarts - the opposite of the shipped fail-closed design. |
-| SYNC-001 | `appSettings` (theme, auto-lock, origin policies) in `storage.sync`; keys in `storage.local`; browser sync copies settings when enabled. | Stay within the 8 KB per-item sync quota; refresh open UI on a remote change; stop syncing device-local fields; test it. |
 | KEYMGMT-008 | nsec, hex and `0x` hex import; encrypted backup export and import inside onboarding. | Backup and export for any key from Settings; backup import outside onboarding; hex export; NIP-49 `ncryptsec` or another standard encrypted format. |
 | SOCIAL-006 | A QR code of the bare `npub` on Home and the profile. | `nostr:nprofile…` with recommended relays; a profile-sharing presentation. |
 
@@ -356,7 +356,7 @@ A review of nostr-wot-extension v0.8.3 against Ostrilo produced these roadmap ch
 | SEC-027 | New, S. Encrypted activity log at rest. |
 | KEYMGMT-009 | New, S. NIP-49 `ncryptsec` import. |
 
-Decided after the review (2026-09-26): origin policies and every other authority-bearing setting become device-local rather than browser-synced, because a grant authorised on one synced profile applied on another without that profile's password. Proposed as `localize-authority-settings`; SYNC-001 and SYNC-006 are restated when it lands.
+Decided after the review (2026-09-26) and landed the same day as `localize-authority-settings`: origin policies and every other setting are device-local rather than browser-synced, because a grant authorised on one synced profile applied on another without that profile's password. The copy earlier versions kept in browser sync is deleted on upgrade, so no follow-up release is needed. SYNC-001 is restated as device-local settings (✅) and SYNC-006 is moot (❌).
 
 ---
 
@@ -533,12 +533,12 @@ Users increasingly work across multiple devices. Seamless sync of settings, trus
 
 | ID | Title | Priority | Status | Version | Epic | Description |
 |----|-------|----------|--------|---------|------|--------------------------|
-| SYNC-001 | Settings & Policy Sync | S | 🔄 | v2.1 | 6 | Implement cross-device settings sync using browser sync storage (chrome.storage.sync) for theme, auto-lock settings, and origin policies (excluding private keys) |
+| SYNC-001 | Device-Local Settings | S | ✅ | v2.1 | 6 | Settings are device-local: origin policies, trust levels, disclosure consent, timeouts, relays, the upload endpoint and preferences live in extension local storage, never in browser sync, and a synced value has no effect. Cross-device sync happens only through a mechanism that authenticates its author (SYNC-005 for settings, PROTO-009 for relays). Reworded 2026-09-26 by `localize-authority-settings`: browser sync applied a grant made under one browser's password on every other synced browser without it. |
 | SYNC-002 | Encrypted Key Backup to Cloud | C | ⬜ | v2.2 | 6 | Add optional encrypted key backup to user-controlled cloud storage (Nostr events, IPFS, user's server) with strong encryption and master password |
 | SYNC-003 | QR Code Key Transfer | S | ⬜ | v2.1 | 6 | Implement secure QR code-based key transfer between devices using ephemeral encryption, time-limited tokens, and visual confirmation |
 | SYNC-004 | Key Restoration from Seed Phrase | C | ⬜ | v2.2 | 6 | Add optional BIP39 seed phrase support for key generation and restoration enabling familiar backup/restore flow for crypto users |
 | SYNC-005 | Profile Sync via Nostr Events | C | ⬜ | v2.2 | 6 | Store extension settings as encrypted Nostr events (private relay or user's relays) enabling true decentralized sync across devices without browser vendor dependency |
-| SYNC-006 | Conflict Resolution Strategy | S | ⬜ | v2.1 | 6 | Implement conflict resolution for synced settings using last-write-wins with timestamps, merge strategies for policies, and user notification for conflicts |
+| SYNC-006 | Conflict Resolution Strategy | S | ❌ | v2.1 | 6 | Implement conflict resolution for synced settings using last-write-wins with timestamps, merge strategies for policies, and user notification for conflicts. Moot for browser sync since `localize-authority-settings` (2026-09-26): nothing syncs that could conflict. Conflict handling belongs to SYNC-005 if that ships. |
 
 ---
 
@@ -669,7 +669,7 @@ These items should be treated as the next hardening priority before claiming the
 
 The original v2.1+ epics remain mostly future work.
 
-- 🔄 **Sync:** settings are stored in browser sync storage, so browser sync already copies them between devices, and local contexts update live. Conflict resolution, quota safety, excluding device-local fields, and NIP-78/decentralized sync remain open.
+- ✅ **Settings locality:** settings are device-local, and local contexts update live. Cross-device sync is future work on an authenticated mechanism (SYNC-005, NIP-78/decentralized sync).
 - 🔄 **Relay performance:** relay adapters reuse open WebSocket connections and reconnect with capped backoff, but every `appSettings` write, including a theme change, currently drops every relay socket. Rebuilding only on a relay-list change, a keepalive policy and metrics remain open.
 - 🔄 **Import/export:** nsec/hex import, a one-time key reveal inside the create-key flow, and an encrypted backup file exist; the backup is offered while creating the first key and restored from the onboarding import step. Backing up a key added later, importing a backup file outside onboarding, hex and NIP-49 export, and an export control in Settings remain open. The background `vault.reveal` already takes a `keyId`, so the gap is in the UI.
 - 🔄 **Profile QR:** the QR encodes the bare `npub`; a profile-sharing QR (`nostr:nprofile…` with recommended relays) is not built.
