@@ -108,7 +108,6 @@ Free, no password:
 | Call | Effect |
 |---|---|
 | `vault.unlock` | Password is the payload, not a gate. |
-| `policy.setOrigin` with `identityDisclosure: "allow"` | Consents to disclosure. |
 | `settings.update` with `onboardingCompleted` | Skips onboarding. |
 | `policy.clearSession`, `policy.removeOrigin` | — |
 | `approval.resolve` | Resolves a pending request. |
@@ -118,7 +117,7 @@ Password-gated, because each grants a standing permission:
 | Call | Condition |
 |---|---|
 | `policy.setKindRule` | when `mode: "allow"` |
-| `policy.setOrigin` | when `trustLevel: "high"` |
+| `policy.setOrigin` | when `trustLevel: "high"` or `identityDisclosure: "allow"` |
 | `settings.update` | when the patch touches `autoLockMinutes` or `sessionTTLMinutes` |
 | `vault.reveal`, `vault.deleteKey` | always |
 

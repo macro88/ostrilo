@@ -41,7 +41,7 @@ describe("RPC Validation Integration", () => {
       const settingsPatch = { theme: "dark" as const, autoLockMinutes: 60 };
       const policyPatch = {
         trustLevel: "high" as const,
-        sessionGrantAll: true,
+        identityDisclosure: "allow" as const,
       };
 
       // These patches should validate successfully
@@ -80,13 +80,7 @@ describe("RPC Validation Integration", () => {
       const complexPolicyPatch = {
         name: "Complex Application",
         trustLevel: "medium" as const,
-        sessionGrantAll: false,
-        rules: {
-          "0": "ask" as const,
-          "1": "allow" as const,
-          "4": "deny" as const,
-          "1984": "allow" as const,
-        },
+        identityDisclosure: "ask" as const,
       };
 
       // Both should validate successfully
@@ -124,7 +118,9 @@ describe("RPC Validation Integration", () => {
       const invalidPolicyPatches = [
         {}, // Empty patch
         { trustLevel: "invalid" }, // Invalid trust level
-        { rules: { "1": "invalid" } }, // Invalid rule
+        { identityDisclosure: "maybe" }, // Invalid disclosure decision
+        { rules: { "1": "allow" } }, // Per-kind rules go through setKindRule
+        { sessionGrantAll: true }, // Session grants go through setSession
       ];
 
       // All invalid patches should fail validation
@@ -149,7 +145,7 @@ describe("RPC Validation Integration", () => {
       const originalPolicyPatch = {
         name: "Test Application",
         trustLevel: "high" as const,
-        sessionGrantAll: true,
+        identityDisclosure: "deny" as const,
       };
 
       // Validate the patches

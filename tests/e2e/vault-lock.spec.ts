@@ -79,6 +79,7 @@ async function createAndUnlock(page: Page) {
     type: "policy.setOrigin",
     origin: "https://localhost:8765",
     patch: { identityDisclosure: "allow" },
+    password: PASSWORD,
   });
   await rpcOk(page, {
     type: "settings.update",

@@ -15,10 +15,12 @@ import {
   DEFAULT_SETTINGS_V1,
   Theme,
   TrustLevel,
-  OriginPolicy,
 } from "@/domain/types";
 import { getEffectiveMediumAllowKinds } from "@/domain/policy/trust-definitions";
-import type { AppSettingsPatch } from "@/infrastructure/validation/schemas";
+import type {
+  AppSettingsPatch,
+  OriginPolicyPatch,
+} from "@/infrastructure/validation/schemas";
 
 // Global settings store to prevent multiple fetches
 class SettingsStore {
@@ -192,9 +194,10 @@ export function useAppSettings() {
 
   // Origin policy management
   const updateOriginPolicy = useCallback(
-    (origin: string, policy: Partial<OriginPolicy>, password?: string) => {
+    (origin: string, policy: OriginPolicyPatch, password?: string) => {
       // Delegate mutations to background PolicyService. A password is
-      // required there only when the patch raises trust to `high`.
+      // required there only when the patch raises trust to `high` or sets
+      // disclosure to `allow`.
       return policySetOrigin(origin, policy, password);
     },
     []

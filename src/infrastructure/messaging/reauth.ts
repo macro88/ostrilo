@@ -68,3 +68,28 @@ export function patchNeedsReauth(patch: unknown): boolean {
   if (!patch || typeof patch !== "object") return false;
   return REAUTH_SETTINGS_FIELDS.some((f) => f in (patch as object));
 }
+
+/**
+ * Origin-policy patch fields, each classified by whether some value of it
+ * grants standing authority. The security suite enumerates the patch schema
+ * against these two lists, so a field added to the schema without a decision
+ * here fails a test instead of shipping ungated.
+ */
+export const ORIGIN_PATCH_AUTHORITY_FIELDS = [
+  "trustLevel",
+  "identityDisclosure",
+] as const;
+export const ORIGIN_PATCH_INERT_FIELDS = ["name"] as const;
+
+/**
+ * True when this origin-policy patch grants authority that is used silently
+ * from then on: `high` trust signs without prompting, and a disclosure `allow`
+ * hands the public key to the site on every request. Tightening either, and
+ * renaming, stay free.
+ */
+export function patchGrantsAuthority(patch: {
+  trustLevel?: string;
+  identityDisclosure?: string;
+}): boolean {
+  return patch.trustLevel === "high" || patch.identityDisclosure === "allow";
+}

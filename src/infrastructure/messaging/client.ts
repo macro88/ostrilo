@@ -358,7 +358,11 @@ export function subscribeSettingsChanged(cb: () => void) {
   return () => browser.runtime.onMessage.removeListener(handler);
 }
 
-/** `password` is required only when the patch raises trust to `high`. */
+/**
+ * `password` is required only when the patch raises trust to `high` or sets
+ * `identityDisclosure` to `allow`. Per-kind rules go through
+ * `policySetKindRule`, and session grants through `policySetSession`.
+ */
 export async function policySetOrigin(
   origin: string,
   patch: OriginPolicyPatch,

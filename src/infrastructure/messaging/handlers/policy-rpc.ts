@@ -1,5 +1,8 @@
 import type { RpcRequest, RpcResponse } from "../rpc";
-import { requireReauth } from "@/infrastructure/messaging/reauth";
+import {
+  patchGrantsAuthority,
+  requireReauth,
+} from "@/infrastructure/messaging/reauth";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
@@ -98,10 +101,10 @@ export class PolicyRpcHandler implements RpcModule {
       });
     }
 
-    // `high` trust signs without prompting from then on. Granting it is a
-    // one-way decision the user will not be reminded of, so it costs a
-    // password. Lowering trust, renaming, and clearing do not.
-    if (validationResult.data.trustLevel === "high") {
+    // Granting `high` trust or disclosure consent is a one-way decision the
+    // user will not be reminded of, so it costs a password. Lowering trust,
+    // tightening disclosure and renaming do not.
+    if (patchGrantsAuthority(validationResult.data)) {
       const reauth = await requireReauth(
         message.password,
         message.type,
