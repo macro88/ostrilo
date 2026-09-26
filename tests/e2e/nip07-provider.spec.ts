@@ -1,4 +1,11 @@
 import { test, expect, Page } from "./fixtures/extension";
+import {
+  DAPP_ORIGIN,
+  openDapp,
+  seedUnlockedVault,
+  sendExtensionRpc,
+  waitForApprovalPage,
+} from "./fixtures/agent";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -404,5 +411,48 @@ test.describe("provider trust boundary", () => {
       extensionScripts,
       "SECURITY REGRESSION: the injected script element is a stable fingerprinting probe"
     ).toEqual([]);
+  });
+  test("a same-document navigation keeps the attested origin", async ({
+    openPopup,
+    extensionContext,
+    extensionId,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    // The background now derives the origin from the browser-attested sender
+    // and refuses a disagreement with the content script's claim. A pushState
+    // changes the URL but not the origin, so SPA routing must keep working.
+    const popup = await openPopup();
+    await seedUnlockedVault(popup);
+
+    const dapp = await openDapp(extensionContext);
+    await dapp.evaluate(() => history.pushState({}, "", "/other/route?tab=2"));
+    expect(new URL(dapp.url()).pathname).toBe("/other/route");
+
+    await dapp.evaluate(() => {
+      void window.nostr!
+        .signEvent({
+          kind: 1,
+          content: "after pushState",
+          tags: [],
+          created_at: Math.floor(Date.now() / 1000),
+        })
+        .catch(() => undefined);
+    });
+
+    const approvalPage = await waitForApprovalPage(extensionContext, extensionId);
+    await expect(
+      approvalPage.locator(
+        `[data-testid="approval-origin-group"][data-origin="${DAPP_ORIGIN}"]`
+      )
+    ).toBeVisible({ timeout: 10_000 });
+
+    const pending = await sendExtensionRpc<{
+      requests: Array<{ origin: string; operation: string }>;
+    }>(popup, { type: "approval.getAll" });
+    expect(pending.requests).toEqual([
+      expect.objectContaining({ origin: DAPP_ORIGIN, operation: "sign_event" }),
+    ]);
   });
 });

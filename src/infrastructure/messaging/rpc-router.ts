@@ -1,6 +1,7 @@
 import { browser } from "wxt/browser";
 import type { RpcRequest, RpcResponse } from "./rpc";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "./error-codes";
+import { attestPageOrigin, isTrustedExtensionSender } from "./sender-trust";
 import type { KeyVaultService } from "@/application/services/key-vault.service";
 import type { PolicyService } from "@/application/services/policy.service";
 import type { SettingsService } from "@/application/services/settings.service";
@@ -59,6 +60,12 @@ export interface RpcModule {
 /**
  * RPC router that delegates requests to appropriate modules based on namespace
  */
+export {
+  attestPageOrigin,
+  isTrustedExtensionSender,
+  type PageOriginAttestation,
+} from "./sender-trust";
+
 /**
  * Namespaces a WEB PAGE may reach, via the content script.
  *
@@ -73,31 +80,6 @@ export interface RpcModule {
  * the dispatch as well.
  */
 const PAGE_REACHABLE_NAMESPACES: ReadonlySet<string> = new Set(["nostr"]);
-
-/**
- * Decides whether a sender may reach a UI-only namespace.
- *
- * Note what is NOT used here: `sender.tab`. The options page is
- * `options_ui.open_in_tab: true` and the approval window is created with
- * `browser.windows.create`, so BOTH are extension pages that carry a
- * `sender.tab`. Requiring its absence would break them. `sender.id` alone is
- * also insufficient: this extension's own content script reports
- * `sender.id === browser.runtime.id`.
- *
- * The usable signal is the sender's URL: an extension page's URL starts with
- * the extension origin, a content script's does not.
- */
-export function isTrustedExtensionSender(
-  sender: unknown,
-  runtimeId: string,
-  extensionOrigin: string
-): boolean {
-  if (!sender || typeof sender !== "object") return false;
-  const s = sender as { id?: unknown; url?: unknown };
-  if (typeof s.id !== "string" || s.id !== runtimeId) return false;
-  if (typeof s.url !== "string" || s.url.length === 0) return false;
-  return s.url.startsWith(extensionOrigin);
-}
 
 /**
  * RPC methods that must remain reachable while the vault is LOCKED.
@@ -324,6 +306,22 @@ export function createRpcMessageListener(
         );
         return false;
       }
+    } else {
+      // Before the lock gate, so an unattestable request cannot raise the
+      // locked-page marker, and before dispatch, so no handler - and no
+      // per-origin rate limit - ever sees an origin the browser did not vouch
+      // for.
+      const attested = attestPageOrigin(sender, runtimeId, message.origin);
+      if (!attested.ok) {
+        console.log("[RPC] Refused page request:", attested.reason);
+        sendResponse(
+          createRpcErrorResponse(RPC_ERROR_CODES.INVALID_ORIGIN, {
+            method: message.type,
+          })
+        );
+        return false;
+      }
+      message.origin = attested.origin;
     }
 
     const dispatch = async (project?: (data: unknown) => unknown) => {
