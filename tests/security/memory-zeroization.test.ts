@@ -277,6 +277,59 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
     });
   });
 
+  describe("changePassword", () => {
+    async function unlockedTwoKeyVault(aeadOpts: { decryptRejects?: boolean } = {}) {
+      const setup = service(aeadOpts);
+      await setup.svc.generateKey("old-pw", "k1");
+      await setup.svc.importKey("55".repeat(32), "old-pw", "k2");
+      await setup.svc.unlock("old-pw");
+      derivedKeys.length = 0;
+      decryptedKeys.length = 0;
+      return setup;
+    }
+
+    it("zeroizes both KEKs and every DEK and round-tripped key on success", async () => {
+      const { svc } = await unlockedTwoKeyVault();
+
+      await svc.changePassword("old-pw", "new-pw");
+
+      // The old KEK and the new one.
+      expect(derivedKeys.length).toBeGreaterThanOrEqual(2);
+      for (const d of derivedKeys) {
+        expect(d.isAllPattern(NON_ZERO_PATTERN)).toBe(false);
+        expect(d.isAllZero(), "a KEK outlived the password change").toBe(true);
+      }
+      // Every decrypt here is a DEK or a verification copy of a private key;
+      // the session's live keys were decrypted before the change, not by it.
+      expect(decryptedKeys.length).toBeGreaterThan(0);
+      for (const d of decryptedKeys) {
+        expect(d.isAllZero(), "a DEK or private-key copy outlived the change").toBe(true);
+      }
+      await expect(svc.sign("ab".repeat(32))).resolves.toBeDefined();
+    });
+
+    it("zeroizes the KEK when the current password is wrong", async () => {
+      const { svc } = await unlockedTwoKeyVault();
+
+      await expect(svc.changePassword("wrong-pw", "new-pw")).rejects.toThrow();
+
+      expect(derivedKeys.length).toBeGreaterThanOrEqual(1);
+      for (const d of derivedKeys) expect(d.isAllZero()).toBe(true);
+    });
+
+    it("zeroizes everything when the commit fails", async () => {
+      const { svc, suite } = await unlockedTwoKeyVault();
+      suite.local.set = async () => {
+        throw new Error("storage full");
+      };
+
+      await expect(svc.changePassword("old-pw", "new-pw")).rejects.toThrow("storage full");
+
+      for (const d of derivedKeys) expect(d.isAllZero()).toBe(true);
+      for (const d of decryptedKeys) expect(d.isAllZero()).toBe(true);
+    });
+  });
+
   describe("lock", () => {
     it("zeroizes every unlocked private key, and signing then fails", async () => {
       const { svc } = service();

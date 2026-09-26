@@ -29,7 +29,13 @@ import { parsePrivateKey } from "@/application/crypto/private-key";
 import { CRYPTO_CONSTANTS } from "@/domain/crypto/constants";
 import { bytesToHex, hexToBytes, isValidHex } from "@/domain/utils/hex";
 import { zeroize } from "@/domain/utils/memory";
+import { SerialLock } from "@/domain/utils/serial-lock";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
+import {
+  ROTATION_JOURNAL_STORAGE,
+  isRotationJournal,
+  type RotationJournal,
+} from "./vault-rotation-journal";
 import { SettingsStore } from "./settings-store";
 
 const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
@@ -57,8 +63,24 @@ type LockState = {
   lastActivity: number;
 };
 
+/** A password change refused because these records do not open. */
+export class VaultDamagedRecordsError extends Error {
+  constructor(readonly keyIds: string[]) {
+    super("vault_has_damaged_records");
+    this.name = "VaultDamagedRecordsError";
+  }
+}
+
 export class KeyVaultService {
   private unlocked: Map<string, Uint8Array> = new Map();
+
+  /**
+   * One vault write at a time. A password change replaces the KEK every record
+   * is wrapped under; a key imported mid-rotation would otherwise be sealed
+   * under the old KEK and then dropped by the rotation's record list. In
+   * memory is enough: the background worker is the only writer.
+   */
+  private writeLock = new SerialLock();
 
   constructor(
     private storage: StorageSuite,
@@ -268,19 +290,28 @@ export class KeyVaultService {
   }
 
   /** Opens a v:1 record. Returns the private key; caller owns zeroizing it. */
-  private async openPrivateKey(
+  /** Unwraps a record's DEK under `kek`. Caller owns zeroizing it. */
+  private async unwrapDek(
     rec: KeyRecord,
     kek: SecretBytes,
     kdf: KdfParams
   ): Promise<SecretBytes> {
     if (!rec.wrappedDek) throw new Error("record_missing_wrapped_dek");
     const kekKey = await this.aead.importKey(kek, ["decrypt"]);
-    const dek = await this.aead.decrypt(
+    return await this.aead.decrypt(
       kekKey,
       Uint8Array.from(rec.wrappedDek.iv) as SecretBytes,
       Uint8Array.from(rec.wrappedDek.ct) as SecretBytes,
       dekAad(rec.v ?? VAULT_VERSION, kdf, rec.id, rec.pubkey)
     );
+  }
+
+  private async openPrivateKey(
+    rec: KeyRecord,
+    kek: SecretBytes,
+    kdf: KdfParams
+  ): Promise<SecretBytes> {
+    const dek = await this.unwrapDek(rec, kek, kdf);
     try {
       const dekKey = await this.aead.importKey(dek, ["decrypt"]);
       return await this.aead.decrypt(
@@ -324,6 +355,9 @@ export class KeyVaultService {
   private async kekForWrite(
     password: string
   ): Promise<{ kek: SecretBytes; kdf: KdfParams; created: boolean }> {
+    // A rotation whose commit failed leaves a mixed envelope and record list.
+    // Sealing a new key into that would be overwritten by the recovery.
+    await this.recoverInterruptedRotation(password);
     const existing = await this.getEnvelope();
     if (existing) {
       const kek = await this.openEnvelope(password, existing);
@@ -353,6 +387,13 @@ export class KeyVaultService {
   }
 
   async generateKey(password: string, label?: string): Promise<KeyRecord> {
+    return this.writeLock.run(() => this.generateKeyNow(password, label));
+  }
+
+  private async generateKeyNow(
+    password: string,
+    label?: string
+  ): Promise<KeyRecord> {
     if (!password) {
       throw new Error("password_required");
     }
@@ -401,6 +442,14 @@ export class KeyVaultService {
   }
 
   async importKey(
+    input: string,
+    password: string,
+    label?: string
+  ): Promise<KeyRecord> {
+    return this.writeLock.run(() => this.importKeyNow(input, password, label));
+  }
+
+  private async importKeyNow(
     input: string,
     password: string,
     label?: string
@@ -454,6 +503,10 @@ export class KeyVaultService {
   }
 
   async selectKey(id: string): Promise<void> {
+    return this.writeLock.run(() => this.selectKeyNow(id));
+  }
+
+  private async selectKeyNow(id: string): Promise<void> {
     // Update selectedKeyId in settings
     const settings = (await this.getSettings()) ?? defaultSettings();
     await this.settingsStore.write<AppSettingsV1>({
@@ -477,6 +530,10 @@ export class KeyVaultService {
   }
 
   async renameKey(id: string, label: string): Promise<void> {
+    return this.writeLock.run(() => this.renameKeyNow(id, label));
+  }
+
+  private async renameKeyNow(id: string, label: string): Promise<void> {
     const records = await this.listKeys();
     const keyIndex = records.findIndex((r) => r.id === id);
 
@@ -490,6 +547,12 @@ export class KeyVaultService {
   }
 
   async deleteKey(id: string): Promise<{ newSelectedKeyId?: string }> {
+    return this.writeLock.run(() => this.deleteKeyNow(id));
+  }
+
+  private async deleteKeyNow(
+    id: string
+  ): Promise<{ newSelectedKeyId?: string }> {
     const records = await this.listKeys();
 
     // Prevent deleting the last key
@@ -521,7 +584,7 @@ export class KeyVaultService {
     if (settings?.selectedKeyId === id) {
       // A key always remains: deleting the last one is refused above.
       newSelectedKeyId = updatedRecords[0].id;
-      await this.selectKey(newSelectedKeyId);
+      await this.selectKeyNow(newSelectedKeyId);
     }
 
     return { newSelectedKeyId };
@@ -583,6 +646,16 @@ export class KeyVaultService {
     unlockedKeyIds: string[];
     damagedKeyIds: string[];
   }> {
+    // Serialised with every vault write: unlock can create the envelope,
+    // migrate legacy records and recover an interrupted rotation.
+    return this.writeLock.run(() => this.unlockNow(password));
+  }
+
+  private async unlockNow(password: string): Promise<{
+    selectedKeyId?: string;
+    unlockedKeyIds: string[];
+    damagedKeyIds: string[];
+  }> {
     // NOTE: there is deliberately no `passwordBuffer` here. This method used to
     // encode `password` into a Uint8Array and zeroize that, which looked like
     // the password was being cleared. It was not: the encoded copy was never
@@ -592,6 +665,8 @@ export class KeyVaultService {
     // The honest position: `password` is an immutable JavaScript string. It
     // cannot be erased. What we can do is avoid extra copies and drop
     // references promptly.
+    await this.recoverInterruptedRotation(password);
+
     // All three reads are independent; issue them together rather than
     // serialising three storage round-trips on the unlock path.
     const [settings, records, loadedEnvelope] = await Promise.all([
@@ -1057,7 +1132,12 @@ export class KeyVaultService {
    * second entry.
    */
   async verifyPassword(password: string): Promise<void> {
+    return this.writeLock.run(() => this.verifyPasswordNow(password));
+  }
+
+  private async verifyPasswordNow(password: string): Promise<void> {
     if (!password) throw new Error("password_required");
+    await this.recoverInterruptedRotation(password);
 
     const records = await this.listKeys();
     if (records.length === 0) throw new Error("vault_not_created");
@@ -1143,6 +1223,180 @@ export class KeyVaultService {
     } finally {
       if (sk) zeroize(sk);
       if (kek) zeroize(kek);
+    }
+  }
+  /**
+   * Replaces the master password: one new KEK, every DEK re-wrapped under it,
+   * a new verifier. The private-key ciphertexts are untouched - `skAad` does
+   * not bind the KDF, and re-sealing them would defend against a leaked DEK,
+   * which is not what a password rotation is for. The envelope and the records
+   * are separate storage items, so the commit goes through a single-item
+   * journal; see `vault-rotation-journal.ts`.
+   *
+   * Throws `incorrect_password` only for a wrong `current`, so the caller can
+   * charge the password throttle for exactly that.
+   */
+  async changePassword(current: string, next: string): Promise<void> {
+    return this.writeLock.run(() => this.changePasswordNow(current, next));
+  }
+
+  private async changePasswordNow(current: string, next: string): Promise<void> {
+    if (!current || !next) throw new Error("password_required");
+    await this.recoverInterruptedRotation(current);
+
+    const [envelope, records] = await Promise.all([
+      this.getEnvelope(),
+      this.listKeys(),
+    ]);
+    if (!envelope || records.length === 0) throw new Error("vault_not_created");
+
+    let oldKek: SecretBytes | null = null;
+    let newKek: SecretBytes | null = null;
+    try {
+      oldKek = await this.openEnvelope(current, envelope);
+      // Refused before the new KEK exists: rotating around a record that
+      // cannot be opened would strand it under a password nobody holds.
+      if (records.some((r) => r.v === undefined)) {
+        throw new Error("vault_has_legacy_records");
+      }
+      const damaged = await this.recordsThatDoNotOpen(records, oldKek, envelope.kdf);
+      if (damaged.length > 0) throw new VaultDamagedRecordsError(damaged);
+
+      const created = await this.createEnvelope(next);
+      newKek = created.kek;
+      const nextEnvelope: VaultEnvelope = {
+        ...created.envelope,
+        createdAt: envelope.createdAt,
+      };
+      const [fromKek, toKek] = [oldKek, newKek];
+      const nextRecords = await Promise.all(
+        records.map((rec) =>
+          this.rewrapRecord(rec, fromKek, envelope.kdf, toKek, nextEnvelope.kdf)
+        )
+      );
+
+      await this.commitRotation({
+        from: { envelope, records },
+        to: { envelope: nextEnvelope, records: nextRecords },
+      });
+    } finally {
+      if (oldKek) zeroize(oldKek);
+      if (newKek) zeroize(newKek);
+    }
+    // The session carries on: the unlocked map holds private keys, not
+    // anything derived from the KEK. A password change is user activity.
+    await this.touchActivity();
+  }
+
+  /** The ids of records that do not open, and match their pubkey, under `kek`. */
+  private async recordsThatDoNotOpen(
+    records: KeyRecord[],
+    kek: SecretBytes,
+    kdf: KdfParams
+  ): Promise<string[]> {
+    const opens = await Promise.all(
+      records.map(async (rec) => {
+        let sk: SecretBytes | null = null;
+        try {
+          sk = await this.openPrivateKey(rec, kek, kdf);
+          return await this.matchesPubkey(sk, rec.pubkey);
+        } catch {
+          return false;
+        } finally {
+          if (sk) zeroize(sk);
+        }
+      })
+    );
+    return records.filter((_, i) => !opens[i]).map((rec) => rec.id);
+  }
+
+  /**
+   * Moves one record's DEK from the old KEK to the new one, and proves the
+   * result by opening it and matching the pubkey before anything is written,
+   * as `migrateLegacyRecord` does. The ciphertext and its IV are carried over
+   * byte for byte.
+   */
+  private async rewrapRecord(
+    rec: KeyRecord,
+    oldKek: SecretBytes,
+    oldKdf: KdfParams,
+    newKek: SecretBytes,
+    newKdf: KdfParams
+  ): Promise<KeyRecord> {
+    const dek = await this.unwrapDek(rec, oldKek, oldKdf);
+    let roundTripped: SecretBytes | null = null;
+    try {
+      const dekIv = this.randomBytes(AES_GCM_IV_LENGTH);
+      const newKey = await this.aead.importKey(newKek, ["encrypt"]);
+      const wrapped = await this.aead.encrypt(
+        newKey,
+        dekIv,
+        dek,
+        dekAad(rec.v ?? VAULT_VERSION, newKdf, rec.id, rec.pubkey)
+      );
+      const candidate: KeyRecord = {
+        ...rec,
+        wrappedDek: { ct: Array.from(wrapped), iv: Array.from(dekIv) },
+      };
+      roundTripped = await this.openPrivateKey(candidate, newKek, newKdf);
+      if (!(await this.matchesPubkey(roundTripped, rec.pubkey))) {
+        throw new Error("rotation_verification_failed");
+      }
+      return candidate;
+    } finally {
+      zeroize(dek);
+      if (roundTripped) zeroize(roundTripped);
+    }
+  }
+
+  /**
+   * Journal first, then the two live items, then the journal goes. Until the
+   * journal is removed, `recoverInterruptedRotation` can restore either whole
+   * state; success is reported only after it is.
+   */
+  private async commitRotation(journal: RotationJournal): Promise<void> {
+    await this.storage.local.set<RotationJournal>(ROTATION_JOURNAL_STORAGE, journal);
+    await this.saveEnvelope(journal.to.envelope);
+    await this.saveKeys(journal.to.records);
+    await this.storage.local.remove(ROTATION_JOURNAL_STORAGE);
+  }
+
+  /**
+   * Finishes an interrupted password change, if there is one.
+   *
+   * A password that opens the journal's after-state rolls forward: it is a
+   * credential the user chose, and the rotation was otherwise complete. One
+   * that opens the before-state rolls back: the user was never told the change
+   * succeeded. Either way a whole state is written, so this is correct
+   * whichever live write was interrupted, and idempotent if it is interrupted
+   * itself. A password that opens neither leaves the journal for the normal
+   * path to report `incorrect_password`.
+   */
+  private async recoverInterruptedRotation(password: string): Promise<void> {
+    const journal = await this.storage.local.get<unknown>(ROTATION_JOURNAL_STORAGE);
+    if (!isRotationJournal(journal)) return;
+    for (const state of [journal.to, journal.from]) {
+      if (await this.passwordOpens(password, state.envelope)) {
+        await this.saveEnvelope(state.envelope);
+        await this.saveKeys(state.records);
+        await this.storage.local.remove(ROTATION_JOURNAL_STORAGE);
+        return;
+      }
+    }
+  }
+
+  private async passwordOpens(
+    password: string,
+    envelope: VaultEnvelope
+  ): Promise<boolean> {
+    try {
+      zeroize(await this.openEnvelope(password, envelope));
+      return true;
+    } catch (error) {
+      if (error instanceof Error && error.message === "incorrect_password") {
+        return false;
+      }
+      throw error;
     }
   }
 }
