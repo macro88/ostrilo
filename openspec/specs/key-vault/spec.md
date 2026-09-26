@@ -3,9 +3,7 @@
 ## Purpose
 
 Define how the extension protects Nostr private keys at rest and in memory: password-derived envelope encryption of stored key records, a verified unlock, password re-authentication before any high-risk or disclosing action, and zeroization of sensitive key material as soon as an operation completes or fails.
-
 ## Requirements
-
 ### Requirement: Zero-Retention Password Handling
 
 The system MUST NOT store the user's master password in memory or storage for longer than the duration of a single cryptographic operation. This applies to the password supplied at unlock, the password supplied when adding a key, and the password supplied to re-authenticate a high-risk action. The system SHALL verify the password against stored verification material on every unlock attempt, including when the vault holds zero key records, and SHALL derive exactly one password-derived key-encryption key per unlock attempt.
@@ -311,3 +309,15 @@ that performs the transfer.
 - **WHEN** the operation's cleanup runs
 - **THEN** the error observed by the caller MUST be the error originally raised
 - **AND** cleanup MUST NOT substitute a different error, swallow the failure, or return a value
+
+### Requirement: Re-Unlock Zeroizes The Key Material It Replaces
+
+When `unlock()` runs while decrypted keys are already held in background memory, the vault SHALL zeroize every held key buffer before discarding it, so a re-unlock leaves no previous key material readable.
+
+#### Scenario: Re-unlock while unlocked
+
+- **GIVEN** the vault is unlocked and a test holds a reference to a decrypted key buffer from that unlock
+- **WHEN** `unlock()` is called again with the correct password
+- **THEN** every byte of the retained buffer reads zero
+- **AND** the vault is unlocked with freshly decrypted key material
+

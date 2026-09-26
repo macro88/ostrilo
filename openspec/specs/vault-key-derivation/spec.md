@@ -3,9 +3,7 @@
 ## Purpose
 
 Defines how the extension derives the vault encryption key from the user's password and how every stored key record declares the format version and derivation parameters that produced it. Covers memory-hard derivation, per-record authenticated encryption bound to record metadata, verification of decrypted keys, and migration of legacy records.
-
 ## Requirements
-
 ### Requirement: Vault Records Declare Their Own Format Version
 
 Every stored vault record SHALL carry an explicit numeric format version field. Code that reads a vault record SHALL branch on that version and MUST NOT infer the format from the presence or absence of other fields.
@@ -287,3 +285,20 @@ The extension SHALL select derivation parameters so that a single unlock derivat
 - **WHEN** the shipped derivation parameters are changed
 - **THEN** the change records the measured derivation time on a mid-range laptop
 - **AND** the measured time is within the stated one-second unlock budget
+
+### Requirement: Stored KDF Parameters Are Bounded Above
+
+The vault SHALL refuse, before any key derivation, a stored record or envelope whose recorded KDF parameters exceed the ceilings defined beside `KDF_FLOORS`, in the same way it refuses parameters below the floor. The shipped defaults SHALL lie within the floors and ceilings.
+
+#### Scenario: A tampered memory cost is refused without deriving
+
+- **GIVEN** a stored envelope whose Argon2id memory cost exceeds the ceiling
+- **WHEN** the user attempts to unlock
+- **THEN** unlock fails with a KDF-parameter error
+- **AND** no Argon2id derivation is started
+
+#### Scenario: Defaults sit inside the bounds
+
+- **WHEN** the security suite compares `KDF_DEFAULTS` with the floors and ceilings
+- **THEN** every default parameter is at or above its floor and at or below its ceiling
+

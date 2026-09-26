@@ -3,9 +3,7 @@
 ## Purpose
 
 Define which background RPC namespaces and methods are reachable from web page context and which are restricted to verified extension pages, so that privileged vault, policy, and settings operations can never be invoked by a site.
-
 ## Requirements
-
 ### Requirement: Page-Reachable RPC Namespaces Are Explicitly Limited
 
 The background RPC router SHALL classify every registered namespace as page-reachable or UI-only. Only the `nostr` namespace SHALL be page-reachable. The `vault`, `keys`, `policy`, `settings`, `crypto`, `state`, `approval`, `activity`, and `profile` namespaces SHALL be UI-only.
@@ -123,3 +121,21 @@ The RPC surface SHALL NOT expose a method that returns private-key material with
 - **WHEN** the UI validates the input before importing
 - **THEN** the UI decides validity from the verdict alone
 - **AND** the UI never holds parsed secret-key bytes
+
+### Requirement: Extension-Internal Commands Require A Verified Extension-Page Sender
+
+Every background message listener that performs an action outside the RPC router, including `ostrilo.openApprovalWindow`, SHALL apply the same verified extension-page sender check as UI-only RPC namespaces, and SHALL neither perform the action nor reply with a result when the check fails.
+
+#### Scenario: An extension page opens the approval window
+
+- **GIVEN** the Activity page sends `ostrilo.openApprovalWindow`
+- **WHEN** the background receives it
+- **THEN** the approval window is focused or created
+
+#### Scenario: A content-script sender cannot open the approval window
+
+- **GIVEN** a message `{ __command: "ostrilo.openApprovalWindow" }` whose sender URL is a web page
+- **WHEN** the background receives it
+- **THEN** no window is created or focused
+- **AND** the sender receives no result
+
