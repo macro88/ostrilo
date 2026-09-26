@@ -205,12 +205,18 @@ try {
 
 #### `invalid_origin`
 
-**When to Use**: An origin parameter is malformed or fails validation checks.
+**When to Use**: An origin parameter is malformed or fails validation checks,
+or a page request's origin cannot be attested by the browser.
 
 **Examples**:
 - Origin is not a valid URL format
 - Origin contains invalid characters
 - Origin missing required components (protocol, host)
+- A `nostr.*` request whose claimed `origin` disagrees with the origin of the
+  browser-attested `sender.url`, or whose sender is not this extension's
+  top-frame content script on an `https:` page. The router refuses these
+  before any handler runs; see "Page origin binding" in
+  `docs/rpc-architecture.md`.
 
 **Handler Usage**:
 ```typescript
