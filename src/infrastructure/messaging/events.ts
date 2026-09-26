@@ -17,6 +17,13 @@ export const BROADCAST_EVENTS = {
  */
 export const DOCKED_STORAGE_KEY = "isDocked";
 
+/**
+ * The extension-page command that opens or focuses the approval window. It is
+ * handled outside the RPC router, and only for a verified extension-page
+ * sender; see `approval-window-command.ts`.
+ */
+export const OPEN_APPROVAL_WINDOW_COMMAND = "ostrilo.openApprovalWindow";
+
 export type BroadcastEventName =
   (typeof BROADCAST_EVENTS)[keyof typeof BROADCAST_EVENTS];
 

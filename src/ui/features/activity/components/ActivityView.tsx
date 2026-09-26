@@ -10,7 +10,10 @@ import { useAppSettings } from "@/ui/hooks/useAppSettings";
 import { ActivityEntryList } from "./ActivityEntryList";
 import { ActivityFilters } from "./ActivityFilters";
 import { ActivityPendingApprovals } from "./ActivityPendingApprovals";
-import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
+import {
+  BROADCAST_EVENTS,
+  OPEN_APPROVAL_WINDOW_COMMAND,
+} from "@/infrastructure/messaging/events";
 
 interface ActivityViewState {
   originFilter?: string;
@@ -122,7 +125,7 @@ export function ActivityView() {
       // Ask the background to open or focus the single managed approval window.
       try {
         const response = await browser.runtime.sendMessage({
-          __command: "ostrilo.openApprovalWindow",
+          __command: OPEN_APPROVAL_WINDOW_COMMAND,
         });
 
         if (!response?.ok) {

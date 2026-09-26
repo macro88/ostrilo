@@ -23,10 +23,7 @@ import {
   createRpcMessageListener,
 } from "@/infrastructure/messaging/rpc-router";
 import { BROADCAST_EVENTS, DOCKED_STORAGE_KEY } from "@/infrastructure/messaging/events";
-import {
-  RPC_ERROR_CODES,
-  createRpcErrorResponse,
-} from "@/infrastructure/messaging/error-codes";
+import { createApprovalWindowCommandListener } from "@/infrastructure/messaging/approval-window-command";
 import {
   VaultRpcHandler,
   PolicyRpcHandler,
@@ -379,21 +376,11 @@ export default defineBackground(() => {
   // master password at prompts they did not initiate. A locked vault now
   // answers `locked` and signals through the toolbar badge, which the page
   // cannot drive.
-  browser.runtime.onMessage.addListener((message) => {
-    if (message?.__command === "ostrilo.openApprovalWindow") {
-      return focusOrCreateApprovalWindow(settings, approvalQueue)
-        .then((windowId) => ({ ok: true, windowId }))
-        .catch((err) =>
-          createRpcErrorResponse(RPC_ERROR_CODES.APPROVAL_FAILED, {
-            details:
-              err instanceof Error
-                ? err.message
-                : "Failed to open approval window",
-            method: "ostrilo.openApprovalWindow",
-          })
-        );
-    }
-  });
+  browser.runtime.onMessage.addListener(
+    createApprovalWindowCommandListener(() =>
+      focusOrCreateApprovalWindow(settings, approvalQueue)
+    )
+  );
 
   // Side panel behavior management
   async function apply() {

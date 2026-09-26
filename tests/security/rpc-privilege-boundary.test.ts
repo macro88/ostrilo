@@ -421,3 +421,81 @@ describe("lock gate on the RPC surface", () => {
     vi.resetModules();
   });
 });
+
+describe("the approval-window command outside the router", () => {
+  async function makeCommandListener() {
+    vi.resetModules();
+    vi.doMock("wxt/browser", () => ({
+      browser: {
+        runtime: {
+          id: RUNTIME_ID,
+          getURL: (p: string) => `${ORIGIN}${p.replace(/^\//, "")}`,
+        },
+      },
+    }));
+    const { createApprovalWindowCommandListener } = await import(
+      "@/infrastructure/messaging/approval-window-command"
+    );
+    const opened: string[] = [];
+    const listener = createApprovalWindowCommandListener(async () => {
+      opened.push("window");
+      return 42;
+    });
+    return { listener, opened };
+  }
+
+  afterEach(() => {
+    vi.doUnmock("wxt/browser");
+    vi.resetModules();
+  });
+
+  const COMMAND = { __command: "ostrilo.openApprovalWindow" };
+
+  it("opens the window for an extension page", async () => {
+    const { listener, opened } = await makeCommandListener();
+    const result = await listener(COMMAND, { id: RUNTIME_ID, url: `${ORIGIN}options.html` });
+    expect(result).toEqual({ ok: true, windowId: 42 });
+    expect(opened).toEqual(["window"]);
+  });
+
+  it("creates or focuses no window for a web-page sender, and returns no result", async () => {
+    const { listener, opened } = await makeCommandListener();
+    for (const sender of [
+      { id: RUNTIME_ID, tab: { id: 1 }, frameId: 0, url: "https://evil.example/page" },
+      { id: "otherextensionidotherextensionid", url: "chrome-extension://otherextensionidotherextensionid/x.html" },
+      undefined,
+    ]) {
+      expect(listener(COMMAND, sender)).toBeUndefined();
+    }
+    expect(
+      opened,
+      "SECURITY REGRESSION: a page could raise a focused approval window on demand"
+    ).toEqual([]);
+  });
+
+  it("reports a window that fails to open as approval_failed", async () => {
+    await makeCommandListener();
+    const { createApprovalWindowCommandListener } = await import(
+      "@/infrastructure/messaging/approval-window-command"
+    );
+    const failing = createApprovalWindowCommandListener(async () => {
+      throw new Error("No window could be created");
+    });
+    const result = (await failing(COMMAND, {
+      id: RUNTIME_ID,
+      url: `${ORIGIN}activity.html`,
+    })) as { ok: boolean; error: { data: { errorCode: string; details: string } } };
+    expect(result.ok).toBe(false);
+    expect(result.error.data).toMatchObject({
+      errorCode: RPC_ERROR_CODES.APPROVAL_FAILED,
+      details: "No window could be created",
+    });
+  });
+
+  it("ignores every other message", async () => {
+    const { listener, opened } = await makeCommandListener();
+    expect(listener({ type: "vault.unlock" }, { id: RUNTIME_ID, url: `${ORIGIN}popup.html` })).toBeUndefined();
+    expect(listener(null, { id: RUNTIME_ID, url: `${ORIGIN}popup.html` })).toBeUndefined();
+    expect(opened).toEqual([]);
+  });
+});
