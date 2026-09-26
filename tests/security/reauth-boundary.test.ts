@@ -5,6 +5,7 @@ import { SettingsRpcHandler } from "@/infrastructure/messaging/handlers/settings
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import { PolicyService } from "@/application/services/policy.service";
 import { SettingsService } from "@/application/services/settings.service";
+import { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
 import {
   WebCryptoAesGcm,
   VaultKdf,
@@ -94,7 +95,12 @@ describe("high-risk actions require a verified password", () => {
     vaultRpc = new VaultRpcHandler();
     policyRpc = new PolicyRpcHandler();
     settingsRpc = new SettingsRpcHandler();
-    context = { vault, settings, policy } as unknown as ServiceContext;
+    context = {
+      vault,
+      settings,
+      policy,
+      unlockThrottle: new UnlockThrottleService(storage.local),
+    } as unknown as ServiceContext;
 
     // Two keys, so deleting one is not refused as "the last key" and the test
     // is actually exercising the password gate.

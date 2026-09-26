@@ -4,6 +4,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { useKeyManager } from "../hooks/useKeyManager";
 import { UNLOCK_FAILED, type UnlockResult } from "@/ui/state/KeyManagerContext";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
+import { countdownDetail } from "@/ui/lib/password-failure";
 import { useEphemeralInputTeardown } from "../hooks/useEphemeralInputTeardown";
 import { AlertTriangle, Lock } from "lucide-react";
 import { Logo } from "@/ui/components/logo/Logo";
@@ -41,19 +42,6 @@ const UNLOCK_FAILURE_COPY: Record<string, string> = {
   [UNLOCK_FAILED]: "Could not reach the vault. Try again.",
 };
 
-/**
- * The codes whose `details` the background populates with a countdown the UI
- * cannot compute for itself, so the detail is worth more than the local copy.
- *
- * Only these render it. The residual to keep in mind: for these two codes the
- * detail string is rendered verbatim, so editing it in the background reaches
- * this screen without passing through the UI.
- */
-const CODES_CARRYING_A_COUNTDOWN: string[] = [
-  RPC_ERROR_CODES.INVALID_PASSWORD,
-  RPC_ERROR_CODES.RATE_LIMITED,
-];
-
 const GENERIC_UNLOCK_FAILURE = "Could not unlock the vault. Try again.";
 
 export function describeUnlockFailure(
@@ -61,10 +49,7 @@ export function describeUnlockFailure(
 ): string {
   const copy = UNLOCK_FAILURE_COPY[result.code];
   if (!copy) return GENERIC_UNLOCK_FAILURE;
-  if (result.detail && CODES_CARRYING_A_COUNTDOWN.includes(result.code)) {
-    return result.detail;
-  }
-  return copy;
+  return countdownDetail(result.code, result.detail) ?? copy;
 }
 
 /**

@@ -1,4 +1,7 @@
 import { useCallback, useState } from "react";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
+import { countdownDetail } from "@/ui/lib/password-failure";
+import { userFacingError } from "@/ui/lib/user-facing-error";
 
 /**
  * Drives a single ReauthDialog for a screen that has several high-risk actions.
@@ -16,6 +19,31 @@ import { useCallback, useState } from "react";
  * the point - a "verified for the next few minutes" window is the same
  * unbounded-authority problem in a smaller box.
  */
+const REAUTH_FAILURE_COPY: Partial<Record<string, string>> = {
+  [RPC_ERROR_CODES.INVALID_PASSWORD]: "Incorrect password",
+  [RPC_ERROR_CODES.RATE_LIMITED]:
+    "Too many failed attempts. Try again in a moment.",
+  [RPC_ERROR_CODES.LOCKED]: "The vault is locked. Unlock it and try again.",
+};
+
+/**
+ * The sentence for a refused confirmation.
+ *
+ * Re-authentication shares the unlock throttle, so a refusal is often a wait,
+ * not a wrong password. The background's countdown is shown when it sent one,
+ * as the lock screen does; an RPC failure's machine string never is.
+ */
+function describeReauthFailure(error: unknown): string {
+  const code = (error as { errorCode?: unknown } | null)?.errorCode;
+  const detail = (error as { rpcError?: { data?: { details?: unknown } } } | null)
+    ?.rpcError?.data?.details;
+  if (typeof code === "string" && typeof detail === "string") {
+    const countdown = countdownDetail(code, detail);
+    if (countdown) return countdown;
+  }
+  return userFacingError(error, "Incorrect password", REAUTH_FAILURE_COPY);
+}
+
 export interface ReauthPrompt {
   action: string;
   consequence?: string;
@@ -55,9 +83,7 @@ export function useReauth() {
         // The dialog stays open so the user can retry, but the message is
         // whatever the background chose to disclose - never anything derived
         // from the password itself.
-        setError(
-          e instanceof Error && e.message ? e.message : "Incorrect password"
-        );
+        setError(describeReauthFailure(e));
       } finally {
         setBusy(false);
       }

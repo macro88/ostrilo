@@ -2,6 +2,7 @@ import { createRpcErrorResponse } from "@/infrastructure/messaging/rpc";
 import type { RpcResponse } from "@/infrastructure/messaging/rpc";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
+import { withPasswordThrottle } from "@/infrastructure/messaging/password-throttle";
 
 /**
  * Password re-authentication for high-risk actions.
@@ -41,19 +42,21 @@ export async function requireReauth(
   }
 
   try {
-    await context.vault.verifyPassword(password);
-    return null;
+    // Throttled with every other password check: re-auth is a verification
+    // oracle like unlock, and an unthrottled one would be the path to guess on.
+    const result = await withPasswordThrottle(context, method, () =>
+      context.vault.verifyPassword(password)
+    );
+    return result.ok ? null : result.response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (message === "vault_not_created") {
+    if (error instanceof Error && error.message === "vault_not_created") {
       return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, { method });
     }
-    // Deliberately indistinguishable from any other verification failure: a
-    // caller learns only that the password was wrong.
-    return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
-      details: "Incorrect password",
-      method,
-    });
+    // `verifyPassword` already reports every verification failure as
+    // `incorrect_password`, which the throttle maps. What reaches here is
+    // infrastructure - a throttle write that failed - and reporting it as a
+    // wrong password would send the user hunting for one that was right.
+    throw error;
   }
 }
 
