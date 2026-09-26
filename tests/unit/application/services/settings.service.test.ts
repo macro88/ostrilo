@@ -29,13 +29,13 @@ class MockStorage implements StoragePort {
   }
 }
 
-function createStorageSuite(): { storage: StorageSuite; sync: MockStorage } {
-  const sync = new MockStorage();
+function createStorageSuite(): { storage: StorageSuite; local: MockStorage } {
+  const local = new MockStorage();
   return {
-    sync,
+    local,
     storage: {
-      local: new MockStorage(),
-      sync,
+      local,
+      sync: new MockStorage(),
       session: new MockStorage(),
     },
   };
@@ -66,8 +66,8 @@ describe("SettingsService", () => {
   });
 
   it("migrates relay lists that match legacy shipped defaults", async () => {
-    const { storage, sync } = createStorageSuite();
-    await sync.set(
+    const { storage, local } = createStorageSuite();
+    await local.set(
       "appSettings",
       createSettings([
         "wss://relay.damus.io",
@@ -83,9 +83,9 @@ describe("SettingsService", () => {
   });
 
   it("preserves custom configured relays", async () => {
-    const { storage, sync } = createStorageSuite();
+    const { storage, local } = createStorageSuite();
     const customRelays = ["wss://relay.example.com"];
-    await sync.set("appSettings", createSettings(customRelays));
+    await local.set("appSettings", createSettings(customRelays));
     const service = new SettingsService(storage);
 
     const settings = await service.get();
@@ -94,8 +94,8 @@ describe("SettingsService", () => {
   });
 
   it("fills medium trust defaults for older settings records", async () => {
-    const { storage, sync } = createStorageSuite();
-    await sync.set("appSettings", {
+    const { storage, local } = createStorageSuite();
+    await local.set("appSettings", {
       ...createSettings(["wss://relay.example.com"]),
       mediumAllowKinds: undefined,
     });
@@ -133,8 +133,8 @@ describe("session bounds", () => {
   });
 
   it("reads a stored 0 as the shipped default, not as never-lock", async () => {
-    const { storage, sync } = createStorageSuite();
-    await sync.set("appSettings", { ...createSettings([]), autoLockMinutes: 0 });
+    const { storage, local } = createStorageSuite();
+    await local.set("appSettings", { ...createSettings([]), autoLockMinutes: 0 });
 
     const settings = await new SettingsService(storage).get();
 
@@ -145,8 +145,8 @@ describe("session bounds", () => {
   });
 
   it("clamps a stored value above the ceiling and persists the correction", async () => {
-    const { storage, sync } = createStorageSuite();
-    await sync.set("appSettings", {
+    const { storage, local } = createStorageSuite();
+    await local.set("appSettings", {
       ...createSettings([]),
       autoLockMinutes: 1440,
     });
@@ -156,14 +156,14 @@ describe("session bounds", () => {
     expect(settings?.autoLockMinutes).toBe(AUTO_LOCK_BOUNDS.max);
     // Written back, so the next read does not have to redo the work and the
     // UI is not showing something different from what is stored.
-    const stored = await sync.get<AppSettingsV1>("appSettings");
+    const stored = await local.get<AppSettingsV1>("appSettings");
     expect(stored?.autoLockMinutes).toBe(AUTO_LOCK_BOUNDS.max);
   });
 
   it("normalizes a garbage stored value rather than trusting it", async () => {
     for (const bad of [null, "15", Number.NaN, -1, 0.5]) {
-      const { storage, sync } = createStorageSuite();
-      await sync.set("appSettings", {
+      const { storage, local } = createStorageSuite();
+      await local.set("appSettings", {
         ...createSettings([]),
         autoLockMinutes: bad,
       });

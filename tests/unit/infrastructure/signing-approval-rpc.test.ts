@@ -88,7 +88,7 @@ async function nextPending(): Promise<PendingRequest> {
 }
 
 async function storedPolicy(origin: string): Promise<OriginPolicy | undefined> {
-  const settings = await storage.sync.get<{ origins?: OriginPolicy[] }>("appSettings");
+  const settings = await storage.local.get<{ origins?: OriginPolicy[] }>("appSettings");
   return settings?.origins?.find((o) => o.origin === origin);
 }
 
@@ -408,7 +408,7 @@ describe("approval queue RPC", () => {
   it("leaves the request pending when the remembered decision cannot be stored", async () => {
     const broken = memoryStorage();
     const brokenContext = realContext(broken).context;
-    broken.sync.set = async () => {
+    broken.local.set = async () => {
       throw new Error("quota exceeded");
     };
     const nostr = new NostrRpcHandler(queue, async () => 1);

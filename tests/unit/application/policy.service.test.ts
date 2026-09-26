@@ -82,7 +82,7 @@ describe("PolicyService", () => {
 
     it("does not allow active session grants to bypass protected kinds", async () => {
       await storage.session.set("lockState", { isLocked: false });
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [
           {
@@ -105,7 +105,7 @@ describe("PolicyService", () => {
 
     it("ignores protected kinds in legacy medium-trust settings", async () => {
       await storage.session.set("lockState", { isLocked: false });
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [
           {
@@ -153,7 +153,7 @@ describe("PolicyService", () => {
       await storage.session.set("lockState", { isLocked: false });
       // The consent migration must not be what makes these pass: with the
       // marker set it is a no-op, so the write path is on its own.
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [],
         __consentMigrations: 1,
@@ -165,7 +165,7 @@ describe("PolicyService", () => {
 
       await service.setPerKindRule("https://example.com", 1, "deny");
 
-      const stored = await storage.sync.get<any>("appSettings");
+      const stored = await storage.local.get<any>("appSettings");
       const record = stored.origins.find(
         (o: any) => o.origin === "https://example.com"
       );
@@ -220,7 +220,7 @@ describe("PolicyService", () => {
 
       await service.setPerKindRule("https://example.com", 5, "deny");
 
-      const stored = await storage.sync.get<any>("appSettings");
+      const stored = await storage.local.get<any>("appSettings");
       const record = stored.origins.find(
         (o: any) => o.origin === "https://example.com"
       );
@@ -231,7 +231,7 @@ describe("PolicyService", () => {
     it("creates an untrusted record when setOriginPolicy supplies no level", async () => {
       await service.setOriginPolicy("https://example.com", { name: "Example" });
 
-      const stored = await storage.sync.get<any>("appSettings");
+      const stored = await storage.local.get<any>("appSettings");
       const record = stored.origins.find(
         (o: any) => o.origin === "https://example.com"
       );
@@ -242,7 +242,7 @@ describe("PolicyService", () => {
   describe("consent migration", () => {
     it("downgrades an extension-assigned medium trust level", async () => {
       await storage.session.set("lockState", { isLocked: false });
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [
           {
@@ -260,7 +260,7 @@ describe("PolicyService", () => {
 
       await service.loadContext();
 
-      const stored = await storage.sync.get<any>("appSettings");
+      const stored = await storage.local.get<any>("appSettings");
       const record = stored.origins[0];
       expect(record.trustLevel).toBe("low");
       // One field changes. Everything the user actually chose survives.
@@ -280,7 +280,7 @@ describe("PolicyService", () => {
     });
 
     it("leaves a user-set high trust level alone", async () => {
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [
           { origin: "https://a.example", trustLevel: "high", rules: {}, updatedAt: 1 },
@@ -290,13 +290,13 @@ describe("PolicyService", () => {
 
       await service.loadContext();
 
-      const stored = await storage.sync.get<any>("appSettings");
+      const stored = await storage.local.get<any>("appSettings");
       expect(stored.origins[0].trustLevel).toBe("high");
       expect(stored.origins[1].trustLevel).toBe("low");
     });
 
     it("is idempotent", async () => {
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [
           {
@@ -309,7 +309,7 @@ describe("PolicyService", () => {
       });
 
       await service.runConsentMigration();
-      const afterFirst = await storage.sync.get<any>("appSettings");
+      const afterFirst = await storage.local.get<any>("appSettings");
 
       // A fresh service instance, so the in-memory guard cannot be what makes
       // the second run a no-op.
@@ -317,12 +317,12 @@ describe("PolicyService", () => {
       const result = await second.runConsentMigration();
 
       expect(result).toBeUndefined();
-      expect(await storage.sync.get<any>("appSettings")).toEqual(afterFirst);
+      expect(await storage.local.get<any>("appSettings")).toEqual(afterFirst);
     });
 
     it("leaves stored allow rules for newly protected kinds in place but inert", async () => {
       await storage.session.set("lockState", { isLocked: false });
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [
           {
@@ -336,7 +336,7 @@ describe("PolicyService", () => {
 
       await service.loadContext();
 
-      const stored = await storage.sync.get<any>("appSettings");
+      const stored = await storage.local.get<any>("appSettings");
       expect(stored.origins[0].rules).toEqual({ 5: "allow", 27235: "allow" });
 
       for (const kind of [5, 27235]) {
@@ -359,7 +359,7 @@ describe("PolicyService", () => {
     it("stores remembered allow rules and lets users change them", async () => {
       await service.setPerKindRule("https://primal.net", 10002, "allow");
 
-      const afterAllow = await storage.sync.get<any>("appSettings");
+      const afterAllow = await storage.local.get<any>("appSettings");
       expect(afterAllow.origins).toEqual([
         expect.objectContaining({
           origin: "https://primal.net",
@@ -368,11 +368,11 @@ describe("PolicyService", () => {
       ]);
 
       await service.setPerKindRule("https://primal.net", 10002, "ask");
-      const afterAsk = await storage.sync.get<any>("appSettings");
+      const afterAsk = await storage.local.get<any>("appSettings");
       expect(afterAsk.origins[0].rules[10002]).toBe("ask");
 
       await service.setPerKindRule("https://primal.net", 10002, "deny");
-      const afterDeny = await storage.sync.get<any>("appSettings");
+      const afterDeny = await storage.local.get<any>("appSettings");
       expect(afterDeny.origins[0].rules[10002]).toBe("deny");
     });
   });
@@ -393,7 +393,7 @@ describe("PolicyService", () => {
     });
 
     it("writes a bounded future expiry even when the stored TTL is zero", async () => {
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [],
         sessionTTLMinutes: 0,
@@ -416,7 +416,7 @@ describe("PolicyService", () => {
 
     it("does not allow on an expired grant", async () => {
       await storage.session.set("lockState", { isLocked: false });
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [
           {
@@ -441,7 +441,7 @@ describe("PolicyService", () => {
 
     it("does not allow on a legacy zero-expiry grant", async () => {
       await storage.session.set("lockState", { isLocked: false });
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [
           {
@@ -465,7 +465,7 @@ describe("PolicyService", () => {
 
     it("still allows an unprotected kind while the grant is live", async () => {
       await storage.session.set("lockState", { isLocked: false });
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [
           {

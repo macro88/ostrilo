@@ -169,7 +169,7 @@ describe("consent policy integration", () => {
     expect(resolved.ok).toBe(true);
     await pending;
 
-    const stored = await storage.sync.get<any>("appSettings");
+    const stored = await storage.local.get<any>("appSettings");
     const record = stored.origins.find(
       (o: any) => o.origin === "https://a.example"
     );

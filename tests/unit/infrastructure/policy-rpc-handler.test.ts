@@ -24,7 +24,7 @@ let storage: StorageSuite;
 const send = (req: RpcRequest) => handler.handleRequest(req, context);
 
 async function storedPolicy(origin: string): Promise<OriginPolicy | undefined> {
-  const settings = await storage.sync.get<{ origins?: OriginPolicy[] }>("appSettings");
+  const settings = await storage.local.get<{ origins?: OriginPolicy[] }>("appSettings");
   return settings?.origins?.find((o) => o.origin === origin);
 }
 

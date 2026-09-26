@@ -63,7 +63,10 @@ describe("settings.update", () => {
 
   it("keeps the settings change when the activity log cannot persist its new capacity", async () => {
     await activityLog.count();
-    storage.local.set = async () => {
+    // Only the activity log's own write fails; settings share the area.
+    const realSet = storage.local.set.bind(storage.local);
+    storage.local.set = async <T>(key: string, value: T) => {
+      if (key === "appSettings") return realSet(key, value);
       throw new Error("quota exceeded");
     };
 

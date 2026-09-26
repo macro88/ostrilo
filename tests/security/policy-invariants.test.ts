@@ -299,7 +299,7 @@ describe("security invariant: policy-consent-scope", () => {
     // Mark the consent migration as already run. Otherwise it would repair a
     // record the write path fabricated, and these tests would pass for the
     // wrong reason - fencing the migration instead of setPerKindRule.
-    await storage.sync.set("appSettings", {
+    await storage.local.set("appSettings", {
       __version: "settings.v1",
       origins: [],
       __consentMigrations: 1,
@@ -324,7 +324,7 @@ describe("security invariant: policy-consent-scope", () => {
   });
 
   it("does not grant an unbounded session", async () => {
-    await storage.sync.set("appSettings", {
+    await storage.local.set("appSettings", {
       __version: "settings.v1",
       origins: [],
       sessionTTLMinutes: 0,
@@ -343,7 +343,7 @@ describe("security invariant: policy-consent-scope", () => {
   });
 
   it("ignores an expired or legacy zero-expiry grant", async () => {
-    await storage.sync.set("appSettings", {
+    await storage.local.set("appSettings", {
       __version: "settings.v1",
       origins: [
         {

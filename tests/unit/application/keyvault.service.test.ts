@@ -82,7 +82,7 @@ describe("KeyVaultService", () => {
       isSelected: true,
     } as any;
     await storage.local.set("encryptedKeys", [keyRecord]);
-    await storage.sync.set("appSettings", { selectedKeyId: "k1" } as any);
+    await storage.local.set("appSettings", { selectedKeyId: "k1" } as any);
     svc = new KeyVaultService(
       storage,
       WebCryptoAesGcm,

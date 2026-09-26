@@ -207,9 +207,9 @@ export const AUTO_LOCK_BOUNDS = { min: 1, max: 60, default: 5 } as const;
 /**
  * Coerces any stored or supplied auto-lock value into the enforced range.
  *
- * Called on every read rather than only on write, because settings live in
- * `storage.sync`: a value written by an older version, or by another profile
- * on the same account, arrives without ever passing through the patch schema.
+ * Called on every read rather than only on write: a value written by an older
+ * version, or migrated from the synced copy another profile on the same
+ * account wrote, arrives without ever passing through the patch schema.
  */
 export function normalizeAutoLockMinutes(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {

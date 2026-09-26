@@ -12,6 +12,10 @@ import {
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import { PolicyService } from "@/application/services/policy.service";
 import { SettingsService } from "@/application/services/settings.service";
+import {
+  SettingsStore,
+  localSettingsChange,
+} from "@/application/services/settings-store";
 import { ActivityLogService } from "@/application/services/activity-log.service";
 import { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
 import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
@@ -214,16 +218,29 @@ async function closeApprovalWindow(): Promise<void> {
 export default defineBackground(() => {
   // Compose services
   const storage = createStorageSuite();
+  // One owner of the settings item, shared by every service that reads it.
+  // Migration off synced storage runs at every worker start - before the
+  // first page request on a fresh start - and again on browser startup and
+  // install or update, so a removal that failed once is retried.
+  const settingsStore = new SettingsStore(storage);
+  const migrateSettings = () =>
+    settingsStore
+      .migrate()
+      .catch((err) => console.warn("[Background] settings migration failed", err));
+  void migrateSettings();
+  browser.runtime.onStartup.addListener(() => void migrateSettings());
+  browser.runtime.onInstalled.addListener(() => void migrateSettings());
   const vault = new KeyVaultService(
     storage,
     WebCryptoAesGcm,
     VaultKdf,
     NobleSchnorr,
     NobleSha256,
-    ScureBech32
+    ScureBech32,
+    settingsStore
   );
-  const policy = new PolicyService(storage);
-  const settings = new SettingsService(storage);
+  const policy = new PolicyService(storage, settingsStore);
+  const settings = new SettingsService(storage, settingsStore);
   const activityLog = new ActivityLogService(storage.local);
 
   // Align activity log capacity with settings at startup
@@ -465,18 +482,16 @@ export default defineBackground(() => {
   (globalThis as unknown as { __ostriloArmAutoLock?: () => Promise<void> })
     .__ostriloArmAutoLock = armAutoLock;
   apply();
-  browser.storage.onChanged.addListener((changes) => {
-    if (changes.appSettings?.newValue) {
-      syncRelayManager(changes.appSettings.newValue as RelaySettings);
+  browser.storage.onChanged.addListener((changes, areaName) => {
+    const nextSettings = localSettingsChange(changes, areaName);
+    if (nextSettings) {
+      syncRelayManager(nextSettings as RelaySettings);
+      // The timeout may have changed; re-arm against the new deadline.
+      void armAutoLock();
     }
 
     if (DOCKED_STORAGE_KEY in changes) {
       apply();
-    }
-
-    if (changes.appSettings?.newValue) {
-      // The timeout may have changed; re-arm against the new deadline.
-      void armAutoLock();
     }
   });
 });

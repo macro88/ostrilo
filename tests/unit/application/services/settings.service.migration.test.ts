@@ -23,7 +23,7 @@ describe("SettingsService relay and legacy-record migration", () => {
   let storage: StorageSuite;
   let service: SettingsService;
 
-  const stored = () => storage.sync.get<AppSettingsV1>("appSettings");
+  const stored = () => storage.local.get<AppSettingsV1>("appSettings");
 
   beforeEach(() => {
     storage = memoryStorage();
@@ -31,7 +31,7 @@ describe("SettingsService relay and legacy-record migration", () => {
   });
 
   it("drops cleartext relays from a stored list and persists the cleaned list", async () => {
-    await storage.sync.set("appSettings", v1(["ws://plain.example", "wss://good.example"]));
+    await storage.local.set("appSettings", v1(["ws://plain.example", "wss://good.example"]));
 
     const settings = await service.get();
 
@@ -40,7 +40,7 @@ describe("SettingsService relay and legacy-record migration", () => {
   });
 
   it("restores the default relay when every stored relay is refused", async () => {
-    await storage.sync.set("appSettings", v1(["ws://plain.example", "https://web.example"]));
+    await storage.local.set("appSettings", v1(["ws://plain.example", "https://web.example"]));
 
     const settings = await service.get();
 
@@ -50,7 +50,7 @@ describe("SettingsService relay and legacy-record migration", () => {
 
   it("gives a v1 record with no relay list the default relays", async () => {
     const { relays: _dropped, ...withoutRelays } = v1([]);
-    await storage.sync.set("appSettings", withoutRelays);
+    await storage.local.set("appSettings", withoutRelays);
 
     const settings = await service.get();
 
@@ -59,7 +59,7 @@ describe("SettingsService relay and legacy-record migration", () => {
   });
 
   it("keeps a relay list the user emptied", async () => {
-    await storage.sync.set("appSettings", v1([]));
+    await storage.local.set("appSettings", v1([]));
 
     const settings = await service.get();
 
@@ -68,7 +68,7 @@ describe("SettingsService relay and legacy-record migration", () => {
 
   it("carries known fields over from a record without the v1 marker", async () => {
     const origins = [{ origin: "https://a.example", trustLevel: "low", rules: {}, updatedAt: 1 }];
-    await storage.sync.set("appSettings", {
+    await storage.local.set("appSettings", {
       theme: "dark",
       sidePanel: true,
       relays: ["wss://mine.example", "ws://dropped.example"],
@@ -94,7 +94,7 @@ describe("SettingsService relay and legacy-record migration", () => {
   });
 
   it("replaces unusable fields of an unmarked record with defaults", async () => {
-    await storage.sync.set("appSettings", {
+    await storage.local.set("appSettings", {
       relays: ["ws://only-cleartext.example"],
       origins: "corrupt",
       mediumAllowKinds: "corrupt",
