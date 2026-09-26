@@ -250,6 +250,33 @@ describe("Memory zeroization (real buffers, not call counts)", () => {
     });
   });
 
+  describe("re-unlock", () => {
+    it("zeroizes the keys it replaces when unlocking an unlocked vault", async () => {
+      // vault.unlock is reachable in every state, so a second unlock over a
+      // live session is ordinary. It used to clear the key map without
+      // zeroizing it, leaving the first session's private keys in memory.
+      const { svc } = service();
+      await svc.generateKey("pw", "k1");
+      await svc.importKey("44".repeat(32), "pw", "k2");
+      await svc.unlock("pw");
+      const firstSession = decryptedKeys.filter((d) => !d.isAllZero());
+      expect(firstSession).toHaveLength(2);
+      decryptedKeys.length = 0;
+
+      await svc.unlock("pw");
+
+      for (const d of firstSession) {
+        expect(
+          d.isAllZero(),
+          "SECURITY REGRESSION: re-unlock left the previous session's private key in memory"
+        ).toBe(true);
+      }
+      // And the vault is unlocked on fresh material, not on the cleared buffers.
+      expect(decryptedKeys.filter((d) => !d.isAllZero())).toHaveLength(2);
+      await expect(svc.sign("ab".repeat(32))).resolves.toBeDefined();
+    });
+  });
+
   describe("lock", () => {
     it("zeroizes every unlocked private key, and signing then fails", async () => {
       const { svc } = service();
