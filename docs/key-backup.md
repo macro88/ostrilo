@@ -19,6 +19,9 @@ master password, forgetting that one password would lose the vault and its backu
 together. Ostrilo cannot recover the backup passphrase, and the file is useless
 without it.
 
+Changing the master password (Settings → Security) does not touch backup files.
+Each one keeps the passphrase it was saved with, before and after the change.
+
 The encrypted backup is offered only during first-key onboarding. There is no
 export on the settings page, so a key you add later cannot be backed up from
 within Ostrilo. If you import a key, keep your own copy of the `nsec`.
