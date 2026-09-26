@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   AutoLockSlider,
@@ -12,14 +13,15 @@ import {
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { AutoLockCountdown } from "@/components/common/AutoLockCountdown";
 import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
+import { ChangePasswordDialog } from "@/ui/components/dialogs/ChangePasswordDialog";
 import { useReauth } from "@/ui/hooks/useReauth";
 
 /**
  * Only what works. This tab used to carry a biometric-unlock checkbox bound
  * to local state (the lock screen's handler says the feature is not
- * implemented) and disabled "Change Password" / "Export Private Key" buttons
- * with no handler behind them. A control that cannot do anything is a promise
- * the surface cannot keep, so none of the three is rendered.
+ * implemented) and a disabled "Export Private Key" button with no handler
+ * behind it. A control that cannot do anything is a promise the surface
+ * cannot keep, so neither is rendered.
  */
 export function SecuritySettingsTab() {
   const {
@@ -30,6 +32,7 @@ export function SecuritySettingsTab() {
     resetSettings,
   } = useAppSettings();
   const reauth = useReauth();
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // Both timeouts are password-gated in the background. The gate is on the
   // change, not on the direction: reasoning about "only when it gets
@@ -84,7 +87,7 @@ export function SecuritySettingsTab() {
     <div>
       <SettingsTabHeader
         title="Security"
-        lede="How long an unlocked vault stays open. Changing either timeout asks for your password."
+        lede="How long an unlocked vault stays open, and the password that opens it."
       />
 
       <SettingsSection label="Timeouts">
@@ -110,6 +113,24 @@ export function SecuritySettingsTab() {
         </div>
       </SettingsSection>
 
+      <SettingsSection label="Master password">
+        <div className="ink-card">
+          <SettingsRow
+            label="Change master password"
+            description="Needs your current password. Your keys are re-encrypted under the new one; backup files keep their own passphrase."
+            control={
+              <Button
+                variant="outline"
+                className="h-10"
+                onClick={() => setChangingPassword(true)}
+              >
+                Change password
+              </Button>
+            }
+          />
+        </div>
+      </SettingsSection>
+
       <SettingsSection label="Defaults">
         <div className="ink-card">
           <SettingsRow
@@ -129,6 +150,10 @@ export function SecuritySettingsTab() {
       </SettingsSection>
 
       <ReauthDialog {...reauth.dialogProps} />
+      <ChangePasswordDialog
+        open={changingPassword}
+        onClose={() => setChangingPassword(false)}
+      />
     </div>
   );
 }

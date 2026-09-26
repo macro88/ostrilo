@@ -385,24 +385,78 @@ test.describe("security settings", () => {
   });
 
   /**
-   * Neither action exists, and neither is shown. Disabled "Change Password"
-   * and "Export Private Key" buttons used to sit here as placeholders; a
-   * half-built "Export Private Key" that appeared to work would be the worst
-   * possible bug in this product, and a dead button is a promise the surface
-   * cannot keep. If either ever arrives it must bring its own tests, and this
-   * failing is the reminder.
+   * Key export does not exist, and is not shown. A disabled "Export Private
+   * Key" button used to sit here as a placeholder; a half-built export that
+   * appeared to work would be the worst possible bug in this product, and a
+   * dead button is a promise the surface cannot keep. If it ever arrives it
+   * must bring its own tests, and this failing is the reminder. Password
+   * change arrived that way, with the test below.
    */
-  test("does not offer password change or key export yet", async ({
-    openPopup,
-    openOptions,
-  }) => {
+  test("does not offer key export yet", async ({ openPopup, openOptions }) => {
     const { options } = await openOptionsOnSecurity(openPopup, openOptions);
 
     await expect(
-      options.getByRole("button", { name: "Change Password" })
-    ).toHaveCount(0);
-    await expect(
       options.getByRole("button", { name: "Export Private Key" })
     ).toHaveCount(0);
+  });
+  test("changes the master password: the old one stops working and every key opens under the new one", async ({
+    openPopup,
+    openOptions,
+  }) => {
+    const NEW_PASSWORD = "Lichen-Harbour-Quill-2026";
+    const { popup, options } = await openOptionsOnSecurity(openPopup, openOptions);
+    await sendExtensionRpc(popup, {
+      type: "vault.import",
+      keyInput: "0000000000000000000000000000000000000000000000000000000000000007",
+      password: TEST_PASSWORD,
+      label: "Second key",
+    });
+    const before = await sendExtensionRpc<Array<{ id: string; pubkey: string }>>(popup, {
+      type: "keys.list",
+    });
+    expect(before).toHaveLength(2);
+
+    await options.getByRole("button", { name: "Change password", exact: true }).click();
+    const dialog = options.getByRole("dialog");
+    await dialog.getByLabel("Current password", { exact: true }).fill(TEST_PASSWORD);
+    await dialog.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD);
+    await dialog.getByLabel("Confirm new password", { exact: true }).fill(NEW_PASSWORD);
+    await dialog.getByRole("button", { name: "Change password", exact: true }).click();
+
+    await expect(dialog.getByTestId("change-password-success")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(dialog).toContainText(/backup files keep the passphrase/i);
+    // The session carries on after the change.
+    expect(
+      (await sendExtensionRpc<{ isLocked: boolean }>(popup, { type: "state.getLock" }))
+        .isLocked
+    ).toBe(false);
+    await dialog.getByRole("button", { name: "Done" }).click();
+
+    await sendExtensionRpc(popup, { type: "vault.lock" });
+    const oldAttempt = await popup.evaluate(
+      (password) =>
+        new Promise<{ ok: boolean; error?: { data?: { errorCode?: string } } }>((resolve) =>
+          (globalThis as any).chrome.runtime.sendMessage(
+            { type: "vault.unlock", password },
+            resolve
+          )
+        ),
+      TEST_PASSWORD
+    );
+    expect(oldAttempt.ok).toBe(false);
+    expect(oldAttempt.error?.data?.errorCode).toBe("invalid_password");
+
+    const unlocked = await sendExtensionRpc<{
+      unlockedKeyIds: string[];
+      damagedKeyIds: string[];
+    }>(popup, { type: "vault.unlock", password: NEW_PASSWORD });
+    expect(unlocked.unlockedKeyIds.sort()).toEqual(before.map((k) => k.id).sort());
+    expect(unlocked.damagedKeyIds).toEqual([]);
+    const after = await sendExtensionRpc<Array<{ pubkey: string }>>(popup, {
+      type: "keys.list",
+    });
+    expect(after.map((k) => k.pubkey).sort()).toEqual(before.map((k) => k.pubkey).sort());
   });
 });
