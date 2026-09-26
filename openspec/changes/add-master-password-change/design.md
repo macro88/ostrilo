@@ -104,4 +104,4 @@ No migration is needed. The journal item is absent in every existing vault, and 
 
 ## Open Questions
 
-- Should a successful rotation append an entry to the activity log? The log records signing decisions today. A security-event category would be new, and belongs with SEC-013 (tamper-evident audit log) rather than here.
+- ~~Should a successful rotation append an entry to the activity log?~~ Decided 2026-09-26: no. The log records signing decisions; a security-event category belongs with SEC-013 (tamper-evident audit log).
