@@ -31,6 +31,7 @@ vi.mock("@/hooks/useAppSettings", () => ({
 
 vi.mock("@/infrastructure/messaging/client", () => ({
   evaluatePasswordStrength: vi.fn(),
+  changePassword: vi.fn(),
 }));
 
 vi.mock("@/components/common/AutoLockCountdown", () => ({
@@ -145,5 +146,19 @@ describe("SecuritySettingsTab", () => {
 
     expect(settingsHook.resetSettings).not.toHaveBeenCalled();
     expect(reauthDialog()).toBeNull();
+  });
+  it("opens the change-password dialog from its own row, and closes it", async () => {
+    const container = render(<SecuritySettingsTab />);
+    expect(document.body.querySelector("#change-current-password")).toBeNull();
+
+    await click(buttonByText(container, "Change password"));
+
+    const dialog = document.body.querySelector("[role='dialog']");
+    expect(dialog?.textContent).toContain("Change master password");
+    expect(document.body.querySelector("#change-current-password")).not.toBeNull();
+
+    await click(buttonByText(document.body, "Cancel"));
+    await flush();
+    expect(document.body.querySelector("#change-current-password")).toBeNull();
   });
 });
