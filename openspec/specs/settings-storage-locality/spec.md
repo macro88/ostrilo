@@ -1,7 +1,9 @@
 # settings-storage-locality Specification
 
 ## Purpose
-TBD - created by archiving change localize-authority-settings. Update Purpose after archive.
+
+Keeps every setting that grants authority on the device where it was granted. Browser sync copies synced storage to every profile on the account, so a grant made under one browser's password must not live there. Covers where the `appSettings` item is stored, the single store that owns it, the static fence on synced storage, the one-time migration off sync (which deletes the synced copy), and which storage events background consumers act on.
+
 ## Requirements
 ### Requirement: Settings Are Stored Device-Locally
 
