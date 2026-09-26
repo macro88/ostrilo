@@ -81,9 +81,9 @@ What it buys: the site list stops living at the browser vendor now rather than o
 
 Migrated grants are copied exactly, trust levels included. A grant already planted through sync before the upgrade survives migration. The threat this change closes is injection from then on, and re-prompting every user for every site in order to cover a hypothetical earlier injection is the worse trade. The design says so rather than implying otherwise.
 
-### 4. Local-context propagation is unchanged
+### 4. Background consumers react to the local area only
 
-The background listener is already area-agnostic, and the UI updates from the RPC broadcast, not storage events. A test asserts that a local-area change to `appSettings` re-arms auto-lock and rebuilds the relay manager, so that a future area filter cannot silently break it.
+The background `storage.onChanged` listener used to key on `changes.appSettings` without checking the area. That was harmless while sync was the only area holding the item. After this change it is a hole: an older version on another device still writes `appSettings` to sync, the event fires here too, and an area-agnostic listener would rebuild the relay manager from a relay list this device never chose. The listener therefore acts only on `areaName === "local"`, through `localSettingsChange()` beside the store, and tests assert that a local change is acted on and a synced one is not. The UI still updates from the RPC broadcast, not storage events.
 
 ## Risks / Trade-offs
 
