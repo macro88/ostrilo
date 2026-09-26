@@ -16,7 +16,7 @@ describe("PolicyService stored-settings handling", () => {
   let storage: StorageSuite;
   let service: PolicyService;
 
-  const stored = async () => storage.sync.get<AppSettingsV1 & { __consentMigrations?: number }>("appSettings");
+  const stored = async () => storage.local.get<AppSettingsV1 & { __consentMigrations?: number }>("appSettings");
 
   beforeEach(async () => {
     storage = memoryStorage();
@@ -27,7 +27,7 @@ describe("PolicyService stored-settings handling", () => {
 
   describe("settings stored without an origins list", () => {
     beforeEach(async () => {
-      await storage.sync.set("appSettings", { __version: "settings.v1", __consentMigrations: 1 });
+      await storage.local.set("appSettings", { __version: "settings.v1", __consentMigrations: 1 });
     });
 
     it("creates a low-trust record when setting an origin policy", async () => {
@@ -81,7 +81,7 @@ describe("PolicyService stored-settings handling", () => {
   });
 
   it("applies a session grant only to the origin that holds it", async () => {
-    await storage.sync.set("appSettings", {
+    await storage.local.set("appSettings", {
       __version: "settings.v1",
       __consentMigrations: 1,
       origins: [policy(A), policy(B)],
@@ -112,13 +112,13 @@ describe("PolicyService stored-settings handling", () => {
     });
 
     it("keeps evaluating when the migration write fails, and retries on the next call", async () => {
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [policy(A, { trustLevel: "medium" })],
       });
-      const realSet = storage.sync.set.bind(storage.sync);
-      storage.sync.set = async () => {
-        throw new Error("sync quota");
+      const realSet = storage.local.set.bind(storage.local);
+      storage.local.set = async () => {
+        throw new Error("storage quota");
       };
 
       const first = await service.evaluate({ origin: A, kind: 1 });
@@ -126,7 +126,7 @@ describe("PolicyService stored-settings handling", () => {
       expect(first.mode).toBe("ask");
       expect((await stored())?.__consentMigrations).toBeUndefined();
 
-      storage.sync.set = realSet;
+      storage.local.set = realSet;
       await service.evaluate({ origin: A, kind: 1 });
 
       expect((await stored())?.__consentMigrations).toBe(1);

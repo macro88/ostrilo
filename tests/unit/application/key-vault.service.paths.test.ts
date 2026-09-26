@@ -151,7 +151,7 @@ describe("KeyVaultService failure and edge paths", () => {
     (await storage.local.get<KeyRecord[]>("encryptedKeys")) ?? [];
   const envelope = async () =>
     (await storage.local.get<VaultEnvelope>("vaultEnvelope")) as VaultEnvelope;
-  const settings = async () => storage.sync.get<AppSettingsV1>("appSettings");
+  const settings = async () => storage.local.get<AppSettingsV1>("appSettings");
   const lockState = async () =>
     storage.session.get<{ isLocked: boolean; selectedKeyId?: string; lastActivity: number }>(
       "lockState"
@@ -343,7 +343,7 @@ describe("KeyVaultService failure and edge paths", () => {
 
     it("does not select a new key when a stored record is already marked selected", async () => {
       const first = await vault.generateKey(PASSWORD, "first");
-      await storage.sync.remove("appSettings");
+      await storage.local.remove("appSettings");
 
       const second = await vault.generateKey(PASSWORD, "second");
 
@@ -370,7 +370,7 @@ describe("KeyVaultService failure and edge paths", () => {
 
     it("writes complete default settings when selecting a key with none stored", async () => {
       const record = await vault.importKey(SK_A, PASSWORD);
-      await storage.sync.remove("appSettings");
+      await storage.local.remove("appSettings");
 
       await vault.selectKey(record.id);
 
@@ -503,7 +503,7 @@ describe("KeyVaultService failure and edge paths", () => {
     it("clears every origin's session grant and broadcasts the settings change", async () => {
       await vault.importKey(SK_A, PASSWORD);
       const current = (await settings()) ?? defaultSettings();
-      await storage.sync.set("appSettings", {
+      await storage.local.set("appSettings", {
         ...current,
         origins: [
           { origin: "https://a.example", trustLevel: "medium", rules: {}, sessionGrantAll: true, updatedAt: 1 },
@@ -598,7 +598,7 @@ describe("KeyVaultService failure and edge paths", () => {
   describe("revealKey", () => {
     it("refuses when no key is named and none is selected", async () => {
       await vault.importKey(SK_A, PASSWORD);
-      await storage.sync.remove("appSettings");
+      await storage.local.remove("appSettings");
 
       await expect(vault.revealKey(PASSWORD)).rejects.toThrow("vault_locked");
     });

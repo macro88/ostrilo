@@ -360,7 +360,7 @@ describe("vault.reveal", () => {
 
   it("refuses as locked when no key is named and none is selected", async () => {
     await importTwoKeys();
-    await storage.sync.remove("appSettings");
+    await storage.local.remove("appSettings");
 
     const res = await send({ type: "vault.reveal", password: STRONG_PASSWORD });
 

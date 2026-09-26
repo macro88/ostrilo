@@ -6,7 +6,7 @@ import { memoryStorage, testVault } from "../helpers/vault";
 
 /**
  * `lock()` wrote the `sessionGrantAll` display flags to settings storage and
- * only then ran its listeners. A settings write that threw - quota, sync
+ * only then ran its listeners. A settings write that threw - quota, storage
  * disabled, a corrupt record - skipped them, and one of them is what denies
  * the pending approvals. A request the user walked away from could survive the
  * lock and be approved after the next unlock.
@@ -26,7 +26,7 @@ describe("lock teardown does not depend on settings storage", () => {
     await vault.unlock(PASSWORD);
     await storage.session.set("sessionGrants", { "https://site.example": { expiresAt: 1 } });
     // An origin record, so lock() has display flags to write.
-    await storage.sync.set<AppSettingsV1>("appSettings", {
+    await storage.local.set<AppSettingsV1>("appSettings", {
       ...defaultSettings(),
       origins: [
         {
@@ -52,8 +52,8 @@ describe("lock teardown does not depend on settings storage", () => {
       badgeCleared = true;
     });
 
-    storage.sync.set = async () => {
-      throw new Error("QUOTA_BYTES_PER_ITEM quota exceeded");
+    storage.local.set = async () => {
+      throw new Error("QUOTA_BYTES quota exceeded");
     };
 
     await expect(

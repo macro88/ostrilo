@@ -13,14 +13,16 @@ import {
 } from "@/domain/policy/session-grants";
 import { StorageSuite } from "@/application/ports/storage";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
-
-const SETTINGS_KEY = "appSettings";
+import { SettingsStore } from "./settings-store";
 
 export class PolicyService {
   private consentMigrationDone = false;
   private consentMigrationInFlight?: Promise<any | undefined>;
 
-  constructor(private storage: StorageSuite) {}
+  constructor(
+    private storage: StorageSuite,
+    private store: SettingsStore = new SettingsStore(storage)
+  ) {}
 
   async loadContext(): Promise<{
     unlocked: boolean;
@@ -29,7 +31,7 @@ export class PolicyService {
     sessionGrants: Record<string, number>;
   }> {
     const [settings, lock, grants] = await Promise.all([
-      this.storage.sync.get<any>(SETTINGS_KEY),
+      this.store.read<any>(),
       this.storage.session.get<{ isLocked?: boolean }>("lockState"),
       this.storage.session.get<Record<string, number>>(SESSION_GRANTS_KEY),
     ]);
@@ -99,12 +101,12 @@ export class PolicyService {
 
   private async getSettings(): Promise<any> {
     return (
-      (await this.storage.sync.get<any>(SETTINGS_KEY)) ?? defaultSettings()
+      (await this.store.read<any>()) ?? defaultSettings()
     );
   }
 
   private async putSettings(next: any): Promise<void> {
-    await this.storage.sync.set<any>(SETTINGS_KEY, next);
+    await this.store.write<any>(next);
     // emit event so UI updates
     try {
       const { browser } = await import("wxt/browser");
@@ -268,7 +270,7 @@ export class PolicyService {
    */
   async runConsentMigration(settings?: any): Promise<any | undefined> {
     const current =
-      settings ?? (await this.storage.sync.get<any>(SETTINGS_KEY));
+      settings ?? (await this.store.read<any>());
 
     if (!current || typeof current !== "object") {
       // Nothing stored yet, so nothing to repair.

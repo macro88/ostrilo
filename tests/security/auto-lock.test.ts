@@ -199,7 +199,7 @@ describe("auto-lock deadline", () => {
   });
 
   async function setTimeout_(minutes: number) {
-    maps.sync.set("appSettings", {
+    maps.local.set("appSettings", {
       __version: "settings.v1",
       autoLockMinutes: minutes,
     });
@@ -328,7 +328,7 @@ describe("the reported deadline", () => {
   });
 
   function setTimeout_(minutes: number) {
-    maps.sync.set("appSettings", {
+    maps.local.set("appSettings", {
       __version: "settings.v1",
       autoLockMinutes: minutes,
     });
@@ -476,7 +476,7 @@ describe("activity recorded through the state.touch RPC", () => {
       ScureBech32
     );
     handler = new StateRpcHandler();
-    maps.sync.set("appSettings", {
+    maps.local.set("appSettings", {
       __version: "settings.v1",
       autoLockMinutes: 15,
     });
@@ -626,12 +626,12 @@ describe("a signature postpones the lock only when someone is there", () => {
       ScureBech32
     );
     handler = new NostrRpcHandler();
-    maps.sync.set("appSettings", {
+    maps.local.set("appSettings", {
       __version: "settings.v1",
       autoLockMinutes: 5,
     });
     presence = new UserPresenceService(
-      { async get() { return maps.sync.get("appSettings") as never; } } as never,
+      { async get() { return maps.local.get("appSettings") as never; } } as never,
       async () => {
         idleQueries++;
         return idle;

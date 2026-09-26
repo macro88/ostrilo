@@ -80,7 +80,7 @@ beforeEach(async () => {
   const real = realContext();
   context = real.context;
   settingsSnapshot = async () =>
-    JSON.stringify(await real.storage.sync.get("appSettings"));
+    JSON.stringify(await real.storage.local.get("appSettings"));
   await real.vault.importKey(SECRET_ONE, STRONG_PASSWORD);
   await real.vault.unlock(STRONG_PASSWORD);
 

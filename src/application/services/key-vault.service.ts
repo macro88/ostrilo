@@ -30,11 +30,11 @@ import { CRYPTO_CONSTANTS } from "@/domain/crypto/constants";
 import { bytesToHex, hexToBytes, isValidHex } from "@/domain/utils/hex";
 import { zeroize } from "@/domain/utils/memory";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
+import { SettingsStore } from "./settings-store";
 
 const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
 const VAULT_ENVELOPE_STORAGE = "vaultEnvelope";
 const LOCK_STATE_STORAGE = "lockState";
-const SETTINGS_KEY = "appSettings";
 
 /**
  * Known plaintext sealed under the vault KEK. Decrypting it proves the password
@@ -66,11 +66,12 @@ export class KeyVaultService {
     private kdf: CryptoKdf,
     private schnorr: Schnorr,
     private hash: CryptoHash,
-    private bech32: Bech32Codec
+    private bech32: Bech32Codec,
+    private settingsStore: SettingsStore = new SettingsStore(storage)
   ) {}
 
   async getSettings(): Promise<AppSettingsV1 | undefined> {
-    return await this.storage.sync.get<AppSettingsV1>(SETTINGS_KEY);
+    return await this.settingsStore.read<AppSettingsV1>();
   }
 
   async listKeys(): Promise<KeyRecord[]> {
@@ -382,7 +383,7 @@ export class KeyVaultService {
         record.isSelected = true;
         // also set selectedKeyId in settings
         const settings = (await this.getSettings()) ?? defaultSettings();
-        await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, {
+        await this.settingsStore.write<AppSettingsV1>({
           ...defaultSettings(),
           ...settings,
           __version: "settings.v1",
@@ -436,7 +437,7 @@ export class KeyVaultService {
       if (!hasSelected && records.length === 0) {
         record.isSelected = true;
         const settings = (await this.getSettings()) ?? defaultSettings();
-        await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, {
+        await this.settingsStore.write<AppSettingsV1>({
           ...defaultSettings(),
           ...settings,
           __version: "settings.v1",
@@ -455,7 +456,7 @@ export class KeyVaultService {
   async selectKey(id: string): Promise<void> {
     // Update selectedKeyId in settings
     const settings = (await this.getSettings()) ?? defaultSettings();
-    await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, {
+    await this.settingsStore.write<AppSettingsV1>({
       ...defaultSettings(),
       ...settings,
       __version: "settings.v1",
@@ -796,9 +797,10 @@ export class KeyVaultService {
     await this.storage.session.remove("sessionGrants");
 
     // The listeners run in `finally`, because one of them denies the pending
-    // approvals: a sync write that throws (quota, sync disabled, a corrupt
-    // record) used to skip them, so a request the user walked away from could
-    // survive the lock. The error still reaches the caller, after them.
+    // approvals: a settings write that throws (it once lived under sync's
+    // quota; a full disk or corrupt record still can) used to skip them, so a
+    // request the user walked away from could survive the lock. The error
+    // still reaches the caller, after them.
     try {
       await this.clearSessionDisplayFlags();
     } finally {
@@ -817,7 +819,7 @@ export class KeyVaultService {
         sessionGrantAll: false,
       })),
     } satisfies AppSettingsV1;
-    await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
+    await this.settingsStore.write<AppSettingsV1>(next);
     try {
       const { browser } = await import("wxt/browser");
       browser.runtime.sendMessage({ __event: SETTINGS_CHANGED_EVENT });

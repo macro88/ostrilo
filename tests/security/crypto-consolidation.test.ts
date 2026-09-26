@@ -618,7 +618,7 @@ describe("a vault written before this change still opens after it", () => {
     await storage.local.set("encryptedKeys", fixture.encryptedKeys);
     await storage.local.set("vaultEnvelope", fixture.vaultEnvelope);
     if (fixture.appSettings) {
-      await storage.sync.set("appSettings", fixture.appSettings);
+      await storage.local.set("appSettings", fixture.appSettings);
     }
     return testVault(storage).vault;
   }

@@ -17,8 +17,8 @@ import {
   getEffectiveMediumAllowKinds,
 } from "@/domain/policy/trust-definitions";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
+import { SettingsStore } from "./settings-store";
 
-const SETTINGS_KEY = "appSettings";
 export const SETTINGS_CHANGED_EVENT = BROADCAST_EVENTS.SETTINGS_CHANGED;
 
 const LEGACY_DEFAULT_RELAY_SETS = [
@@ -40,12 +40,15 @@ function isLegacyDefaultRelaySet(relays: unknown): relays is string[] {
 }
 
 export class SettingsService {
-  constructor(private storage: StorageSuite) {}
+  constructor(
+    storage: StorageSuite,
+    private store: SettingsStore = new SettingsStore(storage)
+  ) {}
 
   async get(): Promise<AppSettingsV1 | undefined> {
-    const existing = await this.storage.sync.get<
+    const existing = await this.store.read<
       Partial<AppSettingsV1> & Record<string, any>
-    >(SETTINGS_KEY);
+    >();
     if (existing && existing.__version === "settings.v1") {
       const current = existing as AppSettingsV1;
       let changed = false;
@@ -57,10 +60,10 @@ export class SettingsService {
       };
       changed = next.mediumAllowKinds !== current.mediumAllowKinds;
 
-      // Normalize the session bounds on READ, not only on write. These live
-      // in storage.sync, so a value written by an older build - or by another
-      // profile signed into the same account - arrives here without ever
-      // having passed through AppSettingsPatchSchema. A stored 0, which used
+      // Normalize the session bounds on READ, not only on write. A value
+      // written by an older build - or migrated from the synced copy another
+      // profile on the same account wrote - arrives here without ever having
+      // passed through AppSettingsPatchSchema. A stored 0, which used
       // to mean "never auto-lock", becomes the shipped default.
       const autoLock = normalizeAutoLockMinutes(current.autoLockMinutes);
       if (autoLock !== current.autoLockMinutes) {
@@ -101,7 +104,7 @@ export class SettingsService {
       }
 
       if (changed) {
-        await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
+        await this.store.write<AppSettingsV1>(next);
         return next;
       }
 
@@ -133,7 +136,7 @@ export class SettingsService {
       selectedKeyId: existing?.selectedKeyId ?? d.selectedKeyId,
       __version: "settings.v1",
     };
-    await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
+    await this.store.write<AppSettingsV1>(next);
     return next;
   }
 
@@ -162,7 +165,7 @@ export class SettingsService {
       ...safePatch,
       __version: "settings.v1",
     } as AppSettingsV1;
-    await this.storage.sync.set<AppSettingsV1>(SETTINGS_KEY, next);
+    await this.store.write<AppSettingsV1>(next);
     // Emit a runtime event for UI stores to pick up
     try {
       const { browser } = await import("wxt/browser");
