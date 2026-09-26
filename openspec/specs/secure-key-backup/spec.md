@@ -3,9 +3,7 @@
 ## Purpose
 
 Define how a private key is revealed, backed up, verified, and cleared, so the user can record a recoverable backup without the extension ever writing plaintext key material to disk or leaving it resident in the UI.
-
 ## Requirements
-
 ### Requirement: No Plaintext Private Key Export
 
 The extension MUST NOT write unencrypted private key material to the filesystem. No onboarding, settings, or key-management surface SHALL offer a download, save, or share action that produces a file containing an nsec or a raw hex private key in the clear.
@@ -298,4 +296,15 @@ The create-key flow SHALL tell the user, before completion, that a forgotten mas
 
 - **WHEN** the encrypted backup export flow is shown
 - **THEN** the UI SHALL state that losing the backup passphrase makes the exported file unusable
+
+### Requirement: Backup File KDF Parameters Are Bounded Above
+
+Restoring an encrypted backup SHALL refuse, before any key derivation, a file whose recorded KDF parameters exceed the ceilings defined beside `KDF_FLOORS`, and SHALL report it with the same generic decryption-failure message used for a wrong passphrase or a parameter below the floor.
+
+#### Scenario: A crafted backup with an extreme memory cost
+
+- **GIVEN** a backup file whose Argon2id memory cost exceeds the ceiling
+- **WHEN** the user imports it with any passphrase
+- **THEN** the import fails with the generic decryption-failure message
+- **AND** no Argon2id derivation is started
 
