@@ -2,6 +2,7 @@ import {
   AES_GCM_IV_LENGTH,
   KDF_DEFAULTS,
   KDF_FLOORS,
+  KDF_CEILINGS,
   KDF_SALT_LENGTH,
   type KdfParams,
 } from "@/domain/types";
@@ -29,9 +30,9 @@ import type { SecretBytes } from "@/application/ports/crypto";
  *     That is the same rule the vault follows (`src/infrastructure/crypto/
  *     adapters.ts`), and it is what allows the work factor to be raised later
  *     without making existing backups unreadable. It is also why the recorded
- *     parameters are checked against `KDF_FLOORS` before use: a file is
- *     attacker-supplied input, and a rolled-back work factor must be refused
- *     rather than silently honoured.
+ *     parameters are checked against `KDF_FLOORS` and `KDF_CEILINGS` before
+ *     use: a file is attacker-supplied input, and neither a rolled-back work
+ *     factor nor a ruinous one may be honoured.
  *  3. **The header is authenticated.** The version, the KDF descriptor and the
  *     IV are bound into the GCM tag as additional authenticated data, so a file
  *     whose header has been rewritten fails to decrypt instead of decrypting
@@ -182,15 +183,26 @@ function deserializeKdf(kdf: SerializedKdfParams): KdfParams {
     throw new KeyBackupError(BACKUP_DECRYPT_FAILURE_MESSAGE);
   }
 
+  // Out-of-bounds parameters fail exactly like a wrong passphrase: a backup
+  // file is untrusted input, and a distinct message would help probe it. The
+  // ceiling is checked here, before derivation, because a crafted `m` in the
+  // gigabytes would otherwise stall or crash the page that opens the file.
   if (kdf.alg === "argon2id") {
     const floor = KDF_FLOORS.argon2id;
-    if (kdf.m < floor.m || kdf.t < floor.t || kdf.p < floor.p) {
+    const ceiling = KDF_CEILINGS.argon2id;
+    if (
+      kdf.m < floor.m || kdf.t < floor.t || kdf.p < floor.p ||
+      kdf.m > ceiling.m || kdf.t > ceiling.t || kdf.p > ceiling.p
+    ) {
       throw new KeyBackupError(BACKUP_DECRYPT_FAILURE_MESSAGE);
     }
     return { alg: "argon2id", m: kdf.m, t: kdf.t, p: kdf.p, salt };
   }
 
-  if (kdf.c < KDF_FLOORS["pbkdf2-sha256"].c) {
+  if (
+    kdf.c < KDF_FLOORS["pbkdf2-sha256"].c ||
+    kdf.c > KDF_CEILINGS["pbkdf2-sha256"].c
+  ) {
     throw new KeyBackupError(BACKUP_DECRYPT_FAILURE_MESSAGE);
   }
   return { alg: "pbkdf2-sha256", c: kdf.c, salt };

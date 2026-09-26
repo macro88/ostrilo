@@ -8,7 +8,12 @@ import {
 } from "@/infrastructure/crypto/adapters";
 import type { StorageSuite } from "@/application/ports/storage";
 import type { KeyRecord, VaultEnvelope } from "@/domain/types";
-import { VAULT_VERSION, KDF_FLOORS } from "@/domain/types";
+import {
+  VAULT_VERSION,
+  KDF_FLOORS,
+  KDF_CEILINGS,
+  KDF_DEFAULTS,
+} from "@/domain/types";
 
 // Some of these run a real KDF at production cost, legacy PBKDF2 at 100,000
 // iterations among them. Under V8 coverage on a CI runner one such unlock
@@ -140,6 +145,37 @@ describe("vault envelope: versioning and recorded parameters", () => {
     });
 
     await expect(vault.unlock(PASSWORD)).rejects.toThrow("kdf_below_floor");
+  });
+
+  it.each([
+    ["argon2id memory cost", { alg: "argon2id", m: KDF_CEILINGS.argon2id.m + 1, t: 2, p: 1 }],
+    ["argon2id time cost", { alg: "argon2id", m: 19456, t: KDF_CEILINGS.argon2id.t + 1, p: 1 }],
+    ["argon2id parallelism", { alg: "argon2id", m: 19456, t: 2, p: KDF_CEILINGS.argon2id.p + 1 }],
+    ["pbkdf2 iterations", { alg: "pbkdf2-sha256", c: KDF_CEILINGS["pbkdf2-sha256"].c + 1 }],
+  ])("refuses a recorded %s above the ceiling without deriving", async (_name, kdf) => {
+    // The attack: rewrite the stored work factor to something that stalls or
+    // crashes the worker on every unlock.
+    await vault.generateKey(PASSWORD, "k1");
+    const env = maps.local.get("vaultEnvelope") as VaultEnvelope;
+    maps.local.set("vaultEnvelope", {
+      ...env,
+      kdf: { ...kdf, salt: (env.kdf as { salt: number[] }).salt },
+    });
+    const derive = vi.spyOn(fastKdf, "deriveKey");
+
+    await expect(vault.unlock(PASSWORD)).rejects.toThrow("kdf_above_ceiling");
+    expect(derive).not.toHaveBeenCalled();
+    derive.mockRestore();
+  });
+
+  it("ships defaults that sit inside the floors and ceilings", () => {
+    expect(KDF_DEFAULTS.alg).toBe("argon2id");
+    if (KDF_DEFAULTS.alg !== "argon2id") return;
+    for (const param of ["m", "t", "p"] as const) {
+      expect(KDF_DEFAULTS[param]).toBeGreaterThanOrEqual(KDF_FLOORS.argon2id[param]);
+      expect(KDF_DEFAULTS[param]).toBeLessThanOrEqual(KDF_CEILINGS.argon2id[param]);
+    }
+    expect(KDF_FLOORS["pbkdf2-sha256"].c).toBeLessThan(KDF_CEILINGS["pbkdf2-sha256"].c);
   });
 
   it("derives once for the whole vault, not once per key", async () => {

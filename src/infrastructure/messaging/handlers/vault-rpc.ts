@@ -189,6 +189,7 @@ export class VaultRpcHandler implements RpcModule {
         if (
           error.message === "vault_version_unsupported" ||
           error.message === "kdf_below_floor" ||
+          error.message === "kdf_above_ceiling" ||
           error.message === "kdf_unknown_algorithm"
         ) {
           return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {

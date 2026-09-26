@@ -15,6 +15,7 @@ import {
   VAULT_VERSION,
   SUPPORTED_VAULT_VERSIONS,
   KDF_FLOORS,
+  KDF_CEILINGS,
   KDF_DEFAULTS,
   KDF_SALT_LENGTH,
   AES_GCM_IV_LENGTH,
@@ -107,22 +108,31 @@ export class KeyVaultService {
   }
 
   /**
-   * Rejects a record whose recorded cost is below the floor.
+   * Rejects a record whose recorded cost is below the floor or above the
+   * ceiling, before any derivation runs.
    *
-   * Without this, an attacker able to write extension storage could rewrite the
-   * stored parameters to something trivially cheap. The AAD binding makes that
-   * tamper detectable, and this check makes it refused rather than merely
-   * detected late.
+   * Without the floor, an attacker able to write extension storage could
+   * rewrite the stored parameters to something trivially cheap. The AAD
+   * binding makes that tamper detectable, and this check makes it refused
+   * rather than merely detected late. Without the ceiling, the same writer
+   * could set a memory cost that stalls or crashes the worker on every unlock.
    */
   private assertKdfAcceptable(kdf: KdfParams): void {
     if (kdf.alg === "argon2id") {
       const f = KDF_FLOORS.argon2id;
+      const c = KDF_CEILINGS.argon2id;
       if (kdf.m < f.m || kdf.t < f.t || kdf.p < f.p) {
         throw new Error("kdf_below_floor");
+      }
+      if (kdf.m > c.m || kdf.t > c.t || kdf.p > c.p) {
+        throw new Error("kdf_above_ceiling");
       }
     } else if (kdf.alg === "pbkdf2-sha256") {
       if (kdf.c < KDF_FLOORS["pbkdf2-sha256"].c) {
         throw new Error("kdf_below_floor");
+      }
+      if (kdf.c > KDF_CEILINGS["pbkdf2-sha256"].c) {
+        throw new Error("kdf_above_ceiling");
       }
     } else {
       throw new Error("kdf_unknown_algorithm");

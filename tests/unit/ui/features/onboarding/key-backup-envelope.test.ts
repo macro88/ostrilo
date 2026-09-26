@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { VaultKdf } from "@/infrastructure/crypto/adapters";
+import { KDF_CEILINGS } from "@/domain/types";
 import {
   BACKUP_DECRYPT_FAILURE_MESSAGE,
   KeyBackupError,
@@ -150,6 +152,28 @@ describe("encrypted key backup envelope", () => {
       BACKUP_DECRYPT_FAILURE_MESSAGE
     );
   });
+
+  it.each([
+    ["memory cost", { m: KDF_CEILINGS.argon2id.m + 1 }],
+    ["time cost", { t: KDF_CEILINGS.argon2id.t + 1 }],
+    ["parallelism", { p: KDF_CEILINGS.argon2id.p + 1 }],
+  ])(
+    "refuses a header whose argon2id %s exceeds the ceiling, without deriving",
+    async (_name, raised) => {
+      const envelope = await createKeyBackup(PAYLOAD, PASSPHRASE);
+      const crafted = { ...envelope, kdf: { ...envelope.kdf, ...raised } };
+      const derive = vi.spyOn(VaultKdf, "deriveKey");
+
+      await expect(openKeyBackup(crafted, PASSPHRASE)).rejects.toThrow(
+        BACKUP_DECRYPT_FAILURE_MESSAGE
+      );
+      expect(
+        derive,
+        "a crafted file must be refused before it can stall the page"
+      ).not.toHaveBeenCalled();
+      derive.mockRestore();
+    }
+  );
 
   it("refuses a header whose salt has been shortened", async () => {
     const envelope = await createKeyBackup(PAYLOAD, PASSPHRASE);
