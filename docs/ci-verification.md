@@ -44,6 +44,10 @@ Four jobs, none using `continue-on-error`:
   the checkout is what gives git the ancestry needed to resolve that range; a
   shallow clone cannot. PR commenting is disabled so the workflow keeps its
   read-only token; findings are reported through the job's exit code and run log.
+  The job holds `pull-requests: read` in addition to `contents: read`: on a
+  pull request the action resolves the commit range through the pulls API
+  before scanning, and without that scope it failed with "Resource not
+  accessible by integration" on every PR while passing on every push to main.
 
 `--frozen-lockfile` is not only about reproducibility. It also runs the
 supply-chain policy declared in `pnpm-workspace.yaml`, so a lockfile containing

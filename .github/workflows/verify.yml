@@ -111,6 +111,15 @@ jobs:
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
+    # Still read-only, one scope wider than the workflow default. On a pull
+    # request the action first lists the PR's commits through
+    # `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits` to find the range
+    # to scan, and `contents: read` alone does not cover the pulls API. Without
+    # this, every PR scan failed with "Resource not accessible by integration"
+    # before gitleaks ran at all, while the push scan of main kept passing.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
