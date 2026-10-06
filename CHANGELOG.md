@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 — 2026-10-06
+
+First public release. The 0.8.0 entry below was written while the repository
+was still private; that version was never tagged, released or published to a
+store, so a first-time reader should take the two sections together as the
+description of what 0.9.0 ships. The behaviour and RPC changes in this section
+are written for anyone who was running a 0.8.0 development build.
 
 ### Added
 
@@ -62,14 +68,15 @@
 
 ## 0.8.0 — 2026-09-25
 
-First public release. There is no published predecessor, so the entries below
-cover the whole of Ostrilo's development rather than a single release cycle —
-which is why a first release arrives with a changelog this long. They were written as
-the work landed, against the development builds in use at the time, so some are
-phrased as changes to existing behaviour and address people already running
-those builds; if this release is your first Ostrilo, read those as descriptions
-of how 0.8.0 behaves. The README states what this version number does and does
-not claim.
+The first versioned build, set while the repository was still private. It was
+never tagged, released or published to a store; 0.9.0 above is the first public
+release. There is no predecessor of any kind, so the entries below cover the
+whole of Ostrilo's development rather than a single release cycle — which is why
+the changelog is this long. They were written as the work landed, against the
+development builds in use at the time, so some are phrased as changes to
+existing behaviour and address people already running those builds; if 0.9.0 is
+your first Ostrilo, read those as descriptions of how it behaves. The README
+states what the current version number does and does not claim.
 
 ### Security
 

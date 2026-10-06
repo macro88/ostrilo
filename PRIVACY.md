@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective:** 26 September 2026 · **Applies to:** Ostrilo 0.8.0 and later
+**Effective:** 6 October 2026 · **Applies to:** Ostrilo 0.9.0 and later
 
 Ostrilo is a browser extension that stores Nostr keys and signs Nostr events on
 your device. This policy covers what the extension stores, what it sends and
@@ -95,7 +95,7 @@ A website never receives a private key or your master password.
 ## Images and uploads
 
 Ostrilo does not load remote images in its own windows, so a profile picture URL
-does not cause a request from the extension. Ostrilo 0.8.0 has no image upload:
+does not cause a request from the extension. Ostrilo 0.9.0 has no image upload:
 you paste an image URL instead.
 
 ## Permissions
