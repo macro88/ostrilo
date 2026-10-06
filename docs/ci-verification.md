@@ -94,6 +94,21 @@ gate. High and critical are rare enough to be worth stopping for.
 | Advisory | Package | Severity | Status |
 |---|---|---|---|
 | esbuild dev-server arbitrary file read on Windows | `esbuild` | low | Accepted. Below threshold. Affects `wxt dev` on Windows only; no release path. |
+| GHSA-vfj7-8cjw-p6xm, stack exhaustion on deeply nested brace patterns | `braces` | high | Accepted 2026-10-06 via `auditConfig.ignoreGhsas` in `pnpm-workspace.yaml`. No patched release exists: the advisory names `>=3.0.4` and npm's latest is `3.0.3`. Reached only through `aislop` and `shadcn > micromatch`, which glob paths this repository supplies; no untrusted pattern reaches it. Remove the ignore the day a patched version is published. |
+| GHSA-86w9-cpqp-85rv, PKCS#1 v1.5 verification accepts extra nested DigestAlgorithm elements | `node-forge` | high | Accepted 2026-10-06 via `auditConfig.ignoreGhsas`. No patched release exists: the advisory names `>=1.4.1` and npm's latest is `1.4.0`. Reached only through `wxt > web-ext-run > @devicefarmer/adbkit`, the Android debugging path, which nothing in this repository invokes. Remove the ignore the day a patched version is published. |
+
+An ignored advisory is a hole in the gate with a name on it. Each entry in
+`ignoreGhsas` has a row here, and a row here says why the finding cannot reach
+the shipped extension or a developer's keys; an entry without a row is a change
+to the gate with no record. A high or critical advisory **with** a patched
+release is never ignored, it is overridden.
+
+Three advisories were fixed by `overrides` on 2026-10-06, before the first
+public release: `brace-expansion` (GHSA-6j4f-fj2g-mc7p, GHSA-qhr7-859c-m2p7),
+`source-map-js` (GHSA-68fv-2mgg-jv7q) and `proxy-addr` (GHSA-jqcg-44mw-7w3h).
+All three sit in dev tooling. `brace-expansion` is overridden within each of its
+two majors, because its 5.x line is ESM-only and a single override would have
+pushed the CommonJS consumers under `minimatch@3` onto it.
 
 Two advisories were fixed rather than accepted when this gate was introduced:
 
