@@ -150,6 +150,24 @@ No `host_permissions` on either target, and none should appear: the content
 script's own `matches` grant what the extension needs. WXT only injects host
 permissions in serve mode.
 
+### Firefox data collection declaration
+
+The Firefox manifest carries, under `browser_specific_settings.gecko`:
+
+```json
+"data_collection_permissions": { "required": ["none"] }
+```
+
+AMO requires this declaration of every new submission since 3 November 2025,
+and surfaces it to the user at install time as the add-on's data consent. `none`
+is the declaration that the extension collects and transmits no user data, which
+is what [PRIVACY.md](../PRIVACY.md) states: no server, no telemetry, no crash
+reports. Relay traffic is user-directed and is not collection in Mozilla's
+sense. The assertion suite fails the Firefox manifest on any value other than
+`["none"]`, and fails the Chrome manifest if the Firefox-only block appears
+there. Adding a collected category is a privacy-policy change first and a
+manifest change second.
+
 ## Web-accessible resources and the injection surface
 
 ```jsonc

@@ -166,8 +166,24 @@ export default defineConfig({
     homepage_url: "https://github.com/macro88/ostrilo",
     // Firefox needs an explicit add-on id for a stable AMO identity. Changing
     // it later orphans every existing install, so it is fixed here once.
+    //
+    // `data_collection_permissions` is the consent declaration AMO requires of
+    // every new submission since 2025-11-03. `required: ["none"]` is the
+    // declaration that the extension collects and transmits no user data,
+    // which is what PRIVACY.md states: there is no server, no telemetry and no
+    // crash reporting. Relay traffic is user-directed and is not collection in
+    // Mozilla's sense. Adding any collected category here is a privacy-policy
+    // change first and a manifest change second; the manifest assertions fail
+    // on anything other than `["none"]`.
     ...(env.browser === "firefox"
-      ? { browser_specific_settings: { gecko: { id: "ostrilo@macro88.github.io" } } }
+      ? {
+          browser_specific_settings: {
+            gecko: {
+              id: "ostrilo@macro88.github.io",
+              data_collection_permissions: { required: ["none"] },
+            },
+          },
+        }
       : {}),
   }),
   zip: {

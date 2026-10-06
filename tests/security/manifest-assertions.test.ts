@@ -385,6 +385,27 @@ for (const target of TARGETS) {
           "SECURITY REGRESSION: host_permissions appeared. The content script's own matches grant what the extension needs."
         ).toBeUndefined();
       });
+
+      it(
+        target.label === "firefox"
+          ? "declares to AMO that it collects no user data"
+          : "carries no Firefox-only data collection declaration",
+        () => {
+          const gecko = (
+            manifest.browser_specific_settings as
+              | { gecko?: { data_collection_permissions?: unknown } }
+              | undefined
+          )?.gecko;
+          if (target.label === "firefox") {
+            expect(
+              gecko?.data_collection_permissions,
+              "PRIVACY REGRESSION: the Firefox manifest must declare data_collection_permissions.required = [\"none\"]. Declaring any collected category is a PRIVACY.md change first; see wxt.config.ts."
+            ).toEqual({ required: ["none"] });
+          } else {
+            expect(manifest.browser_specific_settings).toBeUndefined();
+          }
+        }
+      );
     });
 
     describe("injection surface", () => {
