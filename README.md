@@ -34,7 +34,7 @@ Ostrilo lets Nostr websites ask for your public key and request signatures throu
 and manage each site's permissions. Signing happens in the extension's background
 context; websites receive public keys and signed events, never your private key.
 
-> **Version 0.8.0 — pre-1.0**
+> **Version 0.9.0 — pre-1.0**
 > Ostrilo is usable, but it has not met its own bar for 1.0. Before 1.0 a minor
 > version may change behaviour; a change to the encrypted vault format or to the
 > website-facing NIP-07 surface (`getPublicKey`, `signEvent`) will always be
@@ -219,7 +219,7 @@ pass certificate.
 ```sh
 pnpm run compile
 pnpm run lint
-pnpm run test
+pnpm run test:coverage
 pnpm run test:build-output
 pnpm audit --audit-level high
 pnpm exec playwright install chromium
