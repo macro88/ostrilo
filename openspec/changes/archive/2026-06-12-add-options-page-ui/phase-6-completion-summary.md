@@ -12,14 +12,14 @@ Added `chrome.storage.onChanged` listeners to enable real-time synchronization o
 
 #### Files Modified:
 
-**[src/extension/options/OptionsApp.tsx](src/extension/options/OptionsApp.tsx#L70-L85)**
+**[src/extension/options/OptionsApp.tsx](../../../../src/extension/options/OptionsApp.tsx#L70-L85)**
 
 - Added `useEffect` hook with `chrome.storage.onChanged` listener
 - Listens for changes to `appSettings` in sync storage
 - Triggers page reload to update UI when settings change from other contexts
 - Ensures options page reflects changes made in popup/sidepanel
 
-**[src/ui/features/settings/components/BasicSettings.tsx](src/ui/features/settings/components/BasicSettings.tsx#L9-L38)**
+**[src/ui/features/settings/components/BasicSettings.tsx](../../../../src/ui/features/settings/components/BasicSettings.tsx#L9-L38)**
 
 - Added `useState` for force re-render mechanism
 - Added `useEffect` hook with `chrome.storage.onChanged` listener
@@ -33,7 +33,7 @@ Replaced the binary "Dock to side" switch with a clearer dropdown selector offer
 
 #### Files Created:
 
-**[src/ui/components/navigation/open-in-selector.tsx](src/ui/components/navigation/open-in-selector.tsx)** (NEW)
+**`src/ui/components/navigation/open-in-selector.tsx`** (NEW at the time; since removed)
 
 - Created new component using shadcn/ui `Select` component
 - Options: "Popup" | "Side Panel"
@@ -44,12 +44,12 @@ Replaced the binary "Dock to side" switch with a clearer dropdown selector offer
 
 #### Files Modified:
 
-**[src/ui/features/settings/components/GeneralSettingsTab.tsx](src/ui/features/settings/components/GeneralSettingsTab.tsx#L1-L4)**
+**[src/ui/features/settings/components/GeneralSettingsTab.tsx](../../../../src/ui/features/settings/components/GeneralSettingsTab.tsx#L1-L4)**
 
 - Replaced `SidePanelToggle` import with `OpenInSelector`
 - Updated component usage in Display section
 
-**[src/ui/features/settings/components/SettingsView.tsx](src/ui/features/settings/components/SettingsView.tsx#L1-L2)**
+**`src/ui/features/settings/components/SettingsView.tsx`** (since removed)
 
 - Replaced `SidePanelToggle` import with `OpenInSelector`
 - Updated component usage (legacy settings view, still in codebase)
