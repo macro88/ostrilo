@@ -40,4 +40,37 @@ overrides:
   adm-zip: "0.6.1"
   tmp: "0.2.7"
   uuid: "11.1.1"
+  #
+  # --- Audit overrides, 2026-10-06, before the first public release. All three
+  # --- sit in dev tooling and none ships in the extension bundle, but the
+  # --- audit gate blocks on high severity, and a build machine holding signing
+  # --- keys is a target in its own right.
+  #
+  # brace-expansion: GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7, uncontrolled
+  # recursion and quadratic expansion. Two majors are in the tree under
+  # minimatch, reached through wxt > web-ext-run and typescript-eslint. Each is
+  # moved within its own major: a single override would push the CommonJS 1.x
+  # consumers onto the ESM-only 5.x line.
+  "brace-expansion@1": "1.1.21"
+  "brace-expansion@5": "5.0.12"
+  # source-map-js <1.2.2: GHSA-68fv-2mgg-jv7q, event-loop DoS through indexed
+  # source-map section offsets. Reached through @tailwindcss/vite and postcss.
+  source-map-js: "1.2.2"
+  # proxy-addr <2.0.8: GHSA-jqcg-44mw-7w3h, IP spoofing via IPv4-mapped IPv6
+  # trust subnets. Reached through aislop and shadcn > @modelcontextprotocol/sdk
+  # > express. Nothing here runs an HTTP server behind a proxy.
+  proxy-addr: "2.0.8"
 trustPolicy: no-downgrade
+# Advisories with no patched release on npm. Each one is recorded, with the
+# reason it is accepted, in the "Accepted exceptions" table in
+# docs/ci-verification.md; an entry here without a row there is a change to the
+# gate with no record. Remove the entry the day a patched version exists.
+auditConfig:
+  ignoreGhsas:
+    # braces <=3.0.3: stack exhaustion on deeply nested patterns. Dev-only,
+    # through aislop and shadcn > micromatch. No 3.0.4 has been published.
+    - GHSA-vfj7-8cjw-p6xm
+    # node-forge <=1.4.0: PKCS#1 v1.5 verification accepts extra nested
+    # DigestAlgorithm elements. Dev-only, through wxt > web-ext-run > adbkit,
+    # which drives Android debugging and is never invoked here. No 1.4.1 exists.
+    - GHSA-86w9-cpqp-85rv
