@@ -114,12 +114,29 @@ All three sit in dev tooling. `brace-expansion` is overridden within each of its
 two majors, because its 5.x line is ESM-only and a single override would have
 pushed the CommonJS consumers under `minimatch@3` onto it.
 
+Three more arrived in the feed the next day and were fixed the same way on
+2026-10-07: `shell-quote` (GHSA-pqg4-j6r4-53mv, critical; the existing override
+moved from `1.10.0` to `1.11.0`), `@modelcontextprotocol/sdk`
+(GHSA-6qxp-vccf-f47h) and `sharp` (GHSA-wq5f-xc86-pv6w). `sharp` is the one
+override in this list that touches a shipped artifact: `@wxt-dev/auto-icons`
+rasterises the extension icons through it at build time. Three moderate
+advisories under the MCP SDK and aislop (`fast-uri`, `ip-address`, `smol-toml`)
+were fixed in the same change because patched releases existed and the bumps
+were in range, not because the gate required it. Every bump is inside the
+range its consumer declares.
+
+A gate that was green yesterday and red today on an unchanged tree is this
+mechanism working, not flaking: `pnpm audit` reads npm's live advisory feed, so
+the audit job on an untouched branch can start failing the day an advisory is
+published. Expect it, and fix it by override rather than by rerunning.
+
 Two advisories were fixed rather than accepted when this gate was introduced:
 
 - **`shell-quote`** GHSA-395f-4hp3-45gv (high, quadratic-complexity DoS in
   `parse()`). The workspace already had an override pinning `shell-quote` to
   `1.8.4` — which is itself the vulnerable version, since the advisory covers
-  `<=1.8.4`. No `1.8.5` was ever published, so the override moved to `1.10.0`.
+  `<=1.8.4`. No `1.8.5` was ever published, so the override moved to `1.10.0`,
+  and on 2026-10-07 to `1.11.0` for GHSA-pqg4-j6r4-53mv (see below).
 - **`adm-zip`** (high, crafted ZIP triggers a 4GB allocation; plus a moderate
   symlink-traversal advisory). Overridden to `0.6.1`, which clears both.
 

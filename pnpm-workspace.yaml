@@ -33,8 +33,11 @@ overrides:
   # shell-quote was previously pinned to 1.8.4, which is itself the vulnerable
   # version: GHSA-395f-4hp3-45gv (quadratic-complexity DoS in parse()) covers
   # <=1.8.4 and is patched in >=1.8.5. No 1.8.5 was ever published, so this
-  # moves to the current 1.x line.
-  shell-quote: "1.10.0"
+  # moved to 1.10.0. GHSA-pqg4-j6r4-53mv (critical, command injection through
+  # a line terminator after a comment token in quote()) then covered
+  # >=1.8.4 <1.11.0, so it moves again. fx-runner pins 1.7.3 exactly and has
+  # done so through every one of these; the override is what keeps it current.
+  shell-quote: "1.11.0"
   # adm-zip <0.6.0: crafted ZIP triggers a 4GB allocation. 0.6.1 also clears
   # the symlink-traversal advisory (>=0.5.9 <=0.6.0).
   adm-zip: "0.6.1"
@@ -60,6 +63,36 @@ overrides:
   # trust subnets. Reached through aislop and shadcn > @modelcontextprotocol/sdk
   # > express. Nothing here runs an HTTP server behind a proxy.
   proxy-addr: "2.0.8"
+  #
+  # --- Audit overrides, 2026-10-07. Three advisories reached npm's feed in
+  # --- the day after the block above was written. Each bump is inside the
+  # --- range its consumer declares, so nothing here forces a package onto a
+  # --- line it has not been tested against.
+  #
+  # @modelcontextprotocol/sdk <1.31.0: GHSA-6qxp-vccf-f47h, OAuth client could
+  # send credentials to an authorization server chosen by the MCP server.
+  # Reached through aislop (^1.30.0) and shadcn (^1.26.0); neither tool's MCP
+  # mode is used here, but the gate blocks on high regardless.
+  "@modelcontextprotocol/sdk": "1.31.0"
+  # sharp <0.35.5: GHSA-wq5f-xc86-pv6w, a vulnerability in its bundled librsvg.
+  # Reached through @wxt-dev/auto-icons (^0.35.3), which rasterises the
+  # extension icons at build time - this one does touch a shipped asset, so it
+  # is fixed on that ground as well as the gate's.
+  sharp: "0.35.5"
+  # Moderate advisories, below the gate's threshold but fixed because a patched
+  # release exists and the bump is in range. All three sit under the MCP SDK or
+  # aislop and never ship.
+  # fast-uri <3.1.8: GHSA-hrr3-gc8f-f4qj, inconsistent host case normalisation.
+  fast-uri: "3.1.8"
+  # ip-address <=10.7.0: GHSA-j6r3-76f7-8jcv and GHSA-h3mg-xc3c-68pw, subnet
+  # checks that compare addresses of different families.
+  ip-address: "10.7.1"
+  # smol-toml <=1.8.0: GHSA-r4xh-jqrq-34v2, quadratic-time parse().
+  smol-toml: "1.9.0"
+  #
+  # Not overridden: esbuild GHSA-g7r4-m6w7-qqqr (low, dev-server file read on
+  # Windows). The fix is 0.28.x; wxt declares ^0.27.1 and esbuild treats minor
+  # versions as breaking. Accepted in docs/ci-verification.md instead.
 trustPolicy: no-downgrade
 # Advisories with no patched release on npm. Each one is recorded, with the
 # reason it is accepted, in the "Accepted exceptions" table in
