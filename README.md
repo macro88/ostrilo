@@ -1,98 +1,183 @@
 <p align="center">
-  <img src="src/assets/icon.png" alt="Ostrilo — a purple, faceted ostrich" width="144" height="144">
+  <img src="src/assets/icon.png" alt="Ostrilo, a purple, faceted ostrich" width="144" height="144">
 </p>
 
 <h1 align="center">Ostrilo</h1>
 
 <p align="center">
-  <strong>Your Nostr keys. Your signing decisions.</strong><br>
-  A browser extension for managing identities and signing Nostr events locally.
+  <strong>A Nostr signer extension for your browser.</strong><br>
+  Use Nostr apps without handing your private key to each website.
 </p>
 
 <p align="center">
-  <a href="https://github.com/macro88/ostrilo/actions/workflows/verify.yml"><img src="https://github.com/macro88/ostrilo/actions/workflows/verify.yml/badge.svg?branch=main" alt="Verify"></a>
-  <a href="https://github.com/macro88/ostrilo/actions/workflows/e2e.yml"><img src="https://github.com/macro88/ostrilo/actions/workflows/e2e.yml/badge.svg?branch=main" alt="E2E"></a>
-  <a href="docs/TESTING.md"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmacro88%2Fostrilo%2Fbadges%2Fcoverage.json" alt="Line coverage"></a>
-  <a href="AGENTS.md#aislop-verification"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmacro88%2Fostrilo%2Fbadges%2Faislop.json" alt="aislop score"></a>
-  <a href="AGENTS.md#react-doctor-verification"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmacro88%2Fostrilo%2Fbadges%2Freact-doctor.json" alt="React Doctor score"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/package-json/v/macro88/ostrilo?label=version" alt="Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
-</p>
+
+  <a href="https://github.com/macro88/ostrilo/actions/workflows/verify.yml"><img src="https://github.com/macro88/ostrilo/actions/workflows/verify.yml/badge.svg?branch=main" alt="Verify"></a>  <a href="https://github.com/macro88/ostrilo/actions/workflows/e2e.yml"><img src="https://github.com/macro88/ostrilo/actions/workflows/e2e.yml/badge.svg?branch=main" alt="E2E"></a>  <a href="docs/TESTING.md"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmacro88%2Fostrilo%2Fbadges%2Fcoverage.json" alt="Line coverage"></a>  <a href="AGENTS.md#aislop-verification"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmacro88%2Fostrilo%2Fbadges%2Faislop.json" alt="aislop score"></a>  <a href="AGENTS.md#react-doctor-verification"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmacro88%2Fostrilo%2Fbadges%2Freact-doctor.json" alt="React Doctor score"></a>  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/package-json/v/macro88/ostrilo?label=version" alt="Version"></a>  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a></p>
 
 <p align="center">
+  <a href="#install">Install</a> ·
   <a href="#get-started">Get started</a> ·
-  <a href="#what-works-today">Current status</a> ·
-  <a href="#trust-and-control">Trust &amp; control</a> ·
-  <a href="#backup-recovery-and-exit">Recovery</a> ·
-  <a href="#contributing">Contribute</a>
+  <a href="#backup-and-recovery">Backup</a> ·
+  <a href="#roadmap">Roadmap</a> ·
+  <a href="#help">Help</a>
 </p>
 
 ---
 
-Ostrilo lets Nostr websites ask for your public key and request signatures through
-`window.nostr`. Keep several identities in one local vault, choose the active key,
-and manage each site's permissions. Signing happens in the extension's background
-context; websites receive public keys and signed events, never your private key.
+**Ostrilo is a Nostr signer extension that keeps your private keys in your
+browser.** When a Nostr app needs a signature, it asks Ostrilo. You can see which
+site is asking, check what it wants to sign, and approve or decline the request.
 
-> **Version 0.9.0 — pre-1.0**
-> Ostrilo is usable, but it has not met its own bar for 1.0. Before 1.0 a minor
-> version may change behaviour; a change to the encrypted vault format or to the
-> website-facing NIP-07 surface (`getPublicKey`, `signEvent`) will always be
-> called out in the [changelog](CHANGELOG.md) with a migration path.
->
-> **What 1.0 requires, and does not have yet:**
->
-> - An independent security review of the vault, the signing path and the RPC
->   privilege boundary, with its findings published.
-> - A backup path for every key. Today only the first key, during onboarding, is
->   offered an encrypted backup; a key added later cannot be backed up from
->   within Ostrilo.
->
-> Already met: test coverage of at least 80% overall and 90% in the domain,
-> application and infrastructure layers, enforced in CI.
->
-> Beyond those: Chromium is the only automated
-> extension-test target. Firefox has a dedicated MV3 build, checked by the
-> manifest and bundle assertions but not by a browser-runtime suite. Safari is
-> not a verified target. There has been no independent security audit. The
-> instructions below build from source, rather than install a store release.
-> Start with a disposable identity while evaluating it.
+Keep several identities, switch between them, and set permissions for the sites
+you use. Ostrilo also lets you edit your profile, choose your relays and review
+your signing history.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/design-review/screenshots/dark/23-popup-home-populated.png">
-    <img src="docs/design-review/screenshots/23-popup-home-populated.png" alt="Ostrilo home with two keys, three relays, three site permissions, and signed and denied activity" width="320">
+    <img src="docs/design-review/screenshots/23-popup-home-populated.png" alt="Ostrilo showing the selected identity, saved keys, relays, site permissions and recent activity" width="320">
   </picture>
 </p>
 
-A populated test vault, captured from the production build in the
-[September 2026 design review](docs/design-review/README.md). These are existing
-review captures, not a live demonstration or a new security assessment.
+Ostrilo in light and dark themes. Screenshot from the
+[September 2026 design review](docs/design-review/README.md), using sample data.
 
-## What works today
+## Install
 
-- **Multiple identities:** generate or import keys, select the signing identity,
-  rename keys, and delete them after password re-verification.
-- **Site consent:** decide which origins may learn your public key; approve or
-  deny signing requests, with per-site trust levels and per-kind rules.
-- **Local vault:** encrypted private-key storage, manual locking, and configurable
-  auto-lock. Sensitive actions require the password again.
-- **Profiles and relays:** fetch, cache and publish profile metadata through
-  configurable relays. Manage these alongside keys and permissions in the full-tab
-  options page.
-- **Activity:** inspect signing and disclosure decisions, filter the log, and
-  export activity as a local JSON file.
+Browser-store releases are being prepared. Official installation links will be
+added here when the listings are available.
 
-The website provider implements **`getPublicKey` and `signEvent` only**.
-`getRelays`, `nip04.*` and `nip44.*` are absent, so applications can detect that
-those features are unavailable. Remote signing, seed phrases and multi-device
-sync are roadmap work; the [roadmap](docs/roadmap.md) is not a list of shipped
-capabilities.
+Ostrilo has builds for Chromium browsers and Firefox. If you'd like to install
+from source, follow [the build instructions](#build-from-source).
 
 ## Get started
 
-Use **Node.js 22** (the CI major version) and **pnpm 11.5.2** (pinned in
-`package.json`). You will also need Git and a desktop browser.
+1. **Add your identity.** Create a new key or import an existing Nostr private key
+   (`nsec`), then choose a password for your vault.
+2. **Keep a backup.** When creating your first key, save an encrypted backup or
+   write the key down. Ostrilo asks you to check that you've recorded it before
+   finishing setup. If you import a key, keep your existing backup.
+3. **Connect to an app.** Open a Nostr website and choose its browser-extension
+   sign-in option. Ostrilo will ask whether the site may see your public key.
+4. **Review requests.** Check the site address, selected identity and event
+   contents before approving a signature. Activity shows your signing history.
+
+Use **Settings → Advanced Settings** to manage your keys, site permissions,
+relays and password. You can lock the vault yourself or choose how long it waits
+before locking automatically.
+
+## Trust and control
+
+Private keys are encrypted on your device. Ostrilo signs inside the extension
+and returns the signed event to the website. The website never receives your
+private key.
+
+You choose which sites may see your public key. Signing an event also shares
+that key, because it's part of the event. A site's permission applies to scripts
+running on that page too.
+
+For sites you trust, you can allow some actions without a prompt each time.
+Text notes, deletion requests, zap requests and relay or HTTP login requests
+always need approval. The [signing rules](src/domain/policy/trust-definitions.ts)
+list the exact event types.
+
+Ostrilo asks for your password again before revealing a key or making sensitive
+changes, such as deleting a key or granting a site more access. Keep your browser
+and device protected: encryption can't protect an unlocked vault from software
+that has taken control of your device.
+
+## Backup and recovery
+
+Your private key is what gives you control of your Nostr identity. Keep a backup
+somewhere safe. If every copy is lost, Ostrilo can't recover it or reset it for
+you.
+
+### Save and restore a backup
+
+When you create your first key, **Save encrypted backup** saves a file with its
+own passphrase. Keep the file and passphrase safely. Changing the vault password
+later won't change the backup's passphrase.
+
+To restore the file in a fresh installation, choose it during setup, enter its
+passphrase and set a new vault password. Check that the restored public key
+matches your original identity.
+
+**Backup for keys added later is not available yet.** There is no export button
+in Settings yet. Keep your own copy of imported keys. A key created through
+Settings currently has no backup option, so losing that installation could mean
+losing the identity.
+
+### Move to another signer
+
+You can import your `nsec` into another Nostr signer that accepts it. Ostrilo's
+encrypted backup files use their own format, so another signer may not be able
+to open them. Key backups don't include settings, site permissions or activity.
+
+See the [backup guide](docs/key-backup.md) for details, including the
+[warning for older builds that saved unencrypted backups](docs/key-backup.md#if-you-used-an-earlier-development-build).
+
+## Privacy
+
+Ostrilo doesn't collect analytics or send data to the developer. Your settings,
+permissions and activity stay on this device. Only the preference for opening
+Ostrilo in a side panel syncs through your browser account.
+
+Ostrilo contacts your chosen relays to look up and publish profiles. Relays can
+see your public key and IP address. Websites decide where to publish the events
+Ostrilo signs for them.
+
+Private keys are encrypted, but settings, profile records and activity logs
+aren't. Revealing or copying a key also puts it in memory or on the clipboard,
+where complete erasure can't be guaranteed. The current extension doesn't load
+remote profile pictures or upload images.
+
+Read the [privacy policy](PRIVACY.md) for storage and network details, or
+[browser permissions](docs/extension-manifest.md) for why each permission is
+needed.
+
+## Roadmap
+
+Current version: [0.9.0](CHANGELOG.md).
+
+| Feature | Status |
+| --- | --- |
+| Sign events for Nostr websites | Available |
+| Create, import and switch between identities | Available |
+| Encrypted key storage, automatic locking and password changes | Available |
+| Site permissions and signing history | Available |
+| Profile editing and relay selection | Available |
+| Encrypted key backup and restore | Available during first-key setup |
+| Backup for keys added later | Planned for 1.0 |
+| Independent security review with published findings | Required for 1.0, not yet completed |
+| Encrypted messaging with NIP-44 | Planned |
+| Remote signing with NIP-46 | Planned |
+| Seed-phrase recovery and settings sync across devices | Planned |
+
+The [full roadmap](docs/roadmap.md) tracks the remaining work. Planned features
+don't have release dates yet.
+
+## Help
+
+**A website doesn't see Ostrilo.** Check that the page uses HTTPS, the extension
+is enabled, and the page has been reloaded since installation. If another signer
+already provides the site's browser connection, Ostrilo leaves it in place.
+
+**An app needs encrypted messaging.** Ostrilo currently supports sharing a public
+key and signing events. NIP-44 encryption is planned, so apps that require it
+won't have that feature through Ostrilo yet.
+
+**You've forgotten the vault password.** Restore your saved private key or
+an encrypted backup in a fresh installation. An encrypted backup still needs its
+own passphrase. There is no password-reset service.
+
+For bugs and questions, use [GitHub Issues](https://github.com/macro88/ostrilo/issues).
+Include your browser, Ostrilo version, what happened and the steps to reproduce
+it. Never include a private key, password or unredacted backup file.
+
+Report security problems privately by following [SECURITY.md](SECURITY.md).
+
+## Build from source
+
+You need **Git**, **Node.js 22** and **pnpm 11.5.2**.
 
 ```sh
 git clone https://github.com/macro88/ostrilo.git
@@ -101,167 +186,39 @@ pnpm install --frozen-lockfile
 pnpm run build
 ```
 
-### Chromium
+For Chromium, open `chrome://extensions`, enable **Developer mode**, choose
+**Load unpacked**, and select `.output/chrome-mv3` in the repository folder.
 
-Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**,
-and select `.output/chrome-mv3` inside your checkout. Pin Ostrilo and open its
-popup to begin onboarding.
+For Firefox, run `pnpm run build:firefox`. Open
+`about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and
+select `.output/firefox-mv3/manifest.json`. Firefox removes temporary add-ons
+when it restarts. This is a local development installation.
 
-### Firefox
+Automated browser tests run on Chromium. Firefox builds are checked, but don't
+have an equivalent browser-test suite. Safari hasn't been verified. See
+[testing](docs/TESTING.md) for the checks and their scope.
 
-```sh
-pnpm run build:firefox
-```
+### Integrate a Nostr app
 
-Open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**,
-and select `.output/firefox-mv3/manifest.json`. This is a development installation;
-temporary add-ons are removed when Firefox restarts. Keep backups outside it.
+Ostrilo provides `window.nostr.getPublicKey()` and `window.nostr.signEvent()`
+through NIP-07 on top-level HTTPS pages. `getRelays`, `nip04.*` and `nip44.*`
+aren't available. NIP-44 is planned. NIP-04 won't be added.
 
-### First use
-
-1. Create a test identity or import a test `nsec`, then set your vault password.
-2. If creating an identity during onboarding, record the key or save an encrypted
-   backup. Complete the backup verification before finishing.
-3. Open a Nostr website that supports a browser signer, over **HTTPS**, and choose
-   its extension sign-in option. Review Ostrilo's public-key consent prompt.
-4. Review a signing request in Ostrilo. Check the origin, active identity, event
-   kind and payload before approving; inspect the result in Activity.
-
-Settings contains quick controls and **Advanced Settings**, which opens the full
-options page. Use Permissions to review site access and Relays to change relay
-endpoints. The provider runs only in top-level HTTPS pages; local development
-needs the [HTTPS test setup](docs/local-https-development.md).
-
-For extension development, `pnpm run dev` and `pnpm run dev:firefox` start WXT's
-respective development modes. Judge release behavior using a production build.
-See the [agent loop](docs/agent-loop.md) for a repeatable signing journey.
-
-## Trust and control
-
-Ostrilo separates website requests, extension messaging, policy decisions and
-background signing. You still trust the installed extension, its dependencies,
-your browser and operating system. An encrypted vault does not protect an
-unlocked session from a compromised device.
-
-What Ostrilo stores, what it sends to relays, and what your browser's sync
-copies is set out in the [privacy policy](PRIVACY.md). Nothing is sent to the
-developer.
-
-| Boundary | Current behavior and limits |
-| --- | --- |
-| Keys at rest | Private keys are encrypted in local extension storage with AES-GCM. New vaults use Argon2id; versioned records carry their derivation parameters. See the [vault format](docs/vault-storage-format.md) for legacy migration and validation. |
-| Keys in use | Background code performs signing. Deliberate key reveal returns plaintext to the extension's backup UI after password verification. JavaScript strings and clipboard history cannot be reliably erased. |
-| Public identity | `getPublicKey` requires per-origin consent, including for high-trust sites. Refusal is remembered; requests are rate limited and logged. Approving a signature also records disclosure consent because the event contains the public key. |
-| Signing authority | Trust levels and explicit rules can allow some events without a prompt. Protected kinds always require approval: text notes, deletion requests, zap requests, relay authentication and HTTP authentication. See the [policy definitions](src/domain/policy/trust-definitions.ts). |
-| Locking | Auto-lock uses browser alarms and an access-time deadline check. Password re-verification protects deletion, high-trust grants, signing-session grants and security-timeout changes. |
-| Network | Profile requests disclose a public key to configured relays; profile images can contact their hosts. Profile publication and optional image uploads also leave the device. These operations are not anonymous. |
-| Local records | Settings, public metadata and activity history are not an encrypted personal-data vault. Activity can reveal which sites used an identity. |
-
-The public-key gate limits **identity linkage**, not public-key visibility on Nostr.
-Third-party scripts running inside an approved page share that page's origin and
-its grant. Consent cannot distinguish them from the site itself.
-
-The manifest requests storage, windows, alarms and idle access; Chromium also uses
-a side panel. Idle signals help distinguish human presence from page activity;
-alarms enforce locking across background-worker termination. Inspect
-[the manifest configuration](wxt.config.ts) and
-[provider boundary](src/extension/content.ts) for the actual permission surface.
-
-### Website integration
-
-Check for `window.nostr` and the individual method before using it. Handle refusals
-and locked-vault errors rather than retrying indefinitely. A refused public-key
-request returns `disclosure_refused`; a refused signature returns `denied`;
-excessive requests can return `rate_limited`. See the
-[RPC error reference](docs/rpc-error-codes.md) and
-[provider implementation](src/extension/injected.ts).
-
-## Backup, recovery and exit
-
-**Back up before relying on an identity.** Losing every usable copy of the private
-key loses the identity. Ostrilo has no account-recovery service.
-
-During new-key onboarding, **Save encrypted backup** creates a versioned
-`ostrilo-key-backup` file with a separate backup passphrase. To restore in a fresh
-installation, choose the file in onboarding's import step, enter that passphrase,
-and set the new vault password. Verify the restored public key before relying on
-it. The repository includes [backup tests](tests/unit/ui/features/onboarding/key-backup-envelope.test.ts)
-and a [key backup guide](docs/key-backup.md).
-
-- **Keep the passphrase separately.** An encrypted backup cannot help if you lose
-  its passphrase too. A clipboard copy is not a durable backup.
-- **Check which flow you used.** The encrypted-file workflow is in onboarding.
-  Keys created later through Settings do not get that backup step, and the
-  Settings key list has no export control. Preserve an independent copy of
-  imported keys; avoid relying on later-generated keys without a recovery path.
-- **Move identities with `nsec`.** A client that accepts the same Nostr private key
-  can use the identity. Ostrilo's encrypted backup format is application-specific;
-  other signers are not promised to import it.
-- **Data is separate from identity.** A key backup does not include site permissions,
-  settings, cached profiles or activity. The JSON activity export is not a full-vault
-  restore format. Whole-vault migration and synchronized installations are not
-  established workflows.
-- **Choose services or maintain a fork.** Relay endpoints are configurable. The
-  source and MIT license allow independent builds and modifications; package
-  registries, browser tooling and distribution rules remain dependencies.
-
-If you used an older **Download Backup** flow, read the
-[plaintext-backup migration warning](docs/key-backup.md#if-you-used-an-earlier-development-build).
-Those files contained unencrypted secret keys; deleting one does not remove copies
-from cloud sync, backups or other devices.
-
-## Verify the work
-
-The repository has unit, integration, security and Chromium extension tests.
-Run the checks against the revision you intend to use; a README is not a current
-pass certificate.
-
-```sh
-pnpm run compile
-pnpm run lint
-pnpm run test:coverage
-pnpm run test:build-output
-pnpm audit --audit-level high
-pnpm exec playwright install chromium
-pnpm run test:e2e
-```
-
-`test:build-output` builds both browser targets and checks their manifests and
-key-handling bundles. E2E tests run separately from the core verification gate.
-See [testing](docs/TESTING.md) and [CI verification](docs/ci-verification.md) for
-scope and required checks. These tests are development evidence, not an independent
-security audit or proof of bit-for-bit reproducible releases.
+Check for each method before calling it and handle refusal or a locked vault
+without retrying in a loop. See the [error codes](docs/rpc-error-codes.md),
+[provider code](src/extension/injected.ts) and
+[local HTTPS setup](docs/local-https-development.md).
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) first. It covers setup, the blocking
-verification gate, and the workflow that is easiest to get wrong: substantive
-changes start as an OpenSpec proposal under `openspec/changes/`, not as a pull
-request. [AGENTS.md](AGENTS.md) states the same rules in the form coding agents
-read. Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-Start with the [development standards](docs/development-standards.md),
-[architecture](docs/architecture_primer.md) and
-[developer guide](docs/developers_readme.md). Keep cryptography behind the existing
-ports and adapters, and follow the [Inkline design rules](docs/design/DESIGN_RULES.md)
-for UI work. Every document, including the security design notes, is indexed in
-[docs/README.md](docs/README.md).
-
-Bug reports should include the browser, source revision, reproduction steps and
-expected result, with keys and personal data removed. Documentation corrections,
-accessibility findings and tests for refusal, locking and recovery are useful
-contributions. Keep roadmap intentions separate from verified behavior.
-
-After code edits, run the pinned `pnpm run doctor` and `pnpm run slop:changes` in
-addition to the required verification checks. Fix findings without weakening
-rules. Maintainers review proposed changes; no separate governance or release
-signing policy is documented here.
-
-Security vulnerabilities go to [SECURITY.md](SECURITY.md), which uses GitHub's
-private vulnerability reporting rather than a published address. Do not put
-private keys or sensitive exploit details in public issues.
+Bug reports, documentation fixes, accessibility improvements and tests are
+welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, required checks and
+how to propose a change. The [documentation index](docs/README.md) links to the
+architecture and developer guides. The [Code of Conduct](CODE_OF_CONDUCT.md)
+applies to everyone taking part.
 
 ## License
 
 [MIT](LICENSE) · Copyright © 2026 Ostrilo contributors.
-Third-party dependencies retain their own license terms.
+You can build, modify and redistribute Ostrilo under this license.
+Third-party dependencies keep their own license terms.
