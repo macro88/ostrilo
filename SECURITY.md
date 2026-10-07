@@ -51,7 +51,7 @@ numbered reproduction steps, what you expected, and what happened instead.
 ## What is in scope
 
 Scope follows the boundaries the README's
-[trust and control](README.md#trust-and-control) table already states. Ostrilo
+[trust and control](README.md#trust-and-control) section already states. Ostrilo
 is at version `0.9.0`, pre-1.0, built from source; there is no store release yet and no
 maintained release branch, so reports are assessed against the current
 `main`. Chromium is the automated extension-test target and Firefox has a
@@ -65,29 +65,28 @@ In scope:
   happens in the background; websites receive public keys and signed events,
   never a private key. Any path that returns a plaintext key or passphrase to a
   page, content script, injected provider, or a shipped bundle is in scope.
-  See the *Keys in use* row of the trust table and the
+  See the
   [provider boundary](src/extension/content.ts).
 - **Weaknesses in vault encryption at rest.** Private keys are encrypted in
   local extension storage with AES-GCM; new vaults use Argon2id, and versioned
   records carry their derivation parameters. Breaking that, or forcing a record
-  to weaker parameters, is in scope. See the *Keys at rest* row and the
+  to weaker parameters, is in scope. See the
   [vault format](docs/vault-storage-format.md).
 - **Bypassing the public-key consent gate.** `getPublicKey` requires per-origin
   consent, including for high-trust sites; refusal is remembered, and requests
   are rate limited and logged. Obtaining a public key without consent, defeating
-  a remembered refusal, or evading the rate limit is in scope. See the
-  *Public identity* row.
+  a remembered refusal, or evading the rate limit is in scope.
 - **Obtaining a signature that policy should have refused.** Protected kinds
   always require approval: text notes, deletion requests, zap requests, relay
   authentication and HTTP authentication. Getting one of those signed without a
   prompt, escaping a per-site trust level or per-kind rule, or causing the
   approval prompt to display something other than what would be signed, is in
-  scope. See the *Signing authority* row and the
+  scope. See the
   [policy definitions](src/domain/policy/trust-definitions.ts).
 - **Lock and re-authentication bypass.** Reaching key material while the vault
   is locked, defeating auto-lock, or completing an action that requires password
   re-verification — deletion, high-trust grants, signing-session grants,
-  security-timeout changes — without it. See the *Locking* row.
+  security-timeout changes — without it.
 - **Privilege escalation across the RPC boundary.** A page or content script
   reaching extension-privileged RPC methods it should not be able to call.
 - **Untrusted remote data.** A malicious relay response, cached profile or
@@ -186,5 +185,5 @@ your call — an unanswered report is the maintainer's failure, not yours.
   change workflow.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — conduct expectations and how
   conduct reports are handled.
-- [Trust and control](README.md#trust-and-control) — the boundary table this
+- [Trust and control](README.md#trust-and-control) — the section this
   policy draws its scope from.

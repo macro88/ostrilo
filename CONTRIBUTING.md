@@ -48,7 +48,7 @@ package fails here rather than in CI.
 
 Load `.output/chrome-mv3` as an unpacked extension in Chromium, or
 `.output/firefox-mv3/manifest.json` as a temporary add-on in Firefox. The README
-has the [step-by-step version](README.md#get-started). `pnpm run dev` and
+has the [step-by-step version](README.md#build-from-source). `pnpm run dev` and
 `pnpm run dev:firefox` give you WXT's watch modes, but judge release behaviour
 from a production build.
 
