@@ -4,6 +4,11 @@
 **Change Proposal:** add-options-page-ui  
 **Phase:** 6 - Cross-Context Settings Sync + UI Enhancement
 
+> Historical record, written at commit `db0ef72` (2025-12-18) and left as it was
+> written. The file links point at the current files, which have changed since;
+> the line ranges and some of the described edits no longer correspond to what is
+> in them, and two of the listed components have since been removed.
+
 ## Implemented Changes
 
 ### 1. Cross-Context Settings Sync
@@ -12,14 +17,14 @@ Added `chrome.storage.onChanged` listeners to enable real-time synchronization o
 
 #### Files Modified:
 
-**[src/extension/options/OptionsApp.tsx](../../../../src/extension/options/OptionsApp.tsx#L70-L85)**
+**[src/extension/options/OptionsApp.tsx](../../../../src/extension/options/OptionsApp.tsx)**
 
 - Added `useEffect` hook with `chrome.storage.onChanged` listener
 - Listens for changes to `appSettings` in sync storage
 - Triggers page reload to update UI when settings change from other contexts
 - Ensures options page reflects changes made in popup/sidepanel
 
-**[src/ui/features/settings/components/BasicSettings.tsx](../../../../src/ui/features/settings/components/BasicSettings.tsx#L9-L38)**
+**[src/ui/features/settings/components/BasicSettings.tsx](../../../../src/ui/features/settings/components/BasicSettings.tsx)**
 
 - Added `useState` for force re-render mechanism
 - Added `useEffect` hook with `chrome.storage.onChanged` listener
@@ -44,7 +49,7 @@ Replaced the binary "Dock to side" switch with a clearer dropdown selector offer
 
 #### Files Modified:
 
-**[src/ui/features/settings/components/GeneralSettingsTab.tsx](../../../../src/ui/features/settings/components/GeneralSettingsTab.tsx#L1-L4)**
+**[src/ui/features/settings/components/GeneralSettingsTab.tsx](../../../../src/ui/features/settings/components/GeneralSettingsTab.tsx)**
 
 - Replaced `SidePanelToggle` import with `OpenInSelector`
 - Updated component usage in Display section
