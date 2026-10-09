@@ -29,4 +29,4 @@
 ## 5. Docs and verify
 
 - [x] 5.1 `docs/roadmap.md` (SEC-006, SEC-024, PERF-008 and their known issues), `docs/rpc-error-codes.md`
-- [ ] 5.2 Archive this change (Task 14 of phase 0.10)
+- [x] 5.2 Archive this change (Task 14 of phase 0.10)
