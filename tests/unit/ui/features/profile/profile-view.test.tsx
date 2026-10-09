@@ -141,6 +141,20 @@ describe("ProfileView without a key", () => {
   });
 });
 
+describe("ProfileView with an unreadable key", () => {
+  it("names the key, offers no editing and reads no profile", async () => {
+    keys.selected = { ...ACTIVE, publicKeyBech32: "", isUnreadable: true };
+    await mount();
+
+    expect(container.textContent).toContain("key-main");
+    expect(container.textContent).toContain("could not be read");
+    expect(container.textContent).toContain("Choose another key");
+    expect(buttonByText("Edit")).toBeUndefined();
+    expect(container.querySelector("input, textarea")).toBeNull();
+    expect(client.rpc).not.toHaveBeenCalled();
+  });
+});
+
 describe("ProfileView summary", () => {
   it("reads the active key's profile from cache first", async () => {
     await mount();

@@ -24,7 +24,14 @@ function createProfileFormData(
 
 export function ProfileView() {
   const { selectedUnlockedKey } = useKeyManager();
-  const selectedPubkey = selectedUnlockedKey?.publicKeyHex || null;
+  // No lookup and no editing for a key that could not be read: its public key
+  // is not one to publish under, and a signature would be refused anyway.
+  const unreadableKey = selectedUnlockedKey?.isUnreadable
+    ? selectedUnlockedKey
+    : undefined;
+  const selectedPubkey = unreadableKey
+    ? null
+    : selectedUnlockedKey?.publicKeyHex || null;
 
   const [isEditing, setIsEditing] = useState(false);
   const { profile, loading, error, updateProfile, refresh } =
@@ -93,6 +100,8 @@ export function ProfileView() {
             "No relay accepted the update. Your edits are still here; check your relays and try again.",
           [RPC_ERROR_CODES.NO_KEY_SELECTED]: "Choose an active key before saving the profile.",
           [RPC_ERROR_CODES.LOCKED]: "The vault is locked. Unlock it and save again.",
+          [RPC_ERROR_CODES.VAULT_UNREADABLE]:
+            "The selected key could not be read, so nothing was published. Choose another key.",
         })
       );
     } finally {
@@ -103,6 +112,23 @@ export function ProfileView() {
   const handleInputChange = (field: keyof ProfileMetadata, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
+
+  if (unreadableKey) {
+    return (
+      <div className="screen-shell">
+        <div className="screen-header">
+          <h2 className="screen-title">Profile Settings</h2>
+          <p className="screen-description" role="alert">
+            Key{" "}
+            <span className="break-all font-mono text-xs">{unreadableKey.id}</span>{" "}
+            could not be read, so its profile cannot be shown or edited.
+            Ostrilo has not deleted or changed it. Choose another key from the
+            header menu.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!selectedPubkey) {
     return (
