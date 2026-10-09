@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { isAvatarDataUrl, type AvatarRow } from "@/domain/profile/avatar";
 
 interface OwnAvatarImageProps {
@@ -7,6 +7,36 @@ interface OwnAvatarImageProps {
   alt: string;
   /** Edge in pixels. Fixed, so the image can never size its container. */
   size: number;
+  /** The seal mark: shown until the copy has loaded, and whenever there is none. */
+  fallback: ReactNode;
+}
+
+function CopyImage({
+  avatar,
+  alt,
+  size,
+  fallback,
+}: OwnAvatarImageProps & { avatar: AvatarRow }) {
+  const [status, setStatus] = useState<"loading" | "loaded" | "failed">("loading");
+
+  return (
+    <>
+      {status !== "loaded" && fallback}
+      {status !== "failed" && (
+        <img
+          src={avatar.dataUrl}
+          alt={alt}
+          width={size}
+          height={size}
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className="absolute inset-0 size-full object-cover"
+          onLoad={() => setStatus("loaded")}
+          onError={() => setStatus("failed")}
+        />
+      )}
+    </>
+  );
 }
 
 /**
@@ -14,26 +44,23 @@ interface OwnAvatarImageProps {
  *
  * The source is always a `data:` URL: anything else is refused here as well as
  * where the copy is stored, so no caller can make this element request a host.
- * It is laid over the seal fallback rather than replacing it, so a copy that
- * fails to decode leaves the seal showing instead of a broken image.
  *
- * Keyed by public key by the caller; the failure flag therefore resets when the
- * identity changes.
+ * The seal shows until the copy has decoded and again if it fails to, but not
+ * once the image is up: the picture is shown as the user made it, so a
+ * transparent one does not have the seal's initial showing through. A new copy
+ * for the same key (a refresh) starts over, so an earlier decode failure does
+ * not hide it.
  */
-export function OwnAvatarImage({ avatar, alt, size }: OwnAvatarImageProps) {
-  const [failed, setFailed] = useState(false);
-  if (failed || !avatar || !isAvatarDataUrl(avatar.dataUrl)) return null;
+export function OwnAvatarImage({ avatar, alt, size, fallback }: OwnAvatarImageProps) {
+  if (!avatar || !isAvatarDataUrl(avatar.dataUrl)) return <>{fallback}</>;
 
   return (
-    <img
-      src={avatar.dataUrl}
+    <CopyImage
+      key={`${avatar.pubkey}:${avatar.at}:${avatar.dataUrl.length}`}
+      avatar={avatar}
       alt={alt}
-      width={size}
-      height={size}
-      decoding="async"
-      referrerPolicy="no-referrer"
-      className="absolute inset-0 size-full object-cover"
-      onError={() => setFailed(true)}
+      size={size}
+      fallback={fallback}
     />
   );
 }

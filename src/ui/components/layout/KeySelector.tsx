@@ -130,14 +130,15 @@ export const KeySelector = memo(function KeySelector({
           aria-controls="key-selector-listbox"
         >
           <Avatar shape="seal" className="size-7">
-            <AvatarFallback className="bg-secondary text-xs font-bold text-secondary-foreground">
-              {currentKeyDisplay.displayName.charAt(0).toUpperCase()}
-            </AvatarFallback>
             <OwnAvatarImage
-              key={ownAvatar?.pubkey}
               avatar={ownAvatar}
               alt={currentKeyDisplay.displayName}
               size={28}
+              fallback={
+                <AvatarFallback className="bg-secondary text-xs font-bold text-secondary-foreground">
+                  {currentKeyDisplay.displayName.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              }
             />
           </Avatar>
           <span id={ACTIVE_KEY_NAME_ID} className="truncate">

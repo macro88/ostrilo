@@ -80,10 +80,8 @@ export interface CaptureDeps {
 }
 
 const browserDeps: CaptureDeps = {
-  // aislop-ignore-next-line ai-slop/double-type-assertion -- CaptureImage is a structural subset of HTMLImageElement; the DOM's event-handler and drawImage signatures are wider than the subset, so TypeScript cannot see the relationship.
-  createImage: () => new Image() as unknown as CaptureImage,
-  // aislop-ignore-next-line ai-slop/double-type-assertion -- same: CaptureCanvas narrows HTMLCanvasElement to the calls the capture makes.
-  createCanvas: () => document.createElement("canvas") as unknown as CaptureCanvas,
+  createImage: () => new Image() as CaptureImage,
+  createCanvas: () => document.createElement("canvas") as CaptureCanvas,
   setTimer: (callback, ms) => window.setTimeout(callback, ms),
   clearTimer: (id) => window.clearTimeout(id),
 };

@@ -240,6 +240,28 @@ describe("KeySelector header avatar", () => {
     expect(img?.getAttribute("height")).toBe("28");
   });
 
+  it("keeps the seal initial until the picture loads, then hides it so a transparent picture is shown as made", () => {
+    avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
+    mount();
+    expect(trigger().textContent?.startsWith("M")).toBe(true);
+
+    act(() => {
+      trigger().querySelector("img")!.dispatchEvent(new Event("load"));
+    });
+    expect(trigger().querySelector("img")).not.toBeNull();
+    expect(trigger().querySelector(".seal")?.textContent ?? "").not.toContain("M");
+  });
+
+  it("keeps the seal initial when the copy fails to decode", () => {
+    avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
+    mount();
+    act(() => {
+      trigger().querySelector("img")!.dispatchEvent(new Event("error"));
+    });
+    expect(trigger().querySelector("img")).toBeNull();
+    expect(trigger().querySelector(".seal")?.textContent).toBe("M");
+  });
+
   it("looks up only the selected key's public key", () => {
     mount();
     expect(avatarState.requested.at(-1)).toBe(MAIN.publicKeyHex);

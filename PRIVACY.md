@@ -111,7 +111,7 @@ That is the only time Ostrilo asks an image host for anything. Opening the popup
 or the side panel, unlocking, switching keys and approval windows make no image
 request, and nothing refreshes the copy in the background. If the picture cannot
 be loaded or kept, the header keeps the local seal and the Profile screen says so.
-Saving a profile with no picture, or deleting a key, removes that key's copy.
+Saving a profile with no picture removes that key's copy. Deleting a key removes its copy too, as the last step of the deletion; if that step fails, the leftover copy is removed the next time any copy is saved.
 
 Ostrilo 0.9.0 has no image upload: you paste an image URL instead.
 

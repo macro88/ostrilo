@@ -377,15 +377,16 @@ describe("the only remote image load is the Profile page's explicit save or refr
 describe("OwnAvatarImage", () => {
   const PNG =
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-  const row = (dataUrl: string) => ({
+  const SEAL = <span data-testid="seal">A</span>;
+  const row = (dataUrl: string, at = 1) => ({
     pubkey: "a".repeat(64),
     dataUrl,
     sourceUrl: "https://images.example/a.png",
-    at: 1,
+    at,
   });
 
   it("renders a data: URL at a fixed size, named for the identity", () => {
-    const container = render(<OwnAvatarImage avatar={row(PNG)} alt="Alice" size={28} />);
+    const container = render(<OwnAvatarImage avatar={row(PNG)} alt="Alice" size={28} fallback={SEAL} />);
     const img = container.querySelector("img");
     expect(img?.getAttribute("src")).toBe(PNG);
     expect(img?.getAttribute("alt")).toBe("Alice");
@@ -399,22 +400,51 @@ describe("OwnAvatarImage", () => {
     ["an svg data URL", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4="],
     ["a javascript: URL", "javascript:alert(1)"],
   ])("renders nothing for %s", (_name, value) => {
-    const container = render(<OwnAvatarImage avatar={row(value)} alt="Alice" size={28} />);
+    const container = render(<OwnAvatarImage avatar={row(value)} alt="Alice" size={28} fallback={SEAL} />);
     expect(container.querySelector("img")).toBeNull();
     expect(remoteSources(container)).toEqual([]);
   });
 
   it("renders nothing, leaving the seal, when there is no copy", () => {
-    const container = render(<OwnAvatarImage avatar={null} alt="Alice" size={28} />);
+    const container = render(<OwnAvatarImage avatar={null} alt="Alice" size={28} fallback={SEAL} />);
     expect(container.querySelector("img")).toBeNull();
   });
 
+  it("shows the seal until the copy has loaded, then only the picture", () => {
+    const container = render(<OwnAvatarImage avatar={row(PNG)} alt="Alice" size={28} fallback={SEAL} />);
+    expect(container.querySelector('[data-testid="seal"]')).not.toBeNull();
+
+    act(() => {
+      container.querySelector("img")!.dispatchEvent(new Event("load"));
+    });
+    // A transparent picture must not have the initial showing through it.
+    expect(container.querySelector('[data-testid="seal"]')).toBeNull();
+    expect(container.querySelector("img")).not.toBeNull();
+  });
+
   it("steps aside for the seal when the copy fails to decode", () => {
-    const container = render(<OwnAvatarImage avatar={row(PNG)} alt="Alice" size={28} />);
+    const container = render(<OwnAvatarImage avatar={row(PNG)} alt="Alice" size={28} fallback={SEAL} />);
     act(() => {
       container.querySelector("img")!.dispatchEvent(new Event("error"));
     });
     expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector('[data-testid="seal"]')).not.toBeNull();
+  });
+
+  it("shows a refreshed copy for the same key after an earlier copy failed to decode", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mounted.push({ root, container });
+
+    act(() => root.render(<OwnAvatarImage avatar={row(PNG, 1)} alt="Alice" size={28} fallback={SEAL} />));
+    act(() => {
+      container.querySelector("img")!.dispatchEvent(new Event("error"));
+    });
+    expect(container.querySelector("img")).toBeNull();
+
+    act(() => root.render(<OwnAvatarImage avatar={row(PNG, 2)} alt="Alice" size={28} fallback={SEAL} />));
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(PNG);
   });
 });
 

@@ -229,6 +229,10 @@ test.describe("own profile picture in the header", () => {
     expect(dims.box).toEqual([28, 28]);
     expect(dims.alt).toBe("Avatar Key A");
 
+    // Once the picture is up the seal's initial is gone, so a transparent
+    // picture is shown as made.
+    await expect(popup.locator("header .seal")).not.toContainText("A");
+
     // Centre crop of 200x100: the middle square keeps the red/blue boundary.
     expectNear(await pixelOf(popup, HEADER_IMAGE, 20, 48), RED);
     expectNear(await pixelOf(popup, HEADER_IMAGE, 76, 48), BLUE);
