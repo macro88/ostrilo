@@ -37,9 +37,8 @@ export function OnboardingWelcome({
           Your keys stay in this browser. Sites ask before anything is signed.
         </p>
 
-        <div
-          className="mt-6 w-full space-y-2.5 text-left"
-          role="group"
+        <fieldset
+          className="mt-6 w-full min-w-0 space-y-2.5 text-left"
           aria-label="Choose how to start"
         >
           <button
@@ -51,12 +50,12 @@ export function OnboardingWelcome({
               <span className="block text-[15px] font-bold leading-tight">
                 Create New Key
               </span>
-              <span className="mt-1 block text-xs font-medium text-primary-foreground/75">
+              <span className="mt-1 block text-xs font-medium text-primary-foreground/85">
                 A new key, generated on this device
               </span>
             </span>
             <ChevronRight
-              className="h-4 w-4 shrink-0 text-primary-foreground/75"
+              className="h-4 w-4 shrink-0 text-primary-foreground/85"
               aria-hidden="true"
             />
           </button>
@@ -98,7 +97,7 @@ export function OnboardingWelcome({
               aria-hidden="true"
             />
           </button>
-        </div>
+        </fieldset>
       </div>
     </div>
   );
