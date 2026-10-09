@@ -1,10 +1,13 @@
+import { wellFormedKeyIds } from "./disclosure-grants";
 import { resolveSessionTTLMinutes } from "./session-grants";
 
 /**
  * The consent migration. Versioned: each step runs once, for a settings object
  * stamped below the version that introduced it (repair of trust levels: 1,
- * disclosure binding: 2), and the stamp is written with the result. Steps take one stored origin record - untyped, because it is read
- * from storage that older versions wrote - and return a new one, leaving fields
+ * disclosure binding: 2), and the stamp is written with the result.
+ *
+ * Steps take one stored origin record - untyped, because it is read from
+ * storage that older versions wrote - and return a new one, leaving fields
  * they do not own alone.
  */
 
@@ -29,9 +32,9 @@ function repairFabricatedTrust(origin: any): any {
 }
 
 /**
- * Bind a disclosure `allow` to the key selected now. An allow granted
- * before disclosure was per key was granted for the identity the user was using,
- * so that key keeps it and no other inherits it. A record already holding a list
+ * Bind a disclosure `allow` to the key selected now. An allow granted before
+ * disclosure was per key was granted for the identity the user was using, so
+ * that key keeps it and no other inherits it. A record already holding a list
  * keeps only its well-formed ids; with no selected key there is nothing honest
  * to bind to. Anything that ends up naming no key is not an allow. It only ever
  * narrows: no step adds an allow or a key to one.
@@ -42,14 +45,12 @@ function bindDisclosureToKeys(origin: any, selectedKeyId?: string): any {
   }
   const next = { ...origin };
   const held: unknown = origin.identityDisclosureKeyIds;
-  let keyIds: string[] = [];
-  if (held === undefined) {
-    keyIds = selectedKeyId ? [selectedKeyId] : [];
-  } else if (Array.isArray(held)) {
-    keyIds = held.filter(
-      (id): id is string => typeof id === "string" && id !== ""
-    );
-  }
+  const keyIds =
+    held === undefined
+      ? selectedKeyId
+        ? [selectedKeyId]
+        : []
+      : wellFormedKeyIds(held);
   if (keyIds.length > 0) {
     next.identityDisclosureKeyIds = keyIds;
   } else {
@@ -96,7 +97,11 @@ export function migrateConsentSettings(
       if (stamped < 2) next = bindDisclosureToKeys(next, selectedKeyId);
       return next;
     }),
-    sessionTTLMinutes: resolveSessionTTLMinutes(current.sessionTTLMinutes),
+    // Part of the trust-level repair, so settings that already had it keep the
+    // value they hold.
+    ...(stamped < 1 && {
+      sessionTTLMinutes: resolveSessionTTLMinutes(current.sessionTTLMinutes),
+    }),
     __consentMigrations: version,
   };
 }

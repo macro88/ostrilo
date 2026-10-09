@@ -252,6 +252,35 @@ describe("revoking a grant", () => {
   });
 });
 
+describe("a grant for a key that was deleted", () => {
+  it("does not carry over to the same secret re-imported, stays on record, and can be revoked", async () => {
+    await askAndAnswer("allow");
+    await select(keyB);
+    await context.vault.deleteKey(keyA.id);
+    const reimported = await context.vault.importKey(SECRET_ONE, STRONG_PASSWORD, "Main again");
+    expect(reimported.pubkey).toBe(keyA.pubkey);
+    expect(reimported.id).not.toBe(keyA.id);
+    await select(reimported);
+
+    // Same public key, new key: the site is asked again.
+    await expectAsks();
+
+    // The old grant is still on the site's record, for a key the vault no longer holds,
+    // which is what Settings lists as a removed key.
+    const stored = await context.policy.getIdentityDisclosure(SITE, keyA.id);
+    expect(stored).toBe("allow");
+    const heldIds = (await context.vault.listKeys()).map((k) => k.id);
+    expect(heldIds).not.toContain(keyA.id);
+
+    const res = await new PolicyRpcHandler().handleRequest(
+      { type: "policy.revokeDisclosure", origin: SITE, keyId: keyA.id },
+      context
+    );
+    expect(res.ok).toBe(true);
+    expect(await context.policy.getIdentityDisclosure(SITE, keyA.id)).toBeUndefined();
+  });
+});
+
 describe("the activity log records which key was disclosed", () => {
   it("logs the key id on a fresh approval and on a remembered read", async () => {
     await askAndAnswer("allow");

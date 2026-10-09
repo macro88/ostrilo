@@ -372,8 +372,9 @@ export function subscribeSettingsChanged(cb: () => void) {
 
 /**
  * `password` is required only when the patch raises trust to `high` or sets
- * `identityDisclosure` to `allow`, which grants the key selected at the time. Per-kind rules go through
- * `policySetKindRule`, and session grants through `policySetSession`.
+ * `identityDisclosure` to `allow`, which grants the key selected at the time.
+ * Per-kind rules go through `policySetKindRule`, and session grants through
+ * `policySetSession`.
  */
 export async function policySetOrigin(
   origin: string,

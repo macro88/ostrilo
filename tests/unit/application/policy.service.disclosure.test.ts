@@ -380,6 +380,18 @@ describe("per-key identity disclosure", () => {
       expect((await record())?.trustLevel).toBe("medium");
     });
 
+    it("does not re-normalise the session lifetime of settings that already had the earlier repair", async () => {
+      await legacy(
+        { identityDisclosure: "allow" },
+        { __consentMigrations: 1, sessionTTLMinutes: 0 }
+      );
+
+      await service.migrate();
+
+      expect((await stored())?.sessionTTLMinutes).toBe(0);
+      expect((await record())?.identityDisclosureKeyIds).toEqual([KEY_A]);
+    });
+
     it("writes nothing when there are no settings yet", async () => {
       const empty = memoryStorage();
 
