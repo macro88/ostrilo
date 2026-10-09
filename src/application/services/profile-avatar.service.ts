@@ -63,7 +63,7 @@ export class ProfileAvatarService {
     await this.lock.run(async () => {
       const entries = await this.read();
       const allowed = new Set(vaultPubkeys);
-      for (const key of [...entries.keys()]) {
+      for (const key of entries.keys()) {
         if (!allowed.has(key)) entries.delete(key);
       }
       entries.set(pubkey, { ...copy, at: this.now() });
