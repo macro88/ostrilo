@@ -26,15 +26,21 @@ These are kept in the browser's local extension storage, which is not synced:
 |---|---|
 | Encrypted vault | Your private keys, each encrypted with a key derived from your master password (Argon2id, AES-256-GCM). Without the password, the vault cannot be read. |
 | Public keys and key labels | Stored beside the encrypted keys so the vault can list them while locked. |
-| Activity log | For each request a site made: the time, the site's origin, the event kind, whether it was allowed or denied, the key used, and the first 100 characters of the event's content. It keeps 50 entries by default, and at most 500. |
+| Activity log | For each request a site made: the time, the site's origin, the event kind, whether it was allowed or denied and, for a denial, why (you denied it, a saved rule, no answer in time, too many requests, a locked vault or an unreadable key), the key used, and the first 100 characters of the event's content. It keeps 50 entries by default, and at most 500. |
 | Profile cache | Public Nostr profiles (kind 0 metadata) fetched from relays for your keys. |
+| Backup status | For each key you made in Ostrilo, whether you have backed it up: the key's internal ID, `pending` or `verified`, and the time. It holds no key material and no backup file, and it is stored apart from the vault. |
 | Profile picture copy | A 96 by 96 pixel copy of your own profile picture, at most 64 KB, kept for each key you made one for, with the address it came from and the time. The header shows it. See [Images and uploads](#images-and-uploads). |
 | Relay partition salt | A random value that decides which relay is asked about which of your keys. See [Relays](#what-is-sent-to-nostr-relays). |
-| Settings | Site permissions (each site's origin, trust level, per-event-kind rules and whether it may read your public key), your relay addresses, the image upload endpoint, auto-lock and session-grant durations, the activity log size, theme, which key is active (an internal ID, not the key), and whether onboarding is complete. |
+| Settings | Site permissions (each site's origin, trust level, per-event-kind rules and, for each of your keys, whether the site may read that key's public key), your relay addresses, the image upload endpoint, auto-lock and session-grant durations, the activity log size, theme, which key is active (an internal ID, not the key), and whether onboarding is complete. |
 
 Unlocked keys are held only in the extension's memory and are erased when the
 vault locks. Session storage, which the browser clears when it closes, holds the
-lock state and any time-limited permissions you granted a site.
+lock state and why the vault last locked, any time-limited permissions you granted
+a site, short counters of recent requests per site (so a site cannot reset its
+limit by waiting for the background to restart) and which "no backup" reminders
+you dismissed. While the vault is unlocked Ostrilo makes a harmless call to the
+browser about every 20 seconds to keep its background running until the auto-lock
+time; it sends nothing anywhere.
 
 ## What your browser may sync
 
