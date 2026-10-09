@@ -350,6 +350,11 @@ describe("EventDetailView payload sections", () => {
     expect(container.textContent).toContain("2 hidden or direction-control characters are present");
   });
 
+  it("says one byte, not 1 bytes, for a one-byte tags section", () => {
+    const { container } = renderEvent({ tags: [["a"]] });
+    expect(container.textContent).toMatch(/Tags · 1 · 1 byte(?!s)/);
+  });
+
   it("omits the tags section for an event with no tags", () => {
     const { container } = renderEvent({ tags: [] });
     expect(container.querySelector('[data-testid="approval-tags-json"]')).toBeNull();
