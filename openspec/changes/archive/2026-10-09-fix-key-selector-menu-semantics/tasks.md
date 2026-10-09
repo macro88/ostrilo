@@ -11,4 +11,4 @@
 
 ## 3. Archive
 
-- [ ] 3.1 Archive this change (Task 14 of phase 0.10)
+- [x] 3.1 Archive this change (Task 14 of phase 0.10)
