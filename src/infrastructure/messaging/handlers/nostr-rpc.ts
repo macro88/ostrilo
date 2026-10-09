@@ -18,7 +18,9 @@ import { isProtectedKind } from "@/domain/policy/trust-definitions";
 import {
   ApprovalQueueService,
   ApprovalRateLimitError,
+  QUEUE_LIMITS,
 } from "@/application/services/approval-queue.service";
+import { RefusalLogCoalescer } from "@/application/services/refusal-log-coalescer";
 import { browser } from "wxt/browser";
 
 /** Approval popup dimensions */
@@ -73,6 +75,15 @@ function refusalReason(
 }
 
 export class NostrRpcHandler implements RpcModule {
+  /**
+   * Queue-limit refusals reach the log once per origin per enqueue window. The
+   * limits' own counters do not count a refused call, so without this a page
+   * could write a row per call and rotate the real history out.
+   */
+  private readonly queueRefusalLog = new RefusalLogCoalescer(
+    QUEUE_LIMITS.windowMs
+  );
+
   constructor(
     private approvalQueue?: ApprovalQueueService,
     private windowManager?: () => Promise<number | undefined>
@@ -546,13 +557,14 @@ export class NostrRpcHandler implements RpcModule {
           console.warn(
             `[NostrRpcHandler] Refused enqueue from ${message.origin}: ${error.reason}`
           );
-          await context.activityLog.addEntry({
-            origin: message.origin,
-            kind: event.kind,
-            decision: "deny",
-            reason: "rate_limited",
-            contentPreview: event.content.substring(0, 100),
-          });
+          if (this.queueRefusalLog.shouldLog(message.origin)) {
+            await this.recordSignRefusal(
+              context,
+              message.origin,
+              event,
+              "rate_limited"
+            );
+          }
           return createRpcErrorResponse(RPC_ERROR_CODES.RATE_LIMITED, {
             details: "Too many pending approval requests",
             method: message.type,

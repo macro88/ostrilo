@@ -279,6 +279,7 @@ describe("signing that needs approval", () => {
 
 describe("why a refused signing request was refused", () => {
   const reasonLogged = async () => (await activityLog.getRecent(10, 0))[0];
+  const logged = async () => (await activityLog.getRecent(100, 0)).length;
 
   it("names a remembered deny rule when no prompt was shown", async () => {
     await policy.setPerKindRule(SITE, REACTION, "deny");
@@ -287,6 +288,7 @@ describe("why a refused signing request was refused", () => {
 
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.DENIED);
     expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "remembered" });
+    expect(await logged()).toBe(1);
     expect(queue.count()).toBe(0);
   });
 
@@ -306,6 +308,46 @@ describe("why a refused signing request was refused", () => {
       reason: "rate_limited",
       contentPreview: "one too many",
     });
+    expect(await logged()).toBe(1);
+  });
+
+  describe("a burst of queue-limit refusals", () => {
+    const fillPendingSlots = async (nostr: NostrRpcHandler, origin: string) => {
+      for (let i = 0; i < 5; i++) {
+        void nostr.handleRequest(signRequest(origin, `note ${i}`), context);
+      }
+      await vi.waitFor(() => expect(queue.count()).toBeGreaterThanOrEqual(5));
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("writes one row per origin per window, and a new one once the window passes", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const nostr = new NostrRpcHandler(queue, async () => 1);
+      const other = "https://other.example";
+      await fillPendingSlots(nostr, SITE);
+      await fillPendingSlots(nostr, other);
+      const refused = async (origin: string, content: string) =>
+        errorCodeOf(await nostr.handleRequest(signRequest(origin, content), context));
+
+      for (let i = 0; i < 30; i++) {
+        expect(await refused(SITE, `flood ${i}`)).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+      }
+      expect(await logged()).toBe(1);
+      expect((await reasonLogged()).contentPreview).toBe("flood 0");
+
+      expect(await refused(other, "other site")).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+      expect(await logged()).toBe(2);
+      expect(await refused(other, "other again")).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+      expect(await logged()).toBe(2);
+
+      vi.setSystemTime(Date.now() + 61_000);
+      expect(await refused(SITE, "after the window")).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+      expect(await logged()).toBe(3);
+      expect((await reasonLogged()).contentPreview).toBe("after the window");
+    });
   });
 
   it("blames the lock, not the user, when the vault locks while the prompt is open", async () => {
@@ -318,6 +360,7 @@ describe("why a refused signing request was refused", () => {
 
     expect(errorCodeOf(await pending)).toBe(RPC_ERROR_CODES.DENIED);
     expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "vault_locked" });
+    expect(await logged()).toBe(1);
   });
 
   it("logs a request the page withdrew as unanswered, not as the user's denial", async () => {
@@ -340,6 +383,7 @@ describe("why a refused signing request was refused", () => {
     expect(errorCodeOf(await pending)).toBe(RPC_ERROR_CODES.DENIED);
 
     expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "timeout" });
+    expect(await logged()).toBe(1);
   });
 
   it("logs an approved request that could not be signed because the key was unreadable", async () => {
@@ -350,6 +394,7 @@ describe("why a refused signing request was refused", () => {
 
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
     expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "key_unreadable" });
+    expect(await logged()).toBe(1);
   });
 
   it("logs an approved request that could not be signed because the vault locked", async () => {
@@ -360,6 +405,7 @@ describe("why a refused signing request was refused", () => {
 
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.LOCKED);
     expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "vault_locked" });
+    expect(await logged()).toBe(1);
   });
 
   it("blames the lock for a disclosure prompt the vault locked under", async () => {
@@ -375,6 +421,7 @@ describe("why a refused signing request was refused", () => {
       decision: "deny",
       reason: "vault_locked",
     });
+    expect(await logged()).toBe(1);
   });
 });
 
