@@ -33,13 +33,22 @@ async function lockState(page: Page): Promise<LockPayload> {
   return sendExtensionRpc<LockPayload>(page, { type: "state.getLock" });
 }
 
-async function unlockWithThirtyFiveMinutes(page: Page) {
+/**
+ * Unlocks and sets 35 minutes. `afterUnlock` runs between the two: changing a
+ * setting makes the background re-check at once, which pings, so anything
+ * counting pings has to be installed before that happens.
+ */
+async function unlockWithThirtyFiveMinutes(
+  page: Page,
+  afterUnlock?: () => Promise<void>
+) {
   await sendExtensionRpc(page, {
     type: "vault.generate",
     password: TEST_PASSWORD,
     label: "Keepalive Key",
   });
   await sendExtensionRpc(page, { type: "vault.unlock", password: TEST_PASSWORD });
+  await afterUnlock?.();
   await sendExtensionRpc(page, {
     type: "settings.update",
     patch: { autoLockMinutes: 35, relays: ["wss://localhost:1"] },
@@ -86,9 +95,13 @@ test.describe("session keepalive", () => {
     test.setTimeout(180_000);
 
     const popup = await openPopup();
-    await unlockWithThirtyFiveMinutes(popup);
-    const pings = await countKeepAlivePings(extensionContext, extensionId);
+    let pings: () => Promise<number> = async () => 0;
+    await unlockWithThirtyFiveMinutes(popup, async () => {
+      pings = await countKeepAlivePings(extensionContext, extensionId);
+    });
     await popup.close();
+    // Whatever the settings change pinged has landed; count from here.
+    const before = await pings();
 
     // Nothing extension-owned is open, so nothing is messaging the worker.
     const blank = await extensionContext.newPage();
@@ -96,7 +109,7 @@ test.describe("session keepalive", () => {
     await blank.waitForTimeout(IDLE_WAIT_MS);
 
     expect(
-      await pings(),
+      (await pings()) - before,
       "the background made no keepalive calls while the vault was unlocked"
     ).toBeGreaterThanOrEqual(2);
 
@@ -116,9 +129,14 @@ test.describe("session keepalive", () => {
     test.setTimeout(180_000);
 
     const popup = await openPopup();
-    await unlockWithThirtyFiveMinutes(popup);
-    const pings = await countKeepAlivePings(extensionContext, extensionId);
+    let pings: () => Promise<number> = async () => 0;
+    await unlockWithThirtyFiveMinutes(popup, async () => {
+      pings = await countKeepAlivePings(extensionContext, extensionId);
+    });
     await sendExtensionRpc(popup, { type: "vault.lock" });
+    // A ping that was already under way when the lock landed is not a ping
+    // after it; count what arrives once the lock has returned.
+    const afterLock = await pings();
     await popup.close();
 
     const blank = await extensionContext.newPage();
@@ -126,7 +144,7 @@ test.describe("session keepalive", () => {
     await blank.waitForTimeout(IDLE_WAIT_MS);
 
     expect(
-      await pings(),
+      (await pings()) - afterLock,
       "the keepalive kept calling the extension API after the vault was locked"
     ).toBe(0);
 
