@@ -4,7 +4,7 @@
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OnboardingContainer } from "@/ui/features/onboarding/components/OnboardingContainer";
-import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
+import { RPC_ERROR_CODES, createRpcErrorResponse } from "@/infrastructure/messaging/error-codes";
 import { KeyManagerProvider } from "@/ui/state/KeyManagerContext";
 import { background } from "./fake-background";
 import {
@@ -86,7 +86,6 @@ describe("Quick start on the welcome screen", () => {
 
 describe("Quick start flow", () => {
   it("makes one key, unlocks, shows the notice, and goes to Home with no backup step", async () => {
-    background.respond("keys.list", () => ({ ok: true, data: [] }));
     const { container, onComplete } = mount();
     await openQuickStart(container);
     await fillPasswords(container);
@@ -167,13 +166,25 @@ describe("Quick start flow", () => {
     expect(background.sent("vault.generate")).toHaveLength(1);
   });
 
+  it("asks the background to generate only into an empty vault", async () => {
+    const { container } = mount();
+    await openQuickStart(container);
+    await fillPasswords(container);
+
+    await click(button(container, "Create identity"));
+    await settle(() => container.textContent?.includes("Your identity is ready") ?? false);
+
+    expect(background.sent("vault.generate")[0].onlyIfEmpty).toBe(true);
+  });
+
   it("does not make a second key when a retry follows a failed unlock", async () => {
     let stored = 0;
-    background.respond("keys.list", () => ({
-      ok: true,
-      data: Array.from({ length: stored }, (_, i) => ({ id: `k${i}` })),
-    }));
-    background.respond("vault.generate", () => {
+    background.respond("vault.generate", (request) => {
+      if (request.onlyIfEmpty && stored > 0) {
+        return createRpcErrorResponse(RPC_ERROR_CODES.KEY_ALREADY_EXISTS, {
+          method: "vault.generate",
+        });
+      }
       stored += 1;
       return { ok: true, data: { id: "k0" } };
     });
@@ -190,19 +201,32 @@ describe("Quick start flow", () => {
     await click(button(container, "Create identity"));
     await settle(() => container.textContent?.includes("Your identity is ready") ?? false);
 
-    expect(background.sent("vault.generate")).toHaveLength(1);
     expect(stored).toBe(1);
   });
 
-  it("keeps the form and says so when the vault refuses the password", async () => {
+  it("unlocks the vault another surface already made instead of failing", async () => {
+    background.fail("vault.generate", RPC_ERROR_CODES.KEY_ALREADY_EXISTS);
+    const { container } = mount();
+    await openQuickStart(container);
+    await fillPasswords(container);
+
+    await click(button(container, "Create identity"));
+    await settle(() => container.textContent?.includes("Your identity is ready") ?? false);
+
+    expect(background.sent("vault.unlock")).toHaveLength(1);
+  });
+
+  it("tells the user this browser already has a vault password when it is not the one typed", async () => {
     background.fail("vault.generate", RPC_ERROR_CODES.INVALID_PASSWORD);
     const { container } = mount();
     await openQuickStart(container);
     await fillPasswords(container);
 
     await click(button(container, "Create identity"));
-    await settle(() => container.textContent?.includes("not accepted") ?? false);
+    await settle(() => container.textContent?.includes("already has a vault password") ?? false);
 
+    expect(container.textContent).toContain("Use the one you set earlier.");
+    expect(container.textContent).not.toContain("Could not create the key");
     expect(background.sent("vault.unlock")).toHaveLength(0);
     expect(container.textContent).not.toContain("Your identity is ready");
     expect(button(container, "Create identity").disabled).toBe(false);

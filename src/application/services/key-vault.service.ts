@@ -434,16 +434,33 @@ export class KeyVaultService {
     return { kek, kdf: envelope.kdf, created: true };
   }
 
-  async generateKey(password: string, label?: string): Promise<KeyRecord> {
-    return this.writeLock.run(() => this.generateKeyNow(password, label));
+  /**
+   * With `onlyIfEmpty`, creates nothing and throws `vault_not_empty` when the
+   * vault already holds a key. The check runs inside the write lock, before the
+   * envelope is touched, so two callers racing to make the first key cannot both
+   * pass it: the second sees the first's key. A UI that only looked at the key
+   * list first could not promise that.
+   */
+  async generateKey(
+    password: string,
+    label?: string,
+    options: { onlyIfEmpty?: boolean } = {}
+  ): Promise<KeyRecord> {
+    return this.writeLock.run(() =>
+      this.generateKeyNow(password, label, options.onlyIfEmpty === true)
+    );
   }
 
   private async generateKeyNow(
     password: string,
-    label?: string
+    label: string | undefined,
+    onlyIfEmpty: boolean
   ): Promise<KeyRecord> {
     if (!password) {
       throw new Error("password_required");
+    }
+    if (onlyIfEmpty && (await this.listKeys()).length > 0) {
+      throw new Error("vault_not_empty");
     }
 
     const { kek, kdf } = await this.kekForWrite(password);

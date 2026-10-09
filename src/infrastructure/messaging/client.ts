@@ -195,11 +195,20 @@ export async function listKeys() {
   >({ type: "keys.list" });
 }
 
-export async function generateKey(password: string, label?: string) {
+/**
+ * `onlyIfEmpty` makes the background refuse with `key_already_exists`, creating
+ * nothing, when the vault already holds a key.
+ */
+export async function generateKey(
+  password: string,
+  label?: string,
+  options: { onlyIfEmpty?: boolean } = {}
+) {
   return rpc<import("@/domain/types").KeyRecord>({
     type: "vault.generate",
     password,
     label,
+    ...(options.onlyIfEmpty ? { onlyIfEmpty: true } : {}),
   });
 }
 

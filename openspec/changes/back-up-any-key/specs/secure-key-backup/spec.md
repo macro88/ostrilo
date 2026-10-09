@@ -107,7 +107,16 @@ The welcome screen SHALL offer a Quick start choice beside Create New Key and Im
 
 - **WHEN** the user presses Create repeatedly, or retries after a reply was lost, or a second surface submits
 - **THEN** only one key SHALL be generated
-- **AND** a retry SHALL find the key already in the vault and unlock it rather than generate another
+- **AND** Quick Start SHALL ask the background to generate only into an empty vault
+- **AND** the background SHALL decide that inside the vault's write lock, so of two concurrent requests exactly one creates a key
+- **AND** a request that finds a key already in the vault SHALL create nothing and answer `key_already_exists`, and Quick Start SHALL then unlock the existing vault rather than generate another
+
+#### Scenario: A vault with another password is not mistaken for a failure to create
+
+- **GIVEN** an earlier attempt created the vault under a different password
+- **WHEN** Quick Start is submitted with a password that is not that vault's
+- **THEN** the flow SHALL say that this browser already has a vault password and to use the one set earlier
+- **AND** no second key SHALL be created
 
 #### Scenario: Closing the popup keeps a saved key
 

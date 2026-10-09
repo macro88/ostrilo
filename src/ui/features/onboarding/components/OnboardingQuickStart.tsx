@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SealMark } from "@/components/common/SealMark";
 import {
+  RpcClientError,
   generateKey,
-  listKeys,
   unlockVault,
 } from "@/infrastructure/messaging/client";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
@@ -33,8 +33,10 @@ export const QUICK_START_NOTICE =
  *
  * Retrying must never mint a second key. A click while a submit is in flight is
  * dropped by a ref, because state would not be current until the next render.
- * And a retry after a lost reply, or from a second surface, asks the vault
- * whether a key already exists and unlocks it instead of generating again.
+ * The key is generated `onlyIfEmpty`, which the background checks inside the
+ * vault's write lock: after a lost reply, or when another surface got there
+ * first, it refuses with `key_already_exists` and this flow unlocks the vault
+ * that is already there instead.
  */
 export function OnboardingQuickStart({
   onBack,
@@ -58,8 +60,13 @@ export function OnboardingQuickStart({
         setError(problem);
         return;
       }
-      if ((await listKeys()).length === 0) {
-        await generateKey(password, QUICK_START_KEY_NAME);
+      try {
+        await generateKey(password, QUICK_START_KEY_NAME, { onlyIfEmpty: true });
+      } catch (refusal) {
+        const alreadyThere =
+          refusal instanceof RpcClientError &&
+          refusal.errorCode === RPC_ERROR_CODES.KEY_ALREADY_EXISTS;
+        if (!alreadyThere) throw refusal;
       }
       await unlockVault(password);
       setError("");
@@ -69,8 +76,11 @@ export function OnboardingQuickStart({
     } catch (failure) {
       setError(
         userFacingError(failure, "Could not create the key. Try again.", {
+          // The policy was already checked above, so a refusal here means the
+          // vault exists and this is not its password: an earlier attempt got
+          // as far as creating it.
           [RPC_ERROR_CODES.INVALID_PASSWORD]:
-            "That password was not accepted. Use at least 12 characters, and avoid common passwords and patterns.",
+            "This browser already has a vault password. Use the one you set earlier.",
         })
       );
     } finally {

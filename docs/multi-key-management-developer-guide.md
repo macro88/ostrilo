@@ -326,7 +326,7 @@ calls the service directly; it calls the typed wrappers in
 |---|---|---|
 | `listKeys()` | `keys.list` | yes (projected to ids only) |
 | `selectKey(id)` | `vault.select` | no |
-| `generateKey(password, label?)` | `vault.generate` | yes — verifies the password itself |
+| `generateKey(password, label?, { onlyIfEmpty? })` | `vault.generate` | yes — verifies the password itself; `onlyIfEmpty` refuses with `key_already_exists` when the vault holds a key, checked inside the write lock |
 | `importKey(keyInput, password, label?)` | `vault.import` | yes — verifies the password itself |
 | `renameKey(id, label)` | `vault.renameKey` | no |
 | `deleteKey(id, password)` | `vault.deleteKey` | no |

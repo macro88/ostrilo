@@ -27,7 +27,13 @@ export type RpcRequest =
   | { type: "policy.evaluate"; origin: string; kind: number }
   | { type: "vault.unlock"; password: string }
   | { type: "vault.lock" }
-  | { type: "vault.generate"; password: string; label?: string }
+  | {
+      type: "vault.generate";
+      password: string;
+      label?: string;
+      /** Create the key only if the vault holds none; else `key_already_exists`. */
+      onlyIfEmpty?: boolean;
+    }
   | { type: "vault.import"; keyInput: string; password: string; label?: string }
   | { type: "vault.select"; id: string }
   | { type: "vault.renameKey"; id: string; label: string }

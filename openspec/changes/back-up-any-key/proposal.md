@@ -41,7 +41,7 @@ Not changed: the envelope format, the KDF and AEAD, the backup passphrase rules,
 - `src/infrastructure/messaging/handlers/backup-rpc.ts`, `rpc.ts`, `client.ts`, `events.ts`, `validation/schemas.ts`, `background.ts`: `backup.list`, `backup.markVerified`, the `KEY_BACKUP_CHANGED` broadcast.
 - `src/ui/features/backup/`: the envelope, export and verification moved out of `features/onboarding`; `useKeyBackup`, `KeyBackupDialog`, and the reader hooks `useKeyBackupStatuses` and `useKeyBackupStatus`.
 - `src/ui/features/settings/components/KeysIdentitiesTab.tsx`, `shared/KeySelectorCard.tsx`; `OnboardingCreateKey.tsx` marks its key verified.
-- `src/ui/features/onboarding/components/OnboardingQuickStart.tsx`, `OnboardingWelcome.tsx`, `OnboardingContainer.tsx`, `validate-new-password.ts`: the Quick start flow.
+- `src/ui/features/onboarding/components/OnboardingQuickStart.tsx`, `OnboardingWelcome.tsx`, `OnboardingContainer.tsx`, `validate-new-password.ts`: the Quick start flow. `vault.generate` gains `onlyIfEmpty`, enforced in `KeyVaultService.generateKey` inside the write lock, so Quick start cannot add a second key however the requests interleave.
 - `src/ui/features/backup/backup-banner.ts`, `hooks/useBackupBanner.ts`, `components/BackupBanner.tsx`; `HomeView.tsx`: the banner.
 - `src/ui/lib/open-options.ts`, `src/extension/options/OptionsApp.tsx`, `KeysIdentitiesTab.tsx`: the `#keys?backup=<id>` deep link.
 

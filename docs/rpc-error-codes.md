@@ -111,7 +111,7 @@ A retry after `approval_failed` reports whether the vault is locked. The page-si
 ### State
 
 - `no_key_selected`: the operation needs an active key and none is selected.
-- `key_already_exists`: the key being imported is already in the vault.
+- `key_already_exists`: the key being imported is already in the vault, or `vault.generate` was sent with `onlyIfEmpty` and the vault already holds a key (nothing is created).
 - `key_not_found`: the key id is not in the vault.
 - `vault_unreadable`: the vault, or the selected key, cannot be read: an unknown format version, KDF parameters below the accepted floor, or an unreadable key record. Distinct from `invalid_password`, so a damaged vault never tells the user their password is wrong.
 - `vault_migration_pending`: `vault.changePassword` found a key record still in the pre-envelope format. Nothing is written; one unlock migrates it.

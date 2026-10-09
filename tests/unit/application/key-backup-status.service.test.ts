@@ -136,3 +136,42 @@ describe("the vault and backup status", () => {
     expect((await vault.listKeys()).map((k) => k.id)).toEqual([first.id]);
   });
 });
+
+describe("generating a key only into an empty vault", () => {
+  it("makes exactly one key when two callers race to make the first", async () => {
+    const { vault } = testVault();
+
+    const outcomes = await Promise.allSettled([
+      vault.generateKey(STRONG_PASSWORD, "one", { onlyIfEmpty: true }),
+      vault.generateKey(STRONG_PASSWORD, "two", { onlyIfEmpty: true }),
+    ]);
+
+    expect(outcomes.map((o) => o.status).sort()).toEqual(["fulfilled", "rejected"]);
+    const refused = outcomes.find((o) => o.status === "rejected") as PromiseRejectedResult;
+    expect(refused.reason).toEqual(new Error("vault_not_empty"));
+    expect(await vault.listKeys()).toHaveLength(1);
+    expect(await vault.backupStatus.list()).toHaveLength(1);
+  });
+
+  it("creates nothing, and touches no envelope, when the vault already has a key", async () => {
+    const { vault } = testVault();
+    const first = await vault.generateKey(STRONG_PASSWORD, "first");
+    const envelopeBefore = await vault.getEnvelope();
+
+    await expect(
+      vault.generateKey(STRONG_PASSWORD, "second", { onlyIfEmpty: true })
+    ).rejects.toThrow("vault_not_empty");
+
+    expect((await vault.listKeys()).map((k) => k.id)).toEqual([first.id]);
+    expect(await vault.getEnvelope()).toEqual(envelopeBefore);
+  });
+
+  it("still lets Settings add a key to a vault that has one", async () => {
+    const { vault } = testVault();
+    await vault.generateKey(STRONG_PASSWORD, "first");
+
+    await vault.generateKey(STRONG_PASSWORD, "second");
+
+    expect(await vault.listKeys()).toHaveLength(2);
+  });
+});

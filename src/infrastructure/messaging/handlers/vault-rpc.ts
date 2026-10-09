@@ -232,6 +232,16 @@ export class VaultRpcHandler implements RpcModule {
       }
     }
 
+    if (
+      message.onlyIfEmpty !== undefined &&
+      typeof message.onlyIfEmpty !== "boolean"
+    ) {
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
+        details: "onlyIfEmpty must be a boolean",
+        method: message.type,
+      });
+    }
+
     const policyError = await this.enforceNewPasswordPolicy(
       message.password,
       message.type,
@@ -242,9 +252,18 @@ export class VaultRpcHandler implements RpcModule {
 
     try {
       return await this.writeUnderThrottle(context, message.type, () =>
-        context.vault.generateKey(message.password, message.label)
+        context.vault.generateKey(message.password, message.label, {
+          onlyIfEmpty: message.onlyIfEmpty,
+        })
       );
     } catch (error) {
+      // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract: the service error string this branch maps to RPC_ERROR_CODES.KEY_ALREADY_EXISTS. Not a deployment identifier or credential.
+      if (error instanceof Error && error.message === "vault_not_empty") {
+        return createRpcErrorResponse(RPC_ERROR_CODES.KEY_ALREADY_EXISTS, {
+          details: "The vault already holds a key",
+          method: message.type,
+        });
+      }
       if (error instanceof Error && error.message === "password_required") {
         return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
           details: "Password is required",
