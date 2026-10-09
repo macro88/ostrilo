@@ -513,7 +513,8 @@ test.describe("locking cancels work in flight", () => {
         outcome.error,
         "SECURITY REGRESSION: locking dropped the queued request instead of denying it - the page is still waiting and will retry"
       ).not.toBe(NEVER_ANSWERED);
-      expect(outcome.error.toLowerCase()).toMatch(/denied|rejected/);
+      // `locked`, not a refusal: the page can tell a lock from a user saying no.
+      expect(outcome.error.toLowerCase()).toMatch(/locked/);
       // Specifically not the 60s queue timeout: a request that merely sat there
       // and expired would satisfy a weaker assertion while meaning the lock did
       // nothing.
