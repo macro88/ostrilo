@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import https from "node:https";
 import fsSync from "node:fs";
+import { deflateSync } from "node:zlib";
 import { ensureDevCertificate } from "../../tests/e2e/fixtures/make-dev-cert.ts";
 
 const cwd = process.cwd();
@@ -133,6 +134,62 @@ async function captureTabs(page, tabs) {
 
 // aislop-ignore-next-line security/hardcoded-secret -- throwaway passphrase for a local screenshot vault that is created and discarded by this script. It unlocks nothing that exists outside this run.
 const PASSWORD = "CorrectHorseBatteryStaple!2026";
+
+/**
+ * A 96x96 PNG as a `data:` URL, for the header's local picture copy.
+ *
+ * Built here rather than read from disk so the runner stays one file. The
+ * image is a flat ink-and-violet mark, not a photograph: what the review
+ * judges is the header's fixed box and the seal clip around it.
+ */
+function pictureCopyDataUrl() {
+  const size = 96;
+  const table = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (bytes) => {
+    let c = 0xffffffff;
+    for (const byte of bytes) c = table[(c ^ byte) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const u32 = (n) => {
+    const b = Buffer.alloc(4);
+    b.writeUInt32BE(n);
+    return b;
+  };
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    return Buffer.concat([u32(data.length), body, u32(crc(body))]);
+  };
+
+  const rows = [];
+  for (let y = 0; y < size; y += 1) {
+    const row = Buffer.alloc(1 + size * 3);
+    for (let x = 0; x < size; x += 1) {
+      const inDisc = (x - 48) ** 2 + (y - 40) ** 2 < 18 ** 2;
+      const inBody = y > 62 && (x - 48) ** 2 + (y - 96) ** 2 < 36 ** 2;
+      const [r, g, b] = inDisc || inBody ? [244, 240, 255] : [93, 63, 211];
+      row[1 + x * 3] = r;
+      row[2 + x * 3] = g;
+      row[3 + x * 3] = b;
+    }
+    rows.push(row);
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header[8] = 8;
+  header[9] = 2;
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(Buffer.concat(rows))),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+  return `data:image/png;base64,${png.toString("base64")}`;
+}
 
 /** Privileged RPC from an extension page; throws on an error envelope. */
 async function rpc(page, message) {
@@ -485,6 +542,21 @@ try {
       patch: {
         relays: ["wss://relay.primal.net", "wss://relay.damus.io", "wss://nos.lol"],
       },
+    });
+  });
+
+  await step("seed picture copy", async () => {
+    // The header reads only a stored local copy, so a populated vault needs one.
+    // Stored directly rather than through a Profile save, which would load the
+    // picture URL above: that host does not exist, and the runner's relays and
+    // pages must not reach the network.
+    const list = await rpc(popup, { type: "keys.list" });
+    const jimbo = list.find((k) => k.label === KEY_NAME);
+    await rpc(popup, {
+      type: "avatar.save",
+      pubkey: jimbo.pubkey,
+      sourceUrl: "https://jimbo.example/avatar.png",
+      dataUrl: pictureCopyDataUrl(),
     });
   });
 
