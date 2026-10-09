@@ -210,9 +210,10 @@ function IdentityCard({
         {activeKey ? (
           <>
             <p className="mt-1.5 text-sm text-destructive" role="alert">
-              The stored public key for key{" "}
+              Key{" "}
               <span className="break-all font-mono text-xs">{activeKey.id}</span>{" "}
-              could not be read. Ostrilo has not deleted or changed this key.
+              could not be read, so it cannot sign. Ostrilo has not deleted or
+              changed it. Choose another key from the header menu.
             </p>
             <button
               type="button"

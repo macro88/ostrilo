@@ -11,12 +11,15 @@ import {
 } from "@/infrastructure/messaging/handlers/vault-rpc";
 import { lockedProjectionFor } from "@/infrastructure/messaging/rpc-router";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
+import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import { memoryStorage, testVault } from "../helpers/vault";
 import {
   SECRET_ONE,
   SECRET_TWO,
   STRONG_PASSWORD,
   dataOf,
+  errorCodeOf,
   realContext,
 } from "../unit/infrastructure/messaging-fixture";
 
@@ -223,5 +226,79 @@ describe("selection that no longer exists", () => {
 
     expect(await world.vault.listKeys()).toEqual(records);
     expect((await world.vault.getLockState()).isLocked).toBe(true);
+  });
+});
+
+describe("a selected key that could not be opened", () => {
+  const SITE = "https://site.example";
+  const KIND = 7;
+
+  const signRequest = () => ({
+    type: "nostr.signEvent" as const,
+    origin: SITE,
+    event: { kind: KIND, created_at: 1_700_000_000, tags: [], content: "hello" },
+  });
+
+  /** A healthy first key and a damaged second key that is the stored selection. */
+  async function damagedSelection() {
+    const world = await build(VAULTS[2][1]);
+    const [healthy, damaged] = await world.vault.listKeys();
+    const stored = await world.vault.listKeys();
+    await world.storage.local.set(
+      "encryptedKeys",
+      stored.map((k) => (k.id === damaged.id ? { ...k, wrappedDek: undefined } : k))
+    );
+    await world.context.policy.setPerKindRule(SITE, KIND, "allow");
+    await world.vault.unlock(STRONG_PASSWORD);
+    return { world, healthy, damaged };
+  }
+
+  it("keeps the selection on that key, and does not fall back to the healthy one", async () => {
+    const { world, damaged } = await damagedSelection();
+
+    expect((await lockStateOf(world)).selectedKeyId).toBe(damaged.id);
+    const listed = await listKeys(world);
+    expect(listed.find((k) => k.id === damaged.id)?.unreadable).toBe(true);
+    expect(listed.filter((k) => k.unreadable)).toHaveLength(1);
+  });
+
+  it("refuses to sign instead of signing as another identity, then signs once the healthy key is chosen", async () => {
+    const { world, healthy, damaged } = await damagedSelection();
+    const nostr = new NostrRpcHandler(undefined, async () => 1);
+
+    expect(errorCodeOf(await nostr.handleRequest(signRequest(), world.context))).toBe(
+      RPC_ERROR_CODES.VAULT_UNREADABLE
+    );
+    await expect(world.vault.sign("ab".repeat(32), damaged.id)).rejects.toThrow("key_unreadable");
+
+    await world.vault.selectKey(healthy.id);
+    const signed = dataOf<{ event: SignedEvent }>(
+      await nostr.handleRequest(signRequest(), world.context)
+    ).event;
+
+    expect(signed.pubkey).toBe(healthy.pubkey);
+    expect(verifies(signed)).toBe(true);
+  });
+
+  it("does not disclose the public key of a key that cannot sign", async () => {
+    const { world } = await damagedSelection();
+    const nostr = new NostrRpcHandler(undefined, async () => 1);
+
+    const res = await nostr.handleRequest(
+      { type: "nostr.getPublicKey", origin: SITE },
+      world.context
+    );
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
+  });
+
+  it("clears the unreadable mark on lock, and leaves every record as it was", async () => {
+    const { world, damaged } = await damagedSelection();
+    const records = await world.vault.listKeys();
+
+    await world.vault.lock();
+
+    expect(world.vault.isKeyUnreadable(damaged.id)).toBe(false);
+    expect(await world.vault.listKeys()).toEqual(records);
   });
 });

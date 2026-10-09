@@ -53,6 +53,7 @@ function makeContext(
   return {
     vault: {
       getLockState: async () => ({ isLocked: false }),
+      isKeyUnreadable: () => false,
       listKeys: async () => [
         { id: "k1", pubkey: PUBKEY, isSelected: true, label: "k1" },
       ],
@@ -214,7 +215,11 @@ describe("a polling origin is refused", () => {
       { id: "k1", pubkey: PUBKEY, isSelected: true, label: "k1" },
     ]);
     const context = consented({
-      vault: { getLockState: async () => ({ isLocked: false }), listKeys },
+      vault: {
+        getLockState: async () => ({ isLocked: false }),
+        isKeyUnreadable: () => false,
+        listKeys,
+      },
     });
 
     for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow + 3; i++) {

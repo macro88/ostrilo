@@ -9,11 +9,12 @@ export interface UIKeyInfo {
   publicKeyHex: string;
   publicKeyBech32: string;
   /**
-   * The stored record's public key could not be read, so there is no npub to
-   * show. Surfaces have to render this as an error: the previous code called
-   * a hex decoder that substituted zero bytes for unparseable characters, so
-   * a corrupt record displayed a real, well-formed npub for a key nobody
-   * holds, and the user had no way to tell it from their own identity.
+   * The record could not be read: its public key is malformed, or the last
+   * unlock could not open it. Surfaces have to render this as an error: the
+   * previous code called a hex decoder that substituted zero bytes for
+   * unparseable characters, so a corrupt record displayed a real, well-formed
+   * npub for a key nobody holds, and the user had no way to tell it from their
+   * own identity.
    */
   isUnreadable: boolean;
   createdAt: number;
@@ -40,7 +41,7 @@ function toUIKeyInfo(key: KeyListEntry): UIKeyInfo {
     label: key.label || "Unnamed",
     publicKeyHex: key.pubkey,
     publicKeyBech32: key.npub ?? "",
-    isUnreadable: key.npub === undefined,
+    isUnreadable: key.npub === undefined || key.unreadable === true,
     createdAt: key.createdAt,
     lastUsedAt: key.lastUsedAt || key.createdAt, // Use createdAt as fallback
     isSelected: key.isSelected || false,

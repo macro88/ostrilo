@@ -31,6 +31,11 @@ import { ScureBech32 } from "@/infrastructure/crypto/adapters";
  */
 export interface KeyListEntry extends KeyRecord {
   npub?: string;
+  /**
+   * The last unlock could not open this key's record. Set only while unlocked;
+   * a locked listing is reduced to identifiers before it leaves the router.
+   */
+  unreadable?: true;
 }
 
 /**
@@ -398,6 +403,7 @@ export class VaultRpcHandler implements RpcModule {
             hexToBytes(record.pubkey)
           )
         : undefined,
+      ...(context.vault.isKeyUnreadable(record.id) ? { unreadable: true as const } : {}),
     }));
     return { ok: true, data };
   }

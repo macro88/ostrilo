@@ -175,7 +175,8 @@ describe("HomeView identity card", () => {
     await mount();
     const card = container.querySelector('section[aria-label="Active identity"]');
     expect(card?.textContent).toContain("key-main");
-    expect(card?.textContent).toContain("has not deleted or changed this key");
+    expect(card?.textContent).toContain("Choose another key");
+    expect(card?.textContent).toContain("has not deleted or changed it");
     expect(card?.textContent).not.toContain("Unnamed");
     expect(card?.textContent).not.toContain("Create or import");
   });

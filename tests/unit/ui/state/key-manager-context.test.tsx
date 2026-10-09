@@ -963,5 +963,24 @@ describe("KeyManagerProvider", () => {
       expect(rpc.generateKey).not.toHaveBeenCalled();
       expect(rpc.importKey).not.toHaveBeenCalled();
     });
+
+    it("keeps the selection on a key that could not be opened, names it, and lets the user switch", async () => {
+      const bad = entry({ id: "bad", label: "Damaged", unreadable: true });
+      fakeBackend([bad, a], "bad");
+      await mountProvider();
+
+      await act(async () => {
+        await latest().unlock("pw");
+      });
+
+      expect(latest().selectedKeyInfo).toMatchObject({ id: "bad", isUnreadable: true });
+      expect(latest().keys.find((k) => k.id === "a")?.isUnreadable).toBe(false);
+
+      await act(async () => {
+        await latest().selectKey("a");
+      });
+
+      expect(latest().selectedKeyInfo).toMatchObject({ id: "a", isUnreadable: false });
+    });
   });
 });

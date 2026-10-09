@@ -279,7 +279,7 @@ describe("signing refusals from vault state", () => {
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.NO_KEY_SELECTED);
   });
 
-  it("reports a selected key that failed to unlock as locked, not denied", async () => {
+  it("reports a selected key that failed to unlock as unreadable, not locked and not denied", async () => {
     await vault.importKey(SECRET_TWO, STRONG_PASSWORD, "second");
     await vault.lock();
     const [first, second] = (await storage.local.get<KeyRecord[]>("encryptedKeys")) ?? [];
@@ -293,7 +293,7 @@ describe("signing refusals from vault state", () => {
 
     const res = await new NostrRpcHandler(queue, async () => 1).handleRequest(signRequest(), context);
 
-    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.LOCKED);
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
   });
 });
 

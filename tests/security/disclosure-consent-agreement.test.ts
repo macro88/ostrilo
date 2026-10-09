@@ -356,6 +356,7 @@ describe("revocation actually revokes", () => {
     const context = {
       vault: {
         getLockState: async () => ({ isLocked: false }),
+        isKeyUnreadable: () => false,
         listKeys: async () => [
           { id: "k1", pubkey: "ab".repeat(32), isSelected: true },
         ],

@@ -197,7 +197,7 @@ export function KeySelectorCard({
                       the user would read as their own identity.
                     */
                     <p className="mt-0.5 text-[13px] text-destructive">
-                      Unreadable record: stored public key is not valid
+                      Unreadable record: this key could not be read
                       (key ID {key.id})
                     </p>
                   ) : (

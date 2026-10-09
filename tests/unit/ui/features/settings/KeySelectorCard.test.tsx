@@ -92,7 +92,7 @@ describe("KeySelectorCard", () => {
     );
 
     expect(container.textContent).toContain(
-      "Unreadable record: stored public key is not valid"
+      "Unreadable record: this key could not be read"
     );
     expect(container.textContent).toContain(`key ID ${MAIN.id}`);
     expect(container.textContent).not.toContain("npub1");

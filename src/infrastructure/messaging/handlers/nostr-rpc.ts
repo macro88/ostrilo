@@ -43,6 +43,10 @@ export const VAULT_LOCKED_ERRORS: readonly string[] = [
   "no_unlocked_key",
 ];
 
+/** Fixed text: the key's ID is an internal identifier a web page has no use for. */
+const UNREADABLE_KEY_DETAILS =
+  "The selected key could not be read. Choose another key in Ostrilo.";
+
 export function isVaultLockedError(message: unknown): boolean {
   return typeof message === "string" && VAULT_LOCKED_ERRORS.includes(message);
 }
@@ -141,6 +145,16 @@ export class NostrRpcHandler implements RpcModule {
 
     if (!selectedKey) {
       return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
+        method: message.type,
+      });
+    }
+
+    // The public key is stored in the clear, so it would be disclosed even
+    // though this key cannot sign. Refused instead: the site would otherwise
+    // learn an identity that every following request fails to use.
+    if (context.vault.isKeyUnreadable(selectedKey.id)) {
+      return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
+        details: UNREADABLE_KEY_DETAILS,
         method: message.type,
       });
     }
@@ -540,6 +554,12 @@ export class NostrRpcHandler implements RpcModule {
       if (error instanceof Error) {
         if (isVaultLockedError(error.message)) {
           return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+            method: message.type,
+          });
+        }
+        if (error.message === "key_unreadable") {
+          return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
+            details: UNREADABLE_KEY_DETAILS,
             method: message.type,
           });
         }

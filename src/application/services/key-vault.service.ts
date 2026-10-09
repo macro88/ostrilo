@@ -100,6 +100,13 @@ export class KeyVaultService {
   private unlocked: Map<string, Uint8Array> = new Map();
 
   /**
+   * Records the last unlock could not open. Held so that a request for one of
+   * them is refused for what it is, rather than reported as a locked vault or
+   * answered with another key.
+   */
+  private unreadable: Set<string> = new Set();
+
+  /**
    * Incremented by every lock and unlock. A read of the lock state that awaits
    * storage compares it before correcting the record, so a correction computed
    * from a session that has since ended cannot overwrite the newer record.
@@ -789,8 +796,16 @@ export class KeyVaultService {
         await this.saveKeys(records.map((r) => byId.get(r.id) ?? r));
       }
 
+      this.unreadable = new Set(damagedKeyIds);
+
+      // The stored selection is kept while its record exists, even when that
+      // record could not be opened: signing with it is then refused, and the
+      // user chooses another key. Falling back to a different key here would
+      // sign as an identity they did not pick. Only a selection that no longer
+      // exists in the records falls back to the first key that opened.
       const selectedKeyId =
-        settings?.selectedKeyId && unlockedKeyIds.includes(settings.selectedKeyId)
+        settings?.selectedKeyId &&
+        records.some((rec) => rec.id === settings.selectedKeyId)
           ? settings.selectedKeyId
           : unlockedKeyIds[0];
 
@@ -908,6 +923,12 @@ export class KeyVaultService {
     this.sessionEpoch++;
     this.unlocked.forEach((sk) => zeroize(sk));
     this.unlocked.clear();
+    this.unreadable.clear();
+  }
+
+  /** True when the last unlock could not open this key's record. */
+  isKeyUnreadable(id: string): boolean {
+    return this.unreadable.has(id);
   }
 
   /**
@@ -1139,8 +1160,12 @@ export class KeyVaultService {
     const id = keyId ?? [...this.unlocked.keys()][0];
     if (!id) throw new Error("no_unlocked_key");
     const sk = this.unlocked.get(id);
-    // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract, not a deployment identifier or credential: vault-rpc matches this exact string and maps it to RPC_ERROR_CODES. Moving it to an environment variable would break the mapping.
-    if (!sk) throw new Error("key_locked_or_missing");
+    if (!sk) {
+      // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract, not a deployment identifier or credential: nostr-rpc matches this exact string and maps it to RPC_ERROR_CODES. Moving it to an environment variable would break the mapping.
+      if (this.unreadable.has(id)) throw new Error("key_unreadable");
+      // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract, not a deployment identifier or credential: nostr-rpc matches this exact string and maps it to RPC_ERROR_CODES. Moving it to an environment variable would break the mapping.
+      throw new Error("key_locked_or_missing");
+    }
     return { keyId: id, sk };
   }
 

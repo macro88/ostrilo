@@ -370,6 +370,7 @@ describe("RPC Router and Handlers", () => {
           sign: vi
             .fn()
             .mockResolvedValue({ sigHex: "a".repeat(128), keyId: "key-1" }), // 64-byte hex signature
+          isKeyUnreadable: vi.fn().mockReturnValue(false),
           listKeys: vi.fn().mockResolvedValue([
             {
               id: "key-1",
