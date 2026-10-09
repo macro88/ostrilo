@@ -333,6 +333,23 @@ describe("KeyManagerProvider", () => {
     expect(latest().inactivityMinutes).toBe(35);
   });
 
+  it("drops an inactivity duration that is not a whole number of permitted minutes", async () => {
+    for (const bad of [1.5, Number.POSITIVE_INFINITY, 0, 9_999]) {
+      rpc.getLockState.mockResolvedValue({
+        isLocked: true,
+        lockReason: "inactivity",
+        inactivityMinutes: bad,
+      });
+      renders.length = 0;
+      act(() => root.unmount());
+      root = createRoot(container);
+      await mountProvider();
+
+      expect(latest().lockReason, String(bad)).toBe("inactivity");
+      expect(latest().inactivityMinutes, String(bad)).toBeUndefined();
+    }
+  });
+
   it("ignores a lock reason it does not recognise", async () => {
     rpc.getLockState.mockResolvedValue({
       isLocked: true,

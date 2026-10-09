@@ -39,7 +39,7 @@ const UNLOCK_FAILURE_COPY: Record<string, string> = {
   [RPC_ERROR_CODES.NO_KEY_SELECTED]:
     "No vault exists yet. Create or import a key before unlocking.",
   [RPC_ERROR_CODES.VAULT_UNREADABLE]:
-    "This vault could not be opened. It was written by a different version of Ostrilo, or its stored encryption parameters are not acceptable. Update the extension; do not re-create your vault.",
+    "This vault could not be opened. It was written by a different version of Ostrilo, its stored encryption parameters are not acceptable, or its key records are damaged. Update the extension; do not re-create your vault.",
   [UNLOCK_FAILED]: "Could not reach the vault. Try again.",
 };
 

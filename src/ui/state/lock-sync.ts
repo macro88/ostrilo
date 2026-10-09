@@ -1,5 +1,5 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
-import { isLockReason } from "@/domain/types";
+import { isLockReason, parseInactivityMinutes } from "@/domain/types";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 import { getLockState } from "@/infrastructure/messaging/client";
 import type { LockStatePayload } from "@/infrastructure/messaging/rpc";
@@ -28,7 +28,9 @@ export function applyLockState(prev: UILockState, state: LockStatePayload): UILo
   const lockReason =
     state.isLocked && isLockReason(state.lockReason) ? state.lockReason : undefined;
   const inactivityMinutes =
-    lockReason === "inactivity" ? state.inactivityMinutes : undefined;
+    lockReason === "inactivity"
+      ? parseInactivityMinutes(state.inactivityMinutes)
+      : undefined;
   if (
     prev.isLocked === state.isLocked &&
     prev.lockAt === lockAt &&
