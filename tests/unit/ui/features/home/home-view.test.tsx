@@ -446,6 +446,15 @@ describe("HomeView backup banner", () => {
     expect(banner()).toBeNull();
   });
 
+  it("does not ask about a key that cannot be read, since Back up is refused for it", async () => {
+    backup.status = "pending";
+    env.selectedUnlockedKey = { ...ACTIVE, publicKeyBech32: "", isUnreadable: true };
+    await mount(vi.fn());
+    await flush();
+    expect(container.textContent).toContain("could not be read");
+    expect(banner()).toBeNull();
+  });
+
   it("opens Settings on Keys & Identities with this key's backup requested", async () => {
     backup.status = "pending";
     await mount(vi.fn());

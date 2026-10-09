@@ -129,7 +129,13 @@ export function HomeView({ onNavigate }: HomeViewProps) {
     activePubkeyHex ? [activePubkeyHex] : []
   );
   const profileSettled = useProfileSettled(activePubkeyHex, profileLoading);
-  const backupBanner = useBackupBanner(selectedUnlockedKey?.id);
+  // A key whose record cannot be read cannot be backed up either: Back up is
+  // disabled for it in Settings, so a banner sending the person there would
+  // lead to a button that does nothing.
+  const backupKey = selectedUnlockedKey?.isUnreadable
+    ? undefined
+    : selectedUnlockedKey;
+  const backupBanner = useBackupBanner(backupKey?.id);
 
   if (settingsLoading || keysLoading) {
     return <HomeSkeleton />;
@@ -162,10 +168,10 @@ export function HomeView({ onNavigate }: HomeViewProps) {
           hasKeys={keys.length > 0}
           onRetry={refreshKeys}
         />
-        {backupBanner.visible && selectedUnlockedKey && (
+        {backupBanner.visible && backupKey && (
           <BackupBanner
             onBackUp={() =>
-              openOptionsTab("keys", { backupKeyId: selectedUnlockedKey.id })
+              openOptionsTab("keys", { backupKeyId: backupKey.id })
             }
             onDismiss={backupBanner.dismiss}
           />
