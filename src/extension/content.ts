@@ -161,8 +161,13 @@ function buildRpcRequest(
         },
       };
 
-    default:
+    default: {
+      // Exhaustive over `ProviderMethod`: a method added to the list without a
+      // case above fails to compile. At runtime it still fails closed.
+      const unhandled: never = data.method;
+      void unhandled;
       return { errorCode: RPC_ERROR_CODES.UNKNOWN_METHOD };
+    }
   }
 }
 

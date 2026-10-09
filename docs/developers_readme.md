@@ -171,7 +171,7 @@ if (methods?.includes("signEvent")) {
 }
 ```
 
-The provider is built from `PROVIDER_METHODS` (`src/domain/nostr/provider-methods.ts`), which also feeds `capabilities.methods` and the content script's allowlist; add or remove a method there and all three follow. What counts as public API, and how it is versioned and deprecated, is in [API versioning and deprecation](api-versioning.md).
+`PROVIDER_METHODS` (`src/domain/nostr/provider-methods.ts`) is the source for the provider's methods, `capabilities.methods` and the content script's relay allowlist, so the first two cannot drift apart. A new method also needs its relay case in `buildRpcRequest` (`content.ts`, exhaustive over the list, so the compiler flags a missing one) and its RPC type and handler; without those the relay fails closed with `unknown_method`. What counts as public API, and how it is versioned and deprecated, is in [API versioning and deprecation](api-versioning.md).
 
 ### Policy Evaluation
 

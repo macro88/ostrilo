@@ -14,7 +14,9 @@ export interface FakeWindow extends Record<string, unknown> {
 }
 
 export async function loadInjectedProvider(
-  existingNostr?: unknown
+  existingNostr?: unknown,
+  /** Runs after the module is loaded and before the provider is built. */
+  beforeMain?: () => void
 ): Promise<{ window: FakeWindow; warnings: string[] }> {
   const fakeWindow: FakeWindow = {
     postMessage: () => {},
@@ -36,6 +38,7 @@ export async function loadInjectedProvider(
   const script = (await import("@/extension/injected")).default as unknown as {
     main: () => void;
   };
+  beforeMain?.();
   script.main();
   return { window: fakeWindow, warnings };
 }

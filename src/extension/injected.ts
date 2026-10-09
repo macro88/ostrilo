@@ -37,6 +37,7 @@ export default defineUnlistedScript(() => {
   const clearTimeout = window.clearTimeout.bind(window);
   const randomUUID = crypto.randomUUID.bind(crypto);
   const NativePromise = Promise;
+  const freeze = Object.freeze;
   const pageOrigin = window.location.origin;
 
   // Message types for communication with content script
@@ -212,9 +213,16 @@ export default defineUnlistedScript(() => {
   // What a dApp can feature-detect. Only names the provider implements: no
   // extension version, build id or anything else that tells a page more about
   // the user's setup than the methods it can already call.
-  const capabilities = Object.freeze({
-    methods: Object.freeze([...PROVIDER_METHODS]),
-  });
+  //
+  // Built with indexed reads and writes, not spread or `for...of`: those go
+  // through `Array.prototype[Symbol.iterator]`, which page script can replace,
+  // and a replaced iterator is page code running in the middle of building the
+  // provider.
+  const advertisedMethods: ProviderMethod[] = [];
+  for (let i = 0; i < PROVIDER_METHODS.length; i++) {
+    advertisedMethods[i] = PROVIDER_METHODS[i];
+  }
+  const capabilities = freeze({ methods: freeze(advertisedMethods) });
 
   const nostr = { ...methods, capabilities };
 
@@ -227,8 +235,10 @@ export default defineUnlistedScript(() => {
     return;
   }
 
-  for (const name of PROVIDER_METHODS) Object.freeze(methods[name]);
-  Object.freeze(nostr);
+  for (let i = 0; i < PROVIDER_METHODS.length; i++) {
+    freeze(methods[PROVIDER_METHODS[i]]);
+  }
+  freeze(nostr);
 
   try {
     // Non-writable and non-configurable. A plain assignment left `window.nostr`

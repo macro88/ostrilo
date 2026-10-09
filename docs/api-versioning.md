@@ -71,7 +71,7 @@ if (!window.nostr) {
 What it guarantees:
 
 - `capabilities` and `capabilities.methods` are frozen. Neither a dApp nor any other script on the page can change what Ostrilo reports.
-- `methods` lists exactly the methods the provider implements. One constant, `PROVIDER_METHODS` in `src/domain/nostr/provider-methods.ts`, builds the provider, feeds `capabilities.methods` and gates what the content script will relay, so the three cannot disagree.
+- `methods` lists exactly the methods the provider implements. One constant, `PROVIDER_METHODS` in `src/domain/nostr/provider-methods.ts`, is the source for the provider's methods, `capabilities.methods` and the content script's relay allowlist, so what Ostrilo advertises cannot drift from what it implements. A new method also needs its relay case and RPC wiring; without them the relay fails closed with `unknown_method`.
 - `nip04` and `nip44` are absent from `window.nostr` and from `methods`, because they are not implemented. `if (window.nostr.nip44)` is a truthful check.
 - If another signer already defined `window.nostr`, Ostrilo leaves it in place and adds nothing to it, `capabilities` included. Read `capabilities` as belonging to whichever provider is there.
 
@@ -85,7 +85,7 @@ It holds method names and nothing else, deliberately. An extension version or bu
 
 | Rule | Where |
 | --- | --- |
-| The provider, `capabilities.methods` and the relay allowlist share one list | `src/domain/nostr/provider-methods.ts`; `tests/unit/extension/injected-capabilities.test.ts` |
+| The provider, `capabilities.methods` and the relay allowlist are fed by one list | `src/domain/nostr/provider-methods.ts`; `tests/unit/extension/injected-capabilities.test.ts` |
 | `capabilities` is frozen and the page cannot alter it | `tests/security/provider-capabilities.test.ts`; `tests/e2e/nip07-provider.spec.ts` |
 | Page-facing codes are canonical and documented | `tests/unit/infrastructure/error-code-coverage.test.ts` |
 | Only the `nostr` namespace is reachable from a page | `src/infrastructure/messaging/rpc-router.ts`; `tests/security/rpc-privilege-boundary.test.ts` |

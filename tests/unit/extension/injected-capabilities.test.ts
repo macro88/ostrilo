@@ -68,6 +68,36 @@ describe("window.nostr.capabilities", () => {
   });
 });
 
+describe("building the provider does not run page-patchable code", () => {
+  it("is unaffected by a replaced Array iterator", async () => {
+    const proto = Array.prototype as unknown as Record<symbol, unknown>;
+    const original = proto[Symbol.iterator];
+    let iteratorCalls = 0;
+    let built: Awaited<ReturnType<typeof loadInjectedProvider>>;
+
+    try {
+      built = await loadInjectedProvider(undefined, () => {
+        // What a page that ran first could install: an iterator that reports
+        // calls and yields nothing.
+        proto[Symbol.iterator] = function* () {
+          iteratorCalls++;
+        };
+      });
+    } finally {
+      proto[Symbol.iterator] = original;
+    }
+
+    const nostr = built.window.nostr as Provider;
+    expect(iteratorCalls).toBe(0);
+    expect([...nostr.capabilities.methods]).toEqual([...PROVIDER_METHODS]);
+    expect(Object.isFrozen(nostr.capabilities.methods)).toBe(true);
+    for (const name of PROVIDER_METHODS) {
+      expect(Object.isFrozen(nostr[name])).toBe(true);
+    }
+    expect(Object.isFrozen(nostr)).toBe(true);
+  });
+});
+
 describe("the provider method list", () => {
   it("recognises exactly its own members", () => {
     for (const name of PROVIDER_METHODS) expect(isProviderMethod(name)).toBe(true);
