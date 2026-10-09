@@ -474,3 +474,64 @@ Two colour tokens were darkened in light, one text opacity was raised in dark, a
 
 - `tests/e2e/accessibility.spec.ts` passed in both themes with no serious or critical violation. Two findings are ignored on the open activity filter and one on the open key menu, each named with its reason in the spec: they are Radix's own `aria-hidden` of the page behind a modal popover and its scrolling viewport.
 - Light capture and dark capture both completed.
+
+# Review: phase 0.10, every surface the phase touched
+
+Date: 2026-10-10
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §3 (tokens, Deep Ink), §5 (one notch per screen), §6 (banned patterns), §7 (components, Warnings), §10 (voice), §11 (contrast, hit targets), §12 (PR checklist)
+Build reviewed: production (`pnpm run build`), both themes, populated vault. Each capture was opened and looked at, light and dark; 64 per theme.
+
+The earlier entries above cover the auto-sign notice, per-key grants, Quick start and the Home banner, and the axe pass as each landed. This one is the pass over the finished phase, and it covers what those did not reach.
+
+## What the runner gained
+
+The runner's populated phase now seeds and photographs:
+
+- a picture address long enough to widen anything that does not wrap, and a transparent-background PNG as the second key's picture (`25b`, `23b`);
+- the Back up flow on a key with no backup: the password prompt and the passphrase dialog (`29b`, `29c`);
+- the lock screen with each of the seven lock reasons and the "Can't reach Ostrilo" screen (`36-*`). The vault is locked for real; a page-level override of the background's answer swaps only the reason, so the copy is judged in the real screen at the popup's width;
+- a key whose stored record is damaged, selected: Home, Profile and Settings → Keys (`37`, `37b`, `37c`);
+- refusals with reasons in Activity: your own denial, a saved deny rule and a site refused for asking too often (`38`, `38b`, the second at 400x1400 so the whole run of reasons fits);
+- the approval prompt after a site spends its 60 automatic signatures, at the approval window's 400x600 width (`39`);
+- Quick start on a second, empty browser profile: password, notice and Home with the banner (`40`, `40b`, `40c`);
+- Home with the banner scrolled to its end (`23c`), and the Profile picture row scrolled into view (`25b`).
+
+## Findings
+
+### Fixed
+
+1. **Home's backup banner sent a key that cannot be read to a button that is disabled for it** (`37-popup-home-unreadable-key`, both themes). The banner read "This key has no backup" under the red "could not be read" message, and its Back up action opened Settings on a Back up button that does nothing for that key. The banner now stays away from an unreadable key (`4e6d19f`, with a unit test).
+2. **"CONTENT · 1 BYTES"** on the over-budget prompt (`39`), because the label always pluralised. It now says "1 byte" (`82550a1`, with a unit test).
+3. **A refusal because the key could not be read read as the person's choice.** The activity row carries a red DENIED chip, and the reason line said only "The signing key could not be read". That entry is written when a key fails after the request was accepted, which can be after the person pressed Approve. The line now says "Not signed: the signing key could not be read" (`4e79d5e`). The runner cannot photograph it: a key that is already unreadable when the request arrives is refused before any prompt and is not logged at all, so only a failure mid-sign writes it. The copy is covered by `tests/unit/ui/features/activity/activity-view.test.tsx`.
+
+### Judged, not changed
+
+- **The banner's height at 400x600.** It adds about 68px, so on Home the second activity row sits under the tab bar until the shell scrolls (`23b`). Scrolled to its end (`23c`), both rows are whole and clear of the tab bar, and nothing is sliced through its text at rest: the first row is whole and the second shows only its top hairline. Quick start's first Home (`40c`) has the same shape with the empty-state card, whose last line is behind the tab bar until scrolled; that one was not scrolled in a capture. No card shrinks, clips its own rows or overlaps, which is the failure the populated vault exists to catch. The side panel shows three rows plus the banner (`28b`).
+- **Lock reasons.** Six of the seven lines fit one line at 400px; "Locked because the browser restarted Ostrilo's background." wraps to two with a single word on the second line, and the Unlock button moves down by one line. Centred, unclipped, and the longest line the screen will ever carry, so left as is.
+- **"Can't reach Ostrilo"** is one amber seal, a title, two lines and one notched Try again, in both themes. The amber seal is a warning, not decoration.
+- **The unreadable-key states** keep the red message in the card Home already uses for it, name the key in the header ("Unreadable key") and in Settings (a red line under the key, Back up disabled), and tell the person to choose another key. Profile says the same in plain text with no card. Three different shapes for one fact, each at home on its screen.
+- **A transparent-background picture** in the header reads as a figure on the seal in light. In Deep Ink the violet figure sits on the dark seal at lower contrast, but it is legible, it is the user's own image, and the review does not recolour user content.
+- **The long picture address** truncates inside its Profile row with its copy and open actions intact, and "Refresh picture" sits beside the note that says what it loads. The popup does not widen.
+- **Per-key grants in Permissions** (`30b`): two entries for one site, each with its key name, a shortened mono `npub`, a copy button and its own Revoke. The collapsed row says "Can read 2 public keys".
+- **The over-budget prompt** (`39`) keeps the amber line under the origin block, a mint TRUSTED chip, one notched Approve and the trust line, at the narrow width.
+- **Quick start** keeps one notched primary per screen, the shared step dots and the soft amber notice, with no icon plate or rail (§5, §6, §7).
+- **Back up dialog.** The passphrase panel sits about 28px below the intro text before its hairline, because the dialog's own 16px gap and the shared export panel's 12px top margin stack. It is the component onboarding also uses, nothing is cut off, and it is a small wrong spacing rather than a broken layout, so it is not changed here.
+- **Banned patterns (§6).** No gradient, accent rail, dot grid, icon plate, pill or emoji on any new surface. Every colour is a token. Violet appears at most twice on any one screen.
+
+### Not covered
+
+- The side panel for Quick start and for the unreadable-key states.
+- The narrow approval window with a list of more than three requests.
+- A refusal row that carries the key-unreadable reason.
+- A failed **Refresh picture** note: the runner never loads a picture, so it cannot photograph the failure.
+
+## Verification
+
+- `pnpm run compile` and `pnpm run lint` passed.
+- `pnpm run test:coverage` passed: 175 files, 2951 tests; lines 98.53%, branches 94.57%.
+- `pnpm run build` and `pnpm run build:firefox` passed.
+- `pnpm run doctor`: 100/100.
+- `pnpm run slop:changes`: 100/100 on a clean tree (it scores changed files, and the work was committed). `pnpm run slop:ci`: whole project 91/100, no errors, against the floor in `.aislop/config.yml`.
+- `pnpm audit --audit-level high` exits 0.
+- `tests/e2e/accessibility.spec.ts`, `quick-start.spec.ts` and `activity-view.spec.ts`: 15 passed; axe judged 36 surfaces per theme with no finding.
+- Light capture and dark capture: both complete, 64 screenshots each, no skipped step.
