@@ -1,10 +1,11 @@
-import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { useEffect } from "react";
 import { isLockReason, parseInactivityMinutes } from "@/domain/types";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 import { getLockState } from "@/infrastructure/messaging/client";
 import type { LockStatePayload } from "@/infrastructure/messaging/rpc";
 import { browser } from "wxt/browser";
 import type { UILockState } from "./KeyManagerContext";
+import type { VaultSessionApi } from "./vault-session";
 
 /**
  * How often an open surface re-checks the lock state.
@@ -56,30 +57,29 @@ export function applyLockState(prev: UILockState, state: LockStatePayload): UILo
  *    evicted before it could send;
  *  - the poll, which is the backstop, and is also what evaluates the
  *    auto-lock deadline, since that is checked lazily on access.
+ *
+ * The poll is also how an unlock performed on another surface is noticed.
+ * Each answer is stamped before it is requested, and the session drops one
+ * that a lock, an unlock or a change of selection has overtaken.
  */
-export function useLockSync(
-  setLockState: Dispatch<SetStateAction<UILockState>>,
-  setLockCheckFailed: Dispatch<SetStateAction<boolean>>
-): void {
+export function useLockSync(session: VaultSessionApi): void {
+  const { beginRead, observe, markLocked, markUnavailable } = session;
+
   useEffect(() => {
     let cancelled = false;
 
     const sync = async () => {
+      const stamp = beginRead();
       try {
         const state = await getLockState();
         if (cancelled) return;
-        // `lockAt` is compared as well as `isLocked`, and both are usually
-        // unchanged: the deadline only moves when activity is recorded or the
-        // timeout changes. `applyLockState` returns `prev` on a match, which
-        // keeps the poll from re-rendering every consumer every five seconds.
-        setLockCheckFailed(false);
-        setLockState((prev) => applyLockState(prev, state));
+        observe(state, stamp);
       } catch {
         // An unreachable background is not a locked vault. Nothing is
         // disclosed by saying so: surfaces hide vault content while this is
         // set and offer a retry, rather than telling the user to unlock
         // something that may not be locked.
-        if (!cancelled) setLockCheckFailed(true);
+        if (!cancelled) markUnavailable(stamp);
       }
     };
 
@@ -91,7 +91,7 @@ export function useLockSync(
         (message as { __event?: unknown }).__event ===
           BROADCAST_EVENTS.VAULT_LOCKED
       ) {
-        setLockState((prev) => ({ ...prev, isLocked: true, lockAt: undefined }));
+        markLocked();
         // The broadcast says that it locked, not why; the background knows.
         void sync();
       }
@@ -105,5 +105,5 @@ export function useLockSync(
       clearInterval(interval);
       browser.runtime.onMessage.removeListener(onMessage);
     };
-  }, [setLockState, setLockCheckFailed]);
+  }, [beginRead, observe, markLocked, markUnavailable]);
 }

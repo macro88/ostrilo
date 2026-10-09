@@ -16,17 +16,18 @@ import React, {
 import {
   unlockVault,
   lockVault,
-  listKeys,
-  getLockState,
   generateKey as rpcGenerateKey,
   importKey as rpcImportKey,
   selectKey as rpcSelectKey,
   reportActivity,
   RpcClientError,
 } from "@/infrastructure/messaging/client";
-import type { KeyListEntry } from "@/infrastructure/messaging/handlers/vault-rpc";
 import type { LockReason } from "@/domain/types";
-import { applyLockState, useLockSync } from "./lock-sync";
+import { useLockSync } from "./lock-sync";
+import type { UIKeyInfo } from "./key-hydration";
+import { useVaultSession } from "./vault-session";
+
+export type { UIKeyInfo } from "./key-hydration";
 
 /**
  * The code returned when an unlock fails for a reason the background did not
@@ -44,55 +45,14 @@ export const UNLOCK_FAILED = "unlock_failed";
 /**
  * The outcome of an unlock attempt.
  *
- * `unlock` used to return `boolean`, and every caller ignored it - which is how
- * the lock screen came to run its success path after a wrong password. A result
- * object does not make discarding the outcome a compile error (`await
- * unlock(p); onUnlock?.()` still type-checks), but it does mean that any code
- * which reads a reason must first narrow on `ok`.
+ * A result object and not a boolean, so that code which reads a reason must
+ * first narrow on `ok`. It does not make discarding the outcome a compile
+ * error (`await unlock(p); onUnlock?.()` still type-checks), which is how the
+ * lock screen once ran its success path after a wrong password.
  */
 export type UnlockResult =
   | { ok: true }
   | { ok: false; code: string; detail?: string };
-
-// Secure UI-only types - no plaintext private keys
-export interface UIKeyInfo {
-  id: string;
-  label: string;
-  publicKeyHex: string;
-  publicKeyBech32: string;
-  /**
-   * The stored record's public key could not be read, so there is no npub to
-   * show. Surfaces have to render this as an error: the previous code called
-   * a hex decoder that substituted zero bytes for unparseable characters, so
-   * a corrupt record displayed a real, well-formed npub for a key nobody
-   * holds, and the user had no way to tell it from their own identity.
-   */
-  isUnreadable: boolean;
-  createdAt: number;
-  lastUsedAt: number;
-  isSelected: boolean;
-}
-
-/**
- * Projects one stored record into the view model.
- *
- * The npub arrives already encoded from the background. The UI used to do
- * `publicKeyToBech32(hexToBytes(key.pubkey))` here, which reached
- * `@scure/base` from a React render and would now throw on a malformed
- * record - an exception a context provider has nowhere to put.
- */
-function toUIKeyInfo(key: KeyListEntry): UIKeyInfo {
-  return {
-    id: key.id,
-    label: key.label || "Unnamed",
-    publicKeyHex: key.pubkey,
-    publicKeyBech32: key.npub ?? "",
-    isUnreadable: key.npub === undefined,
-    createdAt: key.createdAt,
-    lastUsedAt: key.lastUsedAt || key.createdAt, // Use createdAt as fallback
-    isSelected: key.isSelected || false,
-  };
-}
 
 export interface UILockState {
   isLocked: boolean;
@@ -182,17 +142,10 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
   // True from mount: the first read starts with the first effect, so there is
   // no render in which a load has not begun.
   const [isLoading, setIsLoading] = useState(true);
-  const [isInitialising, setIsInitialising] = useState(true);
-  // Lazy initializer: `Date.now()` is impure, so the eager form re-ran it on
-  // every render to produce a value useState discards after mount. Evaluated
-  // once, at mount - which is the only point this timestamp is read, since the
-  // effect below overwrites `lastActivity` as soon as the load resolves.
-  const [lockState, setLockState] = useState<UILockState>(() => ({
-    isLocked: true,
-    lastActivity: Date.now(),
-  }));
-  const [keys, setKeys] = useState<UIKeyInfo[]>([]);
-  const [lockCheckFailed, setLockCheckFailed] = useState(false);
+  const { session, api } = useVaultSession();
+  const { hydrate, markLocked, select } = api;
+  const refreshKeys = hydrate;
+  const { lock: lockState, keys, lockCheckFailed, isInitialising } = session;
 
   // Bumped by a retry, so the load below is an effect of state and not a
   // function the effect has to call.
@@ -206,97 +159,40 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
   // Load initial state, and again on every retry.
   useEffect(() => {
     let cancelled = false;
-
-    const loadState = async () => {
-      try {
-        const [lockStateResult, keysResult] = await Promise.all([
-          getLockState(),
-          listKeys(),
-        ]);
-        if (cancelled) return;
-
-        setLockState((prev) => ({
-          ...applyLockState(prev, lockStateResult),
-          selectedKeyId: lockStateResult.selectedKeyId,
-          lastActivity: Date.now(),
-        }));
-        setLockCheckFailed(false);
-
-        // Convert KeyRecord to UIKeyInfo (remove sensitive fields)
-        const uiKeys: UIKeyInfo[] = keysResult.map(toUIKeyInfo);
-
-        setKeys(uiKeys);
-      } catch (error) {
-        console.error("Failed to load key manager state:", error);
-        if (!cancelled) setLockCheckFailed(true);
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-          setIsInitialising(false);
-        }
-      }
-    };
-
-    loadState();
+    void hydrate().then(() => {
+      if (!cancelled) setIsLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [loadAttempt]);
+  }, [hydrate, loadAttempt]);
 
-  useLockSync(setLockState, setLockCheckFailed);
-
-  const refreshKeys = useCallback(async () => {
-    try {
-      const keysResult = await listKeys();
-      const uiKeys: UIKeyInfo[] = keysResult.map(toUIKeyInfo);
-      setKeys(uiKeys);
-    } catch (error) {
-      console.error("Failed to refresh keys:", error);
-    }
-  }, []);
+  useLockSync(api);
 
   const lock = useCallback(async () => {
     try {
       setIsLoading(true);
       await lockVault();
-      setLockState((prev) => ({
-        ...prev,
-        isLocked: true,
-        lockAt: undefined,
-        lockReason: "manual",
-        inactivityMinutes: undefined,
-      }));
+      markLocked("manual");
     } catch (error) {
       console.error("Lock failed:", error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [markLocked]);
 
   const unlock = useCallback(async (password: string): Promise<UnlockResult> => {
     try {
       setIsLoading(true);
-      const result = await unlockVault(password);
+      await unlockVault(password);
       reportActivity();
-      // One read of the deadline on a deliberate action, so a surface that
-      // displays it has it as the vault opens rather than up to a poll
-      // interval later. A failure here leaves the deadline absent - the
-      // countdown's documented "not available" state, which the poll fills in
-      // - because it must not turn a successful unlock into a failed one.
-      const deadline = await getLockState().then(
-        (state) => state.lockAt,
-        () => undefined
-      );
-      setLockState((prev) => ({
-        ...prev,
-        isLocked: false,
-        selectedKeyId: result.selectedKeyId ?? prev.selectedKeyId,
-        lastActivity: Date.now(),
-        lockAt: deadline,
-        lockReason: undefined,
-        inactivityMinutes: undefined,
-      }));
-      setLockCheckFailed(false);
+      // The session is replaced by one read of the lock state and the key
+      // list, not patched. While locked the list is identifiers only, so
+      // the list a surface opened with is useless after an unlock, and the
+      // background - not this surface - knows which key is selected. A
+      // failed read does not turn a successful unlock into a failed one: it
+      // leaves the surface asking the background again, with a retry.
+      await hydrate();
       return { ok: true };
     } catch (error) {
       // `RpcClientError.message` is the machine string `rpc:<method>:<code>`
@@ -318,7 +214,7 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [hydrate]);
 
   const generateKey = useCallback(
     async (password: string, label?: string): Promise<string> => {
@@ -363,23 +259,23 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
       try {
         await rpcSelectKey(keyId);
         reportActivity();
-        setLockState((prev) => ({ ...prev, selectedKeyId: keyId }));
-        await refreshKeys(); // Refresh to update isSelected flags
+        select(keyId);
+        await hydrate(); // Refresh to update isSelected flags
       } catch (error) {
         console.error("Select key failed:", error);
         throw error;
       }
     },
-    [refreshKeys]
+    [hydrate, select]
   );
 
   // Get selected key info (public data only)
   const selectedKeyInfo = useMemo(
     () =>
-      lockState.selectedKeyId
+      lockState.selectedKeyId && !lockState.isLocked
         ? keys.find((key) => key.id === lockState.selectedKeyId)
         : undefined,
-    [keys, lockState.selectedKeyId]
+    [keys, lockState.selectedKeyId, lockState.isLocked]
   );
 
   // Memoized because this provider now re-renders on a timer: the lock poll
