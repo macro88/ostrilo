@@ -28,7 +28,7 @@ Defined in `src/assets/tailwind.css`. Never hard-code hex values in components; 
 | Background | `#F7F6FA` | `#171320` |
 | Card / surface | `#FFFFFF` | `#201A2E` |
 | Text primary (`--ink`) | `#2A2238` | `#EDEAF6` |
-| Text secondary (`--ink-2`) | `#736B89` | `#9C92B8` |
+| Text secondary (`--ink-2`) | `#6C6483` | `#9C92B8` |
 | Text tertiary (`--ink-3`) | `#867E9E` | `#857BA6` |
 | Border hairline | `#E7E4EE` | `#332B49` |
 | Border strong / inputs | `#D9D5E3` | `#3D3456` |
@@ -36,7 +36,7 @@ Defined in `src/assets/tailwind.css`. Never hard-code hex values in components; 
 | Accent soft | `#EFECF7` | `#3A2F5E` |
 | Success (`--ink-mint`) | `#1E7A63` | `#6FD9BC` |
 | Warning (`--ink-amber`) | `#7A5320` | `#E8B36A` |
-| Danger (`--ink-red`) | `#BD4A55` | `#F2728C` |
+| Danger (`--ink-red`) | `#B3434E` | `#F2728C` |
 | Dialog backdrop (`--overlay`) | `rgb(42 34 56 / 0.55)` | `rgb(0 0 0 / 0.72)` |
 
 **Dark mode is not an inversion** — it is the "Deep Ink" variant: primary buttons become violet (`--primary` flips from ink to violet), surfaces come from the mascot's darkest facets, and mono carries even more of the hierarchy.
@@ -127,7 +127,7 @@ Friendly but adult. Short declaratives. Honest about security; never cute about 
 
 - Durations 120–160ms, `--ease-out` (`cubic-bezier(.2,.8,.2,1)`). Fade+4px-rise on dialog entry; 1px press on primary. **No bounce, no shimmer, no confetti, no infinite loops.**
 - Respect `prefers-reduced-motion` (already wired in the stylesheet).
-- Text contrast ≥ 4.5:1 for anything the user must read. Every §3 text token passes on its intended surface (card, soft fill, or background) except `--ink-3`, which is held to ≥ 3:1 and is for placeholders and decorative marks only — never for information. Verify if you mix pairs.
+- Text contrast ≥ 4.5:1 for anything the user must read. Every §3 text token passes on its intended surface (card, soft fill, or background) except `--ink-3`, which is held to ≥ 3:1 and is for placeholders and decorative marks only — never for information. Verify if you mix pairs. `tests/e2e/accessibility.spec.ts` runs axe over every surface in both themes and fails on a serious violation; it is what caught `--ink-2` on `--muted` and `--ink-red` on its own soft fill, and the light values above were darkened to pass.
 - Hit targets ≥ 44px on popup surfaces (rows already are).
 - Visible focus everywhere; remember the clip-path rule (§5).
 

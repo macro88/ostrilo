@@ -450,3 +450,27 @@ The welcome screen gains a third row, "Quick start". Its flow is a password step
 - `tests/e2e/quick-start.spec.ts`: Quick start, lock and unlock, popup closed on the notice, dismissal, backup from the banner, restore in a fresh profile with the same public key.
 - Light capture and dark capture both completed.
 
+
+# Review: automated accessibility pass (axe)
+
+Date: 2026-10-10
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §3 (colour tokens), §11 (contrast, hit targets), §12 (PR checklist)
+Build reviewed: production (`pnpm run build`), both themes, populated vault. Judged from the runner's captures and from `tests/e2e/accessibility.spec.ts`, which scans 36 surfaces per theme.
+
+## What changed
+
+Two colour tokens were darkened in light, one text opacity was raised in dark, and the header key selector became a menu.
+
+## Findings
+
+- `--ink-red` (`#BD4A55`) measured 4.1:1 on its own soft fill, so every red chip (Denied, First visit, Refused) failed 4.5:1. It is now `#B3434E`: 4.6:1 on the soft fill, 5.5:1 on a card. Deep Ink's red was already above the line.
+- `--ink-2` (`#736B89`) measured 4.4:1 on `--muted`, the highlighted row of the key selector. It is now `#6C6483`: 4.9:1 on `--muted`, 4.8:1 on the accent soft fill. Both changes are a few percent of lightness; the hierarchy between `--ink` and `--ink-2` reads the same in the captures.
+- The welcome screen's "A new key, generated on this device" sat at 4.49:1 in Deep Ink (violet plate, 75% ink text). It is 85% now.
+- The key selector was a `listbox` holding an action. It is a `menu` of `menuitemradio` rows and a `menuitem`; the look is unchanged (captures `27`).
+- Not seen in captures but found by axe: password errors in Quick start, Create, Import and the unlock dialogs were not announced. They now are (see the unit test).
+- Not covered: the side panel layout, and Radix Select popovers other than the activity kind filter.
+
+## Verification
+
+- `tests/e2e/accessibility.spec.ts` passed in both themes with no serious or critical violation. Two findings are ignored on the open activity filter and one on the open key menu, each named with its reason in the spec: they are Radix's own `aria-hidden` of the page behind a modal popover and its scrolling viewport.
+- Light capture and dark capture both completed.
