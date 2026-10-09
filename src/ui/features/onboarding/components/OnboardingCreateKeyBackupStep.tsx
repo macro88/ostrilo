@@ -206,6 +206,7 @@ export function OnboardingCreateKeyBackupStep({
 
       {hasRevealedPrivateKey && (
         <BackupVerification
+          mode="key-shown"
           checkSuffix={onVerifySuffix}
           checkNsec={onVerifyNsec}
           verified={verified}

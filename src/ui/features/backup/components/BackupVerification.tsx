@@ -19,21 +19,36 @@ import {
  */
 export const VERIFICATION_SUFFIX_LENGTH = 8;
 
-interface BackupVerificationProps {
-  /**
-   * `true` when a suffix matches the nsec the flow holds. Never gets the key.
-   * Omitted by a flow that never shows the user the key, such as backing up a
-   * key from Settings: re-entering characters nobody was shown proves nothing,
-   * so the file is the only route offered.
-   */
-  checkSuffix?: (value: string) => boolean;
+/**
+ * Which proofs the flow offers. Explicit rather than inferred from a missing
+ * callback, so a caller that forgets the re-entry check is a type error and not
+ * a silently weaker verification.
+ */
+type VerificationModes =
+  | {
+      /** The user was shown the key, so re-entering its end is evidence. */
+      mode: "key-shown";
+      /** `true` when a suffix matches the nsec the flow holds. Never gets the key. */
+      checkSuffix: (value: string) => boolean;
+    }
+  | {
+      /**
+       * The key was never shown, as when backing up from Settings:
+       * re-entering characters nobody saw proves nothing, so only the saved
+       * file is offered.
+       */
+      mode: "file-only";
+      checkSuffix?: never;
+    };
+
+type BackupVerificationProps = VerificationModes & {
   /** `true` when a decrypted backup is the key this flow just created. */
   checkNsec: (nsec: string) => boolean;
   verified: boolean;
   onVerified: () => void;
   /** Offered only once a file has actually been written in this flow. */
   fileRouteAvailable: boolean;
-}
+};
 
 type Route = "transcription" | "file";
 
@@ -53,13 +68,14 @@ const FIELD_LABEL_CLASS = "mb-1.5 text-[13px]";
  * is exactly what recovery needs.
  */
 export function BackupVerification({
+  mode,
   checkSuffix,
   checkNsec,
   verified,
   onVerified,
   fileRouteAvailable,
 }: BackupVerificationProps) {
-  const transcriptionAvailable = checkSuffix !== undefined;
+  const transcriptionAvailable = mode === "key-shown";
   const [route, setRoute] = useState<Route>(
     transcriptionAvailable ? "transcription" : "file"
   );

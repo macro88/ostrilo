@@ -139,6 +139,7 @@ function KeyBackupBody({
         <LockedPanel />
       ) : verified ? (
         <BackupVerification
+          mode="file-only"
           checkNsec={checkNsec}
           verified
           onVerified={handleVerified}
@@ -153,6 +154,7 @@ function KeyBackupBody({
           />
           {fileSaved && (
             <BackupVerification
+              mode="file-only"
               checkNsec={checkNsec}
               verified={false}
               onVerified={handleVerified}
