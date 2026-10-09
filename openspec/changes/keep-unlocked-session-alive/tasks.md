@@ -28,6 +28,14 @@
 - [x] 4.4 Unit tests for the context, the lock screen, both gates and the copy
 - [x] 4.5 e2e: the inactivity sentence on the real lock screen; the `background_restarted` sentence after `ServiceWorker.stopWorker`
 
+## 4a. Review fixes
+
+- [x] 4a.1 A stale failed read cannot stop a newer keepalive run
+- [x] 4a.2 A restarted-worker correction cannot overwrite a newer lock record
+- [x] 4a.3 An unlock that opens no key is refused, not reported as open
+- [x] 4a.4 `inactivityMinutes` validated as a whole number in range, background and UI
+- [x] 4a.5 The `state.getLock` locked-response requirement is modified to allow the lock reason
+
 ## 5. Verify
 
 - [x] 5.1 `pnpm run compile`, `pnpm run lint`, `pnpm test`, the touched e2e specs, `pnpm run build`, `pnpm run build:firefox`

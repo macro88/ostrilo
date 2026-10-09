@@ -1,3 +1,67 @@
+## MODIFIED Requirements
+
+### Requirement: Privileged RPC Methods Require An Unlocked Vault
+
+The extension SHALL refuse privileged RPC methods with the `locked` error code while the vault is locked, and SHALL enforce this in the background handlers rather than relying on UI gating. Privileged methods SHALL include `settings.update`, `policy.setOrigin`, `policy.setKindRule`, `policy.setSession`, `policy.clearSession`, `policy.removeOrigin`, `policy.evaluate`, `vault.select`, `vault.renameKey`, `vault.deleteKey`, `vault.sign`, `vault.export`, `vault.reveal`, `nostr.getPublicKey`, `nostr.signEvent`, `approval.resolve`, all `activity.*` methods, and all `profile.*` methods. Methods that SHALL remain reachable while locked are `vault.unlock`, `state.getLock`, `keys.list`, `crypto.evaluatePassword`, `crypto.parsePrivateKey`, and `settings.get`. While the vault is locked, `keys.list` SHALL return only the identifiers needed to determine that keys exist, `settings.get` SHALL return only the fields needed to render the lock screen and first-run flow, and `state.getLock` SHALL return only the locked state itself, without the inactivity deadline, plus the non-secret lock reason and, for an inactivity lock, the whole minutes of the timeout that elapsed, when the background recorded them.
+
+#### Scenario: Settings mutation is refused while locked
+
+- **GIVEN** the vault is locked
+- **WHEN** `settings.update` is called with any patch
+- **THEN** the call fails with the `locked` error code
+- **AND** stored settings are unchanged
+
+#### Scenario: Policy mutation is refused while locked
+
+- **GIVEN** the vault is locked
+- **WHEN** `policy.setOrigin` is called to raise an origin to `high` trust
+- **THEN** the call fails with the `locked` error code
+- **AND** the stored origin policy is unchanged
+
+#### Scenario: Activity log is not readable while locked
+
+- **GIVEN** the vault is locked
+- **AND** the activity log holds entries with content previews
+- **WHEN** `activity.getRecent` is called
+- **THEN** the call fails with the `locked` error code
+- **AND** no activity entry or content preview is returned
+
+#### Scenario: Unlock path stays reachable while locked
+
+- **GIVEN** the vault is locked
+- **WHEN** `state.getLock`, `keys.list`, `crypto.evaluatePassword`, `settings.get`, and `vault.unlock` are called
+- **THEN** each call is served
+- **AND** the user can complete an unlock
+
+#### Scenario: Locked reads are reduced to what the lock screen needs
+
+- **GIVEN** the vault is locked
+- **AND** origin policies, relays, and key labels are stored
+- **WHEN** `settings.get` and `keys.list` are called
+- **THEN** no origin policy, relay list entry, key label, or public key is returned
+- **AND** the response still allows the UI to distinguish a first run from a locked vault with existing keys
+
+#### Scenario: Locked lock state carries no deadline
+
+- **GIVEN** the vault is locked
+- **AND** a last-activity timestamp is present in stored session state
+- **WHEN** `state.getLock` is called
+- **THEN** no inactivity deadline is returned
+- **AND** the response does not disclose when the previous session would have ended
+
+#### Scenario: Locked lock state carries the lock reason and nothing else
+
+- **GIVEN** the vault is locked with a recorded lock reason and a recorded last-activity timestamp
+- **WHEN** `state.getLock` is called
+- **THEN** the response contains the locked flag, the selected key identifier, the lock reason and, for an inactivity lock, the elapsed minutes
+- **AND** it contains no other field
+
+#### Scenario: A newly added privileged method is classified
+
+- **WHEN** a new RPC method is added to the request union
+- **THEN** the method is classified as privileged or reachable while locked
+- **AND** an unclassified method is treated as privileged
+
 ## ADDED Requirements
 
 ### Requirement: The Inactivity Deadline Is Exactly The Configured Timeout

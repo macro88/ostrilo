@@ -94,6 +94,8 @@ A failed ping is not retried or reported. It changes nothing the keepalive can f
 | `clock_rollback` | `lastActivity` is in the future. |
 | `browser_restarted`, `extension_updated` | The startup and install handlers lock on purpose. |
 
+A restarted-worker correction never overwrites a newer record: `KeyVaultService` counts locks and unlocks, and a read that awaited storage while one ran reads again instead of writing, so a manual lock keeps `manual`. An unlock where the password is right but no key record opens throws `vault_keys_unreadable` (`VAULT_UNREADABLE`) and leaves the record locked with no reason; it is not reported as an open vault, which the next read would have blamed on the browser. `inactivityMinutes` is accepted only as a whole number inside the auto-lock range, on the background and again in the UI.
+
 An absent record is the ordinary first state of a browser session and carries no reason. An unrecognised stored reason is ignored, not shown.
 
 `state.getLock` already reduces a locked response to the fields the lock screen renders from; the two new labels are added to that projection and nothing else is.
