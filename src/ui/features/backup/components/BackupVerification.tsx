@@ -8,7 +8,7 @@ import {
   BACKUP_DECRYPT_FAILURE_MESSAGE,
   openKeyBackup,
   parseKeyBackupEnvelope,
-} from "../../backup/key-backup-envelope";
+} from "../key-backup-envelope";
 
 /**
  * How much of the nsec the user re-enters.

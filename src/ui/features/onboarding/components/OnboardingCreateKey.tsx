@@ -10,12 +10,12 @@ import {
 import { OnboardingCreateKeyBackupStep } from "./OnboardingCreateKeyBackupStep";
 import { OnboardingCreateKeyInputStep } from "./OnboardingCreateKeyInputStep";
 import { OnboardingStepDots } from "./OnboardingStepDots";
-import { VERIFICATION_SUFFIX_LENGTH } from "./backup/BackupVerification";
+import { VERIFICATION_SUFFIX_LENGTH } from "@/ui/features/backup/components/BackupVerification";
 import {
   CLIPBOARD_CLEAR_MS,
   useExpiringClipboard,
 } from "../backup/useExpiringClipboard";
-import type { KeyBackupPayload } from "../backup/key-backup-envelope";
+import type { KeyBackupPayload } from "@/ui/features/backup/key-backup-envelope";
 import { userFacingError } from "@/ui/lib/user-facing-error";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 

@@ -9,7 +9,7 @@ import {
   createKeyBackup,
   serializeKeyBackup,
   type KeyBackupPayload,
-} from "../../backup/key-backup-envelope";
+} from "../key-backup-envelope";
 
 interface BackupEncryptedExportProps {
   /**

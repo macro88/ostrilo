@@ -1,7 +1,7 @@
 import { describeViolation } from "@/domain/utils/password-policy";
 import { useCallback, useLayoutEffect, useReducer, useRef } from "react";
 import { useEncryptedBackupImport } from "../backup/useEncryptedBackupImport";
-import type { KeyBackupPayload } from "../backup/key-backup-envelope";
+import type { KeyBackupPayload } from "@/ui/features/backup/key-backup-envelope";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import {
   importKey as rpcImportKey,
