@@ -123,7 +123,9 @@ queued request over its auto-sign budget, every settings tab, the Back up dialog
 Profile, the lock screen, the "Can't reach Ostrilo" screen and the unreadable-key
 states. It fails on any `serious` or `critical` violation and prints the
 moderate and minor ones. No rule or element is excluded; `KNOWN_FALSE_POSITIVES` in the spec
-lists the two Radix Select findings it ignores, each with its reason. A surface
+lists the three Radix findings it ignores (the page behind the open key menu and
+the open activity filter, and the filter's scrolling viewport), each with its
+reason and each applied only to the nodes carrying Radix's own marker. A surface
 added to the product should be added to the spec, and to `REQUIRED_SURFACES`.
 
 To drive the extension by hand while writing a spec, see `docs/agent-loop.md`.

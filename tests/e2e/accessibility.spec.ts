@@ -23,7 +23,8 @@ import {
  * blocking a merge. Nothing is excluded: a rule or element silenced here would
  * be a surface nobody checks again. The one allowed exception is a defect inside
  * a third-party primitive that props cannot reach, named in
- * KNOWN_FALSE_POSITIVES with its reason.
+ * KNOWN_FALSE_POSITIVES with its reason, and then only for the nodes Radix
+ * itself produced.
  *
  * One browser context per theme, with the vault built up in stages (Quick
  * start, extra key, sites, signed and denied activity, a pending approval
@@ -43,34 +44,54 @@ const VECTOR_NSEC =
   "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5";
 
 /**
- * Third-party false positives, as `{ surface substring, rule, reason }`. The
- * violation is dropped only on a matching surface and rule, so it never hides
- * the same rule anywhere else. Nothing here is Ostrilo's own markup.
+ * Third-party false positives. An entry drops a node of a violation only when
+ * the surface and the rule match AND the node's own markup carries the
+ * `marker` that Radix leaves on what it touched, so the same rule on any other
+ * element of the same surface still blocks. Nothing here is Ostrilo's markup.
  */
-const KNOWN_FALSE_POSITIVES: ReadonlyArray<{
+interface KnownFalsePositive {
   surface: string;
   rule: string;
+  /** Substring of the node's HTML that only Radix's own element or hiding adds. */
+  marker: string;
   reason: string;
-}> = [
+}
+
+const KNOWN_FALSE_POSITIVES: ReadonlyArray<KnownFalsePositive> = [
   {
     surface: "key selector open",
     rule: "aria-hidden-focus",
+    marker: 'data-aria-hidden="true"',
     reason:
-      "Radix's modal DropdownMenu hides the page with aria-hidden and traps focus in the menu; axe only recognises aria-modal dialogs. modal={false} was tried and the menu repositioned endlessly.",
+      "Radix's modal DropdownMenu sets aria-hidden on the page behind it (marking it data-aria-hidden) and traps focus in the menu, which axe only credits for aria-modal dialogs; modal={false} reopens the menu closed if pressed during its 150 ms exit, because the closing content still holds focus.",
   },
   {
     surface: "kind filter open",
     rule: "aria-hidden-focus",
+    marker: 'data-aria-hidden="true"',
     reason:
-      "Radix Select hides the page with aria-hidden while its listbox holds focus and has no non-modal mode to turn that off.",
+      "Radix Select sets aria-hidden on the page behind its popover (marking it data-aria-hidden) and has no non-modal mode to turn that off.",
   },
   {
     surface: "kind filter open",
     rule: "scrollable-region-focusable",
+    marker: "data-radix-select-viewport",
     reason:
       "Radix Select's scrolling viewport is driven by arrow keys on its roving-focus options, which axe does not count as focusable content.",
   },
 ];
+
+/** The nodes of `violation` that no known false positive accounts for. */
+function unexplainedNodes<N extends { html: string }>(
+  surface: string,
+  rule: string,
+  nodes: N[]
+): N[] {
+  const known = KNOWN_FALSE_POSITIVES.filter(
+    (f) => surface.includes(f.surface) && f.rule === rule
+  );
+  return nodes.filter((node) => !known.some((f) => node.html.includes(f.marker)));
+}
 
 /**
  * Surfaces the run must have judged. A refactor that quietly stops reaching one
@@ -134,10 +155,8 @@ class Auditor {
     const name = `${surface} (${this.theme})`;
     const { violations } = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     for (const violation of violations) {
-      const known = KNOWN_FALSE_POSITIVES.some(
-        (f) => name.includes(f.surface) && violation.id === f.rule
-      );
-      if (!known) this.findings.push(summarise(name, violation));
+      const nodes = unexplainedNodes(name, violation.id, violation.nodes);
+      if (nodes.length > 0) this.findings.push(summarise(name, violation, nodes));
     }
     this.surfaces.push(name);
   }
@@ -149,13 +168,17 @@ class Auditor {
 
 type Violation = Awaited<ReturnType<AxeBuilder["analyze"]>>["violations"][number];
 
-function summarise(surface: string, violation: Violation): Finding {
+function summarise(
+  surface: string,
+  violation: Violation,
+  nodes: Violation["nodes"]
+): Finding {
   return {
     surface,
     id: violation.id,
     impact: violation.impact ?? "unknown",
     help: violation.help,
-    nodes: violation.nodes.map(
+    nodes: nodes.map(
       (node) => `${node.target.join(" ")} :: ${node.failureSummary?.replace(/\s+/g, " ") ?? ""}`
     ),
   };
@@ -634,6 +657,25 @@ async function auditUnreadableKey(popup: Page, auditor: Auditor): Promise<void> 
   await expect(popup.getByText("Profile Settings")).toBeVisible();
   await auditor.audit(popup, "profile with an unreadable key");
 }
+
+test("known false positives drop only the nodes Radix produced", async ({ page }) => {
+  // Two regions hidden from assistive technology that still hold a focusable
+  // button. Only the first carries the marker Radix's own hiding leaves.
+  await page.setContent(`<!doctype html><html lang="en"><head><title>probe</title></head><body>
+    <main aria-hidden="true" data-aria-hidden="true"><button>Behind a Radix popover</button></main>
+    <section aria-hidden="true" id="ours"><button>Hidden by our own markup</button></section>
+  </body></html>`);
+  const { violations } = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+  const hidden = violations.find((v) => v.id === "aria-hidden-focus");
+  expect(hidden?.nodes, "the probe should trip aria-hidden-focus on both regions").toHaveLength(2);
+
+  const kept = unexplainedNodes("key selector open (light)", "aria-hidden-focus", hidden!.nodes);
+  expect(kept.map((n) => n.target.join(" "))).toEqual(["#ours"]);
+
+  // The same node on a surface with no entry, or under another rule, is kept.
+  expect(unexplainedNodes("home (light)", "aria-hidden-focus", hidden!.nodes)).toHaveLength(2);
+  expect(unexplainedNodes("key selector open (light)", "color-contrast", hidden!.nodes)).toHaveLength(2);
+});
 
 for (const theme of ["light", "dark"] as const) {
   test(`axe: no serious or critical violations across every surface (${theme})`, async ({
