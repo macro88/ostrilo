@@ -507,7 +507,7 @@ The runner's populated phase now seeds and photographs:
 ### Judged, not changed
 
 - **The banner's height at 400x600.** It adds about 68px, so on Home the second activity row sits under the tab bar until the shell scrolls (`23b`). Scrolled to its end (`23c`), both rows are whole and clear of the tab bar, and nothing is sliced through its text at rest: the first row is whole and the second shows only its top hairline. Quick start's first Home (`40c`) has the same shape with the empty-state card, whose last line is behind the tab bar until scrolled; that one was not scrolled in a capture. No card shrinks, clips its own rows or overlaps, which is the failure the populated vault exists to catch. The side panel shows three rows plus the banner (`28b`).
-- **Lock reasons.** Six of the seven lines fit one line at 400px; "Locked because the browser restarted Ostrilo's background." wraps to two with a single word on the second line, and the Unlock button moves down by one line. Centred, unclipped, and the longest line the screen will ever carry, so left as is.
+- **Lock reasons.** Six of the seven lines are no longer than the 56-character one that fits a single line at 400px; "Locked because the browser restarted Ostrilo's background." (57) wraps to two with a single word on the second line, and the Unlock button moves down by one line. Centred, unclipped, and the longest line the screen will ever carry, so left as is.
 - **"Can't reach Ostrilo"** is one amber seal, a title, two lines and one notched Try again, in both themes. The amber seal is a warning, not decoration.
 - **The unreadable-key states** keep the red message in the card Home already uses for it, name the key in the header ("Unreadable key") and in Settings (a red line under the key, Back up disabled), and tell the person to choose another key. Profile says the same in plain text with no card. Three different shapes for one fact, each at home on its screen.
 - **A transparent-background picture** in the header reads as a figure on the seal in light. In Deep Ink the violet figure sits on the dark seal at lower contrast, but it is legible, it is the user's own image, and the review does not recolour user content.
@@ -516,7 +516,7 @@ The runner's populated phase now seeds and photographs:
 - **The over-budget prompt** (`39`) keeps the amber line under the origin block, a mint TRUSTED chip, one notched Approve and the trust line, at the narrow width.
 - **Quick start** keeps one notched primary per screen, the shared step dots and the soft amber notice, with no icon plate or rail (§5, §6, §7).
 - **Back up dialog.** The passphrase panel sits about 28px below the intro text before its hairline, because the dialog's own 16px gap and the shared export panel's 12px top margin stack. It is the component onboarding also uses, nothing is cut off, and it is a small wrong spacing rather than a broken layout, so it is not changed here.
-- **Banned patterns (§6).** No gradient, accent rail, dot grid, icon plate, pill or emoji on any new surface. Every colour is a token. Violet appears at most twice on any one screen.
+- **Banned patterns (§6).** No gradient, accent rail, dot grid, icon plate, pill or emoji on any new surface. Every colour is a token.
 
 ### Not covered
 
