@@ -86,7 +86,10 @@ export class SessionKeepAlive {
     try {
       state = await this.deps.getLockState();
     } catch {
-      this.stop();
+      // A read that failed for a run that has since been stopped or replaced
+      // says nothing about the run that exists now: stopping here would kill
+      // the keepalive of an unlock that happened while this read was in flight.
+      if (generation === this.generation) this.stop();
       return;
     }
     if (generation !== this.generation) return;

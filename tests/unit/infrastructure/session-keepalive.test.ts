@@ -254,6 +254,82 @@ describe("SessionKeepAlive", () => {
     expect(keepAlive.isRunning).toBe(false);
   });
 
+  it("start() during an in-flight check replaces the run: the stale check neither pings nor reschedules", async () => {
+    const releases: Array<(state: State) => void> = [];
+    let pings = 0;
+    const keepAlive = new SessionKeepAlive({
+      ping: async () => {
+        pings++;
+      },
+      getLockState: () =>
+        new Promise<State>((resolve) => {
+          releases.push(resolve);
+        }),
+    });
+
+    keepAlive.start();
+    await advance(20_000);
+    expect(releases).toHaveLength(1);
+
+    keepAlive.start();
+    await advance(20_000);
+    expect(releases).toHaveLength(2);
+
+    releases[0]({ isLocked: false, lockAt: T0 + 35 * MINUTE });
+    await advance(0);
+    expect(pings, "the replaced run's check must not ping").toBe(0);
+
+    releases[1]({ isLocked: false, lockAt: T0 + 35 * MINUTE });
+    await advance(0);
+    expect(pings).toBe(1);
+    expect(keepAlive.isRunning).toBe(true);
+    keepAlive.stop();
+  });
+
+  it("start() during a failing check does not let the stale failure stop the new run", async () => {
+    // lock, then unlock, while a read from the previous session is in flight.
+    const pending: Array<{ resolve: (s: State) => void; reject: (e: Error) => void }> = [];
+    let pings = 0;
+    const keepAlive = new SessionKeepAlive({
+      ping: async () => {
+        pings++;
+      },
+      getLockState: () =>
+        new Promise<State>((resolve, reject) => {
+          pending.push({ resolve, reject });
+        }),
+    });
+
+    keepAlive.start();
+    await advance(20_000);
+    expect(pending).toHaveLength(1);
+
+    keepAlive.stop();
+    keepAlive.start();
+    pending[0].reject(new Error("storage unavailable"));
+    await advance(0);
+    expect(
+      keepAlive.isRunning,
+      "the new session lost its keepalive to the old session's failed read"
+    ).toBe(true);
+
+    await advance(20_000);
+    expect(pending).toHaveLength(2);
+    pending[1].resolve({ isLocked: false, lockAt: T0 + 35 * MINUTE });
+    await advance(0);
+    expect(pings).toBe(1);
+    keepAlive.stop();
+  });
+
+  it("still stops on a failed read belonging to the current run", async () => {
+    const h = harness({ isLocked: false, lockAt: T0 + 35 * MINUTE });
+    h.keepAlive.start();
+    await advance(20_000);
+    h.failStateWith(new Error("storage unavailable"));
+    await advance(20_000);
+    expect(h.keepAlive.isRunning).toBe(false);
+  });
+
   it("a restart after a stop begins a fresh run", async () => {
     const h = harness({ isLocked: false, lockAt: T0 + 35 * MINUTE });
     h.keepAlive.start();
