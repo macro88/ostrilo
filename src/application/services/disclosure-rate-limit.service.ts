@@ -20,13 +20,16 @@
  * not be able to consume the capacity a pending signature from another origin
  * needs.
  *
- * ON MV3 EVICTION. The window is held in memory, matching the approval queue.
- * A service worker evicted after ~30s idle loses the counters. That is the
- * right trade here: the attack this bounds is a fast polling loop, and a page
- * polling fast enough to matter is also what keeps the worker alive. An
- * attacker patient enough to wait out an eviction between calls is already
- * within any rate this would impose.
+ * ON MV3 EVICTION. The window is persisted in `storage.session` (see
+ * `rolling-window-counters.ts`). It used to live in worker memory only, on the
+ * argument that a page polling fast enough to matter keeps the worker alive.
+ * That fails while the vault is locked: no keepalive runs then, the worker is
+ * evicted after ~30s idle, and each eviction handed the page a fresh allowance.
+ * The window now outlives the worker and dies with the browser session.
  */
+
+import type { StoragePort } from "@/application/ports/storage";
+import { RollingWindowCounters } from "./rolling-window-counters";
 
 export const DISCLOSURE_RATE_LIMITS = {
   /** Calls one origin may make per rolling window. */
@@ -34,37 +37,42 @@ export const DISCLOSURE_RATE_LIMITS = {
   windowMs: 60_000,
 } as const;
 
+/** Distinct from every other counter's record. */
+export const DISCLOSURE_WINDOW_STORAGE_KEY = "rateWindow:disclosure";
+
 export class DisclosureRateLimitService {
-  private history = new Map<string, number[]>();
+  private readonly windows: RollingWindowCounters;
 
-  constructor(private now: () => number = () => Date.now()) {}
+  constructor(now: () => number = () => Date.now(), storage?: StoragePort) {
+    this.windows = new RollingWindowCounters({
+      storage,
+      storageKey: DISCLOSURE_WINDOW_STORAGE_KEY,
+      windowMs: DISCLOSURE_RATE_LIMITS.windowMs,
+      maxPerOrigin: DISCLOSURE_RATE_LIMITS.perOriginPerWindow,
+      now,
+    });
+  }
 
-  private recent(origin: string): number[] {
-    const cutoff = this.now() - DISCLOSURE_RATE_LIMITS.windowMs;
-    const kept = (this.history.get(origin) ?? []).filter((at) => at > cutoff);
-    if (kept.length > 0) {
-      this.history.set(origin, kept);
-    } else {
-      // Do not keep an entry for an origin whose allowance has fully decayed:
-      // an attacker cycling subdomains would otherwise grow this map without
-      // bound for the life of the worker.
-      this.history.delete(origin);
-    }
-    return kept;
+  /** Resolves once the persisted window has been read. Await before enforcing. */
+  ready(): Promise<void> {
+    return this.windows.ready();
+  }
+
+  /** Resolves when every charge so far has been written. */
+  settled(): Promise<void> {
+    return this.windows.settled();
   }
 
   /** True when this origin may make one more call right now. */
   isAllowed(origin: string): boolean {
     return (
-      this.recent(origin).length < DISCLOSURE_RATE_LIMITS.perOriginPerWindow
+      this.windows.count(origin) < DISCLOSURE_RATE_LIMITS.perOriginPerWindow
     );
   }
 
   /** Charges one call against this origin's allowance. */
   record(origin: string): void {
-    const kept = this.recent(origin);
-    kept.push(this.now());
-    this.history.set(origin, kept);
+    this.windows.record(origin);
   }
 
   /**
@@ -78,8 +86,8 @@ export class DisclosureRateLimitService {
     return true;
   }
 
-  /** Test seam, and the reset a lock performs. */
+  /** Test seam. */
   clear(): void {
-    this.history.clear();
+    this.windows.clear();
   }
 }

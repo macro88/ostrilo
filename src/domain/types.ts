@@ -687,6 +687,15 @@ export interface PendingRequest {
    * ever used to DENY: see cancelByClientRequestId.
    */
   clientRequestId?: string;
+  /**
+   * Set when the site's policy would have signed this without a prompt but the
+   * origin had used its automatic-signing budget for the window.
+   *
+   * Display-only. The approval window says so, because a trusted site that
+   * suddenly needs approval otherwise looks like a fault. It never changes what
+   * approving does.
+   */
+  exceededAutoSignBudget?: true;
 }
 
 /**

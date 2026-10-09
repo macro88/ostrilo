@@ -1,3 +1,5 @@
+import type { StoragePort } from "@/application/ports/storage";
+import { RollingWindowCounters } from "./rolling-window-counters";
 import {
   ApprovalDecision,
   ApprovalAction,
@@ -56,6 +58,9 @@ export class ApprovalRateLimitError extends Error {
   }
 }
 
+/** Distinct from every other counter's record. */
+export const ENQUEUE_WINDOW_STORAGE_KEY = "rateWindow:approvalEnqueue";
+
 const DEFAULT_TIMEOUT_MS = APPROVAL_TIMEOUT_MS;
 
 /** Callback type for when a request is resolved or times out */
@@ -109,8 +114,34 @@ export class ApprovalQueueService {
   private timedOutRequests: Set<string> = new Set(); // Track which requests timed out
   private changeCallback?: QueueChangeCallback; // Optional callback for queue changes
 
-  constructor(timeoutMs: number = DEFAULT_TIMEOUT_MS) {
+  /**
+   * @param storage - Where the per-origin enqueue window persists, so a worker
+   *   restart does not hand every origin a fresh allowance. The pending caps
+   *   count live entries, which cannot outlive the worker, so they need no
+   *   record.
+   */
+  constructor(timeoutMs: number = DEFAULT_TIMEOUT_MS, storage?: StoragePort) {
     this.timeoutMs = timeoutMs;
+    this.enqueueWindows = new RollingWindowCounters({
+      storage,
+      storageKey: ENQUEUE_WINDOW_STORAGE_KEY,
+      windowMs: QUEUE_LIMITS.windowMs,
+      maxPerOrigin: QUEUE_LIMITS.perOriginPerWindow,
+    });
+  }
+
+  /**
+   * Resolves once the persisted enqueue window has been read. Await before
+   * `enqueue`, so a request that wakes a restarted worker is judged against the
+   * window the worker had when it died.
+   */
+  ready(): Promise<void> {
+    return this.enqueueWindows.ready();
+  }
+
+  /** Resolves when every enqueue charged so far has been written. */
+  settled(): Promise<void> {
+    return this.enqueueWindows.settled();
   }
 
   /**
@@ -131,7 +162,7 @@ export class ApprovalQueueService {
   }
 
   /** Enqueue timestamps per origin, trimmed to the rolling window. */
-  private enqueueHistory: Map<string, number[]> = new Map();
+  private readonly enqueueWindows: RollingWindowCounters;
 
   /** Number of entries this origin currently has waiting. */
   private pendingForOrigin(origin: string): number {
@@ -151,24 +182,16 @@ export class ApprovalQueueService {
       throw new ApprovalRateLimitError("origin_full");
     }
 
-    const now = Date.now();
-    const recent = (this.enqueueHistory.get(origin) ?? []).filter(
-      (at) => now - at < QUEUE_LIMITS.windowMs
-    );
-    this.enqueueHistory.set(origin, recent);
-    if (recent.length >= QUEUE_LIMITS.perOriginPerWindow) {
+    if (
+      this.enqueueWindows.count(origin) >= QUEUE_LIMITS.perOriginPerWindow
+    ) {
       throw new ApprovalRateLimitError("rate");
     }
   }
 
   /** Charges one enqueue against this origin's rolling allowance. */
   private recordEnqueue(origin: string): void {
-    const now = Date.now();
-    const recent = (this.enqueueHistory.get(origin) ?? []).filter(
-      (at) => now - at < QUEUE_LIMITS.windowMs
-    );
-    recent.push(now);
-    this.enqueueHistory.set(origin, recent);
+    this.enqueueWindows.record(origin);
   }
 
   /**
@@ -229,7 +252,11 @@ export class ApprovalQueueService {
     event: UnsignedEvent,
     resolver: RequestResolver,
     eventIdHash?: string,
-    options?: { signingPubkey?: string; clientRequestId?: string }
+    options?: {
+      signingPubkey?: string;
+      clientRequestId?: string;
+      exceededAutoSignBudget?: boolean;
+    }
   ): PendingRequest {
     // Check for a duplicate from THIS origin. The key is built here, inside the
     // service, so no caller can forget to include the origin.
@@ -256,6 +283,7 @@ export class ApprovalQueueService {
       timeoutAt: now + Math.floor(this.timeoutMs / 1000),
       signingPubkey: options?.signingPubkey,
       clientRequestId: options?.clientRequestId,
+      ...(options?.exceededAutoSignBudget && { exceededAutoSignBudget: true }),
     };
 
     this.recordEnqueue(origin);
