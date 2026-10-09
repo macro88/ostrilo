@@ -6,7 +6,7 @@ import {
 } from "@/ui/features/settings/components/shared/SettingsLayout";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { activityGetRecent } from "@/infrastructure/messaging/client";
-import type { ActivityLogEntry } from "@/domain/types";
+import { parseActivityReason, type ActivityLogEntry } from "@/domain/types";
 import { useState } from "react";
 
 type ExportStatus = "idle" | "busy" | "success" | "error";
@@ -45,7 +45,9 @@ async function readActivityEntries(maxEntries: number) {
       // repeat rather than export it twice.
       if (!seen.has(entry.id)) {
         seen.add(entry.id);
-        entries.push(entry);
+        // Storage is untrusted on read: a reason this build does not
+        // recognise is left out of the file rather than copied into it.
+        entries.push({ ...entry, reason: parseActivityReason(entry.reason) });
       }
     }
     if (page.entries.length < limit || offset >= total) break;

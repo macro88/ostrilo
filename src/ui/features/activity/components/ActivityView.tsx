@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 import { useActivityLog } from "../hooks/useActivityLog";
+import { useActivityOrigins } from "../hooks/useActivityOrigins";
 import type { PendingRequest } from "@/domain/types";
 import {
   getAllApprovalRequests,
@@ -146,11 +147,9 @@ export function ActivityView() {
     }
   };
 
-  // Get unique origins for filter dropdown
-  const uniqueOrigins = useMemo(
-    () => Array.from(new Set(entries.map((e) => e.origin))).sort(),
-    [entries]
-  );
+  // The whole log's origins, not just those on the loaded page. Re-read when a
+  // load finishes, so a site that has just been logged is offered.
+  const uniqueOrigins = useActivityOrigins(!loading);
 
   const handleOriginChange = (value: string) => {
     if (value === "all") {

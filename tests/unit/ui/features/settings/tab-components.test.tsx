@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactNode } from "react";
+import type { ActivityLogEntry } from "@/domain/types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -500,7 +501,13 @@ describe("options page tab components", () => {
   });
 
   describe("exporting a log longer than one RPC page", () => {
-    type Stored = { id: string; origin: string; timestamp: number; decision: "allow" };
+    type Stored = {
+      id: string;
+      origin: string;
+      timestamp: number;
+      decision: "allow" | "deny";
+      reason?: ActivityLogEntry["reason"];
+    };
     const stored = (count: number): Stored[] =>
       Array.from({ length: count }, (_, index) => ({
         id: `entry-${index}`,
@@ -555,7 +562,7 @@ describe("options page tab components", () => {
 
       return JSON.parse(await blobs[0].text()) as {
         total: number;
-        entries: Array<{ id: string }>;
+        entries: Array<{ id: string; reason?: string }>;
       };
     }
 
@@ -582,6 +589,22 @@ describe("options page tab components", () => {
       expect(
         vi.mocked(activityGetRecent).mock.calls.map(([args]) => args?.limit)
       ).toEqual([100, 50]);
+    });
+
+    it("exports a denial's reason, and leaves out one this build does not recognise", async () => {
+      const base = { origin: "https://site.example", timestamp: 1_735_689_600 };
+      const log: Stored[] = [
+        { ...base, id: "locked", decision: "deny", reason: "vault_locked" },
+        { ...base, id: "odd", decision: "deny", reason: "from_the_future" as never },
+        { ...base, id: "old", decision: "deny" },
+      ];
+      const exported = await exportWith(50, () => log);
+
+      expect(exported.entries.map((e) => [e.id, e.reason])).toEqual([
+        ["locked", "vault_locked"],
+        ["odd", undefined],
+        ["old", undefined],
+      ]);
     });
 
     it("exports an entry recorded mid-export once", async () => {
