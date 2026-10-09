@@ -8,6 +8,8 @@ export const BROADCAST_EVENTS = {
    * sitting there showing key labels and policy until someone reloads it.
    */
   VAULT_LOCKED: "ostrilo.vault.locked",
+  /** A key's backup was verified, so a surface showing its status should re-read it. */
+  KEY_BACKUP_CHANGED: "ostrilo.keyBackup.changed",
 } as const;
 
 /**

@@ -6,8 +6,10 @@ import type {
   RpcErrorObject,
   LockStatePayload,
 } from "./rpc";
+import type { KeyBackupStatusRow } from "@/domain/backup/status";
 import {
   ActivityOriginsResponseSchema,
+  BackupListResponseSchema,
   type AppSettingsPatch,
   type OriginPolicyPatch,
 } from "@/infrastructure/validation/schemas";
@@ -295,6 +297,17 @@ export function reportActivity(): void {
 }
 
 
+
+/** Every key that has a backup record. A key absent from the result is unknown. */
+export async function listBackupStatuses(): Promise<KeyBackupStatusRow[]> {
+  const data = await rpc<unknown>({ type: "backup.list" });
+  return BackupListResponseSchema.parse(data).statuses;
+}
+
+/** Records that a backup of this key was made and checked. */
+export async function markKeyBackupVerified(keyId: string) {
+  return rpc<null>({ type: "backup.markVerified", keyId });
+}
 
 export async function revealKey(password: string, keyId?: string) {
   return rpc<{ nsec: string; hex: string }>({

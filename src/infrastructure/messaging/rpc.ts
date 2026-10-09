@@ -39,6 +39,10 @@ export type RpcRequest =
     }
   | { type: "vault.reveal"; keyId?: string; password: string }
   | { type: "keys.list" }
+  // Per-key backup status. `markVerified` is the only write the UI has: a key
+  // becomes `pending` when the vault creates it, never by request.
+  | { type: "backup.list" }
+  | { type: "backup.markVerified"; keyId: string }
   | { type: "state.getLock" }
   | { type: "state.touch" }
   | { type: "settings.get" }

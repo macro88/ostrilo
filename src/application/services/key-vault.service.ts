@@ -40,6 +40,7 @@ import {
   type RotationJournal,
 } from "./vault-rotation-journal";
 import { SettingsStore } from "./settings-store";
+import { KeyBackupStatusService } from "./key-backup-status.service";
 
 const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
 const VAULT_ENVELOPE_STORAGE = "vaultEnvelope";
@@ -128,7 +129,15 @@ export class KeyVaultService {
     private schnorr: Schnorr,
     private hash: CryptoHash,
     private bech32: Bech32Codec,
-    private settingsStore: SettingsStore = new SettingsStore(storage)
+    private settingsStore: SettingsStore = new SettingsStore(storage),
+    /**
+     * Per-key backup status. The vault is the one place a key is created or
+     * deleted, so it is also the one place that sets a new key `pending` and
+     * drops a deleted key's record: a key cannot exist without its status.
+     */
+    readonly backupStatus: KeyBackupStatusService = new KeyBackupStatusService(
+      storage.local
+    )
   ) {}
 
   async getSettings(): Promise<AppSettingsV1 | undefined> {
@@ -470,6 +479,10 @@ export class KeyVaultService {
           selectedKeyId: record.id,
         } as AppSettingsV1);
       }
+      // Before the key is stored, so a failure here creates no key rather than
+      // a key nothing knows is unbacked-up. An orphaned record for an id that
+      // was never stored is inert.
+      await this.backupStatus.markPending(id);
       const next = [...records, record];
       await this.saveKeys(next);
       return record;
@@ -608,6 +621,7 @@ export class KeyVaultService {
     // Remove the key from the list
     const updatedRecords = records.filter((r) => r.id !== id);
     await this.saveKeys(updatedRecords);
+    await this.backupStatus.remove(id);
 
     // Remove from unlocked map if present
     const unlockedKey = this.unlocked.get(id);

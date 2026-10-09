@@ -355,6 +355,22 @@ export const ActivityOriginsResponseSchema = z.object({
   origins: z.array(OriginSchema).max(500),
 });
 
+/**
+ * What `backup.list` returns, checked where the UI receives it. Bounded by the
+ * number of keys a vault holds, not by the transport.
+ */
+export const BackupListResponseSchema = z.object({
+  statuses: z
+    .array(
+      z.object({
+        keyId: KeyIdSchema,
+        state: z.enum(["pending", "verified"]),
+        at: z.number().finite(),
+      })
+    )
+    .max(1000),
+});
+
 // Infer types from schemas
 export type ActivityGetRecentRequest = z.infer<
   typeof ActivityGetRecentRequestSchema
