@@ -128,6 +128,24 @@ describe("useKeyBackup", () => {
     expect(latest.target).toEqual(KEY);
   });
 
+  it("keeps reporting the lock after an unlock, until a new backup starts", async () => {
+    mount(reauthWith("master"));
+    await act(() => latest.start(KEY));
+    manager.isLocked = true;
+    rerender();
+    expect(latest.lockedMidBackup).toBe(true);
+
+    manager.isLocked = false;
+    rerender();
+
+    expect(latest.lockedMidBackup).toBe(true);
+    expect(latest.getPayload()).toBeNull();
+
+    await act(() => latest.start(KEY));
+    expect(latest.lockedMidBackup).toBe(false);
+    expect(latest.getPayload()?.nsec).toBe(NSEC);
+  });
+
   it("drops the key when the page goes away", async () => {
     mount(reauthWith("master"));
     await act(() => latest.start(KEY));

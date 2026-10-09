@@ -25,6 +25,10 @@ export function useKeyBackup(reauth: ReturnType<typeof useReauth>) {
   const { isLocked } = useKeyManager();
   const keyRef = useRef<KeyBackupPayload | null>(null);
   const [target, setTarget] = useState<BackupTarget | null>(null);
+  // Latched for the attempt: an unlock after the lock does not bring the
+  // dropped key back, so the dialog must keep saying the flow was stopped.
+  const [lockedAttempt, setLockedAttempt] = useState(false);
+  if (target !== null && isLocked && !lockedAttempt) setLockedAttempt(true);
 
   const release = useCallback(() => {
     keyRef.current = null;
@@ -41,6 +45,7 @@ export function useKeyBackup(reauth: ReturnType<typeof useReauth>) {
   const start = useCallback(
     async (next: BackupTarget) => {
       release();
+      setLockedAttempt(false);
       try {
         await reauth.request(
           {
@@ -67,6 +72,7 @@ export function useKeyBackup(reauth: ReturnType<typeof useReauth>) {
   const close = useCallback(() => {
     release();
     setTarget(null);
+    setLockedAttempt(false);
   }, [release]);
 
   const getPayload = useCallback(() => keyRef.current, []);
@@ -77,6 +83,6 @@ export function useKeyBackup(reauth: ReturnType<typeof useReauth>) {
     close,
     release,
     getPayload,
-    lockedMidBackup: target !== null && isLocked,
+    lockedMidBackup: target !== null && lockedAttempt,
   };
 }
