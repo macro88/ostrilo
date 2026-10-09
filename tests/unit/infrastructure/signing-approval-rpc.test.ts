@@ -350,6 +350,28 @@ describe("why a refused signing request was refused", () => {
     });
   });
 
+  it("writes one disclosure row for a burst refused by the queue's limits and then the limiter", async () => {
+    const nostr = new NostrRpcHandler(queue, async () => 1);
+    for (let i = 0; i < 5; i++) {
+      void nostr.handleRequest(signRequest(SITE, `note ${i}`), context);
+    }
+    await vi.waitFor(() => expect(queue.count()).toBe(5));
+
+    // Six calls fit the limiter's allowance and are refused by the full queue;
+    // the rest are refused by the limiter itself.
+    for (let i = 0; i < 12; i++) {
+      const res = await nostr.handleRequest({ type: "nostr.getPublicKey", origin: SITE }, context);
+      expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+    }
+
+    expect(await logged()).toBe(1);
+    expect(await reasonLogged()).toMatchObject({
+      operation: "identity_disclosure",
+      decision: "deny",
+      reason: "rate_limited",
+    });
+  });
+
   it("blames the lock, not the user, when the vault locks while the prompt is open", async () => {
     const nostr = new NostrRpcHandler(queue, async () => 1);
     const pending = nostr.handleRequest(signRequest(), context);

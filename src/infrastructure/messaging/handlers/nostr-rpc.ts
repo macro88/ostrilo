@@ -20,6 +20,7 @@ import {
   ApprovalRateLimitError,
   QUEUE_LIMITS,
 } from "@/application/services/approval-queue.service";
+import { DISCLOSURE_RATE_LIMITS } from "@/application/services/disclosure-rate-limit.service";
 import { RefusalLogCoalescer } from "@/application/services/refusal-log-coalescer";
 import { browser } from "wxt/browser";
 
@@ -84,6 +85,15 @@ export class NostrRpcHandler implements RpcModule {
     QUEUE_LIMITS.windowMs
   );
 
+  /**
+   * The same guard for identity requests, whose limiter refuses a polling
+   * origin on every call past its allowance. Separate from the signing one, so
+   * a signing refusal never hides a disclosure refusal from the same origin.
+   */
+  private readonly disclosureRefusalLog = new RefusalLogCoalescer(
+    DISCLOSURE_RATE_LIMITS.windowMs
+  );
+
   constructor(
     private approvalQueue?: ApprovalQueueService,
     private windowManager?: () => Promise<number | undefined>
@@ -143,6 +153,12 @@ export class NostrRpcHandler implements RpcModule {
     origin: string,
     reason: ActivityReason
   ): Promise<void> {
+    if (
+      reason === "rate_limited" &&
+      !this.disclosureRefusalLog.shouldLog(origin)
+    ) {
+      return;
+    }
     await context.activityLog.addEntry({
       origin,
       operation: "identity_disclosure",

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
@@ -296,6 +296,53 @@ describe("every outcome reaches the activity log", () => {
       origin: "https://poll.example",
       operation: "identity_disclosure",
       reason: "rate_limited",
+    });
+  });
+
+  describe("a burst of rate-limited refusals", () => {
+    const refusals = () => logged.filter((e) => e.decision === "deny");
+    const burst = async (handler: NostrRpcHandler, origin: string, calls: number) => {
+      const context = consented();
+      for (let i = 0; i < calls; i++) {
+        await handler.handleRequest(ask(origin), context);
+      }
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("writes one row per origin per window, and a new one once the window passes", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const handler = new NostrRpcHandler();
+      const over = DISCLOSURE_RATE_LIMITS.perOriginPerWindow + 30;
+
+      await burst(handler, "https://poll.example", over);
+      expect(refusals()).toHaveLength(1);
+
+      await burst(handler, "https://flood.example", over);
+      expect(refusals().map((e) => e.origin)).toEqual([
+        "https://poll.example",
+        "https://flood.example",
+      ]);
+
+      now += DISCLOSURE_RATE_LIMITS.windowMs + 1;
+      vi.setSystemTime(Date.now() + DISCLOSURE_RATE_LIMITS.windowMs + 1);
+      await burst(handler, "https://poll.example", over);
+      expect(refusals().filter((e) => e.origin === "https://poll.example")).toHaveLength(2);
+    });
+
+    it("still answers every refused call with rate_limited", async () => {
+      const handler = new NostrRpcHandler();
+      const context = consented();
+      for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow; i++) {
+        await handler.handleRequest(ask("https://poll.example"), context);
+      }
+      for (let i = 0; i < 5; i++) {
+        const res = await handler.handleRequest(ask("https://poll.example"), context);
+        expect(res.ok).toBe(false);
+        if (!res.ok) expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+      }
     });
   });
 
