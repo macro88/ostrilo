@@ -384,7 +384,7 @@ test.describe("profile view", () => {
     ).toBeVisible();
 
     await popup.getByRole("button", { name: "Select active key" }).click();
-    await popup.getByRole("option", { name: /Bruno Marsh/ }).click();
+    await popup.getByRole("menuitemradio", { name: /Bruno Marsh/ }).click();
 
     // Both halves matter. A surface that swapped the name but kept the npub -
     // or the reverse - would tell the user they are signing as an identity

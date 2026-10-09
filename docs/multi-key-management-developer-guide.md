@@ -162,20 +162,15 @@ No `avatarUrl` is returned. `profile.picture` is deliberately not read here; see
 
 **ARIA Attributes:**
 ```typescript
-// Trigger
+// Trigger (Radix adds aria-haspopup="menu" and aria-expanded)
 aria-label="Select active key"
-aria-haspopup="listbox"
-aria-expanded={isOpen}
-aria-controls="key-selector-listbox"
 
-// Listbox
-role="listbox"
-id="key-selector-listbox"
+// Menu (Radix's own role; a listbox cannot hold the Add Key action)
 aria-label="Available keys"
 
-// Option
-role="option"
-aria-selected={isSelected}
+// Key row
+role="menuitemradio"
+aria-checked={isSelected}
 aria-label={`${displayName} - ${truncatedNpub}${isSelected ? " (currently selected)" : ""}`}
 ```
 

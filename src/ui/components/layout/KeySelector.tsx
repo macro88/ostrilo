@@ -40,9 +40,12 @@ const ACTIVE_KEY_NAME_ID = "active-key-name";
  * "Select active key" label.
  *
  * @remarks
- * Uses Radix UI DropdownMenu for accessible dropdown behavior. Profile
- * metadata is fetched via useProfileMetadata and cached for 5 minutes. All
- * keys share the same vault password and are encrypted at rest.
+ * Uses Radix UI DropdownMenu for accessible dropdown behavior. It is a menu,
+ * not a listbox: the list ends in an "Add Key" action, and a listbox may hold
+ * only options. The keys are `menuitemradio` rows, so the active one is
+ * announced as checked. Profile metadata is fetched via useProfileMetadata and
+ * cached for 5 minutes. All keys share the same vault password and are
+ * encrypted at rest.
  *
  * The header avatar is the selected key's own picture when the user has a local
  * copy of it, and the seal with the key's initial otherwise. The copy is a
@@ -125,9 +128,6 @@ export const KeySelector = memo(function KeySelector({
           )}
           disabled={isSwitching}
           aria-label="Select active key"
-          aria-haspopup="listbox"
-          aria-expanded={isOpen}
-          aria-controls="key-selector-listbox"
         >
           <Avatar shape="seal" className="size-7">
             <OwnAvatarImage
@@ -158,8 +158,6 @@ export const KeySelector = memo(function KeySelector({
         align="start"
         sideOffset={6}
         className="w-[288px] max-w-[calc(100vw-1rem)] p-1.5"
-        role="listbox"
-        id="key-selector-listbox"
         aria-label="Available keys"
       >
         {keys.map((key: UIKeyInfo) => {
@@ -175,8 +173,8 @@ export const KeySelector = memo(function KeySelector({
                 "hover:bg-muted focus:bg-muted focus:outline-none",
                 isSelected && "bg-muted"
               )}
-              role="option"
-              aria-selected={isSelected}
+              role="menuitemradio"
+              aria-checked={isSelected}
               aria-label={`${keyDisplay.displayName} - ${
                 keyDisplay.truncatedNpub
               }${isSelected ? " (currently selected)" : ""}`}

@@ -94,12 +94,12 @@ function trigger(): HTMLButtonElement {
   return button;
 }
 
-function listbox(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('[role="listbox"]');
+function menu(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[role="menu"]');
 }
 
 function options(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));
+  return Array.from(document.querySelectorAll<HTMLElement>('[role="menuitemradio"]'));
 }
 
 function key(target: Element, keyName: string) {
@@ -154,11 +154,10 @@ describe("KeySelector trigger", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("names the active key and exposes the listbox relationship", () => {
+  it("names the active key and announces a menu", () => {
     mount();
     const button = trigger();
-    expect(button.getAttribute("aria-haspopup")).toBe("listbox");
-    expect(button.getAttribute("aria-controls")).toBe("key-selector-listbox");
+    expect(button.getAttribute("aria-haspopup")).toBe("menu");
     expect(button.getAttribute("aria-expanded")).toBe("false");
 
     const heading = container.querySelector("h2");
@@ -295,31 +294,40 @@ describe("KeySelector header avatar", () => {
     avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
     mount();
     open();
-    expect(document.querySelector('[role="listbox"] img')).toBeNull();
+    expect(document.querySelector('[role="menu"] img')).toBeNull();
   });
 });
 
-describe("KeySelector listbox on the rendered DOM", () => {
+describe("KeySelector menu on the rendered DOM", () => {
   it("toggles aria-expanded as the list opens and closes", () => {
     mount();
-    expect(listbox()).toBeNull();
+    expect(menu()).toBeNull();
 
     open();
     expect(trigger().getAttribute("aria-expanded")).toBe("true");
-    const list = listbox();
-    expect(list?.id).toBe("key-selector-listbox");
+    const list = menu();
     expect(list?.getAttribute("aria-label")).toBe("Available keys");
 
     key(document.activeElement ?? list!, "Escape");
-    expect(listbox()).toBeNull();
+    expect(menu()).toBeNull();
     expect(trigger().getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("marks exactly the active key as the selected option", () => {
+  it("marks exactly the active key as the checked item", () => {
     mount();
     open();
-    const selected = options().map((option) => option.getAttribute("aria-selected"));
+    const selected = options().map((option) => option.getAttribute("aria-checked"));
     expect(selected).toEqual(["true", "false", "false"]);
+  });
+
+  it("keeps every row a menu item, so the Add Key action is a legal child", () => {
+    mount(vi.fn());
+    open();
+    const list = menu()!;
+    expect(document.querySelector('[role="listbox"], [role="option"]')).toBeNull();
+    const add = list.querySelector('[aria-label="Add new key"]');
+    expect(add?.getAttribute("role")).toBe("menuitem");
+    expect(list.querySelectorAll('[role="menuitemradio"]')).toHaveLength(3);
   });
 
   it("moves focus between options with the arrow keys", async () => {
@@ -342,7 +350,7 @@ describe("KeySelector listbox on the rendered DOM", () => {
     mount();
     trigger().focus();
     key(trigger(), "ArrowDown");
-    expect(listbox()).not.toBeNull();
+    expect(menu()).not.toBeNull();
     expect(trigger().getAttribute("aria-expanded")).toBe("true");
   });
 
@@ -356,7 +364,7 @@ describe("KeySelector listbox on the rendered DOM", () => {
     await flush();
 
     expect(keyManager.selectKey).toHaveBeenCalledWith("key-alt");
-    expect(listbox()).toBeNull();
+    expect(menu()).toBeNull();
   });
 
   it("does not ask to switch to the key that is already active", async () => {

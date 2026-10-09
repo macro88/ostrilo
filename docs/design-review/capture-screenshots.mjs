@@ -686,7 +686,7 @@ try {
     await safeClick(popup.getByRole("button", { name: /Home/i }));
     await popup.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 10000 });
     await popup.getByLabel("Select active key").click();
-    await popup.getByRole("option").first().waitFor({ timeout: 5000 });
+    await popup.getByRole("menuitemradio").first().waitFor({ timeout: 5000 });
     await screenshot(popup, "27-key-selector-open");
     await popup.keyboard.press("Escape");
   });

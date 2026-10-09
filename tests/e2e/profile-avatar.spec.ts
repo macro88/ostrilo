@@ -183,7 +183,7 @@ function expectNear(actual: number[], expected: readonly number[]) {
 
 async function selectKey(page: Page, label: string) {
   await page.getByRole("button", { name: "Select active key" }).click();
-  await page.getByRole("option", { name: new RegExp(`^${label} - `) }).click();
+  await page.getByRole("menuitemradio", { name: new RegExp(`^${label} - `) }).click();
   await expect(page.getByRole("heading", { level: 2, name: label })).toBeVisible();
 }
 
