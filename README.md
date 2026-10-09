@@ -147,7 +147,6 @@ Current version: [0.9.0](CHANGELOG.md).
 | Profile editing and relay selection | Available |
 | Encrypted key backup and restore | Available during first-key setup |
 | Backup for keys added later | Planned for 1.0 |
-| Independent security review with published findings | Required for 1.0, not yet completed |
 | Encrypted messaging with NIP-44 | Planned |
 | Remote signing with NIP-46 | Planned |
 | Seed-phrase recovery and settings sync across devices | Planned |
