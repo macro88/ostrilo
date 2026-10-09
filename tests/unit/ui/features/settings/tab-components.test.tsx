@@ -499,6 +499,104 @@ describe("options page tab components", () => {
     );
   });
 
+  describe("exporting a log longer than one RPC page", () => {
+    type Stored = { id: string; origin: string; timestamp: number; decision: "allow" };
+    const stored = (count: number): Stored[] =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `entry-${index}`,
+        origin: "https://site.example",
+        timestamp: 1_735_689_600 - index,
+        decision: "allow",
+      }));
+
+    beforeEach(() => vi.mocked(activityGetRecent).mockClear());
+    afterEach(() =>
+      vi
+        .mocked(activityGetRecent)
+        .mockReset()
+        .mockResolvedValue({ entries: [], total: 0 })
+    );
+
+    // The log as the RPC serves it: newest first, one call capped at 100.
+    async function exportWith(
+      retention: number,
+      logAtCall: (call: number) => Stored[]
+    ) {
+      appSettingsMock.settings.maxActivityEntries = retention;
+      let call = 0;
+      vi.mocked(activityGetRecent).mockImplementation(
+        async ({ limit = 10, offset = 0 } = {}) => {
+          const log = logAtCall(call++);
+          return {
+            entries: log.slice(offset, offset + Math.min(limit, 100)),
+            total: log.length,
+          };
+        }
+      );
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+        () => {}
+      );
+      const blobs: Blob[] = [];
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: vi.fn((blob: Blob) => {
+          blobs.push(blob);
+          return "blob:ostrilo-activity";
+        }),
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: vi.fn(),
+      });
+      const container = render(<ActivityLogTab />);
+
+      await clickByTextAsync(container, "Export activity");
+      await act(async () => {});
+
+      return JSON.parse(await blobs[0].text()) as {
+        total: number;
+        entries: Array<{ id: string }>;
+      };
+    }
+
+    it("pages through 250 stored entries when retention is 500", async () => {
+      const log = stored(250);
+      const exported = await exportWith(500, () => log);
+
+      expect(vi.mocked(activityGetRecent).mock.calls).toEqual([
+        [{ limit: 100, offset: 0 }],
+        [{ limit: 100, offset: 100 }],
+        [{ limit: 100, offset: 200 }],
+      ]);
+      expect(exported.total).toBe(250);
+      expect(exported.entries.map((entry) => entry.id)).toEqual(
+        log.map((entry) => entry.id)
+      );
+    });
+
+    it("stops at the retention limit when more is stored than that", async () => {
+      const log = stored(250);
+      const exported = await exportWith(150, () => log);
+
+      expect(exported.entries).toHaveLength(150);
+      expect(
+        vi.mocked(activityGetRecent).mock.calls.map(([args]) => args?.limit)
+      ).toEqual([100, 50]);
+    });
+
+    it("exports an entry recorded mid-export once", async () => {
+      const log = stored(150);
+      const arrival = { ...log[0], id: "arrived-during-export" };
+      const exported = await exportWith(500, (call) =>
+        call === 0 ? log : [arrival, ...log]
+      );
+
+      const ids = exported.entries.map((entry) => entry.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids).toHaveLength(150);
+    });
+  });
+
   it("tells the user when the export fails", async () => {
     vi.mocked(activityGetRecent).mockRejectedValueOnce(new Error("locked"));
     const container = render(<ActivityLogTab />);

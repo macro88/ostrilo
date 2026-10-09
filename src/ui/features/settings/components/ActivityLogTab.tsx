@@ -6,6 +6,7 @@ import {
 } from "@/ui/features/settings/components/shared/SettingsLayout";
 import { useAppSettings } from "@/hooks/useAppSettings";
 import { activityGetRecent } from "@/infrastructure/messaging/client";
+import type { ActivityLogEntry } from "@/domain/types";
 import { useState } from "react";
 
 type ExportStatus = "idle" | "busy" | "success" | "error";
@@ -24,11 +25,37 @@ function downloadJson(filename: string, payload: unknown) {
   URL.revokeObjectURL(url);
 }
 
+// The RPC and the service both cap one request at 100 entries, so a log kept
+// longer than that is read in pages.
+const ACTIVITY_PAGE_SIZE = 100;
+
+async function readActivityEntries(maxEntries: number) {
+  const entries: ActivityLogEntry[] = [];
+  const seen = new Set<string>();
+  let total = 0;
+  let offset = 0;
+
+  while (entries.length < maxEntries) {
+    const limit = Math.min(ACTIVITY_PAGE_SIZE, maxEntries - entries.length);
+    const page = await activityGetRecent({ limit, offset });
+    offset += page.entries.length;
+    total = page.total;
+    for (const entry of page.entries) {
+      // An entry recorded mid-export shifts later pages by one; skip the
+      // repeat rather than export it twice.
+      if (!seen.has(entry.id)) {
+        seen.add(entry.id);
+        entries.push(entry);
+      }
+    }
+    if (page.entries.length < limit || offset >= total) break;
+  }
+
+  return { entries, total };
+}
+
 async function exportActivityLog(maxEntries: number) {
-  const { entries, total } = await activityGetRecent({
-    limit: maxEntries,
-    offset: 0,
-  });
+  const { entries, total } = await readActivityEntries(maxEntries);
   const exportedAt = new Date().toISOString();
 
   downloadJson(`ostrilo-activity-log-${exportedAt.slice(0, 10)}.json`, {
