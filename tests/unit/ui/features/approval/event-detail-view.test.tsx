@@ -221,6 +221,12 @@ describe("what the dialog shows is what gets signed", () => {
     expect(container.textContent).toContain("bytes");
   });
 
+  it("says one byte, not 1 bytes, for a one-byte content", () => {
+    const { container } = renderWith({ content: "+" });
+    expect(container.textContent).toContain("Content · 1 byte");
+    expect(container.textContent).not.toContain("1 bytes");
+  });
+
   it("marks the end of the content, so nothing hides below a fold", () => {
     const { container } = renderWith({ content: "x".repeat(5_000) });
     expect(container.textContent).toContain("end of content");

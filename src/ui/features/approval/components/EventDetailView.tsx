@@ -507,6 +507,8 @@ export function useCopyFeedback(): CopyFeedback {
   return { copied, write };
 }
 
+const byteUnit = (count: number) => (count === 1 ? "byte" : "bytes");
+
 function ContentSection({
   content,
   safeText,
@@ -524,7 +526,7 @@ function ContentSection({
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <h3 className="section-label">
-          Content · <span className="font-mono">{bytes}</span> bytes
+          Content · <span className="font-mono">{bytes}</span> {byteUnit(bytes)}
         </h3>
         <CopyButton text={content} copy={copy} />
       </div>
@@ -578,7 +580,7 @@ function TagsSection({
       <div className="flex items-center justify-between">
         <h3 className="section-label">
           Tags · <span className="font-mono">{tags.length}</span> ·{" "}
-          <span className="font-mono">{bytes}</span> bytes
+          <span className="font-mono">{bytes}</span> {byteUnit(bytes)}
         </h3>
         <CopyButton text={json} copy={copy} />
       </div>
