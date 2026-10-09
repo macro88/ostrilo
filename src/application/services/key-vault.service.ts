@@ -803,11 +803,18 @@ export class KeyVaultService {
       // user chooses another key. Falling back to a different key here would
       // sign as an identity they did not pick. Only a selection that no longer
       // exists in the records falls back to the first key that opened.
+      const stored = settings?.selectedKeyId;
       const selectedKeyId =
-        settings?.selectedKeyId &&
-        records.some((rec) => rec.id === settings.selectedKeyId)
-          ? settings.selectedKeyId
+        stored !== undefined && records.some((rec) => rec.id === stored)
+          ? stored
           : unlockedKeyIds[0];
+      if (selectedKeyId !== stored) {
+        // Written through the path `vault.select` uses, so the settings and the
+        // records' `isSelected` flags - which `nostr-rpc` resolves the signing
+        // key from - agree with the session. Only the selection moves; no key
+        // material or other field of a record is rewritten.
+        await this.selectKeyNow(selectedKeyId);
+      }
 
       await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
         isLocked: false,
@@ -1156,9 +1163,21 @@ export class KeyVaultService {
     });
   }
 
-  private ensureUnlockedKey(keyId?: string): { keyId: string; sk: Uint8Array } {
-    const id = keyId ?? [...this.unlocked.keys()][0];
-    if (!id) throw new Error("no_unlocked_key");
+  /**
+   * The key a call without an explicit ID means: the stored selection.
+   *
+   * Never another key: the first entry of the unlocked map is not "the" key,
+   * and a caller that omits the ID must not sign as whichever opened first.
+   */
+  private async resolveKeyId(keyId?: string): Promise<string> {
+    if (keyId) return keyId;
+    if (this.unlocked.size === 0) throw new Error("no_unlocked_key");
+    const selected = (await this.getSettings())?.selectedKeyId;
+    if (!selected) throw new Error("no_unlocked_key");
+    return selected;
+  }
+
+  private ensureUnlockedKey(id: string): { keyId: string; sk: Uint8Array } {
     const sk = this.unlocked.get(id);
     if (!sk) {
       // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract, not a deployment identifier or credential: nostr-rpc matches this exact string and maps it to RPC_ERROR_CODES. Moving it to an environment variable would break the mapping.
@@ -1185,7 +1204,7 @@ export class KeyVaultService {
   ): Promise<{ sigHex: string; keyId: string }> {
     if (!isValidHex(hashHex, 32)) throw new Error("hash_must_be_32_bytes");
     const bytes = hexToBytes(hashHex);
-    const { keyId: id, sk } = this.ensureUnlockedKey(keyId);
+    const { keyId: id, sk } = this.ensureUnlockedKey(await this.resolveKeyId(keyId));
     const sig = await this.schnorr.sign(bytes, sk);
     return { sigHex: bytesToHex(sig), keyId: id };
   }
@@ -1195,7 +1214,8 @@ export class KeyVaultService {
    * Computes event ID and signature for an unsigned event.
    *
    * @param unsignedEvent - Event without id and sig fields
-   * @param keyId - Optional key ID (uses selected key if omitted)
+   * @param keyId - Optional key ID (the stored selected key if omitted, never
+   *   another key; a selected key that is not open fails rather than falling back)
    * @returns Signed event with id and sig
    */
   async signEvent(

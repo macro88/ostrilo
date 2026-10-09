@@ -185,8 +185,13 @@ export class ProfileService {
       content: JSON.stringify(validated),
     };
 
-    // Sign event via KeyVaultService
-    const signedEvent = await this.keyVault.signEvent(unsignedEvent);
+    // Signed by the key whose pubkey the event carries. Without the ID the
+    // vault used to pick its first key, so a profile for any other selected key
+    // carried that key's pubkey and another key's signature.
+    const signedEvent = await this.keyVault.signEvent(
+      unsignedEvent,
+      selectedKey.id
+    );
 
     // Publish to relay and update cache optimistically
     await Promise.all([

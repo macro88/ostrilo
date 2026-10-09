@@ -7,10 +7,15 @@ import type { ActivityLogService } from "@/application/services/activity-log.ser
 import type { KeyVaultService } from "@/application/services/key-vault.service";
 import type { StorageSuite } from "@/application/ports/storage";
 import { memoryStorage } from "../../helpers/vault";
+import { computeEventId } from "@/application/crypto/event-id";
+import { NobleSchnorr, NobleSha256 } from "@/infrastructure/crypto/adapters";
+import { hexToBytes } from "@/domain/utils/hex";
+import type { KeyRecord } from "@/domain/types";
 import {
   MemoryRelay,
   PUBKEY_ONE,
   SECRET_ONE,
+  SECRET_TWO,
   STRONG_PASSWORD,
   dataOf,
   errorCodeOf,
@@ -80,6 +85,44 @@ describe("profile.update", () => {
     const res = await send({ type: "profile.update", params: { metadata: { name: "Alice" } } });
 
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.LOCKED);
+    expect(relay.published).toHaveLength(0);
+  });
+});
+
+describe("profile.update with several keys", () => {
+  it("signs with the selected key, not the first key of the vault", async () => {
+    const second = await vault.importKey(SECRET_TWO, STRONG_PASSWORD, "second");
+    await vault.selectKey(second.id);
+    await vault.unlock(STRONG_PASSWORD);
+
+    const res = await send({ type: "profile.update", params: { metadata: { name: "Bob" } } });
+
+    expect(res).toEqual({ ok: true, data: null });
+    const event = relay.published[0];
+    expect(event.pubkey).toBe(second.pubkey);
+    const id = computeEventId(NobleSha256, event as never);
+    expect(id).toBe(event.id);
+    expect(
+      NobleSchnorr.verify(hexToBytes(event.sig), hexToBytes(id), hexToBytes(second.pubkey))
+    ).toBe(true);
+  });
+
+  it("refuses when the selected key could not be opened, publishing nothing and naming no key", async () => {
+    const second = await vault.importKey(SECRET_TWO, STRONG_PASSWORD, "second");
+    await vault.selectKey(second.id);
+    await vault.lock();
+    const stored = (await storage.local.get<KeyRecord[]>("encryptedKeys")) ?? [];
+    await storage.local.set(
+      "encryptedKeys",
+      stored.map((k) => (k.id === second.id ? { ...k, wrappedDek: undefined } : k))
+    );
+    await vault.unlock(STRONG_PASSWORD);
+
+    const res = await send({ type: "profile.update", params: { metadata: { name: "Bob" } } });
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
+    expect(JSON.stringify(res)).not.toContain("key_unreadable");
+    expect(JSON.stringify(res)).not.toContain(second.id);
     expect(relay.published).toHaveLength(0);
   });
 });
