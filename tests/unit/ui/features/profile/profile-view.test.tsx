@@ -6,16 +6,29 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ProfileMetadata } from "@/domain/profile/types";
 import type { UIKeyInfo } from "@/ui/state/KeyManagerContext";
+import type { AvatarRow } from "@/domain/profile/avatar";
 
 type RpcRequest = { type: string; params: { pubkey?: string; forceFetch?: boolean; metadata?: ProfileMetadata } };
 
 const client = vi.hoisted(() => ({
   rpc: vi.fn<(request: RpcRequest) => Promise<unknown>>(),
+  getOwnAvatar: vi.fn<(pubkey: string) => Promise<AvatarRow | null>>(),
+  saveOwnAvatar: vi.fn<(copy: { pubkey: string; sourceUrl: string; dataUrl: string }) => Promise<null>>(),
+  removeOwnAvatar: vi.fn<(pubkey: string) => Promise<null>>(),
+}));
+
+const capture = vi.hoisted(() => ({
+  captureAvatar: vi.fn<(url: string) => Promise<string>>(),
 }));
 
 const keys = vi.hoisted(() => ({ selected: null as unknown }));
 
 vi.mock("@/infrastructure/messaging/client", () => client);
+
+vi.mock("@/ui/lib/avatar-capture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ui/lib/avatar-capture")>()),
+  captureAvatar: capture.captureAvatar,
+}));
 
 vi.mock("@/ui/features/authentication/hooks/useKeyManager", () => ({
   useKeyManager: () => ({ selectedUnlockedKey: keys.selected }),
@@ -120,6 +133,10 @@ beforeEach(() => {
     if (request.type === "profile.update") return updateOutcome(request.params.metadata!);
     throw new Error(`unexpected ${request.type}`);
   });
+  capture.captureAvatar.mockReset().mockResolvedValue("data:image/webp;base64,AAAA");
+  client.getOwnAvatar.mockReset().mockResolvedValue(null);
+  client.saveOwnAvatar.mockReset().mockResolvedValue(null);
+  client.removeOwnAvatar.mockReset().mockResolvedValue(null);
   consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -374,5 +391,125 @@ describe("ProfileView editing", () => {
     await click(buttonByText("Remove")!);
     expect(field("picture").value).toBe("");
     expect(buttonByText("Remove")).toBeUndefined();
+  });
+});
+
+describe("ProfileView picture copy", () => {
+  async function saveWith(picture: string) {
+    await mount();
+    await click(buttonByText("Edit Profile")!);
+    type("picture", picture);
+    await click(buttonByText("Save Changes")!);
+  }
+
+  it("loads no image when the profile opens", async () => {
+    await mount();
+    expect(capture.captureAvatar).not.toHaveBeenCalled();
+    expect(client.saveOwnAvatar).not.toHaveBeenCalled();
+  });
+
+  it("loads the saved picture once and stores the copy under the key's public key", async () => {
+    await saveWith("https://cdn.example/new.png");
+
+    expect(capture.captureAvatar).toHaveBeenCalledTimes(1);
+    expect(capture.captureAvatar).toHaveBeenCalledWith("https://cdn.example/new.png");
+    expect(client.saveOwnAvatar).toHaveBeenCalledWith({
+      pubkey: HEX,
+      sourceUrl: "https://cdn.example/new.png",
+      dataUrl: "data:image/webp;base64,AAAA",
+    });
+    expect(container.textContent).toContain("The header now shows this picture.");
+  });
+
+  it("drops the copy when a save clears the picture, and loads nothing", async () => {
+    await mount();
+    await click(buttonByText("Edit Profile")!);
+    await click(buttonByText("Remove")!);
+    await click(buttonByText("Save Changes")!);
+
+    expect(capture.captureAvatar).not.toHaveBeenCalled();
+    expect(client.removeOwnAvatar).toHaveBeenCalledWith(HEX);
+  });
+
+  it("does not touch the copy when the save itself fails", async () => {
+    updateOutcome = async () => {
+      throw new Error("relay refused");
+    };
+    await saveWith("https://cdn.example/new.png");
+
+    expect(capture.captureAvatar).not.toHaveBeenCalled();
+    expect(client.removeOwnAvatar).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the copy on request, once per press", async () => {
+    await mount();
+    await click(buttonByText("Refresh picture")!);
+
+    expect(capture.captureAvatar).toHaveBeenCalledTimes(1);
+    expect(capture.captureAvatar).toHaveBeenCalledWith("https://cdn.example/alice.png");
+    expect(client.saveOwnAvatar).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no refresh when the profile has no picture", async () => {
+    stored = { name: "alice" };
+    await mount();
+    expect(buttonByText("Refresh picture")).toBeUndefined();
+  });
+
+  it("says why when the host does not allow a copy, and never retries", async () => {
+    const { AvatarCaptureError } = await import("@/ui/lib/avatar-capture");
+    capture.captureAvatar.mockRejectedValue(new AvatarCaptureError("tainted"));
+    await mount();
+    await click(buttonByText("Refresh picture")!);
+
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      "This image host doesn't allow Ostrilo to keep a copy."
+    );
+    expect(client.saveOwnAvatar).not.toHaveBeenCalled();
+    expect(capture.captureAvatar).toHaveBeenCalledTimes(1);
+    await flush();
+    expect(capture.captureAvatar).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes a copy made from a picture the user has since replaced", async () => {
+    const { AvatarCaptureError } = await import("@/ui/lib/avatar-capture");
+    capture.captureAvatar.mockRejectedValue(new AvatarCaptureError("load-failed"));
+    client.getOwnAvatar.mockResolvedValue({
+      pubkey: HEX,
+      sourceUrl: "https://cdn.example/old.png",
+      dataUrl: "data:image/webp;base64,AAAA",
+      at: 1,
+    });
+    await mount();
+    await click(buttonByText("Refresh picture")!);
+
+    expect(client.removeOwnAvatar).toHaveBeenCalledWith(HEX);
+  });
+
+  it("keeps a copy of the same picture when a refresh fails", async () => {
+    const { AvatarCaptureError } = await import("@/ui/lib/avatar-capture");
+    capture.captureAvatar.mockRejectedValue(new AvatarCaptureError("timeout"));
+    client.getOwnAvatar.mockResolvedValue({
+      pubkey: HEX,
+      sourceUrl: PUBLISHED.picture!,
+      dataUrl: "data:image/webp;base64,AAAA",
+      at: 1,
+    });
+    await mount();
+    await click(buttonByText("Refresh picture")!);
+
+    expect(client.removeOwnAvatar).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("took too long");
+  });
+
+  it("reports a failure to store the copy without claiming success", async () => {
+    client.saveOwnAvatar.mockRejectedValue(new Error("locked"));
+    await mount();
+    await click(buttonByText("Refresh picture")!);
+
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(
+      "couldn't save the copy"
+    );
+    expect(container.textContent).not.toContain("The header now shows this picture.");
   });
 });

@@ -5,6 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ProfileMetadata } from "@/domain/profile/types";
+import type { AvatarRow } from "@/domain/profile/avatar";
 import type { UIKeyInfo } from "@/ui/state/KeyManagerContext";
 
 const keyManager = vi.hoisted(() => ({
@@ -16,6 +17,18 @@ const keyManager = vi.hoisted(() => ({
 const profileState = vi.hoisted(() => ({
   profiles: new Map<string, ProfileMetadata>(),
   requested: [] as string[][],
+}));
+
+const avatarState = vi.hoisted(() => ({
+  rows: new Map<string, AvatarRow>(),
+  requested: [] as Array<string | null>,
+}));
+
+vi.mock("@/ui/hooks/useOwnAvatar", () => ({
+  useOwnAvatar: (pubkey: string | null) => {
+    avatarState.requested.push(pubkey);
+    return pubkey ? (avatarState.rows.get(pubkey) ?? null) : null;
+  },
 }));
 
 vi.mock("@/ui/features/authentication/hooks/useKeyManager", () => ({
@@ -121,6 +134,8 @@ beforeEach(() => {
   keyManager.selectKey.mockReset().mockResolvedValue(undefined);
   profileState.profiles = new Map();
   profileState.requested = [];
+  avatarState.rows = new Map();
+  avatarState.requested = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -197,6 +212,68 @@ describe("KeySelector trigger", () => {
     expect(trigger().textContent?.startsWith("Z")).toBe(true);
     open();
     expect(document.querySelector("img")).toBeNull();
+  });
+});
+
+// A real 1x1 PNG, so the stored-copy policy accepts it.
+const PNG_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+function copyFor(key: UIKeyInfo): AvatarRow {
+  return {
+    pubkey: key.publicKeyHex,
+    dataUrl: PNG_DATA_URL,
+    sourceUrl: "https://images.example/a.png",
+    at: 1,
+  };
+}
+
+describe("KeySelector header avatar", () => {
+  it("shows the selected key's own local copy, named for the identity", () => {
+    avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
+    mount();
+
+    const img = trigger().querySelector("img");
+    expect(img?.getAttribute("src")).toBe(PNG_DATA_URL);
+    expect(img?.getAttribute("alt")).toBe("Main");
+    expect(img?.getAttribute("width")).toBe("28");
+    expect(img?.getAttribute("height")).toBe("28");
+  });
+
+  it("looks up only the selected key's public key", () => {
+    mount();
+    expect(avatarState.requested.at(-1)).toBe(MAIN.publicKeyHex);
+  });
+
+  it("falls back to the seal initial when there is no copy", () => {
+    mount();
+    expect(trigger().querySelector("img")).toBeNull();
+    expect(trigger().textContent?.startsWith("M")).toBe(true);
+  });
+
+  it("shows no image for an unreadable key and asks for no copy", () => {
+    keyManager.selectedUnlockedKey = { ...MAIN, isUnreadable: true };
+    keyManager.keys = [keyManager.selectedUnlockedKey];
+    avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
+    mount();
+    expect(avatarState.requested.at(-1)).toBeNull();
+    expect(trigger().querySelector("img")).toBeNull();
+  });
+
+  it("refuses a copy whose source is not a data URL", () => {
+    avatarState.rows = new Map([
+      [MAIN.publicKeyHex, { ...copyFor(MAIN), dataUrl: "https://relay.example/a.png" }],
+    ]);
+    mount();
+    expect(trigger().querySelector("img")).toBeNull();
+    expect(document.querySelector('img[src^="http"]')).toBeNull();
+  });
+
+  it("keeps the list rows as seals even when the selected key has a copy", () => {
+    avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
+    mount();
+    open();
+    expect(document.querySelector('[role="listbox"] img')).toBeNull();
   });
 });
 

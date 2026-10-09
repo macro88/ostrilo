@@ -10,6 +10,8 @@ import {
 import { Avatar, AvatarFallback } from "@/ui/components/ui/avatar";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { useProfileMetadata } from "@/ui/hooks/useProfileMetadata";
+import { useOwnAvatar } from "@/ui/hooks/useOwnAvatar";
+import { OwnAvatarImage } from "@/ui/components/common/OwnAvatarImage";
 import { cn } from "@/lib/utils";
 import type { UIKeyInfo } from "@/ui/state/KeyManagerContext";
 
@@ -42,10 +44,13 @@ const ACTIVE_KEY_NAME_ID = "active-key-name";
  * metadata is fetched via useProfileMetadata and cached for 5 minutes. All
  * keys share the same vault password and are encrypted at rest.
  *
- * Avatars are always the local seal with the key's initial. A relay chooses the
- * profile picture URL, and this is the surface on which the user confirms which
- * identity is about to sign, so no request is ever made to a relay-supplied host
- * from here.
+ * The header avatar is the selected key's own picture when the user has a local
+ * copy of it, and the seal with the key's initial otherwise. The copy is a
+ * `data:` image made on the Profile page when the user saved or refreshed their
+ * profile. A relay chooses the profile picture URL, and this is the surface on
+ * which the user confirms which identity is about to sign, so no request is
+ * ever made to that host from here: nothing on this surface loads a remote
+ * image. The list rows below are always the seal.
  */
 export const KeySelector = memo(function KeySelector({
   onAddKey,
@@ -57,6 +62,12 @@ export const KeySelector = memo(function KeySelector({
   // Fetch profile metadata for all keys
   const pubkeys = keys.map((key: UIKeyInfo) => key.publicKeyHex);
   const { profiles } = useProfileMetadata(pubkeys);
+
+  const ownAvatar = useOwnAvatar(
+    selectedUnlockedKey && !selectedUnlockedKey.isUnreadable
+      ? selectedUnlockedKey.publicKeyHex
+      : null
+  );
 
   const handleSelectKey = async (keyId: string) => {
     if (keyId === selectedUnlockedKey?.id || isSwitching) return;
@@ -122,6 +133,12 @@ export const KeySelector = memo(function KeySelector({
             <AvatarFallback className="bg-secondary text-xs font-bold text-secondary-foreground">
               {currentKeyDisplay.displayName.charAt(0).toUpperCase()}
             </AvatarFallback>
+            <OwnAvatarImage
+              key={ownAvatar?.pubkey}
+              avatar={ownAvatar}
+              alt={currentKeyDisplay.displayName}
+              size={28}
+            />
           </Avatar>
           <span id={ACTIVE_KEY_NAME_ID} className="truncate">
             {currentKeyDisplay.displayName}

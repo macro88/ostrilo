@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useProfile } from "@/ui/hooks/useProfile";
+import { useProfilePicture } from "../hooks/useProfilePicture";
 import type { ProfileMetadata } from "@/domain/profile/types";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { ProfileEditForm } from "./ProfileEditForm";
@@ -36,6 +37,8 @@ export function ProfileView() {
   const [isEditing, setIsEditing] = useState(false);
   const { profile, loading, error, updateProfile, refresh } =
     useProfile(selectedPubkey);
+
+  const picture = useProfilePicture(selectedPubkey);
 
   const [formData, setFormData] = useState<ProfileMetadata>({});
   const [focusField, setFocusField] = useState<ProfileEditField | undefined>();
@@ -90,6 +93,14 @@ export function ProfileView() {
       await updateProfile(cleanedData);
       setIsEditing(false);
       setFocusField(undefined);
+
+      // The save is published; the header's copy follows it. Not awaited: the
+      // image load can take its full timeout and the save is already done.
+      if (cleanedData.picture) {
+        void picture.cache(cleanedData.picture);
+      } else {
+        void picture.clear();
+      }
     } catch (err) {
       console.error("Failed to save profile:", err);
       setSaveError(
@@ -165,6 +176,10 @@ export function ProfileView() {
       npub={npub}
       onEdit={handleEditClick}
       onRefresh={handleRefresh}
+      pictureStatus={picture.status}
+      onRefreshPicture={() => {
+        if (profile?.picture) void picture.cache(profile.picture);
+      }}
     />
   );
 }
