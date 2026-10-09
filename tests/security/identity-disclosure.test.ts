@@ -7,6 +7,7 @@ import {
   DISCLOSURE_RATE_LIMITS,
 } from "@/application/services/disclosure-rate-limit.service";
 import type { ActivityLogEntry } from "@/domain/types";
+import { memoryStorage } from "../helpers/vault";
 
 /**
  * `nostr.getPublicKey` had no origin, no rate limit and no audit entry. The
@@ -357,6 +358,30 @@ describe("a disclosure flood cannot crowd out a signature", () => {
   });
 });
 
+describe("a disclosure window survives a worker restart", () => {
+  it("refuses the first call a restarted worker receives when the stored window is full", async () => {
+    const storage = memoryStorage().session;
+    const before = new DisclosureRateLimitService(() => now, storage);
+    for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow; i++) {
+      before.tryConsume("https://flood.example");
+    }
+    await before.settled();
+
+    // A new worker: nothing in memory, and the request arrives before the
+    // stored window has been read.
+    const restarted = new DisclosureRateLimitService(() => now, storage);
+    const res = await new NostrRpcHandler().handleRequest(
+      ask("https://flood.example"),
+      consented({ disclosureRateLimit: restarted })
+    );
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+    }
+  });
+});
+
 describe("public key disclosure requires per-origin consent", () => {
   /** A queue stub whose prompt answers with `decision`. */
   function queueAnswering(
@@ -376,6 +401,7 @@ describe("public key disclosure requires per-origin consent", () => {
           queueMicrotask(() => resolver(decision, decision));
           return request;
         },
+        ready: async () => {},
         wasTimeout: () => options.timedOut ?? false,
         resolve: () => true,
       },
@@ -583,6 +609,7 @@ describe("a locked vault never reaches the consent gate", () => {
           enqueued.push(origin);
           return { id: "x", origin };
         },
+        ready: async () => {},
         wasTimeout: () => false,
         resolve: () => true,
       },

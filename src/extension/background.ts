@@ -19,6 +19,7 @@ import {
 import { ActivityLogService } from "@/application/services/activity-log.service";
 import { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
 import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
+import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import { UserPresenceService } from "@/application/services/user-presence.service";
 import { ProfileService } from "@/application/services/profile.service";
 import { RelayManager } from "@/infrastructure/relay";
@@ -280,10 +281,14 @@ export default defineBackground(() => {
   // service-worker termination, so a timer-based lockout would evaporate.
   const unlockThrottle = new UnlockThrottleService(storage.local);
 
-  // In memory, unlike the unlock throttle: the attack it bounds is a fast
-  // polling loop, and a page polling fast enough to matter keeps this worker
-  // alive. See the module comment.
-  const disclosureRateLimit = new DisclosureRateLimitService();
+  // Windows persist in storage.session so an evicted worker does not hand
+  // every origin a fresh allowance. Session storage rather than local: a
+  // counter should not outlive the browser session it meters.
+  const disclosureRateLimit = new DisclosureRateLimitService(
+    undefined,
+    storage.session
+  );
+  const autoSignBudget = new AutoSignBudgetService(undefined, storage.session);
 
   // Separates "a person is here" from "a page is doing things" when a
   // silently-signed request asks to postpone the auto-lock deadline. The idle
@@ -302,6 +307,7 @@ export default defineBackground(() => {
     profile,
     unlockThrottle,
     disclosureRateLimit,
+    autoSignBudget,
     presence,
     onLockedPageRequest: () => {
       void setLockedRequestPending(true, approvalQueue.count());
@@ -309,7 +315,7 @@ export default defineBackground(() => {
   };
 
   // Create approval queue service
-  const approvalQueue = new ApprovalQueueService();
+  const approvalQueue = new ApprovalQueueService(undefined, storage.session);
 
   // Keeps this worker alive while the vault is unlocked. See "Auto-lock" below.
   // `getPlatformInfo` is the cheapest extension API call there is: it reads a

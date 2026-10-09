@@ -153,7 +153,10 @@ export class NostrRpcHandler implements RpcModule {
     }
 
     // Charged before the key is read, and never when the origin is over its
-    // allowance. A refusal here queues nothing and prompts nobody.
+    // allowance. A refusal here queues nothing and prompts nobody. The window
+    // is read back from session storage first, so a worker that was evicted
+    // while locked does not hand the origin a fresh allowance.
+    await context.disclosureRateLimit.ready();
     if (!context.disclosureRateLimit.tryConsume(origin)) {
       await context.activityLog.addEntry({
         origin,
@@ -290,6 +293,7 @@ export class NostrRpcHandler implements RpcModule {
     pubkey: string,
     clientRequestId?: string
   ): Promise<ApprovalDecision | "timeout"> {
+    await this.approvalQueue!.ready();
     return new Promise<ApprovalDecision | "timeout">((resolve, reject) => {
       const pendingRequest = this.approvalQueue!.enqueueDisclosure(
         origin,
@@ -399,9 +403,22 @@ export class NostrRpcHandler implements RpcModule {
       });
     }
 
+    // The auto-sign budget belongs here, where policy has decided to sign
+    // without a prompt and the key is already resolved. Over budget is not a
+    // refusal: the request takes the same path an `ask` decision does, so the
+    // user is asked and the queue's own limits apply.
+    const signsWithoutPrompt =
+      policyResult.mode === "allow" && !isProtectedKind(event.kind);
+    let overAutoSignBudget = false;
+    if (signsWithoutPrompt) {
+      await context.autoSignBudget.ready();
+      overAutoSignBudget = !context.autoSignBudget.tryConsume(message.origin);
+    }
+
     const requiresApproval =
       policyResult.mode === "ask" ||
-      (policyResult.mode === "allow" && isProtectedKind(event.kind));
+      (policyResult.mode === "allow" && isProtectedKind(event.kind)) ||
+      overAutoSignBudget;
 
     if (requiresApproval) {
       // Need approval - queue the request and open popup
@@ -429,7 +446,8 @@ export class NostrRpcHandler implements RpcModule {
           event,
           pubkey,
           eventIdHash,
-          message.clientRequestId
+          message.clientRequestId,
+          overAutoSignBudget
         );
 
         console.log("[NostrRpcHandler] Approval decision:", decision);
@@ -633,8 +651,11 @@ export class NostrRpcHandler implements RpcModule {
     event: UnsignedEvent,
     pubkey: string,
     eventIdHash: string,
-    clientRequestId?: string
+    clientRequestId?: string,
+    exceededAutoSignBudget = false
   ): Promise<ApprovalDecision | "timeout"> {
+    // Judged against the enqueue window the worker had before any restart.
+    await this.approvalQueue!.ready();
     return new Promise<ApprovalDecision | "timeout">((resolve, reject) => {
       // Enqueue the request with event ID hash for de-duplication
       const pendingRequest = this.approvalQueue!.enqueue(
@@ -656,7 +677,7 @@ export class NostrRpcHandler implements RpcModule {
         // The key that will actually sign, bound to the request here, so the
         // dialog cannot show a different one if the user switches keys while
         // the prompt is open.
-        { signingPubkey: pubkey, clientRequestId }
+        { signingPubkey: pubkey, clientRequestId, exceededAutoSignBudget }
       );
 
       // Open approval popup

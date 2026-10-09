@@ -348,6 +348,7 @@ describe("revocation actually revokes", () => {
         queueMicrotask(() => resolver("allow"));
         return { id: "x", origin };
       },
+      ready: async () => {},
       wasTimeout: () => false,
       resolve: () => true,
     };
@@ -367,7 +368,7 @@ describe("revocation actually revokes", () => {
         setIdentityDisclosure: async () => {},
       },
       activityLog: { addEntry: async () => {} },
-      disclosureRateLimit: { tryConsume: () => true },
+      disclosureRateLimit: { ready: async () => {}, tryConsume: () => true },
     };
 
     await handler.handleRequest(

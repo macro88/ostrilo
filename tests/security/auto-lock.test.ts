@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import {
   WebCryptoAesGcm,
@@ -592,6 +593,7 @@ describe("a signature postpones the lock only when someone is there", () => {
       presence,
       policy: { async evaluate() { return { mode: "allow" }; } },
       activityLog: { async addEntry() {} },
+      autoSignBudget: new AutoSignBudgetService(),
     } as unknown as ServiceContext;
   }
 

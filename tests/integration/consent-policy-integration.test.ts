@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
 import { ApprovalRpcHandler } from "@/infrastructure/messaging/handlers/approval-rpc";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
@@ -80,6 +81,7 @@ describe("consent policy integration", () => {
       },
       policy,
       activityLog: { addEntry: vi.fn().mockResolvedValue(undefined) },
+      autoSignBudget: new AutoSignBudgetService(),
       settings: { get: vi.fn(), update: vi.fn() },
     } as unknown as ServiceContext;
   });

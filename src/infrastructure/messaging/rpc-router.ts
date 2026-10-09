@@ -9,6 +9,7 @@ import type { ActivityLogService } from "@/application/services/activity-log.ser
 import type { ProfileService } from "@/application/services/profile.service";
 import type { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
 import type { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
+import type { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import type { UserPresenceService } from "@/application/services/user-presence.service";
 
 /**
@@ -22,6 +23,11 @@ export interface ServiceContext {
   profile: ProfileService;
   unlockThrottle: UnlockThrottleService;
   disclosureRateLimit: DisclosureRateLimitService;
+  /**
+   * Meters requests that site policy signs without a prompt. Required rather
+   * than optional: a context built without it would sign unmetered.
+   */
+  autoSignBudget: AutoSignBudgetService;
   /**
    * Answers whether a user is at the machine, for the one path that needs it:
    * a signature produced without an approval prompt, asking to postpone the
