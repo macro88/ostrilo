@@ -41,6 +41,7 @@ import {
   ActivityRpcHandler,
   ProfileRpcHandler,
   BackupRpcHandler,
+  AvatarRpcHandler,
 } from "@/infrastructure/messaging/handlers";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 
@@ -403,6 +404,7 @@ export default defineBackground(() => {
   router.registerModule("activity", new ActivityRpcHandler()); // Activity log operations
   router.registerModule("profile", new ProfileRpcHandler()); // Profile metadata operations
   router.registerModule("backup", new BackupRpcHandler()); // Per-key backup status
+  router.registerModule("avatar", new AvatarRpcHandler()); // Local copy of a key's profile picture
 
   // Register the RPC message listener
   browser.runtime.onMessage.addListener(

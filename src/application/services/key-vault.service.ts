@@ -41,6 +41,7 @@ import {
 } from "./vault-rotation-journal";
 import { SettingsStore } from "./settings-store";
 import { KeyBackupStatusService } from "./key-backup-status.service";
+import { ProfileAvatarService } from "./profile-avatar.service";
 
 const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
 const VAULT_ENVELOPE_STORAGE = "vaultEnvelope";
@@ -136,6 +137,14 @@ export class KeyVaultService {
      * drops a deleted key's record: a key cannot exist without its status.
      */
     readonly backupStatus: KeyBackupStatusService = new KeyBackupStatusService(
+      storage.local
+    ),
+    /**
+     * The local copy of each key's profile picture. Held here for the same
+     * reason as the backup status: the vault is where a key stops existing, so
+     * it is where the copy for that public key is dropped.
+     */
+    readonly profileAvatar: ProfileAvatarService = new ProfileAvatarService(
       storage.local
     )
   ) {}
@@ -664,6 +673,13 @@ export class KeyVaultService {
       await this.backupStatus.remove(id);
     } catch (error) {
       console.warn("[Vault] could not drop a deleted key's backup status:", error);
+    }
+    // The picture copy is keyed by public key. A copy left behind is dropped by
+    // the next save, which keeps only keys the vault still holds.
+    try {
+      await this.profileAvatar.remove(records[keyIndex].pubkey);
+    } catch (error) {
+      console.warn("[Vault] could not drop a deleted key's picture copy:", error);
     }
 
     return { newSelectedKeyId };

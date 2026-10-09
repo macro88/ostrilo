@@ -116,6 +116,11 @@ export type RpcRequest =
     }
   | { type: "activity.origins" }
   | { type: "activity.clear" }
+  // The local copy of a key's profile picture. The UI makes the copy; the
+  // background only stores it, and never fetches the picture.
+  | { type: "avatar.get"; pubkey: string }
+  | { type: "avatar.save"; pubkey: string; sourceUrl: string; dataUrl: string }
+  | { type: "avatar.remove"; pubkey: string }
   // Profile operations
   | { type: "profile.get"; params: { pubkey: string; forceFetch?: boolean } }
   | { type: "profile.getAll" }

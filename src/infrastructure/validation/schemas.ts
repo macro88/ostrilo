@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { RelayUrlListSchema } from "@/domain/relay/url";
+import { isAvatarDataUrl } from "@/domain/profile/avatar";
+import { isAllowedRemoteUrl } from "@/domain/profile/types";
 import {
   PASSWORD_POLICY,
   checkPassword,
@@ -324,6 +326,36 @@ export const UnsignedEventSchema = z
         "Event content or tags contain an unpaired surrogate code unit",
     }
   );
+
+/** A public key as the avatar requests name it: 64 lowercase hex characters. */
+export const AvatarPubkeySchema = HexString32Schema;
+
+/**
+ * What `avatar.save` accepts. The picture URL goes through the same `https:`
+ * allowlist as every other remote URL, and the encoded image through the avatar
+ * policy: type, size and a header that matches the declared type.
+ */
+export const AvatarSaveParamsSchema = z.object({
+  pubkey: AvatarPubkeySchema,
+  sourceUrl: z.string().refine(isAllowedRemoteUrl, {
+    message: "Picture URL must use the https: scheme",
+  }),
+  dataUrl: z.string().refine(isAvatarDataUrl, {
+    message: "Image must be a webp or png data URL of at most 64 KiB",
+  }),
+});
+
+/** What `avatar.get` returns, checked where the UI receives it. */
+export const AvatarGetResponseSchema = z.object({
+  avatar: z
+    .object({
+      pubkey: AvatarPubkeySchema,
+      sourceUrl: z.string().refine(isAllowedRemoteUrl),
+      dataUrl: z.string().refine(isAvatarDataUrl),
+      at: z.number().finite(),
+    })
+    .nullable(),
+});
 
 // Infer types from schemas
 export type UnsignedEventInput = z.infer<typeof UnsignedEventSchema>;

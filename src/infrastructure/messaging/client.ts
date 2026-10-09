@@ -7,8 +7,10 @@ import type {
   LockStatePayload,
 } from "./rpc";
 import type { KeyBackupStatusRow } from "@/domain/backup/status";
+import type { AvatarRow } from "@/domain/profile/avatar";
 import {
   ActivityOriginsResponseSchema,
+  AvatarGetResponseSchema,
   BackupListResponseSchema,
   type AppSettingsPatch,
   type OriginPolicyPatch,
@@ -331,6 +333,42 @@ export function subscribeKeyBackupChanged(cb: () => void) {
 /** Records that a backup of this key was made and checked. */
 export async function markKeyBackupVerified(keyId: string) {
   return rpc<null>({ type: "backup.markVerified", keyId });
+}
+
+/** The local copy of this public key's picture, or null when there is none. */
+export async function getOwnAvatar(pubkey: string): Promise<AvatarRow | null> {
+  const data = await rpc<unknown>({ type: "avatar.get", pubkey });
+  return AvatarGetResponseSchema.parse(data).avatar;
+}
+
+/** Stores the shrunken picture the Profile page made from `sourceUrl`. */
+export async function saveOwnAvatar(copy: {
+  pubkey: string;
+  sourceUrl: string;
+  dataUrl: string;
+}) {
+  return rpc<null>({ type: "avatar.save", ...copy });
+}
+
+/** Drops the local copy of this public key's picture. */
+export async function removeOwnAvatar(pubkey: string) {
+  return rpc<null>({ type: "avatar.remove", pubkey });
+}
+
+/** Calls `cb` when a picture copy was saved or removed. Returns the unsubscribe. */
+export function subscribeAvatarChanged(cb: () => void) {
+  const handler = (msg: unknown) => {
+    if (
+      typeof msg === "object" &&
+      msg !== null &&
+      (msg as { __event?: unknown }).__event ===
+        BROADCAST_EVENTS.PROFILE_AVATAR_CHANGED
+    ) {
+      cb();
+    }
+  };
+  browser.runtime.onMessage.addListener(handler);
+  return () => browser.runtime.onMessage.removeListener(handler);
 }
 
 export async function revealKey(password: string, keyId?: string) {

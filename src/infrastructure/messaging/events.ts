@@ -10,6 +10,8 @@ export const BROADCAST_EVENTS = {
   VAULT_LOCKED: "ostrilo.vault.locked",
   /** A key's backup was verified, so a surface showing its status should re-read it. */
   KEY_BACKUP_CHANGED: "ostrilo.keyBackup.changed",
+  /** A key's local profile picture copy was saved or removed; the header re-reads it. */
+  PROFILE_AVATAR_CHANGED: "ostrilo.profileAvatar.changed",
 } as const;
 
 /**

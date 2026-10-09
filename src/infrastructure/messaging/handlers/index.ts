@@ -8,3 +8,4 @@ export { ApprovalRpcHandler } from "./approval-rpc";
 export { ActivityRpcHandler } from "./activity-rpc";
 export { ProfileRpcHandler } from "./profile-rpc";
 export { BackupRpcHandler } from "./backup-rpc";
+export { AvatarRpcHandler } from "./avatar-rpc";
