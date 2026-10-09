@@ -17,7 +17,7 @@ been set for them.
   backed up. Quick start is offered only on a new install and never changes an
   existing vault.
 - **Back up any key from Settings.** Settings → Keys & Identities has a **Back
-  up** button on every key. It asks for your master password, writes the same
+  up** button on every readable key. It asks for your master password, writes the same
   encrypted backup file as first-key onboarding, with its own passphrase, and
   then asks you to open the saved file to check that it holds this key. Only
   then is the key marked backed up. The key itself is never shown. A key you
@@ -84,7 +84,9 @@ been set for them.
   request allows. It now reads the log in pages.
 - **A page that gets a failure gets a documented code.** Two messages the
   content script made up ("Invalid event parameter", "Unknown method") are now
-  `invalid_event` and `unknown_method`. A page waiting for approval when the
+  `invalid_event` and `unknown_method`, codes the documentation already listed as
+  what a page receives, so this is a patch-level correction under the
+  [versioning policy](docs/api-versioning.md) and not marked breaking. A page waiting for approval when the
   browser ends the background gets `approval_failed` instead of the browser's own
   error text. Everything a page can receive is one of the codes in
   [docs/rpc-error-codes.md](docs/rpc-error-codes.md), which was rewritten and is
@@ -93,8 +95,8 @@ been set for them.
 - **Changing a setting no longer drops your relay connections.** A theme change,
   for example, used to close every relay socket.
 - **A long profile value no longer widens the popup.** A long website or picture
-  address, or a long about text, wraps or truncates inside the 400-pixel popup
-  and the side panel.
+  address, or a long about text, wraps or truncates inside the popup and inside
+  a 400-pixel-wide side panel (both are checked by an end-to-end test).
 - **A site that floods the activity log is recorded once per window.** Rate-limited
   requests from one site are coalesced into one entry per window, so a page
   cannot push your real history out of a log that keeps 50 entries.
@@ -102,16 +104,18 @@ been set for them.
   contrast in their themes (`--ink-red` and `--ink-2` are a few percent darker in
   the light theme). The header's key selector is a menu, not a listbox, so a
   screen reader reports it as one. Password errors are announced and tied to
-  their field. A test now scans 36 surfaces in both themes with axe on every run.
+  their field. An end-to-end test scans 36 surfaces in both themes with axe, and fails the
+  e2e run (nightly, on pushes to main, and on pull requests labelled `run-e2e`)
+  on a serious or critical finding.
 - **Smaller:** the approval window said "1 bytes" for one byte; the Home banner no
   longer points a key that cannot be read at a Back up button that is disabled
   for it.
 
 ### Behaviour changes
 
-- **A site that signs a lot is asked about, not cut off.** A site with a
-  remembered allow rule can have 60 requests per minute signed without a prompt.
-  The 61st opens the approval window like a request from a site you have not
+- **A site that signs a lot is asked about, not cut off.** A site you let
+  sign without asking, through a remembered allow rule, high trust or a session
+  grant, can have 60 requests per minute signed without a prompt. The 61st opens the approval window like a request from a site you have not
   trusted, with a line saying why. The limits for the approval queue and for
   `getPublicKey` are unchanged, and the counters now survive the background
   restarting.
