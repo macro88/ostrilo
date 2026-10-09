@@ -270,6 +270,25 @@ describe("approvals and activity through the client", () => {
     await client.activityClear();
     expect(await activityLog.count()).toBe(0);
   });
+
+  it("lists every origin in the stored log, past what one page holds", async () => {
+    for (let i = 0; i < 25; i++) {
+      await activityLog.addEntry({ origin: `https://site${i}.example`, kind: 1, decision: "allow" });
+    }
+    await activityLog.addEntry({ origin: "extension://profile", kind: 0, decision: "allow" });
+
+    const origins = await client.activityGetOrigins();
+
+    expect(origins).toHaveLength(25);
+    expect(origins).toContain("https://site0.example");
+    expect(origins).not.toContain("extension://profile");
+  });
+
+  it("refuses an origin list that does not validate", async () => {
+    bus.override = async () => ({ ok: true, data: { origins: ["javascript:alert(1)"] } });
+
+    await expect(client.activityGetOrigins()).rejects.toThrow();
+  });
 });
 
 describe("settings cache", () => {

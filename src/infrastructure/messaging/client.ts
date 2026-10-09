@@ -6,9 +6,10 @@ import type {
   RpcErrorObject,
   LockStatePayload,
 } from "./rpc";
-import type {
-  AppSettingsPatch,
-  OriginPolicyPatch,
+import {
+  ActivityOriginsResponseSchema,
+  type AppSettingsPatch,
+  type OriginPolicyPatch,
 } from "@/infrastructure/validation/schemas";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 // webextension-polyfill already imported above
@@ -514,6 +515,12 @@ export async function activityFilterBy(filters: {
     limit: filters.limit,
     offset: filters.offset,
   });
+}
+
+/** Every origin present in the stored log, not only those on a loaded page. */
+export async function activityGetOrigins(): Promise<string[]> {
+  const data = await rpc<unknown>({ type: "activity.origins" });
+  return ActivityOriginsResponseSchema.parse(data).origins;
 }
 
 export async function activityClear() {

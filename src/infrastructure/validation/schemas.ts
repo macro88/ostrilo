@@ -345,6 +345,16 @@ export const ActivityFilterByRequestSchema = z.object({
   offset: z.number().int().min(0).optional(),
 });
 
+/**
+ * What `activity.origins` answers. Every origin is the site-filterable kind
+ * (http or https): an internal origin such as `extension://profile` appears in
+ * the log but could not be sent back as a filter, so listing it would offer a
+ * choice that fails. Bounded by the log's own 500-entry ceiling.
+ */
+export const ActivityOriginsResponseSchema = z.object({
+  origins: z.array(OriginSchema).max(500),
+});
+
 // Infer types from schemas
 export type ActivityGetRecentRequest = z.infer<
   typeof ActivityGetRecentRequestSchema

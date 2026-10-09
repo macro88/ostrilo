@@ -104,6 +104,7 @@ export type RpcRequest =
       limit?: number;
       offset?: number;
     }
+  | { type: "activity.origins" }
   | { type: "activity.clear" }
   // Profile operations
   | { type: "profile.get"; params: { pubkey: string; forceFetch?: boolean } }
@@ -151,6 +152,10 @@ export type ActivityGetRecentResponse =
 
 export type ActivityFilterResponse =
   | { ok: true; data: { entries: ActivityLogEntry[]; total: number } }
+  | { ok: false; error: RpcErrorObject };
+
+export type ActivityOriginsResponse =
+  | { ok: true; data: { origins: string[] } }
   | { ok: false; error: RpcErrorObject };
 
 export type ActivityClearResponse =

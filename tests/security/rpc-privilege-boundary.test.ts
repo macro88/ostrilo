@@ -376,6 +376,7 @@ describe("lock gate on the RPC surface", () => {
       "policy.setPerKindRule",
       "settings.update",
       "activity.getRecent",
+      "activity.origins",
       "profile.get",
       "approval.resolve",
       "vault.deleteKey",
