@@ -14,4 +14,4 @@
 
 - [x] 3.1 `docs/api-versioning.md`, linked from `docs/README.md` and `docs/developers_readme.md`
 - [x] 3.2 Feature-detection snippet in `docs/developers_readme.md`
-- [ ] 3.3 Archive this change (Task 14 of phase 0.10)
+- [x] 3.3 Archive this change (Task 14 of phase 0.10)
