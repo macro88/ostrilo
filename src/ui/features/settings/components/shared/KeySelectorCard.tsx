@@ -135,7 +135,10 @@ export function KeySelectorCard({
         const copied = copiedKeyId === key.id;
 
         return (
-          <li key={key.id} className="ink-row">
+          // Wraps: Set Active, Back up, Rename and Delete do not fit beside the
+          // name on a narrow settings page, and a row that cannot wrap lets
+          // its chips ride over the buttons.
+          <li key={key.id} className="ink-row flex-wrap">
             {/*
               Local seal avatar only. The picture URL comes from a relay, and this
               list is where the user picks which identity signs; loading it would
@@ -154,7 +157,7 @@ export function KeySelectorCard({
               </AvatarFallback>
             </Avatar>
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-44">
               {isEditing ? (
                 <div className="flex items-center gap-2">
                   <Input
@@ -193,10 +196,10 @@ export function KeySelectorCard({
                       {displayName}
                     </span>
                     {isActive && (
-                      <span className="seal-chip seal-chip-success">Active</span>
+                      <span className="seal-chip seal-chip-success shrink-0">Active</span>
                     )}
                     {backupStatusOf?.(key.id) === "pending" && (
-                      <span className="seal-chip seal-chip-warning">
+                      <span className="seal-chip seal-chip-warning shrink-0">
                         No backup
                       </span>
                     )}
@@ -241,7 +244,7 @@ export function KeySelectorCard({
             </div>
 
             {!isEditing && (
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="ml-auto flex shrink-0 items-center gap-1">
                 {!isActive && onSelectKey && (
                   <Button
                     size="sm"
