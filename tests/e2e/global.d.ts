@@ -31,7 +31,12 @@ interface Nip44 {
   decrypt(pubkey: string, ciphertext: string): Promise<string>;
 }
 
+interface WindowNostrCapabilities {
+  readonly methods: readonly string[];
+}
+
 interface WindowNostr {
+  readonly capabilities?: WindowNostrCapabilities;
   getPublicKey(): Promise<string>;
   signEvent(event: UnsignedNostrEvent): Promise<SignedNostrEvent>;
   nip04?: Nip04;

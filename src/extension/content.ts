@@ -1,6 +1,10 @@
 import { browser } from "wxt/browser";
 import type { RpcRequest, RpcResponse } from "@/infrastructure/messaging/rpc";
 import {
+  isProviderMethod,
+  type ProviderMethod,
+} from "@/domain/nostr/provider-methods";
+import {
   RPC_ERROR_CODES,
   type RpcErrorCode,
 } from "@/infrastructure/messaging/error-codes";
@@ -22,7 +26,7 @@ import {
 interface NostrRequestMessage {
   type: "OSTRILO_NOSTR_REQUEST";
   id: string;
-  method: "getPublicKey" | "signEvent";
+  method: ProviderMethod;
   params?: unknown;
 }
 
@@ -103,7 +107,7 @@ async function handlePageMessage(event: MessageEvent): Promise<void> {
   // Validate message structure
   if (data?.type !== "OSTRILO_NOSTR_REQUEST") return;
   if (typeof data.id !== "string") return;
-  if (!["getPublicKey", "signEvent"].includes(data.method)) return;
+  if (!isProviderMethod(data.method)) return;
 
   const built = buildRpcRequest(data, window.location.origin);
   if ("errorCode" in built) {

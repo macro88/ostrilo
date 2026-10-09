@@ -2,6 +2,10 @@ import {
   APPROVAL_TIMEOUT_MS,
   PROVIDER_TIMEOUT_GRACE_MS,
 } from "@/application/services/approval-queue.service";
+import {
+  PROVIDER_METHODS,
+  type ProviderMethod,
+} from "@/domain/nostr/provider-methods";
 
 /**
  * NIP-07 window.nostr provider injection script
@@ -39,7 +43,7 @@ export default defineUnlistedScript(() => {
   interface NostrRequestMessage {
     type: "OSTRILO_NOSTR_REQUEST";
     id: string;
-    method: "getPublicKey" | "signEvent";
+    method: ProviderMethod;
     params?: unknown;
   }
 
@@ -80,7 +84,7 @@ export default defineUnlistedScript(() => {
 
   // Send request to content script and wait for response
   function sendRequest(
-    method: "getPublicKey" | "signEvent",
+    method: ProviderMethod,
     params?: unknown
   ): Promise<unknown> {
     return new NativePromise((resolve, reject) => {
@@ -156,7 +160,11 @@ export default defineUnlistedScript(() => {
   // capabilities whose every method threw, so NIP-07 feature detection - the
   // whole point of which is `if (window.nostr.nip44)` - returned true and then
   // failed at call time. An honest absence is a working feature check.
-  const nostr = {
+  //
+  // `satisfies Record<ProviderMethod, unknown>` makes the compiler reject a
+  // method missing from, or extra to, `PROVIDER_METHODS`, which is also what
+  // `capabilities.methods` reports.
+  const methods = {
     /**
      * Get the public key of the currently selected identity
      * @returns Promise resolving to hex-encoded public key
@@ -199,7 +207,16 @@ export default defineUnlistedScript(() => {
       };
       return result.event;
     },
-  };
+  } satisfies Record<ProviderMethod, unknown>;
+
+  // What a dApp can feature-detect. Only names the provider implements: no
+  // extension version, build id or anything else that tells a page more about
+  // the user's setup than the methods it can already call.
+  const capabilities = Object.freeze({
+    methods: Object.freeze([...PROVIDER_METHODS]),
+  });
+
+  const nostr = { ...methods, capabilities };
 
   // Never overwrite an existing provider: another signer may have got here
   // first, and silently replacing it would hijack the user's chosen extension.
@@ -210,8 +227,7 @@ export default defineUnlistedScript(() => {
     return;
   }
 
-  Object.freeze(nostr.getPublicKey);
-  Object.freeze(nostr.signEvent);
+  for (const name of PROVIDER_METHODS) Object.freeze(methods[name]);
   Object.freeze(nostr);
 
   try {
