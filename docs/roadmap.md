@@ -19,11 +19,11 @@ Priority is MoSCoW: **M**ust, **S**hould, **C**ould, **W**on't.
 
 | Priority | Total | ✅ | 🔄 | ⬜ | ❌ |
 |----------|-------|----|----|----|----|
-| Must     | 33 | 16 | 8 | 9 | 0 |
-| Should   | 54 | 5 | 10 | 38 | 1 |
-| Could    | 31 | 0 | 0 | 31 | 0 |
+| Must     | 29 | 16 | 8 | 5 | 0 |
+| Should   | 58 | 5 | 10 | 39 | 4 |
+| Could    | 31 | 0 | 0 | 29 | 2 |
 | Won't    | 1 | 0 | 0 | 0 | 1 |
-| **Total**| **119** | **21** | **18** | **78** | **2** |
+| **Total**| **119** | **21** | **18** | **73** | **7** |
 
 ## What ships today
 
@@ -55,15 +55,6 @@ Defects in shipped code. Each belongs to the row named.
 | The approval queue and rate-limit counters are lost when the service worker is evicted. | PERF-008 |
 | Activity log: the origin filter lists only origins on the loaded page; the kind filter can't reach kinds 5, 22242 and 27235; denials don't record why; the preview doesn't escape hidden characters. | UX-001 |
 
-## Decisions needed
-
-These rows conflict with a shipped decision or with what a browser extension can do.
-
-- **SEC-014** asks for cryptographic erasure on uninstall. Extensions can't run code at uninstall; the browser deletes their storage. An in-app "erase all data" is the implementable form. Otherwise ❌.
-- **SEC-018** asks to detect deterministic-signature requests. Signing always uses fresh randomness and a page can't request otherwise, so there is nothing to detect.
-- **MON-001 to MON-003** conflict with `PRIVACY.md`, which promises no analytics, telemetry or crash reports.
-- **DEV-012** (batch signing) conflicts with the deliberate removal of bulk approve.
-
 ---
 
 ## 1. Security and Privacy
@@ -76,18 +67,18 @@ These rows conflict with a shipped decision or with what a browser extension can
 | SEC-004 | CSP enforcement in CI | M | ✅ | Manifest CSP and bundle hygiene (no source maps, no `console`) asserted against fresh Chrome and Firefox builds. |
 | SEC-005 | Secret scanning in CI | M | ✅ | gitleaks on every PR and push. |
 | SEC-006 | Rate limiting | S | 🔄 | Approval queue: 10 per minute and 5 pending per origin, 20 globally. `getPublicKey`: 6 per minute. Left: meter auto-signed requests, make limits configurable, persist counters. |
-| SEC-007 | Phishing blocklist | M | ⬜ | Warn before signing on known-bad domains. |
+| SEC-007 | Phishing blocklist | S | ⬜ | Warn before signing on known-bad domains. Needs a list-source decision: a remote feed is a network contact `PRIVACY.md` does not describe, and a bundled list goes stale. |
 | SEC-008 | Risk analysis in approvals | M | 🔄 | Display integrity ships: full origin, non-HTTPS chip, byte lengths, hidden characters escaped, protected-kind notice. Left: zap amounts, DM content, relay-list changes, a risk score. |
 | SEC-009 | Biometric unlock | S | ⬜ | WebAuthn PRF. Proposal open at `openspec/changes/add-biometric-unlock`. |
 | SEC-010 | Multi-factor authentication | S | ⬜ | For key export, settings changes and large zaps. |
 | SEC-011 | Backup and recovery | M | 🔄 | Encrypted backup file (Argon2id + AES-GCM, separate passphrase) at first-key onboarding, restored on import. Left: back up keys added later from Settings behind re-auth; optional remote target. |
 | SEC-012 | Gradual session lock | S | 🔄 | Flat fail-closed lock with a sliding 1-60 minute deadline, presence-gated postponement and a countdown. Left: an intermediate tier that stops auto-signing before asking for the password. |
 | SEC-013 | Tamper-evident audit log | S | ⬜ | The activity log is user-facing, with no hash chain and no lock, unlock or settings events. |
-| SEC-014 | Wipe on uninstall | M | ⬜ | See Decisions needed. |
+| SEC-014 | Erase all data | M | ⬜ | An in-app action that deletes every key, setting, permission and log after re-authentication. Erasure at uninstall is impossible: extensions cannot run code at uninstall. |
 | SEC-015 | Argon2id key derivation | M | ✅ | Tunable parameters; KDF costs bounded above and below on stored and imported data. |
 | SEC-016 | Sandboxed crypto | S | ⬜ | Crypto in a worker or separate context. |
 | SEC-017 | Supply-chain verification | M | 🔄 | Frozen lockfile, release-age and no-downgrade policy, audit blocking on high and critical, SHA-pinned actions, Renovate. Left: reproducible-build check and published digests. |
-| SEC-018 | Deterministic-signature detection | S | ⬜ | See Decisions needed. |
+| SEC-018 | Deterministic-signature detection | S | ❌ | Signing always uses fresh randomness and a page cannot request otherwise, so there is nothing to detect. |
 | SEC-019 | RPC privilege separation | M | ✅ | Page-reachable and UI-only namespaces, requests bound to the browser-attested sender origin, no payload logging, no passwordless key export. |
 | SEC-020 | Relay input validation | M | ✅ | Frames size-bounded and schema-checked; event ID and signature verified; `wss://` only; bounded reconnects. |
 | SEC-021 | Remote media and egress policy | M | ✅ | `https:` allowlist; extension pages never load relay-chosen images. |
@@ -118,7 +109,7 @@ These rows conflict with a shipped decision or with what a browser extension can
 | PROTO-014 | NIP-28 public chat | C | ⬜ | |
 | PROTO-015 | NIP-72 communities | C | ⬜ | |
 | PROTO-016 | NIP-90 DVMs | C | ⬜ | |
-| PROTO-017 | Post-quantum hybrid encryption | M | ⬜ | ML-KEM combined with ECDH. Blocked on an interoperable specification. |
+| PROTO-017 | Post-quantum hybrid encryption | S | ⬜ | ML-KEM combined with ECDH. Blocked on an interoperable specification. |
 
 ## 3. User Experience
 
@@ -158,7 +149,7 @@ These rows conflict with a shipped decision or with what a browser extension can
 | DEV-009 | Browser DevTools panel | C | ⬜ | |
 | DEV-010 | API versioning and deprecation policy | M | ⬜ | |
 | DEV-011 | Performance profiling tools | C | ⬜ | |
-| DEV-012 | Batch signing | S | ⬜ | See Decisions needed. |
+| DEV-012 | Batch signing | S | ❌ | Conflicts with the deliberate removal of bulk approve. |
 | DEV-013 | Capability detection API | M | ⬜ | The provider advertises only the methods it implements, but there is no `capabilities` API. |
 
 ## 5. Performance and Reliability
@@ -168,13 +159,13 @@ These rows conflict with a shipped decision or with what a browser extension can
 | PERF-001 | Signing latency target | S | ⬜ | ≤5ms P50 with CI benchmarks. |
 | PERF-002 | Code splitting | S | ⬜ | No route loads on demand. |
 | PERF-003 | Background bundle size | M | ✅ | 74 KB gzipped against a 150 KB target. A CI size gate is PERF-009. |
-| PERF-004 | Memory-leak detection in CI | M | ⬜ | |
+| PERF-004 | Memory-leak detection in CI | S | ⬜ | Should until it has a measurable target. |
 | PERF-005 | Efficient storage access | S | 🔄 | A 5-second settings cache in the UI client, debounced docked-panel writes, parallel policy reads. Left: a background settings cache and stop rewriting the whole `appSettings` object on every change. |
 | PERF-006 | Relay connection reuse | S | ✅ | One shared `RelayManager`; sockets are reused and reconnect with jittered backoff. A settings write currently drops them (Known issues). |
 | PERF-007 | Signature caching | S | ⬜ | |
 | PERF-008 | Service-worker lifecycle | M | ✅ | Lock state and grants in `storage.session`, the lock deadline in `chrome.alarms`, the unlock throttle in `storage.local`. Key material is deliberately gone after eviction, so the vault re-locks rather than staying open. The original wording asked for the opposite. |
 | PERF-009 | Bundle analysis and size gate | S | ⬜ | Include a gzip gate on `background.js` and size trends. |
-| PERF-010 | Startup time | M | ⬜ | |
+| PERF-010 | Startup time | S | ⬜ | Should until it has a measurable target. |
 | PERF-011 | Policy evaluation caching | S | ⬜ | |
 
 ## 6. Sync
@@ -233,9 +224,9 @@ authenticates its author.
 
 | ID | Title | Pri | Status | Notes |
 |----|-------|-----|--------|-------|
-| MON-001 | Privacy-preserving telemetry | C | ⬜ | See Decisions needed. |
-| MON-002 | Error reporting | S | ⬜ | See Decisions needed. |
-| MON-003 | Performance monitoring | C | ⬜ | See Decisions needed. |
+| MON-001 | Privacy-preserving telemetry | C | ❌ | `PRIVACY.md` promises no analytics, telemetry or crash reports. |
+| MON-002 | Error reporting | S | ❌ | `PRIVACY.md` promises no analytics, telemetry or crash reports. |
+| MON-003 | Performance monitoring | C | ❌ | `PRIVACY.md` promises no analytics, telemetry or crash reports. |
 | MON-004 | Public health dashboard | C | ⬜ | |
 | MON-005 | A/B testing | C | ⬜ | |
 
