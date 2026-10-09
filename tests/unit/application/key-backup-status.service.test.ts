@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   KEY_BACKUP_STORAGE,
   KeyBackupStatusService,
@@ -104,5 +104,35 @@ describe("the vault and backup status", () => {
     };
     await expect(vault.generateKey(STRONG_PASSWORD, "x")).rejects.toThrow("quota");
     expect(await vault.listKeys()).toEqual([]);
+    // The first key also selects itself; that write must not have happened.
+    expect((await vault.getSettings())?.selectedKeyId).toBeUndefined();
+  });
+
+  it("still zeroizes and forgets a deleted key, and repairs the selection, when its status cannot be removed", async () => {
+    const storage = memoryStorage();
+    const { vault } = testVault(storage);
+    const first = await vault.generateKey(STRONG_PASSWORD, "first");
+    const second = await vault.generateKey(STRONG_PASSWORD, "second");
+    await vault.unlock(STRONG_PASSWORD);
+    await vault.selectKey(second.id);
+
+    const unlocked = (vault as unknown as { unlocked: Map<string, Uint8Array> }).unlocked;
+    const secret = unlocked.get(second.id)!;
+    expect(secret.some((byte) => byte !== 0)).toBe(true);
+
+    const realSet = storage.local.set.bind(storage.local);
+    storage.local.set = async (key, value) => {
+      if (key === KEY_BACKUP_STORAGE) throw new Error("quota");
+      return realSet(key, value);
+    };
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await vault.deleteKey(second.id);
+
+    expect(result.newSelectedKeyId).toBe(first.id);
+    expect(unlocked.has(second.id)).toBe(false);
+    expect(secret.every((byte) => byte === 0)).toBe(true);
+    expect((await vault.getSettings())?.selectedKeyId).toBe(first.id);
+    expect((await vault.listKeys()).map((k) => k.id)).toEqual([first.id]);
   });
 });

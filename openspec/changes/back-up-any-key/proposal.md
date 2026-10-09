@@ -10,6 +10,7 @@ An encrypted backup can only be made while the first key is being created. A key
 - **Per-key backup status**, kept outside the vault envelope in its own non-secret `storage.local` record: `pending` or `verified`, with a time.
   - A key the vault generates starts `pending`. The vault sets it before the key is stored, so a key cannot be created without its status. This is the one hook Quick Start (a later task in this change) uses.
   - A key generated through onboarding becomes `verified` only when its backup verification passes.
+  - The status is written before anything else names the new key, so a failed write creates no key and no selection of one. A later failure to store the key can leave an inert orphan `pending` record: the id is random and never reused.
   - An imported key gets no record: the user already holds the secret.
   - A key that existed before this change has no record and is *unknown*: no marker, no banner, and Back up stays available. This avoids nagging users who backed up during onboarding. The cost is that a legacy key added from Settings before this change is not nagged either.
   - Deleting a key removes its record.

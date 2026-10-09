@@ -465,6 +465,11 @@ export class KeyVaultService {
         isSelected: false,
       } as KeyRecord;
       const records = await this.listKeys();
+      // Before any write that names this key, so a failure here leaves neither
+      // a stored key nor a selection pointing at one. A saveKeys failure after
+      // it can leave an orphan pending record, which is inert: the id is random
+      // and never reused.
+      await this.backupStatus.markPending(id);
       const hasSelected =
         (await this.getSettings())?.selectedKeyId ??
         records.find((r) => r.isSelected)?.id;
@@ -479,10 +484,6 @@ export class KeyVaultService {
           selectedKeyId: record.id,
         } as AppSettingsV1);
       }
-      // Before the key is stored, so a failure here creates no key rather than
-      // a key nothing knows is unbacked-up. An orphaned record for an id that
-      // was never stored is inert.
-      await this.backupStatus.markPending(id);
       const next = [...records, record];
       await this.saveKeys(next);
       return record;
@@ -621,7 +622,6 @@ export class KeyVaultService {
     // Remove the key from the list
     const updatedRecords = records.filter((r) => r.id !== id);
     await this.saveKeys(updatedRecords);
-    await this.backupStatus.remove(id);
 
     // Remove from unlocked map if present
     const unlockedKey = this.unlocked.get(id);
@@ -638,6 +638,15 @@ export class KeyVaultService {
       // A key always remains: deleting the last one is refused above.
       newSelectedKeyId = updatedRecords[0].id;
       await this.selectKeyNow(newSelectedKeyId);
+    }
+
+    // Last, and best effort: the secret is already zeroized and the selection
+    // repaired, and an orphan status record for a deleted id is inert. A failed
+    // write here must not abort that cleanup.
+    try {
+      await this.backupStatus.remove(id);
+    } catch (error) {
+      console.warn("[Vault] could not drop a deleted key's backup status:", error);
     }
 
     return { newSelectedKeyId };
