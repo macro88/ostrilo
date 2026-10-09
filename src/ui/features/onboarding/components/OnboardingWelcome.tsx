@@ -3,18 +3,21 @@ import { Logo } from "@/ui/components/logo/Logo";
 
 interface OnboardingWelcomeProps {
   onCreateKey: () => void;
+  onQuickStart: () => void;
   onImportKey: () => void;
 }
 
 /**
- * Two ways in, each one tap: a two-way choice needs no confirmation step.
+ * Three ways in, each one tap: a short list of choices needs no confirmation
+ * step.
  *
- * The notch sits on "Create New Key" - the path a first-run user almost always
- * takes, and therefore the screen's single primary action (DESIGN_RULES §5) -
- * while "Import Existing Key" is a hairline row.
+ * The notch sits on "Create New Key" - the path that ends with a backed-up key,
+ * and therefore the screen's single primary action (DESIGN_RULES §5) - while
+ * "Quick start" and "Import Existing Key" are hairline rows.
  */
 export function OnboardingWelcome({
   onCreateKey,
+  onQuickStart,
   onImportKey,
 }: OnboardingWelcomeProps) {
   return (
@@ -54,6 +57,25 @@ export function OnboardingWelcome({
             </span>
             <ChevronRight
               className="h-4 w-4 shrink-0 text-primary-foreground/75"
+              aria-hidden="true"
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={onQuickStart}
+            className="ink-card flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors duration-150 hover:bg-muted"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-bold leading-tight text-foreground">
+                Quick start
+              </span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Just a password. Back up later
+              </span>
+            </span>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[var(--ink-3)]"
               aria-hidden="true"
             />
           </button>

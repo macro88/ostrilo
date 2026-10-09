@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useOnboarding } from "../hooks/useOnboarding";
 import { OnboardingWelcome } from "./OnboardingWelcome";
 import { OnboardingCreateKey } from "./OnboardingCreateKey";
+import { OnboardingQuickStart } from "./OnboardingQuickStart";
 import { OnboardingImportKey } from "./OnboardingImportKey";
 
-type OnboardingFlow = "welcome" | "create" | "import";
+type OnboardingFlow = "welcome" | "create" | "quick" | "import";
 
 interface OnboardingContainerProps {
   onComplete: () => void;
@@ -23,6 +24,10 @@ export function OnboardingContainer({ onComplete }: OnboardingContainerProps) {
     setCurrentFlow("create");
   };
 
+  const handleQuickStart = () => {
+    setCurrentFlow("quick");
+  };
+
   const handleImportKey = () => {
     setCurrentFlow("import");
   };
@@ -36,12 +41,17 @@ export function OnboardingContainer({ onComplete }: OnboardingContainerProps) {
       {currentFlow === "welcome" && (
         <OnboardingWelcome
           onCreateKey={handleCreateKey}
+          onQuickStart={handleQuickStart}
           onImportKey={handleImportKey}
         />
       )}
 
       {currentFlow === "create" && (
         <OnboardingCreateKey onBack={handleBack} onComplete={handleComplete} />
+      )}
+
+      {currentFlow === "quick" && (
+        <OnboardingQuickStart onBack={handleBack} onComplete={handleComplete} />
       )}
 
       {currentFlow === "import" && (
