@@ -257,6 +257,20 @@ export function isLockReason(value: unknown): value is LockReason {
   );
 }
 
+/**
+ * The minutes an `inactivity` lock reports, or undefined when the value is not
+ * a whole number inside the auto-lock range. A stored record or an RPC payload
+ * is not trusted to be one: a lock screen must never print `1.5` or `Infinity`.
+ */
+export function parseInactivityMinutes(value: unknown): number | undefined {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= AUTO_LOCK_BOUNDS.min &&
+    value <= AUTO_LOCK_BOUNDS.max
+    ? value
+    : undefined;
+}
+
 export const DEFAULT_RELAY_URLS = ["wss://relay.primal.net"] as const;
 
 // Default settings shipped with the extension

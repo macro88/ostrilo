@@ -174,6 +174,13 @@ export class VaultRpcHandler implements RpcModule {
             method: message.type,
           });
         }
+        if (error.message === "vault_keys_unreadable") {
+          return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
+            details:
+              "The password is right, but none of this vault's keys could be opened. Their records may be damaged. Do not re-create your vault.",
+            method: message.type,
+          });
+        }
         if (
           error.message === "vault_version_unsupported" ||
           error.message === "kdf_below_floor" ||

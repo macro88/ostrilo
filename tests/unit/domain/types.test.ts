@@ -89,3 +89,19 @@ describe("describeActivityAction", () => {
     ).toBe("Denied unknown request");
   });
 });
+
+describe("parseInactivityMinutes", () => {
+  it("accepts whole minutes inside the auto-lock range", async () => {
+    const { parseInactivityMinutes, AUTO_LOCK_BOUNDS } = await import("@/domain/types");
+    expect(parseInactivityMinutes(AUTO_LOCK_BOUNDS.min)).toBe(AUTO_LOCK_BOUNDS.min);
+    expect(parseInactivityMinutes(35)).toBe(35);
+    expect(parseInactivityMinutes(AUTO_LOCK_BOUNDS.max)).toBe(AUTO_LOCK_BOUNDS.max);
+  });
+
+  it("drops everything else", async () => {
+    const { parseInactivityMinutes } = await import("@/domain/types");
+    for (const bad of [1.5, Infinity, -Infinity, NaN, 0, -1, 61, "35", null, undefined, {}]) {
+      expect(parseInactivityMinutes(bad), String(bad)).toBeUndefined();
+    }
+  });
+});

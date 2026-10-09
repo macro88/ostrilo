@@ -22,6 +22,7 @@ import {
   DEK_LENGTH,
   normalizeAutoLockMinutes,
   isLockReason,
+  parseInactivityMinutes,
   type LockReason,
 } from "@/domain/types";
 import { verifierAad, dekAad, skAad } from "@/domain/crypto/aad";
@@ -97,6 +98,13 @@ export class VaultDamagedRecordsError extends Error {
 
 export class KeyVaultService {
   private unlocked: Map<string, Uint8Array> = new Map();
+
+  /**
+   * Incremented by every lock and unlock. A read of the lock state that awaits
+   * storage compares it before correcting the record, so a correction computed
+   * from a session that has since ended cannot overwrite the newer record.
+   */
+  private sessionEpoch = 0;
 
   /**
    * One vault write at a time. A password change replaces the KEK every record
@@ -762,6 +770,20 @@ export class KeyVaultService {
         }
       }
 
+      // The password was right but not one key opened. Reporting the vault
+      // unlocked would hand every surface an open session with nothing in it,
+      // and the next read would blame the browser for it
+      // (`background_restarted`). The record is left locked, with no reason
+      // rather than a false one, and the caller is told the keys are damaged.
+      if (unlockedKeyIds.length === 0) {
+        await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
+          isLocked: true,
+          selectedKeyId: undefined,
+          lastActivity: Date.now(),
+        });
+        throw new Error("vault_keys_unreadable");
+      }
+
       if (migrated.length > 0) {
         const byId = new Map(migrated.map((r) => [r.id, r]));
         await this.saveKeys(records.map((r) => byId.get(r.id) ?? r));
@@ -879,6 +901,7 @@ export class KeyVaultService {
 
   /** Zeroizes every held private key, then forgets it. */
   private discardUnlockedKeys(): void {
+    this.sessionEpoch++;
     this.unlocked.forEach((sk) => zeroize(sk));
     this.unlocked.clear();
   }
@@ -900,7 +923,9 @@ export class KeyVaultService {
       selectedKeyId: undefined,
       lastActivity: Date.now(),
       lockReason: reason,
-      ...(inactivityMinutes === undefined ? {} : { inactivityMinutes }),
+      ...(parseInactivityMinutes(inactivityMinutes) === undefined
+        ? {}
+        : { inactivityMinutes }),
     });
     await this.storage.session.remove("sessionGrants");
 
@@ -980,6 +1005,7 @@ export class KeyVaultService {
    * at the moment of locking, so a surface opened later reads the same answer.
    */
   async getLockState(): Promise<VaultLockState> {
+    const epoch = this.sessionEpoch;
     let state: LockState | undefined;
     try {
       state = await this.storage.session.get<LockState>(LOCK_STATE_STORAGE);
@@ -1002,9 +1028,9 @@ export class KeyVaultService {
         isLocked: true,
         selectedKeyId: state.selectedKeyId,
         ...(isLockReason(state.lockReason) ? { lockReason: state.lockReason } : {}),
-        ...(typeof state.inactivityMinutes === "number"
-          ? { inactivityMinutes: state.inactivityMinutes }
-          : {}),
+        ...(parseInactivityMinutes(state.inactivityMinutes) === undefined
+          ? {}
+          : { inactivityMinutes: state.inactivityMinutes }),
       };
     }
 
@@ -1023,6 +1049,10 @@ export class KeyVaultService {
     // Correct the record rather than reporting an unlocked vault with no keys,
     // which surfaced to the user as a confusing "denied" on the next signature.
     if (this.unlocked.size === 0) {
+      // A lock or unlock that ran while this read was awaiting storage already
+      // wrote a newer record, with its own reason. Read again instead of
+      // overwriting it with a conclusion drawn from the old one.
+      if (epoch !== this.sessionEpoch) return this.getLockState();
       await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
         isLocked: true,
         selectedKeyId: undefined,

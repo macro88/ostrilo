@@ -1087,3 +1087,113 @@ describe("why the vault is locked", () => {
     );
   });
 });
+
+describe("lock reasons stay truthful under races and damage", () => {
+  const T0 = 1_760_000_000_000;
+  let suite: StorageSuite;
+  let maps: ReturnType<typeof memoryStorage>["maps"];
+
+  function newVault(s: StorageSuite) {
+    return new KeyVaultService(
+      s,
+      WebCryptoAesGcm,
+      fastKdf as never,
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
+    );
+  }
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(T0);
+    ({ suite, maps } = memoryStorage());
+    const first = newVault(suite);
+    await first.generateKey(PASSWORD, "k1");
+    await first.unlock(PASSWORD);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("a manual lock that lands while a restart check is in flight keeps its reason", async () => {
+    // A fresh instance over an unlocked record is a restarted worker: it holds
+    // no keys, so a read of the lock state wants to record background_restarted.
+    // Hold that read at its settings fetch while the user locks.
+    const restarted = newVault(suite);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const localGet = suite.local.get.bind(suite.local);
+    let held = false;
+    (suite.local as { get: typeof suite.local.get }).get = (async (key: string) => {
+      if (key === "appSettings" && !held) {
+        held = true;
+        await gate;
+      }
+      return localGet(key);
+    }) as typeof suite.local.get;
+
+    const inFlight = restarted.getLockState();
+    await Promise.resolve();
+    await restarted.lock();
+    release();
+    const result = await inFlight;
+
+    expect(result).toMatchObject({ isLocked: true, lockReason: "manual" });
+    expect(
+      (maps.session.get("lockState") as { lockReason?: string }).lockReason,
+      "a manual lock was overwritten with background_restarted"
+    ).toBe("manual");
+  });
+
+  it("an unlock that opens no key reports the vault locked, with no false reason", async () => {
+    const records = maps.local.get("encryptedKeys") as Array<Record<string, unknown>>;
+    maps.local.set("encryptedKeys", [{ ...records[0], pubkey: "cd".repeat(32) }]);
+    const vault = newVault(suite);
+    await vault.lock();
+
+    await expect(vault.unlock(PASSWORD)).rejects.toThrow("vault_keys_unreadable");
+
+    const state = await vault.getLockState();
+    expect(state.isLocked).toBe(true);
+    expect(state.lockReason).toBeUndefined();
+    expect(state.lockReason).not.toBe("background_restarted");
+  });
+
+  it("an unlock that opens no key over a live session leaves it locked, not blamed on the browser", async () => {
+    const records = maps.local.get("encryptedKeys") as Array<Record<string, unknown>>;
+    maps.local.set("encryptedKeys", [{ ...records[0], pubkey: "cd".repeat(32) }]);
+    const vault = newVault(suite);
+
+    await expect(vault.unlock(PASSWORD)).rejects.toThrow("vault_keys_unreadable");
+
+    const state = await vault.getLockState();
+    expect(state.isLocked).toBe(true);
+    expect(state.lockReason).toBeUndefined();
+  });
+
+  it("drops an inactivity duration that is not a whole number inside the auto-lock range", async () => {
+    const vault = newVault(suite);
+    for (const bad of [1.5, Number.POSITIVE_INFINITY, Number.NaN, 0, -3, 61, "35", null]) {
+      await vault.lock();
+      maps.session.set("lockState", {
+        ...(maps.session.get("lockState") as object),
+        lockReason: "inactivity",
+        inactivityMinutes: bad,
+      });
+      const state = await vault.getLockState();
+      expect(state, String(bad)).toMatchObject({ isLocked: true, lockReason: "inactivity" });
+      expect(state.inactivityMinutes, String(bad)).toBeUndefined();
+    }
+
+    maps.session.set("lockState", {
+      ...(maps.session.get("lockState") as object),
+      lockReason: "inactivity",
+      inactivityMinutes: 35,
+    });
+    expect((await vault.getLockState()).inactivityMinutes).toBe(35);
+  });
+});

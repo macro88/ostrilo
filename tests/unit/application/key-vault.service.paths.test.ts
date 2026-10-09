@@ -285,25 +285,24 @@ describe("KeyVaultService failure and edge paths", () => {
       ]);
       const retained: Retained[] = [];
 
-      const result = await build(storage, recordingAead(retained)).unlock(PASSWORD);
+      await expect(
+        build(storage, recordingAead(retained)).unlock(PASSWORD)
+      ).rejects.toThrow("vault_keys_unreadable");
 
-      expect(result.unlockedKeyIds).toEqual([]);
-      expect(result.damagedKeyIds).toEqual(["L1"]);
       const recovered = retained.filter((r) => r.hexAtReturn === SK_A);
       expect(recovered.length).toBeGreaterThan(0);
       expect(recovered.every((r) => isZero(r.buf))).toBe(true);
       expect((await keys())[0].salt).toBeDefined();
     });
 
-    it("reports a legacy record that decrypts to an invalid scalar as damaged", async () => {
+    it("refuses to unlock when a legacy record decrypts to an invalid scalar", async () => {
       await storage.local.set("encryptedKeys", [
         await legacyRecord("zero", new Uint8Array(32), pubkeyOf(SK_A)),
       ]);
 
-      const result = await vault.unlock(PASSWORD);
-
-      expect(result.damagedKeyIds).toEqual(["zero"]);
+      await expect(vault.unlock(PASSWORD)).rejects.toThrow("vault_keys_unreadable");
       await expect(vault.sign("ab".repeat(32))).rejects.toThrow("no_unlocked_key");
+      expect((await vault.getLockState()).isLocked).toBe(true);
     });
 
     it("keeps the legacy record when the migrated copy does not read back to the same key", async () => {

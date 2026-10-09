@@ -113,6 +113,18 @@ describe("vault.unlock", () => {
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
   });
 
+  it("reports a right password over records that all fail to open as unreadable, and stays locked", async () => {
+    await vault.importKey(SECRET_ONE, STRONG_PASSWORD);
+    await vault.lock();
+    const records = (await storage.local.get("encryptedKeys")) as Array<Record<string, unknown>>;
+    await storage.local.set("encryptedKeys", [{ ...records[0], pubkey: "cd".repeat(32) }]);
+
+    const res = await send({ type: "vault.unlock", password: STRONG_PASSWORD });
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
+    expect((await vault.getLockState()).isLocked).toBe(true);
+  });
+
   it("reports KDF parameters weakened below the floor as unreadable", async () => {
     await vault.importKey(SECRET_ONE, STRONG_PASSWORD);
     await vault.lock();
