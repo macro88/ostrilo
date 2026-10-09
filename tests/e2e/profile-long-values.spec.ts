@@ -5,6 +5,7 @@ import { test, expect } from "./fixtures/extension";
 import type { Page } from "./fixtures/extension";
 import { seedUnlockedVault, sendExtensionRpc } from "./fixtures/agent";
 import { PROFILE_FIELD_BOUNDS } from "@/domain/profile/types";
+import { twoToneImage } from "./fixtures/png";
 
 /**
  * Long profile values must never widen the window.
@@ -17,6 +18,11 @@ import { PROFILE_FIELD_BOUNDS } from "@/domain/profile/types";
  * viewport cannot show that, because a tab's width is fixed from outside - so
  * these tests measure the preferred width directly (see `preferredWidth`) in
  * addition to the horizontal overflow a tab can show.
+ *
+ * The header carries the user's own picture too, as a stored `data:` copy, and
+ * the Profile view carries the Refresh picture control and its note. Both are
+ * seeded and exercised here so the fixed-size image and the failure note are
+ * measured beside the long values, not only on their own.
  *
  * To cover a new long value, add a field to `LONG_PROFILE` (or a surface to
  * `SURFACES`); every assertion below runs over the whole record.
@@ -150,6 +156,12 @@ async function seedLongProfile(page: Page): Promise<void> {
     },
     { pubkey: keys[0].pubkey, metadata: LONG_PROFILE }
   );
+  await sendExtensionRpc(page, {
+    type: "avatar.save",
+    pubkey: keys[0].pubkey,
+    sourceUrl: LONG_PICTURE_URL,
+    dataUrl: `data:image/png;base64,${twoToneImage(96, 96, [220, 30, 30], [30, 30, 220]).toString("base64")}`,
+  });
 }
 
 async function setTheme(page: Page, theme: "light" | "dark"): Promise<void> {
@@ -243,6 +255,26 @@ test.describe("long profile values stay inside the window", () => {
         const view = await measureLayout(page);
         await capture(page, `${surface.name}-${theme}-view`);
         expectContained(view, baseline.preferredWidth, `${surface.name} ${theme} view`);
+
+        // The header's own picture sits in a fixed 28px box whatever the
+        // image or the name beside it.
+        const headerImage = page.locator("header img");
+        await expect(headerImage).toHaveAttribute("src", /^data:image\//);
+        expect(await headerImage.boundingBox()).toMatchObject({ width: 28, height: 28 });
+
+        // Pressing Refresh picture on an unreachable host puts the failure note
+        // on screen; it must stay inside the window like everything else.
+        await page.getByRole("button", { name: "Refresh picture" }).click();
+        await expect(page.getByRole("status").filter({ hasText: /\S/ })).toBeVisible({
+          timeout: 20_000,
+        });
+        await capture(page, `${surface.name}-${theme}-picture-note`);
+        expectContained(
+          await measureLayout(page),
+          baseline.preferredWidth,
+          `${surface.name} ${theme} picture note`
+        );
+        await expect(headerImage).toBeVisible();
 
         // Reachable: the action row is on screen without scrolling the page.
         await expect(
