@@ -25,5 +25,5 @@
 ## 4. Docs and verify
 
 - [x] 4.1 `docs/key-backup.md`, `docs/vault-storage-format.md`, README
-- [ ] 4.2 Light and dark review on the production build with a populated vault (Task 14 of phase 0.10)
-- [ ] 4.3 Archive this change (Task 14 of phase 0.10)
+- [x] 4.2 Light and dark review on the production build with a populated vault (Task 14 of phase 0.10)
+- [x] 4.3 Archive this change (Task 14 of phase 0.10)
