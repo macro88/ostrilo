@@ -55,7 +55,9 @@ from source, follow [the build instructions](#build-from-source).
    (`nsec`), then choose a password for your vault.
 2. **Keep a backup.** When creating your first key, save an encrypted backup or
    write the key down. Ostrilo asks you to check that you've recorded it before
-   finishing setup. If you import a key, keep your existing backup.
+   finishing setup. In a hurry, **Quick start** needs only a password and leaves
+   the backup for later; Home reminds you until you make one. If you import a
+   key, keep your existing backup.
 3. **Connect to an app.** Open a Nostr website and choose its browser-extension
    sign-in option. Ostrilo will ask whether the site may see your public key.
 4. **Review requests.** Check the site address, selected identity and event

@@ -18,6 +18,9 @@ An encrypted backup can only be made while the first key is being created. A key
 - **The keys list marks `pending` keys** with a quiet "No backup" chip.
 - **Docs:** `docs/key-backup.md`, `docs/vault-storage-format.md` and the README no longer say a later key cannot be backed up.
 
+- **Quick start** (phase 0.10, Task 10), a lighter way in for a new vault: a password, one key, a recoverability notice, then Home. No backup step, no key shown. The key is `pending`, which is why the status record exists before it. This scopes the first-key requirements that make backup mandatory to the full create flow, and adds the Quick Start requirement beside them.
+- **A Home banner** for the selected `pending` key: "This key has no backup", with an action that opens Settings on that key's backup. Dismissal lasts for the browser session and applies to that key only (`storage.session`, one item per key). It is the owner's chosen reminder: no schedule, no counter, no server.
+
 Not changed: the envelope format, the KDF and AEAD, the backup passphrase rules, the clipboard behaviour of onboarding, and the rule that no plaintext export exists anywhere.
 
 ## Capabilities
@@ -28,7 +31,7 @@ Not changed: the envelope format, the KDF and AEAD, the backup passphrase rules,
 
 ### Modified Capabilities
 
-- `secure-key-backup`: adds Settings backup, per-key backup status, and the keys-list marker.
+- `secure-key-backup`: adds Settings backup, per-key backup status, the keys-list marker, Quick Start and the Home banner; scopes the mandatory first-key backup requirements to the full create flow.
 
 ## Impact
 
@@ -38,7 +41,10 @@ Not changed: the envelope format, the KDF and AEAD, the backup passphrase rules,
 - `src/infrastructure/messaging/handlers/backup-rpc.ts`, `rpc.ts`, `client.ts`, `events.ts`, `validation/schemas.ts`, `background.ts`: `backup.list`, `backup.markVerified`, the `KEY_BACKUP_CHANGED` broadcast.
 - `src/ui/features/backup/`: the envelope, export and verification moved out of `features/onboarding`; `useKeyBackup`, `KeyBackupDialog`, and the reader hooks `useKeyBackupStatuses` and `useKeyBackupStatus`.
 - `src/ui/features/settings/components/KeysIdentitiesTab.tsx`, `shared/KeySelectorCard.tsx`; `OnboardingCreateKey.tsx` marks its key verified.
+- `src/ui/features/onboarding/components/OnboardingQuickStart.tsx`, `OnboardingWelcome.tsx`, `OnboardingContainer.tsx`, `validate-new-password.ts`: the Quick start flow.
+- `src/ui/features/backup/backup-banner.ts`, `hooks/useBackupBanner.ts`, `components/BackupBanner.tsx`; `HomeView.tsx`: the banner.
+- `src/ui/lib/open-options.ts`, `src/extension/options/OptionsApp.tsx`, `KeysIdentitiesTab.tsx`: the `#keys?backup=<id>` deep link.
 
-**Storage:** one new `storage.local` item, `keyBackupStatus`, holding key ids, a state and a time. No secret, no new permission, no dependency and no network behaviour.
+**Storage:** one new `storage.local` item, `keyBackupStatus`, holding key ids, a state and a time, and one `storage.session` item per dismissed banner (`backupBannerDismissed:<keyId>`). No secret, no new permission, no dependency and no network behaviour.
 
-**Behaviour users will notice:** every key can be backed up from Settings; a key made in Settings shows "No backup" until it is.
+**Behaviour users will notice:** every key can be backed up from Settings; a key made in Settings shows "No backup" until it is; a new install can take Quick start, and Home reminds a key without a backup until one is made.

@@ -1,4 +1,162 @@
+## MODIFIED Requirements
+
+### Requirement: Backup Is Verified Before The Flow Can Complete
+
+The full create-key flow (Create New Key) SHALL require positive evidence that the user recorded the key before it allows completion, and SHALL NOT accept an unverified acknowledgement checkbox as that evidence. This requirement does not apply to Quick Start, which creates a key without a backup step and records the key as having no backup until one is verified.
+
+#### Scenario: Verification is required to finish
+
+- **GIVEN** the user is in the full create-key flow and has revealed the private key
+- **WHEN** the user has not yet passed the backup verification step
+- **THEN** the finish action SHALL remain disabled
+
+#### Scenario: Correct re-entry passes verification
+
+- **GIVEN** the backup verification step asks the user to re-enter a checkable portion of the nsec
+- **WHEN** the user enters the correct value
+- **THEN** verification SHALL pass
+- **AND** the finish action SHALL become available
+
+#### Scenario: Incorrect re-entry blocks completion
+
+- **GIVEN** the backup verification step is shown
+- **WHEN** the user enters an incorrect value
+- **THEN** verification SHALL fail
+- **AND** the UI SHALL let the user reveal the key again and retry
+- **AND** the finish action SHALL remain disabled
+
+#### Scenario: Encrypted backup file round-trip passes verification
+
+- **GIVEN** the user saved an encrypted backup file during this flow
+- **WHEN** the user re-selects that file and supplies the backup passphrase
+- **THEN** the extension SHALL confirm the file decrypts to the key that was just created
+- **AND** verification SHALL pass
+- **AND** the decrypted material SHALL be discarded without being displayed
+
+#### Scenario: Verification input is not retained
+
+- **WHEN** backup verification passes or the user leaves the step
+- **THEN** the extension SHALL clear the verification input value from component state
+
+#### Scenario: Quick Start is not held to verification
+
+- **WHEN** the user takes Quick Start
+- **THEN** the flow SHALL complete without a backup step, a revealed key, a download or a quiz
+
+### Requirement: Key Loss Consequences Are Stated Plainly
+
+The full create-key flow SHALL tell the user, before completion, that a forgotten master password with no backup makes the identity permanently unrecoverable, and that no party can restore it. Quick Start SHALL instead give the recoverability notice defined by its own requirement before it continues.
+
+#### Scenario: Backup step states irrecoverability
+
+- **WHEN** the create-key backup step is rendered
+- **THEN** the UI SHALL state that the private key cannot be recovered if both the password and the backup are lost
+- **AND** SHALL state that no recovery service, support channel, or reset exists
+
+#### Scenario: Encrypted export states passphrase dependence
+
+- **WHEN** the encrypted backup export flow is shown
+- **THEN** the UI SHALL state that losing the backup passphrase makes the exported file unusable
+
 ## ADDED Requirements
+
+### Requirement: Quick Start Creates A Key Without A Backup
+
+The welcome screen SHALL offer a Quick start choice beside Create New Key and Import Existing Key, only when no vault exists. Quick Start SHALL ask for a master password and its confirmation under the existing password policy, SHALL generate exactly one key through the vault's existing generate path, SHALL show the recoverability notice, and SHALL then continue to Home. It SHALL NOT reveal, display, copy or download the key, SHALL NOT ask the user to prove a backup, and SHALL NOT record the key as verified. The key SHALL be `pending`.
+
+#### Scenario: Quick start is offered beside the other choices
+
+- **GIVEN** no vault exists
+- **WHEN** the welcome screen is shown
+- **THEN** Quick start SHALL be offered beside Create New Key and Import Existing Key
+
+#### Scenario: An existing vault is never offered Quick start
+
+- **GIVEN** the vault holds a key
+- **THEN** the welcome screen SHALL NOT be shown
+- **AND** nothing SHALL create a key or replace the vault through Quick Start
+
+#### Scenario: A password is all it asks for
+
+- **WHEN** the user takes Quick start
+- **THEN** the flow SHALL explain, in one short paragraph, that it creates a new identity on this browser
+- **AND** SHALL ask for a master password and confirmation that satisfy the existing password policy
+- **AND** a mismatched or rejected password SHALL create no key
+
+#### Scenario: One key, then the recoverability notice
+
+- **WHEN** a valid password is submitted
+- **THEN** exactly one key SHALL be generated and the vault unlocked
+- **AND** the flow SHALL state: "This creates a new identity on this browser. You can back it up later. If you lose access to this browser before making a backup, you may lose access to this identity."
+- **AND** the flow SHALL then continue to Home with that key selected
+- **AND** SHALL NOT claim that any server can recover the identity
+
+#### Scenario: No secret is shown
+
+- **WHEN** Quick start runs to completion
+- **THEN** no private key SHALL be displayed, copied, downloaded or revealed
+- **AND** the master password SHALL NOT remain in component state once the key exists
+
+#### Scenario: The key starts with no backup
+
+- **WHEN** Quick start completes
+- **THEN** the key's backup status SHALL be `pending`
+- **AND** Quick start SHALL NOT record it as `verified`
+
+#### Scenario: Repeated submission makes one key
+
+- **WHEN** the user presses Create repeatedly, or retries after a reply was lost, or a second surface submits
+- **THEN** only one key SHALL be generated
+- **AND** a retry SHALL find the key already in the vault and unlock it rather than generate another
+
+#### Scenario: Closing the popup keeps a saved key
+
+- **GIVEN** the key was saved
+- **WHEN** the popup closes before the notice is dismissed
+- **THEN** the next open SHALL find one usable key, not a partly made vault
+- **AND** the key SHALL survive reopening, a manual lock and an auto-lock
+
+#### Scenario: The identity is the same after a backup restores it
+
+- **GIVEN** the user backed up a Quick start key from Settings
+- **WHEN** the file is imported in a fresh profile
+- **THEN** the restored key SHALL have the same public key
+
+### Requirement: Home Reminds A Key Without A Backup
+
+Home SHALL show a quiet banner, "This key has no backup", for the selected key whose backup status is `pending`, with an action that opens Settings on that key's backup. The banner SHALL NOT be shown for a `verified` key or an unknown one. Dismissing it SHALL hide it for the current browser session only and for that key alone. It SHALL return in a new browser session until the key is backed up, and SHALL go as soon as a backup is verified.
+
+#### Scenario: A pending key shows the banner
+
+- **GIVEN** the selected key's status is `pending`
+- **WHEN** Home is shown
+- **THEN** the banner "This key has no backup" SHALL be shown with an action to back it up
+
+#### Scenario: Verified and unknown keys are not nagged
+
+- **GIVEN** the selected key's status is `verified`, or it has no record
+- **WHEN** Home is shown
+- **THEN** no banner SHALL be shown
+
+#### Scenario: The action opens that key's backup
+
+- **WHEN** the user chooses the banner's action
+- **THEN** Settings SHALL open on Keys & Identities and start the password-gated backup of the selected key
+- **AND** the request SHALL be dropped from the address once acted on, so reloading does not start it again
+
+#### Scenario: Dismissal lasts for the browser session
+
+- **WHEN** the user dismisses the banner
+- **THEN** it SHALL stay hidden for that key until the browser session ends
+- **AND** it SHALL NOT be hidden for another key
+- **AND** it SHALL NOT mark the key as backed up
+- **AND** it SHALL return in a new browser session while the key is `pending`
+
+#### Scenario: Verification removes the banner
+
+- **GIVEN** the banner is shown
+- **WHEN** a backup of that key is verified, from any surface
+- **THEN** the banner SHALL disappear without a reload
 
 ### Requirement: Any Key Can Be Backed Up From Settings
 

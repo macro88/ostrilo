@@ -15,9 +15,15 @@
 - [x] 2.5 `useKeyBackupStatuses` / `useKeyBackupStatus` for Home and other surfaces
 - [x] 2.6 Component and hook tests; Chrome e2e: add a key in Settings, back it up, restore it in a fresh profile with the same public key (`tests/e2e/backup-round-trip.spec.ts`)
 
-## 3. Docs and verify
+## 3. Quick start and the Home banner
 
-- [x] 3.1 `docs/key-backup.md`, `docs/vault-storage-format.md`, README
-- [ ] 3.2 Light and dark review on the production build with a populated vault (Task 14 of phase 0.10)
-- [ ] 3.3 Quick Start keys start `pending` and a Home banner reads the status (Task 10 of phase 0.10; extends this change)
-- [ ] 3.4 Archive this change (Task 14 of phase 0.10)
+- [x] 3.1 Welcome offers Quick start; `OnboardingQuickStart`: password, one key through the existing generate path, recoverability notice, Home; guards against repeat submission and a retry after a lost reply
+- [x] 3.2 `BackupBanner` and `useBackupBanner` on Home: `pending` only, per-key session dismissal, gone on `verified`
+- [x] 3.3 `#keys?backup=<id>` deep link: the banner opens Settings and starts that key's backup once
+- [x] 3.4 Unit tests (flow, banner visibility, dismissal, deep link) and Chrome e2e (`tests/e2e/quick-start.spec.ts`): Quick start, lock and unlock, back up from the banner, restore in a fresh profile
+
+## 4. Docs and verify
+
+- [x] 4.1 `docs/key-backup.md`, `docs/vault-storage-format.md`, README
+- [ ] 4.2 Light and dark review on the production build with a populated vault (Task 14 of phase 0.10)
+- [ ] 4.3 Archive this change (Task 14 of phase 0.10)

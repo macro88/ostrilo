@@ -626,6 +626,34 @@ try {
     await screenshot(sidepanel, "28-sidepanel-home-populated");
   });
 
+  // The selected key above was backed up in onboarding. "Work" was generated
+  // afterwards, so its backup is pending and Home asks about it. Selected for
+  // the captures and handed back, because every later surface expects the
+  // named key.
+  await step("23b-popup-home-backup-banner", async () => {
+    const list = await rpc(popup, { type: "keys.list" });
+    const all = Array.isArray(list) ? list : list?.keys ?? [];
+    const jimbo = all.find((k) => k.label === KEY_NAME);
+    const work = all.find((k) => k.label === "Work");
+    await rpc(popup, { type: "vault.select", id: work.id });
+    try {
+      await popup.reload();
+      await popup.getByRole("heading", { level: 2, name: "Work" }).waitFor({ timeout: 15000 });
+      await popup.getByText("This key has no backup").waitFor({ timeout: 10000 });
+      await popup.getByText("Signed reaction").first().waitFor({ timeout: 10000 });
+      await screenshot(popup, "23b-popup-home-backup-banner");
+
+      await sidepanel.reload();
+      await sidepanel.getByText("This key has no backup").waitFor({ timeout: 15000 });
+      await sidepanel.getByText("Signed reaction").first().waitFor({ timeout: 10000 });
+      await screenshot(sidepanel, "28b-sidepanel-home-backup-banner");
+    } finally {
+      await rpc(popup, { type: "vault.select", id: jimbo.id });
+      await popup.reload();
+      await sidepanel.reload();
+    }
+  });
+
   await step("options populated", async () => {
     await options.reload();
     await options.getByText("Ostrilo Settings").waitFor({ timeout: 15000 });

@@ -424,3 +424,29 @@ A public-key `allow` now belongs to one key, so Settings → Permissions names e
 - `tests/unit/ui/features/settings/OriginPolicyTable.test.tsx`, `PermissionsTab.test.tsx`, `tests/unit/ui/hooks/use-app-settings.test.tsx` passed.
 - `tests/e2e/identity-disclosure.spec.ts` (key switch through a real page and approval window) and `tests/e2e/settings-origin-policy.spec.ts` passed.
 - Light capture and dark capture both completed.
+
+# Review: Quick start and the Home backup banner
+
+Date: 2026-10-10
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §5 (one notch per screen), §6 (banned patterns), §7 (cards, warnings, step dots), §10 (voice), §11 (hit targets), §12 (PR checklist)
+Build reviewed: production (`pnpm run build`), both themes. The banner was judged on the runner's populated vault (new captures `23b` and `28b`, taken with the pending "Work" key selected and the named key selected again afterwards). The Quick start password and notice screens are not in the runner, which drives onboarding through Create New Key; they were photographed once per theme on a fresh profile.
+
+## What changed
+
+The welcome screen gains a third row, "Quick start". Its flow is a password step and one notice step, then Home. Home gains a hairline banner, "This key has no backup", with a "Back up" action and a dismiss, for a selected key whose backup is pending.
+
+## Findings
+
+- Welcome: Create New Key keeps the screen's single notch; Quick start and Import are hairline rows. Three rows still fit the 400x600 popup with the hero.
+- Quick start password step: the same `PasswordInput`, step dots and 1fr/2fr button pair as the other flows. The notice step uses the soft amber warning panel with a seal icon and no border or rail (§7 Warnings), and one notched Continue. No new colour, icon plate or gradient.
+- Banner: an `ink-card` row in Home's own grammar, deliberately not an amber warning. "Back up" is violet text and the dismiss is a 44px square, so both meet §11. One violet use on the screen.
+- Both themes: the banner keeps its hairline and text contrast on Deep Ink; "Back up" reads as the accent in both.
+- The banner adds about 68px, so in the 400x600 popup the second activity row now sits behind the tab bar until the shell scrolls. The first row stays whole and nothing is sliced through its text. The side panel shows the same rows as before.
+- Not covered: the banner at a very long key name (it does not render the name), and Quick start in the side panel layout.
+
+## Verification
+
+- `tests/unit/ui/features/home/home-view.test.tsx`, `tests/unit/ui/features/backup/backup-banner.test.tsx`, `tests/unit/ui/features/onboarding/quick-start-flow.test.tsx` passed.
+- `tests/e2e/quick-start.spec.ts`: Quick start, lock and unlock, popup closed on the notice, dismissal, backup from the banner, restore in a fresh profile with the same public key.
+- Light capture and dark capture both completed.
+

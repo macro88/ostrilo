@@ -8,7 +8,7 @@ can restore it for you. The copy you keep is the only recovery path there is.
 
 ## Saving an encrypted backup
 
-While you create your first key, onboarding offers **Save encrypted backup**. It
+While you create your first key with **Create New Key**, onboarding offers **Save encrypted backup**. It
 writes a versioned `ostrilo-key-backup` file sealed with the same Argon2id key
 derivation and AES-GCM encryption the vault itself uses. There is no plaintext
 option.
@@ -21,6 +21,21 @@ without it.
 
 Changing the master password (Settings → Security) does not touch backup files.
 Each one keeps the passphrase it was saved with, before and after the change.
+
+## Quick start: a password now, a backup later
+
+On a fresh install, **Quick start** makes one key from a master password alone.
+There is no backup step, no key shown, no file and no quiz. Ostrilo says so
+plainly: "This creates a new identity on this browser. You can back it up later.
+If you lose access to this browser before making a backup, you may lose access to
+this identity." It does not offer a server recovery, because there is none.
+
+A Quick start key is `pending`, and Home shows a quiet **This key has no backup**
+banner with a **Back up** action. It opens Settings on that key's backup, below.
+Dismissing the banner hides it for the current browser session only; it returns
+in the next one until the key is backed up, and goes the moment a backup is
+verified. Quick start is offered only when no vault exists, and never changes an
+existing one.
 
 ## Backing up a key you added later
 
