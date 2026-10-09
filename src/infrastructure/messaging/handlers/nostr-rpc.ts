@@ -2,9 +2,10 @@ import type { RpcRequest, RpcResponse } from "../rpc";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import type {
+  KeyRecord,
   SignedEvent,
   UnsignedEvent,
-  ApprovalDecision,
+  ActivityReason,
   ApprovalAction,
 } from "@/domain/types";
 import {
@@ -17,7 +18,10 @@ import { isProtectedKind } from "@/domain/policy/trust-definitions";
 import {
   ApprovalQueueService,
   ApprovalRateLimitError,
+  QUEUE_LIMITS,
 } from "@/application/services/approval-queue.service";
+import { DISCLOSURE_RATE_LIMITS } from "@/application/services/disclosure-rate-limit.service";
+import { RefusalLogCoalescer } from "@/application/services/refusal-log-coalescer";
 import { browser } from "wxt/browser";
 
 /** Approval popup dimensions */
@@ -43,15 +47,141 @@ export const VAULT_LOCKED_ERRORS: readonly string[] = [
   "no_unlocked_key",
 ];
 
+/** Fixed text: the key's ID is an internal identifier a web page has no use for. */
+const UNREADABLE_KEY_DETAILS =
+  "The selected key could not be read. Choose another key in Ostrilo.";
+
 export function isVaultLockedError(message: unknown): boolean {
   return typeof message === "string" && VAULT_LOCKED_ERRORS.includes(message);
 }
 
+/**
+ * How an approval prompt ended. Carrying the cause out of the queue is what
+ * lets the log say a prompt died to a lock or an expiry instead of calling
+ * every refusal the user's. `abandoned` is a page withdrawing its own request:
+ * the page is told it was denied, and the log records that nobody answered.
+ */
+type ApprovalOutcome =
+  | "allow"
+  | "user"
+  | "timeout"
+  | "vault_locked"
+  | "abandoned";
+
+/** The activity reason for a refusal outcome. */
+function refusalReason(
+  outcome: Exclude<ApprovalOutcome, "allow">
+): ActivityReason {
+  return outcome === "abandoned" ? "timeout" : outcome;
+}
+
 export class NostrRpcHandler implements RpcModule {
+  /**
+   * Queue-limit refusals reach the log once per origin per enqueue window. The
+   * limits' own counters do not count a refused call, so without this a page
+   * could write a row per call and rotate the real history out.
+   */
+  private readonly queueRefusalLog = new RefusalLogCoalescer(
+    QUEUE_LIMITS.windowMs
+  );
+
+  /**
+   * The same guard for identity requests, whose limiter refuses a polling
+   * origin on every call past its allowance. Separate from the signing one, so
+   * a signing refusal never hides a disclosure refusal from the same origin.
+   */
+  private readonly disclosureRefusalLog = new RefusalLogCoalescer(
+    DISCLOSURE_RATE_LIMITS.windowMs
+  );
+
   constructor(
     private approvalQueue?: ApprovalQueueService,
     private windowManager?: () => Promise<number | undefined>
   ) {}
+
+  /** The key a request would use, or the refusal to send instead. */
+  private async resolveSigningKey(
+    method: string,
+    context: ServiceContext
+  ): Promise<
+    { ok: true; key: KeyRecord } | { ok: false; response: RpcResponse }
+  > {
+    const keys = await context.vault.listKeys();
+    const key = keys.find((k) => k.isSelected);
+    if (!key) {
+      return {
+        ok: false,
+        response: createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, { method }),
+      };
+    }
+    if (context.vault.isKeyUnreadable(key.id)) {
+      return {
+        ok: false,
+        response: createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
+          details: UNREADABLE_KEY_DETAILS,
+          method,
+        }),
+      };
+    }
+    return { ok: true, key };
+  }
+
+  /**
+   * What the queue's denial means for the log. A prompt a lock killed, or one
+   * the page withdrew, was not refused by the user, and logging it as theirs
+   * would make the audit trail say something that did not happen.
+   */
+  private outcomeOf(
+    requestId: string,
+    decision: "allow" | "deny"
+  ): ApprovalOutcome {
+    if (decision === "allow") return "allow";
+    switch (this.approvalQueue!.denialCause(requestId)) {
+      case "vault_locked":
+        return "vault_locked";
+      case "timeout":
+        return "timeout";
+      case "abandoned":
+        return "abandoned";
+      default:
+        return "user";
+    }
+  }
+
+  private async recordDisclosureRefusal(
+    context: ServiceContext,
+    origin: string,
+    reason: ActivityReason
+  ): Promise<void> {
+    if (
+      reason === "rate_limited" &&
+      !this.disclosureRefusalLog.shouldLog(origin)
+    ) {
+      return;
+    }
+    await context.activityLog.addEntry({
+      origin,
+      operation: "identity_disclosure",
+      decision: "deny",
+      reason,
+    });
+  }
+
+  /** A signature that was asked for and approved, but could not be produced. */
+  private async recordSignRefusal(
+    context: ServiceContext,
+    origin: string,
+    event: UnsignedEvent,
+    reason: ActivityReason
+  ): Promise<void> {
+    await context.activityLog.addEntry({
+      origin,
+      kind: event.kind,
+      decision: "deny",
+      reason,
+      contentPreview: event.content.substring(0, 100),
+    });
+  }
 
   async handleRequest(
     message: RpcRequest,
@@ -121,48 +251,44 @@ export class NostrRpcHandler implements RpcModule {
     }
 
     // Charged before the key is read, and never when the origin is over its
-    // allowance. A refusal here queues nothing and prompts nobody.
+    // allowance. A refusal here queues nothing and prompts nobody. The window
+    // is read back from session storage first, so a worker that was evicted
+    // while locked does not hand the origin a fresh allowance.
+    await context.disclosureRateLimit.ready();
     if (!context.disclosureRateLimit.tryConsume(origin)) {
-      await context.activityLog.addEntry({
-        origin,
-        operation: "identity_disclosure",
-        decision: "deny",
-        reason: "rate_limited",
-      });
+      await this.recordDisclosureRefusal(context, origin, "rate_limited");
       return createRpcErrorResponse(RPC_ERROR_CODES.RATE_LIMITED, {
         details: "Too many identity requests from this site.",
         method: message.type,
       });
     }
 
-    // Get the selected key
-    const keys = await context.vault.listKeys();
-    const selectedKey = keys.find((k) => k.isSelected);
+    // The public key is stored in the clear, so an unreadable key would still
+    // be disclosed. Refused instead: the site would otherwise learn an
+    // identity that every following request fails to use.
+    const selection = await this.resolveSigningKey(message.type, context);
+    if (!selection.ok) return selection.response;
+    const selectedKey = selection.key;
 
-    if (!selectedKey) {
-      return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
-        method: message.type,
-      });
-    }
-
-    // Recorded consent. UNDEFINED IS NOT CONSENT - it is the prompting state.
+    // Recorded consent FOR THIS KEY. A grant is bound to the key it was given
+    // for, so one the user gave for another key does not answer here - the site
+    // is asked about this one. A refusal is per origin and covers every key.
+    // UNDEFINED IS NOT CONSENT - it is the prompting state.
     // Nothing infers consent from a stored policy record, a trust level or a
     // per-kind rule: such a record is written whenever a signing decision is
     // made, INCLUDING a refusal, and `low` is the level assigned by default
     // when one is created as a side effect. So its existence is evidence of a
     // signing decision and of nothing else. No origin is grandfathered.
-    const recorded = await context.policy.getIdentityDisclosure(origin);
+    const recorded = await context.policy.getIdentityDisclosure(
+      origin,
+      selectedKey.id
+    );
 
     if (recorded === "deny") {
       // Answered without a prompt. Without this, any https origin could
       // re-summon a focused OS window on every page load - the abuse shape this
       // codebase removed once already when it deleted `openUnlockPrompt`.
-      await context.activityLog.addEntry({
-        origin,
-        operation: "identity_disclosure",
-        decision: "deny",
-        reason: "remembered",
-      });
+      await this.recordDisclosureRefusal(context, origin, "remembered");
       return createRpcErrorResponse(RPC_ERROR_CODES.DISCLOSURE_REFUSED, {
         details: "This site is not allowed to read your public key.",
         method: message.type,
@@ -176,22 +302,17 @@ export class NostrRpcHandler implements RpcModule {
         });
       }
 
-      let decision: ApprovalDecision | "timeout";
+      let outcome: ApprovalOutcome;
       try {
-        decision = await this.requestDisclosureApproval(
+        outcome = await this.requestDisclosureApproval(
           origin,
-          selectedKey.pubkey,
+          selectedKey,
           message.clientRequestId
         );
       } catch (error) {
         // A flooding origin gets a distinct, honest code, matching signEvent.
         if (error instanceof ApprovalRateLimitError) {
-          await context.activityLog.addEntry({
-            origin,
-            operation: "identity_disclosure",
-            decision: "deny",
-            reason: "rate_limited",
-          });
+          await this.recordDisclosureRefusal(context, origin, "rate_limited");
           return createRpcErrorResponse(RPC_ERROR_CODES.RATE_LIMITED, {
             details: "Too many pending requests from this site.",
             method: message.type,
@@ -203,26 +324,23 @@ export class NostrRpcHandler implements RpcModule {
         });
       }
 
-      if (decision === "timeout") {
-        await context.activityLog.addEntry({
-          origin,
-          operation: "identity_disclosure",
-          decision: "deny",
-          reason: "timeout",
-        });
+      if (outcome === "timeout") {
+        await this.recordDisclosureRefusal(context, origin, "timeout");
         return createRpcErrorResponse(RPC_ERROR_CODES.TIMEOUT, {
           details: "Approval request timed out",
           method: message.type,
         });
       }
 
-      if (decision !== "allow") {
-        await context.activityLog.addEntry({
-          origin,
-          operation: "identity_disclosure",
-          decision: "deny",
-          reason: "user",
-        });
+      if (outcome !== "allow") {
+        await this.recordDisclosureRefusal(context, origin, refusalReason(outcome));
+        // A lock killed the prompt: the page is told the vault is locked, so it
+        // can ask again after an unlock instead of reading a refusal.
+        if (outcome === "vault_locked") {
+          return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+            method: message.type,
+          });
+        }
         return createRpcErrorResponse(RPC_ERROR_CODES.DISCLOSURE_REFUSED, {
           details: "You refused to share your public key with this site.",
           method: message.type,
@@ -252,29 +370,27 @@ export class NostrRpcHandler implements RpcModule {
   /**
    * Queue a prompt asking whether this origin may read the public key.
    *
-   * De-duplicates on `(origin, "identity_disclosure")` inside the queue, so a
-   * page calling `getPublicKey` in a loop produces ONE prompt whose answer fans
-   * out to every waiting caller - not one prompt per call.
+   * De-duplicates on `(origin, key, "identity_disclosure")` inside the queue, so
+   * a page calling `getPublicKey` in a loop produces ONE prompt whose answer
+   * fans out to every waiting caller - not one prompt per call. A caller that
+   * arrives after a key switch gets its own prompt, never the old one's answer.
    */
   private async requestDisclosureApproval(
     origin: string,
-    pubkey: string,
+    key: KeyRecord,
     clientRequestId?: string
-  ): Promise<ApprovalDecision | "timeout"> {
-    return new Promise<ApprovalDecision | "timeout">((resolve, reject) => {
+  ): Promise<ApprovalOutcome> {
+    await this.approvalQueue!.ready();
+    return new Promise<ApprovalOutcome>((resolve, reject) => {
       const pendingRequest = this.approvalQueue!.enqueueDisclosure(
         origin,
-        (decision: ApprovalDecision, _action: ApprovalAction) => {
-          if (
-            decision === "deny" &&
-            this.approvalQueue!.wasTimeout(pendingRequest.id)
-          ) {
-            resolve("timeout");
-          } else {
-            resolve(decision);
-          }
-        },
-        { signingPubkey: pubkey, clientRequestId }
+        (decision, _action: ApprovalAction) =>
+          resolve(this.outcomeOf(pendingRequest.id, decision)),
+        {
+          signingPubkey: key.pubkey,
+          signingKeyId: key.id,
+          clientRequestId,
+        }
       );
 
       this.openApprovalPopup(pendingRequest.id).catch((err) => {
@@ -328,15 +444,11 @@ export class NostrRpcHandler implements RpcModule {
       });
     }
 
-    // Get the selected key
-    const keys = await context.vault.listKeys();
-    const selectedKey = keys.find((k) => k.isSelected);
-
-    if (!selectedKey) {
-      return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
-        method: message.type,
-      });
-    }
+    // Before policy and before any prompt: a key that cannot sign must not
+    // raise an approval window, or have a "remember" decision stored for it.
+    const selection = await this.resolveSigningKey(message.type, context);
+    if (!selection.ok) return selection.response;
+    const selectedKey = selection.key;
 
     const event = message.event as UnsignedEvent;
     const pubkey = selectedKey.pubkey;
@@ -360,11 +472,13 @@ export class NostrRpcHandler implements RpcModule {
         });
       }
 
-      // Record denial in activity log
+      // Record denial in activity log. Past the lock check above, the only
+      // deny the policy returns is a rule the user saved.
       await context.activityLog.addEntry({
         origin: message.origin,
         kind: event.kind,
         decision: "deny",
+        reason: "remembered",
         contentPreview: event.content.substring(0, 100),
       });
 
@@ -374,9 +488,22 @@ export class NostrRpcHandler implements RpcModule {
       });
     }
 
+    // The auto-sign budget belongs here, where policy has decided to sign
+    // without a prompt and the key is already resolved. Over budget is not a
+    // refusal: the request takes the same path an `ask` decision does, so the
+    // user is asked and the queue's own limits apply.
+    const signsWithoutPrompt =
+      policyResult.mode === "allow" && !isProtectedKind(event.kind);
+    let overAutoSignBudget = false;
+    if (signsWithoutPrompt) {
+      await context.autoSignBudget.ready();
+      overAutoSignBudget = !context.autoSignBudget.tryConsume(message.origin);
+    }
+
     const requiresApproval =
       policyResult.mode === "ask" ||
-      (policyResult.mode === "allow" && isProtectedKind(event.kind));
+      (policyResult.mode === "allow" && isProtectedKind(event.kind)) ||
+      overAutoSignBudget;
 
     if (requiresApproval) {
       // Need approval - queue the request and open popup
@@ -399,23 +526,26 @@ export class NostrRpcHandler implements RpcModule {
         });
 
         // Wait for user approval
-        const decision = await this.requestApproval(
+        const outcome = await this.requestApproval(
           message.origin,
           event,
           pubkey,
+          selectedKey.id,
           eventIdHash,
-          message.clientRequestId
+          message.clientRequestId,
+          overAutoSignBudget
         );
 
-        console.log("[NostrRpcHandler] Approval decision:", decision);
+        console.log("[NostrRpcHandler] Approval outcome:", outcome);
 
         // Handle timeout separately
-        if (decision === "timeout") {
+        if (outcome === "timeout") {
           // Record timeout as denial
           await context.activityLog.addEntry({
             origin: message.origin,
             kind: event.kind,
             decision: "deny",
+            reason: "timeout",
             contentPreview: event.content.substring(0, 100),
           });
 
@@ -425,14 +555,22 @@ export class NostrRpcHandler implements RpcModule {
           });
         }
 
-        if (decision !== "allow") {
-          // Record user denial
+        if (outcome !== "allow") {
+          // Record the refusal with the reason the queue reports: the user
+          // pressing deny, or a lock that denied the prompt for them.
           await context.activityLog.addEntry({
             origin: message.origin,
             kind: event.kind,
             decision: "deny",
+            reason: refusalReason(outcome),
             contentPreview: event.content.substring(0, 100),
           });
+
+          if (outcome === "vault_locked") {
+            return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+              method: message.type,
+            });
+          }
 
           return createRpcErrorResponse(RPC_ERROR_CODES.DENIED, {
             details: "user rejected",
@@ -448,6 +586,14 @@ export class NostrRpcHandler implements RpcModule {
           console.warn(
             `[NostrRpcHandler] Refused enqueue from ${message.origin}: ${error.reason}`
           );
+          if (this.queueRefusalLog.shouldLog(message.origin)) {
+            await this.recordSignRefusal(
+              context,
+              message.origin,
+              event,
+              "rate_limited"
+            );
+          }
           return createRpcErrorResponse(RPC_ERROR_CODES.RATE_LIMITED, {
             details: "Too many pending approval requests",
             method: message.type,
@@ -539,7 +685,15 @@ export class NostrRpcHandler implements RpcModule {
       // Translate service errors to RPC codes
       if (error instanceof Error) {
         if (isVaultLockedError(error.message)) {
+          await this.recordSignRefusal(context, message.origin, event, "vault_locked");
           return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+            method: message.type,
+          });
+        }
+        if (error.message === "key_unreadable") {
+          await this.recordSignRefusal(context, message.origin, event, "key_unreadable");
+          return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
+            details: UNREADABLE_KEY_DETAILS,
             method: message.type,
           });
         }
@@ -601,31 +755,30 @@ export class NostrRpcHandler implements RpcModule {
     origin: string,
     event: UnsignedEvent,
     pubkey: string,
+    keyId: string,
     eventIdHash: string,
-    clientRequestId?: string
-  ): Promise<ApprovalDecision | "timeout"> {
-    return new Promise<ApprovalDecision | "timeout">((resolve, reject) => {
+    clientRequestId?: string,
+    exceededAutoSignBudget = false
+  ): Promise<ApprovalOutcome> {
+    // Judged against the enqueue window the worker had before any restart.
+    await this.approvalQueue!.ready();
+    return new Promise<ApprovalOutcome>((resolve, reject) => {
       // Enqueue the request with event ID hash for de-duplication
       const pendingRequest = this.approvalQueue!.enqueue(
         origin,
         event,
-        (decision: ApprovalDecision, _action: ApprovalAction) => {
-
-          // Check if this was a timeout
-          if (
-            decision === "deny" &&
-            this.approvalQueue!.wasTimeout(pendingRequest.id)
-          ) {
-            resolve("timeout");
-          } else {
-            resolve(decision);
-          }
-        },
+        (decision, _action: ApprovalAction) =>
+          resolve(this.outcomeOf(pendingRequest.id, decision)),
         eventIdHash,
         // The key that will actually sign, bound to the request here, so the
         // dialog cannot show a different one if the user switches keys while
         // the prompt is open.
-        { signingPubkey: pubkey, clientRequestId }
+        {
+          signingPubkey: pubkey,
+          signingKeyId: keyId,
+          clientRequestId,
+          exceededAutoSignBudget,
+        }
       );
 
       // Open approval popup

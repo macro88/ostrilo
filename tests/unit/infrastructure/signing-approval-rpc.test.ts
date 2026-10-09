@@ -131,6 +131,9 @@ describe("signing that needs approval", () => {
     expect(await verifies(event)).toBe(true);
     expect((await storedPolicy(SITE))?.rules[REACTION]).toBe("allow");
     expect((await storedPolicy(SITE))?.identityDisclosure).toBe("allow");
+    expect((await storedPolicy(SITE))?.identityDisclosureKeyIds).toEqual([
+      (await vault.listKeys())[0].id,
+    ]);
     expect(windowsClosed).toBe(1);
   });
 
@@ -161,7 +164,12 @@ describe("signing that needs approval", () => {
     const res = await pending;
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.DENIED);
     const [entry] = await activityLog.getRecent(10, 0);
-    expect(entry).toMatchObject({ origin: SITE, decision: "deny", contentPreview: "secret plans" });
+    expect(entry).toMatchObject({
+      origin: SITE,
+      decision: "deny",
+      reason: "user",
+      contentPreview: "secret plans",
+    });
     expect(await storedPolicy(SITE)).toBeUndefined();
   });
 
@@ -187,7 +195,7 @@ describe("signing that needs approval", () => {
 
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.TIMEOUT);
     const [entry] = await activityLog.getRecent(10, 0);
-    expect(entry).toMatchObject({ origin: SITE, decision: "deny" });
+    expect(entry).toMatchObject({ origin: SITE, decision: "deny", reason: "timeout" });
   });
 
   it("reports approval_failed, not a user denial, when the approval window cannot be opened", async () => {
@@ -259,13 +267,186 @@ describe("signing that needs approval", () => {
 
     const res = await nostr.handleRequest(signRequest(), context);
 
-    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.DENIED);
+    // `clear()` is what a lock does to the queue, so the page hears `locked`.
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.LOCKED);
     expect(browserBoundary.badgeTexts).toEqual([""]);
   });
 
   it("answers needs-approval when no approval queue is configured", async () => {
     const res = await new NostrRpcHandler().handleRequest(signRequest(), context);
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.NEEDS_APPROVAL);
+  });
+});
+
+describe("why a refused signing request was refused", () => {
+  const reasonLogged = async () => (await activityLog.getRecent(10, 0))[0];
+  const logged = async () => (await activityLog.getRecent(100, 0)).length;
+
+  it("names a remembered deny rule when no prompt was shown", async () => {
+    await policy.setPerKindRule(SITE, REACTION, "deny");
+
+    const res = await new NostrRpcHandler(queue, async () => 1).handleRequest(signRequest(), context);
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.DENIED);
+    expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "remembered" });
+    expect(await logged()).toBe(1);
+    expect(queue.count()).toBe(0);
+  });
+
+  it("names the rate limit when the origin's pending slots are full", async () => {
+    const nostr = new NostrRpcHandler(queue, async () => 1);
+    for (let i = 0; i < 5; i++) {
+      void nostr.handleRequest(signRequest(SITE, `note ${i}`), context);
+    }
+    await vi.waitFor(() => expect(queue.count()).toBe(5));
+
+    const res = await nostr.handleRequest(signRequest(SITE, "one too many"), context);
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+    expect(await reasonLogged()).toMatchObject({
+      decision: "deny",
+      kind: REACTION,
+      reason: "rate_limited",
+      contentPreview: "one too many",
+    });
+    expect(await logged()).toBe(1);
+  });
+
+  describe("a burst of queue-limit refusals", () => {
+    const fillPendingSlots = async (nostr: NostrRpcHandler, origin: string) => {
+      for (let i = 0; i < 5; i++) {
+        void nostr.handleRequest(signRequest(origin, `note ${i}`), context);
+      }
+      await vi.waitFor(() => expect(queue.count()).toBeGreaterThanOrEqual(5));
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("writes one row per origin per window, and a new one once the window passes", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const nostr = new NostrRpcHandler(queue, async () => 1);
+      const other = "https://other.example";
+      await fillPendingSlots(nostr, SITE);
+      await fillPendingSlots(nostr, other);
+      const refused = async (origin: string, content: string) =>
+        errorCodeOf(await nostr.handleRequest(signRequest(origin, content), context));
+
+      for (let i = 0; i < 30; i++) {
+        expect(await refused(SITE, `flood ${i}`)).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+      }
+      expect(await logged()).toBe(1);
+      expect((await reasonLogged()).contentPreview).toBe("flood 0");
+
+      expect(await refused(other, "other site")).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+      expect(await logged()).toBe(2);
+      expect(await refused(other, "other again")).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+      expect(await logged()).toBe(2);
+
+      vi.setSystemTime(Date.now() + 61_000);
+      expect(await refused(SITE, "after the window")).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+      expect(await logged()).toBe(3);
+      expect((await reasonLogged()).contentPreview).toBe("after the window");
+    });
+  });
+
+  it("writes one disclosure row for a burst refused by the queue's limits and then the limiter", async () => {
+    const nostr = new NostrRpcHandler(queue, async () => 1);
+    for (let i = 0; i < 5; i++) {
+      void nostr.handleRequest(signRequest(SITE, `note ${i}`), context);
+    }
+    await vi.waitFor(() => expect(queue.count()).toBe(5));
+
+    // Six calls fit the limiter's allowance and are refused by the full queue;
+    // the rest are refused by the limiter itself.
+    for (let i = 0; i < 12; i++) {
+      const res = await nostr.handleRequest({ type: "nostr.getPublicKey", origin: SITE }, context);
+      expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+    }
+
+    expect(await logged()).toBe(1);
+    expect(await reasonLogged()).toMatchObject({
+      operation: "identity_disclosure",
+      decision: "deny",
+      reason: "rate_limited",
+    });
+  });
+
+  it("blames the lock, not the user, when the vault locks while the prompt is open", async () => {
+    const nostr = new NostrRpcHandler(queue, async () => 1);
+    const pending = nostr.handleRequest(signRequest(), context);
+    await nextPending();
+
+    // What the background does on lock.
+    queue.clear();
+
+    // `locked`, not `denied`: a dapp retries after an unlock, and does not
+    // retry a refusal the user chose.
+    expect(errorCodeOf(await pending)).toBe(RPC_ERROR_CODES.LOCKED);
+    expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "vault_locked" });
+    expect(await logged()).toBe(1);
+  });
+
+  it("logs a request the page withdrew as unanswered, not as the user's denial", async () => {
+    const nostr = new NostrRpcHandler(queue, async () => 1);
+    const pending = nostr.handleRequest(
+      {
+        type: "nostr.signEvent",
+        origin: SITE,
+        clientRequestId: "c1",
+        event: { kind: REACTION, created_at: 1_700_000_000, tags: [], content: "hello" },
+      },
+      context
+    );
+    await nextPending();
+
+    await nostr.handleRequest(
+      { type: "nostr.cancelRequest", origin: SITE, clientRequestId: "c1" },
+      context
+    );
+    expect(errorCodeOf(await pending)).toBe(RPC_ERROR_CODES.DENIED);
+
+    expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "timeout" });
+    expect(await logged()).toBe(1);
+  });
+
+  it("logs an approved request that could not be signed because the key was unreadable", async () => {
+    await policy.setPerKindRule(SITE, REACTION, "allow");
+    vi.spyOn(vault, "sign").mockRejectedValueOnce(new Error("key_unreadable"));
+
+    const res = await new NostrRpcHandler(queue, async () => 1).handleRequest(signRequest(), context);
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
+    expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "key_unreadable" });
+    expect(await logged()).toBe(1);
+  });
+
+  it("logs an approved request that could not be signed because the vault locked", async () => {
+    await policy.setPerKindRule(SITE, REACTION, "allow");
+    vi.spyOn(vault, "sign").mockRejectedValueOnce(new Error("key_locked_or_missing"));
+
+    const res = await new NostrRpcHandler(queue, async () => 1).handleRequest(signRequest(), context);
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.LOCKED);
+    expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "vault_locked" });
+    expect(await logged()).toBe(1);
+  });
+
+  it("blames the lock for a disclosure prompt the vault locked under", async () => {
+    const nostr = new NostrRpcHandler(queue, async () => 1);
+    const pending = nostr.handleRequest({ type: "nostr.getPublicKey", origin: SITE }, context);
+    await nextPending();
+
+    queue.clear();
+
+    expect(errorCodeOf(await pending)).toBe(RPC_ERROR_CODES.LOCKED);
+    expect(await reasonLogged()).toMatchObject({
+      operation: "identity_disclosure",
+      decision: "deny",
+      reason: "vault_locked",
+    });
+    expect(await logged()).toBe(1);
   });
 });
 
@@ -279,7 +460,7 @@ describe("signing refusals from vault state", () => {
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.NO_KEY_SELECTED);
   });
 
-  it("reports a selected key that failed to unlock as locked, not denied", async () => {
+  it("reports a selected key that failed to unlock as unreadable, not locked and not denied", async () => {
     await vault.importKey(SECRET_TWO, STRONG_PASSWORD, "second");
     await vault.lock();
     const [first, second] = (await storage.local.get<KeyRecord[]>("encryptedKeys")) ?? [];
@@ -293,7 +474,7 @@ describe("signing refusals from vault state", () => {
 
     const res = await new NostrRpcHandler(queue, async () => 1).handleRequest(signRequest(), context);
 
-    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.LOCKED);
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
   });
 });
 
@@ -324,7 +505,9 @@ describe("identity disclosure through the approval queue", () => {
 
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.APPROVAL_FAILED);
     expect(JSON.stringify(res)).not.toContain(PUBKEY_ONE);
-    expect(await policy.getIdentityDisclosure(SITE)).toBeUndefined();
+    expect(
+      await policy.getIdentityDisclosure(SITE, (await vault.listKeys())[0].id)
+    ).toBeUndefined();
   });
 
   it("remembers an allowed disclosure per origin without writing a kind rule", async () => {
@@ -338,7 +521,11 @@ describe("identity disclosure through the approval queue", () => {
     );
 
     expect(dataOf(await pending)).toEqual({ pubkey: PUBKEY_ONE });
-    expect(await storedPolicy(SITE)).toMatchObject({ identityDisclosure: "allow", rules: {} });
+    expect(await storedPolicy(SITE)).toMatchObject({
+      identityDisclosure: "allow",
+      identityDisclosureKeyIds: [(await vault.listKeys())[0].id],
+      rules: {},
+    });
   });
 
   it("remembers a refused disclosure so the next request is answered without a prompt", async () => {

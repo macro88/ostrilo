@@ -161,8 +161,22 @@ export interface OriginPolicy {
    * `low` is the level assigned by default when a record is created as a side
    * effect. So an existing record is evidence of a signing decision and of
    * nothing else. Every origin prompts once on next use.
+   *
+   * `deny` is per ORIGIN and covers every key. `allow` is per KEY: it is only
+   * ever in force for the key ids listed in `identityDisclosureKeyIds`, and an
+   * `allow` that names no key discloses nothing.
    */
   identityDisclosure?: Authorisation;
+  /**
+   * The key ids this origin has been allowed to read, when `identityDisclosure`
+   * is `allow`.
+   *
+   * Key ids, not public keys: the id is the vault's own immutable handle, so a
+   * grant cannot follow a key that was deleted and re-imported - that key asks
+   * again. Present only alongside `allow`; absent on a legacy record, where the
+   * migration binds it to the key selected at the time.
+   */
+  identityDisclosureKeyIds?: string[];
   updatedAt: number;
 }
 
@@ -190,6 +204,8 @@ export interface AppSettingsV1 {
   uploadEndpoint?: string;
   onboardingCompleted?: boolean; // track if user completed onboarding
   onboardingCompletedAt?: number; // epoch seconds when onboarding was completed
+  /** Consent-migration version already applied; absent means none has run. */
+  __consentMigrations?: number;
 }
 
 /**
@@ -218,6 +234,57 @@ export function normalizeAutoLockMinutes(value: unknown): number {
   const whole = Math.floor(value);
   if (whole < AUTO_LOCK_BOUNDS.min) return AUTO_LOCK_BOUNDS.default;
   return Math.min(whole, AUTO_LOCK_BOUNDS.max);
+}
+
+/**
+ * Why the vault is locked, recorded in session storage beside the lock flag.
+ *
+ * A label and nothing else: it carries no key material and is safe to show a
+ * locked surface. It exists so the lock screen can tell a lock the user or the
+ * timer chose from one the browser or a damaged record forced.
+ *
+ *  - `manual`: the user pressed Lock.
+ *  - `inactivity`: the auto-lock deadline passed.
+ *  - `background_restarted`: the record said unlocked but the background held
+ *    no keys - the browser ended the MV3 service worker, or it crashed.
+ *  - `state_unreadable`: the lock record was missing fields, malformed, or
+ *    could not be read at all.
+ *  - `clock_rollback`: the last recorded activity is in the future.
+ *  - `browser_restarted`, `extension_updated`: the background started fresh
+ *    and locked on purpose.
+ */
+export const LOCK_REASONS = [
+  "manual",
+  "inactivity",
+  "background_restarted",
+  "state_unreadable",
+  "clock_rollback",
+  "browser_restarted",
+  "extension_updated",
+] as const;
+
+export type LockReason = (typeof LOCK_REASONS)[number];
+
+/** Narrows an untrusted value - a stored record or an RPC payload - to a lock reason. */
+export function isLockReason(value: unknown): value is LockReason {
+  return (
+    typeof value === "string" &&
+    (LOCK_REASONS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * The minutes an `inactivity` lock reports, or undefined when the value is not
+ * a whole number inside the auto-lock range. A stored record or an RPC payload
+ * is not trusted to be one: a lock screen must never print `1.5` or `Infinity`.
+ */
+export function parseInactivityMinutes(value: unknown): number | undefined {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= AUTO_LOCK_BOUNDS.min &&
+    value <= AUTO_LOCK_BOUNDS.max
+    ? value
+    : undefined;
 }
 
 export const DEFAULT_RELAY_URLS = ["wss://relay.primal.net"] as const;
@@ -630,12 +697,27 @@ export interface PendingRequest {
    */
   signingPubkey?: string;
   /**
+   * The id of the key `signingPubkey` belongs to, captured with it. A
+   * remembered approval binds to this key id, so switching keys while a prompt
+   * is open cannot move the grant onto the new selection.
+   */
+  signingKeyId?: string;
+  /**
    * The page-side correlation id, when the request came from a web page.
    *
    * Lets the content script cancel a request the page has abandoned. Only
    * ever used to DENY: see cancelByClientRequestId.
    */
   clientRequestId?: string;
+  /**
+   * Set when the site's policy would have signed this without a prompt but the
+   * origin had used its automatic-signing budget for the window.
+   *
+   * Display-only. The approval window says so, because a trusted site that
+   * suddenly needs approval otherwise looks like a fault. It never changes what
+   * approving does.
+   */
+  exceededAutoSignBudget?: true;
 }
 
 /**
@@ -675,6 +757,56 @@ export function isDisclosureRequest(
 // ============================================
 
 /**
+ * Why a request was refused, or allowed without a prompt.
+ *
+ * - `user`: the person pressed deny.
+ * - `remembered`: a saved rule answered, with no prompt.
+ * - `timeout`: no answer arrived - the prompt expired, the window was closed or
+ *   the page gave up waiting.
+ * - `rate_limited`: the site asked too often.
+ * - `vault_locked`: the vault locked before the request could be answered.
+ * - `key_unreadable`: the selected key could not be opened to sign.
+ */
+export const ACTIVITY_REASONS = [
+  "user",
+  "remembered",
+  "timeout",
+  "rate_limited",
+  "vault_locked",
+  "key_unreadable",
+] as const;
+
+export type ActivityReason = (typeof ACTIVITY_REASONS)[number];
+
+/** The reason a stored value names, or undefined for anything unrecognised. */
+export function parseActivityReason(value: unknown): ActivityReason | undefined {
+  return ACTIVITY_REASONS.find((reason) => reason === value);
+}
+
+const DENIAL_REASON_COPY: Record<ActivityReason, string> = {
+  user: "You denied it",
+  remembered: "Blocked by a remembered rule",
+  timeout: "No answer in time, or the window was closed",
+  rate_limited: "Too many requests from this site",
+  vault_locked: "Ostrilo was locked",
+  key_unreadable: "Not signed: the signing key could not be read",
+};
+
+/**
+ * Short copy for why a request was refused, or undefined when there is nothing
+ * to say: an allowed entry, an entry from before reasons were recorded, or a
+ * stored value this build does not recognise. The row then shows no reason
+ * rather than a guess.
+ */
+export function describeDenialReason(
+  entry: Pick<ActivityLogEntry, "decision"> & { reason?: unknown }
+): string | undefined {
+  if (entry.decision !== "deny") return undefined;
+  const reason = parseActivityReason(entry.reason);
+  return reason === undefined ? undefined : DENIAL_REASON_COPY[reason];
+}
+
+/**
  * Activity log entry tracking signing operations
  * Stored in local storage for audit trail
  */
@@ -709,9 +841,11 @@ export interface ActivityLogEntry {
    *
    * A closed union, never free text: an activity log is read by people and
    * must not become a channel for whatever a handler happened to have in a
-   * string. Absent when the decision speaks for itself.
+   * string. Absent when the decision speaks for itself, and on every entry
+   * written before reasons were recorded. Storage is untrusted on read - use
+   * `parseActivityReason`, which treats an unrecognised value as absent.
    */
-  reason?: "user" | "policy" | "remembered" | "timeout" | "rate_limited";
+  reason?: ActivityReason;
   /** User decision: "allow" | "deny" */
   decision: "allow" | "deny";
   /** Content preview (first 100 chars, sanitized) */

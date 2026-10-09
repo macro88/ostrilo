@@ -1,5 +1,172 @@
 # Changelog
 
+## Unreleased
+
+Changes since 0.9.0. They are not in a release yet, and no version number has
+been set for them.
+
+### Added
+
+- **Quick start.** The welcome screen has a third option that needs only a
+  master password: Ostrilo makes one identity and opens Home. It does not show
+  the key or ask for a backup. It says so plainly, that if you lose access to
+  this browser before making a backup you may lose the identity, and Home keeps
+  reminding you with a quiet "This key has no backup" banner and a **Back up**
+  button that opens that key's backup in Settings. Dismiss the banner and it
+  stays away for the rest of the browser session, then returns until the key is
+  backed up. Quick start is offered only on a new install and never changes an
+  existing vault.
+- **Back up any key from Settings.** Settings → Keys & Identities has a **Back
+  up** button on every readable key. It asks for your master password, writes the same
+  encrypted backup file as first-key onboarding, with its own passphrase, and
+  then asks you to open the saved file to check that it holds this key. Only
+  then is the key marked backed up. The key itself is never shown. A key you
+  make in Settings or with Quick start is marked **No backup** until you do
+  this. An imported key, or one that predates this tracking, is not marked: you
+  already hold its `nsec`, or made its backup in onboarding.
+- **Your own picture in the header.** When you save your profile with a picture
+  address, or press **Refresh picture** on the Profile screen, Ostrilo loads
+  that address once, shrinks it to a 96 by 96 pixel copy, keeps the copy on this
+  device and shows it in the header. Opening the popup or the side panel,
+  unlocking, switching keys and approval windows make no image request, and
+  nothing refreshes the copy in the background. If the host refuses the load,
+  the header keeps its local mark and the Profile screen says the picture could
+  not be loaded. Saving a profile with no picture, or deleting the key, removes
+  the copy. See [PRIVACY.md](PRIVACY.md#images-and-uploads) for what the image
+  host can see.
+- **The lock screen says why it locked:** you locked it, inactivity (with the
+  number of minutes), the browser or Ostrilo's background restarting, an update
+  or reload, a session state Ostrilo could not read, or a clock that moved
+  backwards. If the background does not answer at all, the screen says "Can't
+  reach Ostrilo" and offers a retry, where it used to say the vault was locked.
+- **`window.nostr.capabilities`**, a frozen `{ methods }` list of what this
+  provider implements, for feature detection without calling a method and
+  reading its failure. It carries no version or build number, on purpose. The
+  versioning and deprecation policy is in
+  [docs/api-versioning.md](docs/api-versioning.md).
+- **Why a request was refused, in the activity log.** Each denied entry says
+  whether you denied it, a saved rule did, nobody answered in time, the site
+  asked too often, Ostrilo was locked, or the signing key could not be read. The
+  reason is in the JSON export too. The activity preview shows hidden and
+  direction-control characters escaped, as the approval window already does.
+- **Activity filters see everything.** The origin filter lists every origin in
+  the stored log, not just the loaded page, and the kind filter reaches kinds 5,
+  22242 and 27235.
+
+### Fixed
+
+- **A lock while a request was waiting for you now reaches the site as "locked",
+  not as a refusal.** If the vault locked with a signature or public-key prompt
+  open, the site was told you had said no, and it could not tell that from a
+  real refusal. It now hears that the vault is locked and can ask again after
+  you unlock. The activity log already recorded the lock as the reason.
+- **A 35-minute auto-lock now lasts 35 minutes.** The browser ends an idle
+  extension background after about half a minute, and the unlocked keys live
+  only in that background's memory, so with every Ostrilo window closed the
+  vault locked itself in a minute or two whatever the slider said. While the
+  vault is unlocked, Ostrilo now makes one harmless extension call about every 20
+  seconds to keep the background running, and stops the moment the vault locks
+  and never past the auto-lock deadline. Keys are still held in memory only,
+  never written anywhere. If the browser ends the background anyway - an update,
+  a crash, memory pressure - the vault still locks, and the lock screen says
+  so.
+- **A stored activity time that was not a number could read as a session that
+  never expires.** It now locks the vault.
+- **Keys and the selected identity are right after every unlock,** including an
+  unlock made in another window or after the background restarted. The key list,
+  the selection and the settings are re-read once the unlock is confirmed, and an
+  answer to an earlier request can no longer overwrite a newer one. If the key
+  you had selected is damaged, it stays selected and Ostrilo names it instead of
+  quietly switching to another; signing and `getPublicKey` refuse with
+  `vault_unreadable` before any approval prompt appears. If the stored selection
+  points at a key that no longer exists, the fallback is saved. An unlock that
+  opens none of the stored keys is refused, not reported as success.
+- **Saving the profile of a key that was not first in the vault signed the
+  update with the wrong key.** Signing with no key named now means the selected
+  key, never another.
+- **Activity export covers the whole log.** With retention above 100 entries the
+  export failed, because it asked for more entries in one request than the
+  request allows. It now reads the log in pages.
+- **A page that gets a failure gets a documented code.** Two messages the
+  content script made up ("Invalid event parameter", "Unknown method") are now
+  `invalid_event` and `unknown_method`, codes the documentation already listed as
+  what a page receives, so this is a patch-level correction under the
+  [versioning policy](docs/api-versioning.md) and not marked breaking. A page waiting for approval when the
+  browser ends the background gets `approval_failed` instead of the browser's own
+  error text. Everything a page can receive is one of the codes in
+  [docs/rpc-error-codes.md](docs/rpc-error-codes.md), which was rewritten and is
+  now checked against the code by a test. If your dApp matched on the old
+  strings, match on the codes.
+- **Changing a setting no longer drops your relay connections.** A theme change,
+  for example, used to close every relay socket.
+- **A long profile value no longer widens the popup.** A long website or picture
+  address, or a long about text, wraps or truncates inside the popup and inside
+  a 400-pixel-wide side panel (both are checked by an end-to-end test).
+- **A site that floods the activity log is recorded once per window.** Rate-limited
+  requests from one site are coalesced into one entry per window, so a page
+  cannot push your real history out of a log that keeps 50 entries.
+- **Accessibility.** Red chips, secondary text and the welcome hint now meet 4.5:1
+  contrast in their themes (`--ink-red` and `--ink-2` are a few percent darker in
+  the light theme). The header's key selector is a menu, not a listbox, so a
+  screen reader reports it as one. Password errors are announced and tied to
+  their field. An end-to-end test scans 36 surfaces in both themes with axe, and fails the
+  e2e run (nightly, on pushes to main, and on pull requests labelled `run-e2e`)
+  on a serious or critical finding.
+- **Smaller:** the approval window said "1 bytes" for one byte; the Home banner no
+  longer points a key that cannot be read at a Back up button that is disabled
+  for it.
+
+### Behaviour changes
+
+- **A site that signs a lot is asked about, not cut off.** A site you let
+  sign without asking, through a remembered allow rule, high trust or a session
+  grant, can have 60 requests per minute signed without a prompt. The 61st opens the approval window like a request from a site you have not
+  trusted, with a line saying why. The limits for the approval queue and for
+  `getPublicKey` are unchanged, and the counters now survive the background
+  restarting.
+- **A refusal in the activity log can read "Not signed: the signing key could not be
+  read"** under a Denied entry, when a key failed after the request was
+  accepted. It was not your choice, and the line says so.
+- **BREAKING (RPC): an unlock that opens none of the stored keys fails with
+  `vault_unreadable`.** It used to succeed with an empty vault. Internal;
+  nothing a page can reach.
+- Internal, additive: `state.getLock` answers `lockReason` and `inactivityMinutes`
+  when locked, and `vault.generate` takes `onlyIfEmpty`, which Quick start uses so
+  a second window cannot overwrite an existing vault.
+
+### Security
+
+- **BREAKING (API): `getPublicKey()` consent now belongs to one key.** Allowing a
+  site to read your public key applied to every identity in the vault, so a
+  site you let see key A also saw key B the moment you switched. Consent is now
+  per site and per key. After you switch keys, a site is asked again for the new
+  one, and switching back needs no prompt. Refusing stays per site. A dApp that
+  was calling `getPublicKey()` after a key switch now waits on a prompt, and
+  rejects with `disclosure_refused` if you refuse. It could not wait for a major
+  release because it closes a leak about which identities a site can link, so
+  [the policy's exception](docs/api-versioning.md#deprecation-policy) applies. On
+  upgrade, a site you had allowed keeps its allowance for the key that was
+  selected; if no key was selected it is set back to ask. Settings → Permissions
+  lists each grant with the identity's name and a shortened `npub`, and revokes
+  one without touching the others. A refusal still covers every key, since
+  "this site may not know who I am" is about the site, and refusing also
+  withdraws the site's grants. A key you delete and import again is a new key
+  and is asked about again.
+- **Still not per key: remembered signing rules, high trust and session grants.** A
+  site you trust while one key is selected can sign without asking under another
+  key after a switch. Tracked as SEC-028 in [the roadmap](docs/roadmap.md).
+- **The one outside image load is limited to what you start.** Ostrilo loads your
+  picture only on a profile save or **Refresh picture**, only from an `https:`
+  address, up to 4096 by 4096 pixels, with no cookies or referrer, giving up after
+  10 seconds. The host sees your IP address and the time, as any image host would.
+  Chromium lets an extension page read an image from a host that sends no
+  cross-origin headers, so the copy is made there; a browser that enforces them
+  leaves the header on its local mark.
+- **Backup status is not secret and is stored apart from the vault:** only a key's
+  id, `pending` or `verified`, and a time.
+- Keys remain in the background's memory only. The keepalive holds no secret and
+  writes nothing.
+
 ## 0.9.0 — 2026-10-06
 
 First public release. The 0.8.0 entry below was written while the repository

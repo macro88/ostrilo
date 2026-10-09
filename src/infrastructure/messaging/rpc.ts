@@ -8,6 +8,7 @@ import type {
   SignedEvent,
   ApprovalAction,
   ActivityLogEntry,
+  LockReason,
 } from "@/domain/types";
 
 // Re-export error codes for convenience
@@ -26,7 +27,13 @@ export type RpcRequest =
   | { type: "policy.evaluate"; origin: string; kind: number }
   | { type: "vault.unlock"; password: string }
   | { type: "vault.lock" }
-  | { type: "vault.generate"; password: string; label?: string }
+  | {
+      type: "vault.generate";
+      password: string;
+      label?: string;
+      /** Create the key only if the vault holds none; else `key_already_exists`. */
+      onlyIfEmpty?: boolean;
+    }
   | { type: "vault.import"; keyInput: string; password: string; label?: string }
   | { type: "vault.select"; id: string }
   | { type: "vault.renameKey"; id: string; label: string }
@@ -38,6 +45,10 @@ export type RpcRequest =
     }
   | { type: "vault.reveal"; keyId?: string; password: string }
   | { type: "keys.list" }
+  // Per-key backup status. `markVerified` is the only write the UI has: a key
+  // becomes `pending` when the vault creates it, never by request.
+  | { type: "backup.list" }
+  | { type: "backup.markVerified"; keyId: string }
   | { type: "state.getLock" }
   | { type: "state.touch" }
   | { type: "settings.get" }
@@ -67,6 +78,8 @@ export type RpcRequest =
       password?: string;
     }
   | { type: "policy.removeOrigin"; origin: string }
+  // Withdraws one key's disclosure grant for a site, leaving its other grants.
+  | { type: "policy.revokeDisclosure"; origin: string; keyId: string }
   | { type: "crypto.evaluatePassword"; password: string; label?: string }
   | { type: "crypto.parsePrivateKey"; keyInput: string }
   // NIP-07 Nostr operations
@@ -101,7 +114,13 @@ export type RpcRequest =
       limit?: number;
       offset?: number;
     }
+  | { type: "activity.origins" }
   | { type: "activity.clear" }
+  // The local copy of a key's profile picture. The UI makes the copy; the
+  // background only stores it, and never fetches the picture.
+  | { type: "avatar.get"; pubkey: string }
+  | { type: "avatar.save"; pubkey: string; sourceUrl: string; dataUrl: string }
+  | { type: "avatar.remove"; pubkey: string }
   // Profile operations
   | { type: "profile.get"; params: { pubkey: string; forceFetch?: boolean } }
   | { type: "profile.getAll" }
@@ -119,6 +138,13 @@ export type LockStatePayload = {
   isLocked: boolean;
   selectedKeyId?: string;
   lockAt?: number;
+  /**
+   * Why the vault is locked, present only while locked and only when the
+   * background knows. Absent on a vault never unlocked in this browser session.
+   */
+  lockReason?: LockReason;
+  /** The timeout that elapsed, present with `lockReason: "inactivity"`. */
+  inactivityMinutes?: number;
 };
 
 // NIP-07 specific response types
@@ -141,6 +167,10 @@ export type ActivityGetRecentResponse =
 
 export type ActivityFilterResponse =
   | { ok: true; data: { entries: ActivityLogEntry[]; total: number } }
+  | { ok: false; error: RpcErrorObject };
+
+export type ActivityOriginsResponse =
+  | { ok: true; data: { origins: string[] } }
   | { ok: false; error: RpcErrorObject };
 
 export type ActivityClearResponse =

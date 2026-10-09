@@ -4,11 +4,12 @@ import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
   ActivityGetRecentRequestSchema,
   ActivityFilterByRequestSchema,
+  OriginSchema,
 } from "@/infrastructure/validation/schemas";
 
 /**
  * RPC handler for activity log operations
- * Handles: activity.getRecent, activity.filterBy, activity.clear
+ * Handles: activity.getRecent, activity.filterBy, activity.origins, activity.clear
  */
 export class ActivityRpcHandler implements RpcModule {
   async handleRequest(
@@ -22,6 +23,9 @@ export class ActivityRpcHandler implements RpcModule {
 
       case "activity.filterBy":
         return this.handleFilterBy(message, context);
+
+      case "activity.origins":
+        return this.handleOrigins(context);
 
       case "activity.clear":
         return this.handleClear(context);
@@ -101,6 +105,16 @@ export class ActivityRpcHandler implements RpcModule {
       ok: true,
       data: { entries, total },
     };
+  }
+
+  /**
+   * Every origin in the stored log, for the site filter. The page of entries a
+   * list has loaded is not the log, so the filter cannot be built from it.
+   */
+  private async handleOrigins(context: ServiceContext): Promise<RpcResponse> {
+    const stored = await context.activityLog.getUniqueOrigins();
+    const origins = stored.filter((o) => OriginSchema.safeParse(o).success);
+    return { ok: true, data: { origins } };
   }
 
   private async handleClear(context: ServiceContext): Promise<RpcResponse> {

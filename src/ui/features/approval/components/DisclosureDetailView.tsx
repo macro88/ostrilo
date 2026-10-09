@@ -137,8 +137,8 @@ export function DisclosureDetailView({
           testId="disclosure-remember-copy"
         >
           <p>
-            {domain} will not ask again. You can change this in Settings →
-            Permissions.
+            {domain} will not ask again for this identity. Another key will
+            still ask. You can change this in Settings → Permissions.
           </p>
         </RememberControl>
       </ApprovalActions>

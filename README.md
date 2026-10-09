@@ -39,7 +39,7 @@ your signing history.
 </p>
 
 Ostrilo in light and dark themes. Screenshot from the
-[September 2026 design review](docs/design-review/README.md), using sample data.
+[design review](docs/design-review/README.md), using sample data.
 
 ## Install
 
@@ -55,7 +55,9 @@ from source, follow [the build instructions](#build-from-source).
    (`nsec`), then choose a password for your vault.
 2. **Keep a backup.** When creating your first key, save an encrypted backup or
    write the key down. Ostrilo asks you to check that you've recorded it before
-   finishing setup. If you import a key, keep your existing backup.
+   finishing setup. In a hurry, **Quick start** needs only a password and leaves
+   the backup for later; Home reminds you until you make one. If you import a
+   key, keep your existing backup.
 3. **Connect to an app.** Open a Nostr website and choose its browser-extension
    sign-in option. Ostrilo will ask whether the site may see your public key.
 4. **Review requests.** Check the site address, selected identity and event
@@ -71,8 +73,9 @@ Private keys are encrypted on your device. Ostrilo signs inside the extension
 and returns the signed event to the website. The website never receives your
 private key.
 
-You choose which sites may see your public key. Signing an event also shares
-that key, because it's part of the event. A site's permission applies to scripts
+You choose which sites may see your public key, one identity at a time: a site
+you allow for one key asks again after you switch to another. Signing an event
+also shares that key, because it's part of the event. A site's permission applies to scripts
 running on that page too.
 
 For sites you trust, you can allow some actions without a prompt each time.
@@ -101,10 +104,12 @@ To restore the file in a fresh installation, choose it during setup, enter its
 passphrase and set a new vault password. Check that the restored public key
 matches your original identity.
 
-**Backup for keys added later is not available yet.** There is no export button
-in Settings yet. Keep your own copy of imported keys. A key created through
-Settings currently has no backup option, so losing that installation could mean
-losing the identity.
+**Keys added later can be backed up from Settings.** In Keys & Identities, choose
+**Back up** on any key, enter your vault password, save the encrypted file, then
+select it again with its passphrase so Ostrilo can check that it opens. A key
+you create in Settings shows **No backup** until you do. The file restores
+through the same import step as a first-key backup. If you import a key, you
+already hold its `nsec`; keep your own copy.
 
 ### Move to another signer
 
@@ -127,8 +132,10 @@ Ostrilo signs for them.
 
 Private keys are encrypted, but settings, profile records and activity logs
 aren't. Revealing or copying a key also puts it in memory or on the clipboard,
-where complete erasure can't be guaranteed. The current extension doesn't load
-remote profile pictures or upload images.
+where complete erasure can't be guaranteed. Ostrilo loads your own profile
+picture once, when you save your profile or press Refresh picture, and keeps a
+small local copy for the header; opening the popup, unlocking and switching keys
+never request an image. It doesn't upload images.
 
 Read the [privacy policy](PRIVACY.md) for storage and network details, or
 [browser permissions](docs/extension-manifest.md) for why each permission is
@@ -145,9 +152,7 @@ Current version: [0.9.0](CHANGELOG.md).
 | Encrypted key storage, automatic locking and password changes | Available |
 | Site permissions and signing history | Available |
 | Profile editing and relay selection | Available |
-| Encrypted key backup and restore | Available during first-key setup |
-| Backup for keys added later | Planned for 1.0 |
-| Independent security review with published findings | Required for 1.0, not yet completed |
+| Encrypted key backup and restore | Available |
 | Encrypted messaging with NIP-44 | Planned |
 | Remote signing with NIP-46 | Planned |
 | Seed-phrase recovery and settings sync across devices | Planned |
@@ -204,8 +209,10 @@ Ostrilo provides `window.nostr.getPublicKey()` and `window.nostr.signEvent()`
 through NIP-07 on top-level HTTPS pages. `getRelays`, `nip04.*` and `nip44.*`
 aren't available. NIP-44 is planned. NIP-04 won't be added.
 
-Check for each method before calling it and handle refusal or a locked vault
-without retrying in a loop. See the [error codes](docs/rpc-error-codes.md),
+Check for each method before calling it, with `window.nostr.capabilities.methods`
+or by testing for the function, and handle refusal or a locked vault without
+retrying in a loop. See the [API versioning policy](docs/api-versioning.md), the
+[error codes](docs/rpc-error-codes.md),
 [provider code](src/extension/injected.ts) and
 [local HTTPS setup](docs/local-https-development.md).
 

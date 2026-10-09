@@ -15,6 +15,7 @@ const client = vi.hoisted(() => ({
   activityFilterBy: vi.fn<
     (filters: { origin?: string; kind?: number; limit: number; offset: number }) => Promise<Page>
   >(),
+  activityGetOrigins: vi.fn<() => Promise<string[]>>(),
   getAllApprovalRequests: vi.fn<() => Promise<{ requests: PendingRequest[] }>>(),
   getApprovalCount: vi.fn<() => Promise<{ count: number }>>(),
 }));
@@ -174,6 +175,9 @@ beforeEach(() => {
   settings.sidePanel = false;
   client.activityGetRecent.mockReset().mockResolvedValue({ entries: SAMPLE, total: SAMPLE.length });
   client.activityFilterBy.mockReset().mockResolvedValue({ entries: [], total: 0 });
+  client.activityGetOrigins
+    .mockReset()
+    .mockResolvedValue(["http://snort.social", "https://older.example", "https://primal.net"]);
   client.getAllApprovalRequests.mockReset().mockResolvedValue({ requests: [] });
   client.getApprovalCount.mockReset().mockResolvedValue({ count: 0 });
   runtime.sendMessage.mockReset().mockResolvedValue({ ok: true });
@@ -263,8 +267,51 @@ describe("ActivityView log states", () => {
   });
 });
 
+describe("ActivityView denial reasons and previews", () => {
+  async function mountWith(entries: ActivityLogEntry[]) {
+    client.activityGetRecent.mockResolvedValue({ entries, total: entries.length });
+    await mount();
+    return logRows();
+  }
+
+  it.each([
+    ["user", "You denied it"],
+    ["remembered", "Blocked by a remembered rule"],
+    ["rate_limited", "Too many requests from this site"],
+    ["vault_locked", "Ostrilo was locked"],
+    ["timeout", "No answer in time, or the window was closed"],
+    ["key_unreadable", "Not signed: the signing key could not be read"],
+  ] as const)("says why a %s denial happened", async (reason, copy) => {
+    const [row] = await mountWith([entry({ id: "d", decision: "deny", reason })]);
+    expect(row.textContent).toContain(copy);
+  });
+
+  it("shows no reason for an old denial, an unrecognised one, or an allowed entry", async () => {
+    const rows = await mountWith([
+      entry({ id: "old", decision: "deny" }),
+      entry({ id: "odd", decision: "deny", reason: "future_reason" as never }),
+      entry({ id: "ok", decision: "allow", reason: "remembered" }),
+    ]);
+    for (const row of rows) {
+      expect(row.textContent).not.toContain("Blocked by a remembered rule");
+      expect(row.textContent).not.toContain("future_reason");
+      expect(row.querySelectorAll("p")).toHaveLength(1);
+    }
+  });
+
+  it("shows direction and hidden characters in a preview as escapes", async () => {
+    const [row] = await mountWith([
+      entry({ id: "p", contentPreview: "send\u202Egpj.exe\u200B now" }),
+    ]);
+    const text = row.textContent ?? "";
+    expect(text).toContain("send\\u{202E}gpj.exe\\u{200B} now");
+    expect(text).not.toContain("\u202E");
+    expect(text).not.toContain("\u200B");
+  });
+});
+
 describe("ActivityView filters", () => {
-  it("offers each origin in the log once, with its scheme", async () => {
+  it("offers every origin in the stored log, including ones not on the loaded page", async () => {
     await mount();
     const trigger = container.querySelector<HTMLElement>('[aria-label="Filter by site"]')!;
     trigger.focus();
@@ -272,7 +319,67 @@ describe("ActivityView filters", () => {
     const labels = Array.from(document.querySelectorAll('[role="option"]')).map((item) =>
       item.textContent?.trim()
     );
-    expect(labels).toEqual(["All Origins", "http://snort.social", "https://primal.net"]);
+    expect(labels).toEqual([
+      "All Origins",
+      "http://snort.social",
+      "https://older.example",
+      "https://primal.net",
+    ]);
+  });
+
+  it("filters by an origin that only the background list knows about", async () => {
+    client.activityFilterBy.mockResolvedValue({ entries: [], total: 0 });
+    await mount();
+    await choose("Filter by site", "https://older.example");
+
+    expect(client.activityFilterBy).toHaveBeenLastCalledWith({
+      origin: "https://older.example",
+      kind: undefined,
+      limit: 10,
+      offset: 0,
+    });
+  });
+
+  it("keeps the log usable when the origin list cannot be read", async () => {
+    client.activityGetOrigins.mockRejectedValue(new Error("storage unavailable"));
+    await mount();
+    expect(logRows()).toHaveLength(SAMPLE.length);
+  });
+
+  it("offers the protected kinds, so deletions and auth events can be filtered", async () => {
+    await mount();
+    const trigger = container.querySelector<HTMLElement>('[aria-label="Filter by event kind"]')!;
+    trigger.focus();
+    keyDown(trigger, "Enter");
+    const labels = Array.from(document.querySelectorAll('[role="option"]')).map((item) =>
+      item.textContent?.trim()
+    );
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        "Event Deletion Request (5)",
+        "Client Authentication (22242)",
+        "HTTP Auth (27235)",
+        "Short Text Note (1)",
+        "Zap Request (9734)",
+      ])
+    );
+    expect(labels?.filter((l) => l?.endsWith("(1)"))).toHaveLength(1);
+  });
+
+  it.each([
+    ["Event Deletion Request (5)", 5],
+    ["Client Authentication (22242)", 22242],
+    ["HTTP Auth (27235)", 27235],
+  ])("queries by %s", async (label, kind) => {
+    client.activityFilterBy.mockResolvedValue({ entries: [], total: 0 });
+    await mount();
+    await choose("Filter by event kind", label);
+    expect(client.activityFilterBy).toHaveBeenLastCalledWith({
+      origin: undefined,
+      kind,
+      limit: 10,
+      offset: 0,
+    });
   });
 
   it("queries by origin and shows only what comes back", async () => {

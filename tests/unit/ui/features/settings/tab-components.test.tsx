@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactNode } from "react";
+import type { ActivityLogEntry } from "@/domain/types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -93,6 +94,8 @@ vi.mock("@/infrastructure/messaging/client", () => ({
   renameKey: vi.fn(),
   deleteKey: vi.fn(),
   activityGetRecent: vi.fn().mockResolvedValue({ entries: [], total: 0 }),
+  listBackupStatuses: vi.fn().mockResolvedValue([]),
+  subscribeKeyBackupChanged: vi.fn(() => () => {}),
 }));
 
 // The "Open extension in" row writes the legacy docking flag and the
@@ -497,6 +500,126 @@ describe("options page tab components", () => {
     expect(container.querySelector('[role="status"]')?.textContent).toBe(
       "Activity log exported as a local JSON file."
     );
+  });
+
+  describe("exporting a log longer than one RPC page", () => {
+    type Stored = {
+      id: string;
+      origin: string;
+      timestamp: number;
+      decision: "allow" | "deny";
+      reason?: ActivityLogEntry["reason"];
+    };
+    const stored = (count: number): Stored[] =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `entry-${index}`,
+        origin: "https://site.example",
+        timestamp: 1_735_689_600 - index,
+        decision: "allow",
+      }));
+
+    beforeEach(() => vi.mocked(activityGetRecent).mockClear());
+    afterEach(() =>
+      vi
+        .mocked(activityGetRecent)
+        .mockReset()
+        .mockResolvedValue({ entries: [], total: 0 })
+    );
+
+    // The log as the RPC serves it: newest first, one call capped at 100.
+    async function exportWith(
+      retention: number,
+      logAtCall: (call: number) => Stored[]
+    ) {
+      appSettingsMock.settings.maxActivityEntries = retention;
+      let call = 0;
+      vi.mocked(activityGetRecent).mockImplementation(
+        async ({ limit = 10, offset = 0 } = {}) => {
+          const log = logAtCall(call++);
+          return {
+            entries: log.slice(offset, offset + Math.min(limit, 100)),
+            total: log.length,
+          };
+        }
+      );
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+        () => {}
+      );
+      const blobs: Blob[] = [];
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: vi.fn((blob: Blob) => {
+          blobs.push(blob);
+          return "blob:ostrilo-activity";
+        }),
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: vi.fn(),
+      });
+      const container = render(<ActivityLogTab />);
+
+      await clickByTextAsync(container, "Export activity");
+      await act(async () => {});
+
+      return JSON.parse(await blobs[0].text()) as {
+        total: number;
+        entries: Array<{ id: string; reason?: string }>;
+      };
+    }
+
+    it("pages through 250 stored entries when retention is 500", async () => {
+      const log = stored(250);
+      const exported = await exportWith(500, () => log);
+
+      expect(vi.mocked(activityGetRecent).mock.calls).toEqual([
+        [{ limit: 100, offset: 0 }],
+        [{ limit: 100, offset: 100 }],
+        [{ limit: 100, offset: 200 }],
+      ]);
+      expect(exported.total).toBe(250);
+      expect(exported.entries.map((entry) => entry.id)).toEqual(
+        log.map((entry) => entry.id)
+      );
+    });
+
+    it("stops at the retention limit when more is stored than that", async () => {
+      const log = stored(250);
+      const exported = await exportWith(150, () => log);
+
+      expect(exported.entries).toHaveLength(150);
+      expect(
+        vi.mocked(activityGetRecent).mock.calls.map(([args]) => args?.limit)
+      ).toEqual([100, 50]);
+    });
+
+    it("exports a denial's reason, and leaves out one this build does not recognise", async () => {
+      const base = { origin: "https://site.example", timestamp: 1_735_689_600 };
+      const log: Stored[] = [
+        { ...base, id: "locked", decision: "deny", reason: "vault_locked" },
+        { ...base, id: "odd", decision: "deny", reason: "from_the_future" as never },
+        { ...base, id: "old", decision: "deny" },
+      ];
+      const exported = await exportWith(50, () => log);
+
+      expect(exported.entries.map((e) => [e.id, e.reason])).toEqual([
+        ["locked", "vault_locked"],
+        ["odd", undefined],
+        ["old", undefined],
+      ]);
+    });
+
+    it("exports an entry recorded mid-export once", async () => {
+      const log = stored(150);
+      const arrival = { ...log[0], id: "arrived-during-export" };
+      const exported = await exportWith(500, (call) =>
+        call === 0 ? log : [arrival, ...log]
+      );
+
+      const ids = exported.entries.map((entry) => entry.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids).toHaveLength(150);
+    });
   });
 
   it("tells the user when the export fails", async () => {

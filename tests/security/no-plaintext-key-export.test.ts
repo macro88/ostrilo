@@ -5,7 +5,7 @@ import {
   createKeyBackup,
   openKeyBackup,
   serializeKeyBackup,
-} from "@/ui/features/onboarding/backup/key-backup-envelope";
+} from "@/ui/features/backup/key-backup-envelope";
 
 /**
  * The plaintext key download is gone and must stay gone.
@@ -53,7 +53,7 @@ const FILES = sourceFiles(SRC_ROOT).map((file) => ({
 /** Files allowed to hand the browser a file at all. */
 const DOWNLOAD_ALLOWLIST = new Set([
   // Writes the encrypted envelope, and nothing else.
-  "ui/features/onboarding/components/backup/BackupEncryptedExport.tsx",
+  "ui/features/backup/components/BackupEncryptedExport.tsx",
   // Activity log export. Carries no key material.
   "ui/features/settings/components/ActivityLogTab.tsx",
 ]);

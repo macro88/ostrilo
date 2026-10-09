@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import https from "node:https";
 import fsSync from "node:fs";
+import { deflateSync } from "node:zlib";
 import { ensureDevCertificate } from "../../tests/e2e/fixtures/make-dev-cert.ts";
 
 const cwd = process.cwd();
@@ -34,7 +35,7 @@ const userDataDir = path.join(
 await fs.mkdir(outDir, { recursive: true });
 console.log(`Capturing ${theme} theme into ${outDir}`);
 
-async function launchContext() {
+async function launchContext(profileDir = userDataDir) {
   const base = {
     headless: true,
     viewport: { width: 400, height: 600 },
@@ -58,13 +59,13 @@ async function launchContext() {
   };
 
   try {
-    return await chromium.launchPersistentContext(userDataDir, {
+    return await chromium.launchPersistentContext(profileDir, {
       ...base,
       channel: "chromium",
     });
   } catch (error) {
     console.warn("Falling back to bundled Chromium:", error.message);
-    return await chromium.launchPersistentContext(userDataDir, base);
+    return await chromium.launchPersistentContext(profileDir, base);
   }
 }
 
@@ -111,6 +112,17 @@ async function screenshot(page, name, options = {}) {
   console.log(file);
 }
 
+/** Scrolls every scrollable region to its end, for what sits under the fold. */
+async function scrollToEnd(page) {
+  await page.evaluate(() => {
+    for (const el of document.querySelectorAll("*")) {
+      if (el.scrollHeight > el.clientHeight + 1 && getComputedStyle(el).overflowY !== "visible") {
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+  });
+}
+
 async function safeClick(locator, timeout = 5000) {
   await locator.waitFor({ state: "visible", timeout });
   await locator.click();
@@ -133,6 +145,78 @@ async function captureTabs(page, tabs) {
 
 // aislop-ignore-next-line security/hardcoded-secret -- throwaway passphrase for a local screenshot vault that is created and discarded by this script. It unlocks nothing that exists outside this run.
 const PASSWORD = "CorrectHorseBatteryStaple!2026";
+// aislop-ignore-next-line security/hardcoded-secret -- throwaway replacement password for the same discarded screenshot vault as PASSWORD above. It unlocks nothing that exists outside this run.
+const CHANGED_PASSWORD = "Lichen-Harbour-Quill-2026";
+
+// What a profile host's CDN address looks like once it carries a size, a
+// signature and a cache key. Long enough to widen anything that does not wrap.
+const LONG_PICTURE_URL =
+  "https://images.jimbo-the-signer.example/avatars/2026/10/jimbo-jesus-jones-profile-picture-original-upload-with-a-very-long-descriptive-filename.png?width=512&height=512&fit=cover&signature=3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+
+/**
+ * A 96x96 PNG as a `data:` URL, for the header's local picture copy.
+ *
+ * Built here rather than read from disk so the runner stays one file. The
+ * image is a flat ink-and-violet mark, not a photograph: what the review
+ * judges is the header's fixed box and the seal clip around it. With
+ * `transparent` the background has no alpha, as a logo or a sticker PNG does,
+ * so the review sees what shows through the seal behind it.
+ */
+function pictureCopyDataUrl({ transparent = false } = {}) {
+  const size = 96;
+  const table = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (bytes) => {
+    let c = 0xffffffff;
+    for (const byte of bytes) c = table[(c ^ byte) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const u32 = (n) => {
+    const b = Buffer.alloc(4);
+    b.writeUInt32BE(n);
+    return b;
+  };
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    return Buffer.concat([u32(data.length), body, u32(crc(body))]);
+  };
+
+  const channels = transparent ? 4 : 3;
+  const rows = [];
+  for (let y = 0; y < size; y += 1) {
+    const row = Buffer.alloc(1 + size * channels);
+    for (let x = 0; x < size; x += 1) {
+      const inDisc = (x - 48) ** 2 + (y - 40) ** 2 < 18 ** 2;
+      const inBody = y > 62 && (x - 48) ** 2 + (y - 96) ** 2 < 36 ** 2;
+      const mark = inDisc || inBody;
+      const [r, g, b] = transparent
+        ? [93, 63, 211]
+        : mark
+          ? [244, 240, 255]
+          : [93, 63, 211];
+      row[1 + x * channels] = r;
+      row[2 + x * channels] = g;
+      row[3 + x * channels] = b;
+      if (transparent) row[4 + x * channels] = mark ? 255 : 0;
+    }
+    rows.push(row);
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header[8] = 8;
+  header[9] = transparent ? 6 : 2;
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(Buffer.concat(rows))),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+  return `data:image/png;base64,${png.toString("base64")}`;
+}
 
 /** Privileged RPC from an extension page; throws on an error envelope. */
 async function rpc(page, message) {
@@ -476,7 +560,7 @@ try {
           display_name: KEY_NAME,
           about: "Signs things locally. Never snoops.",
           website: "https://jimbo.example",
-          picture: "https://jimbo.example/avatar.png",
+          picture: LONG_PICTURE_URL,
         },
       },
     }).catch((error) => console.warn("profile.update:", error.message));
@@ -488,6 +572,30 @@ try {
     });
   });
 
+  await step("seed picture copy", async () => {
+    // The header reads only a stored local copy, so a populated vault needs one.
+    // Stored directly rather than through a Profile save, which would load the
+    // picture URL above: that host does not exist, and the runner's relays and
+    // pages must not reach the network.
+    const list = await rpc(popup, { type: "keys.list" });
+    const jimbo = list.find((k) => k.label === KEY_NAME);
+    await rpc(popup, {
+      type: "avatar.save",
+      pubkey: jimbo.pubkey,
+      sourceUrl: LONG_PICTURE_URL,
+      dataUrl: pictureCopyDataUrl(),
+    });
+    // The second key's picture has a transparent background, which is what a
+    // logo PNG is. The header must still read as one seal, not as a square.
+    const work = list.find((k) => k.label === "Work");
+    await rpc(popup, {
+      type: "avatar.save",
+      pubkey: work.pubkey,
+      sourceUrl: "https://work.example/logo.png",
+      dataUrl: pictureCopyDataUrl({ transparent: true }),
+    });
+  });
+
   await step("seed policies", async () => {
     await rpc(popup, {
       type: "policy.setOrigin",
@@ -495,6 +603,21 @@ try {
       patch: { trustLevel: "high", identityDisclosure: "allow", name: "Nostrich" },
       password: PASSWORD,
     });
+    // A grant is for the key selected when it is made, so a site that may read
+    // two identities needs the grant made once under each. Without the second,
+    // the Permissions capture would only ever show a one-grant row.
+    const list = await rpc(popup, { type: "keys.list" });
+    const all = Array.isArray(list) ? list : list?.keys ?? [];
+    const jimbo = all.find((k) => k.label === KEY_NAME);
+    const work = all.find((k) => k.label === "Work");
+    await rpc(popup, { type: "vault.select", id: work.id });
+    await rpc(popup, {
+      type: "policy.setOrigin",
+      origin: nostrich,
+      patch: { identityDisclosure: "allow" },
+      password: PASSWORD,
+    });
+    await rpc(popup, { type: "vault.select", id: jimbo.id });
     await rpc(popup, {
       type: "policy.setKindRule",
       origin: nostrich,
@@ -589,6 +712,14 @@ try {
     await screenshot(popup, "25-popup-profile-populated");
   });
 
+  // The picture row sits under the fold of the 400x600 popup. Scrolled to, it
+  // shows the long address wrapping inside the row and the Refresh picture
+  // control beside Edit Profile.
+  await step("25b-popup-profile-picture-row", async () => {
+    await scrollToEnd(popup);
+    await screenshot(popup, "25b-popup-profile-picture-row");
+  });
+
   await step("26-popup-settings-populated", async () => {
     await safeClick(popup.getByRole("button", { name: /Settings/i }));
     await popup.getByText("Quick controls for this signer window.").waitFor({ timeout: 10000 });
@@ -599,7 +730,7 @@ try {
     await safeClick(popup.getByRole("button", { name: /Home/i }));
     await popup.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 10000 });
     await popup.getByLabel("Select active key").click();
-    await popup.getByRole("option").first().waitFor({ timeout: 5000 });
+    await popup.getByRole("menuitemradio").first().waitFor({ timeout: 5000 });
     await screenshot(popup, "27-key-selector-open");
     await popup.keyboard.press("Escape");
   });
@@ -609,6 +740,39 @@ try {
     await sidepanel.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 15000 });
     await sidepanel.getByText("Signed reaction").first().waitFor({ timeout: 10000 });
     await screenshot(sidepanel, "28-sidepanel-home-populated");
+  });
+
+  // The selected key above was backed up in onboarding. "Work" was generated
+  // afterwards, so its backup is pending and Home asks about it. Selected for
+  // the captures and handed back, because every later surface expects the
+  // named key.
+  await step("23b-popup-home-backup-banner", async () => {
+    const list = await rpc(popup, { type: "keys.list" });
+    const all = Array.isArray(list) ? list : list?.keys ?? [];
+    const jimbo = all.find((k) => k.label === KEY_NAME);
+    const work = all.find((k) => k.label === "Work");
+    await rpc(popup, { type: "vault.select", id: work.id });
+    try {
+      await popup.reload();
+      await popup.getByRole("heading", { level: 2, name: "Work" }).waitFor({ timeout: 15000 });
+      await popup.getByText("This key has no backup").waitFor({ timeout: 10000 });
+      await popup.getByText("Signed reaction").first().waitFor({ timeout: 10000 });
+      await screenshot(popup, "23b-popup-home-backup-banner");
+
+      // The banner pushes the second activity row below the fold, so the review
+      // must see that scrolling reaches it whole and clear of the tab bar.
+      await scrollToEnd(popup);
+      await screenshot(popup, "23c-popup-home-backup-banner-scrolled");
+
+      await sidepanel.reload();
+      await sidepanel.getByText("This key has no backup").waitFor({ timeout: 15000 });
+      await sidepanel.getByText("Signed reaction").first().waitFor({ timeout: 10000 });
+      await screenshot(sidepanel, "28b-sidepanel-home-backup-banner");
+    } finally {
+      await rpc(popup, { type: "vault.select", id: jimbo.id });
+      await popup.reload();
+      await sidepanel.reload();
+    }
   });
 
   await step("options populated", async () => {
@@ -631,13 +795,28 @@ try {
     }
   });
 
+  // Back up a key that has none: the re-authentication prompt, then the
+  // backup dialog itself. Before the password change below, so PASSWORD works.
+  await step("back up dialog", async () => {
+    await safeClick(options.getByRole("tab", { name: "Keys & Identities" }));
+    await safeClick(options.getByRole("button", { name: "Back up Work" }));
+    const reauth = options.getByRole("dialog");
+    await reauth.locator("#reauth-password").fill(PASSWORD);
+    await screenshot(options, "29b-options-back-up-reauth");
+    await safeClick(reauth.getByRole("button", { name: "Confirm" }), 10000);
+    const backup = options.getByRole("dialog", { name: /Back up .Work./ });
+    await backup.waitFor({ timeout: 20000 });
+    await screenshot(options, "29c-options-back-up-dialog");
+    await options.keyboard.press("Escape");
+    await backup.waitFor({ state: "hidden", timeout: 5000 });
+  });
+
   // The change-password dialog in each state it can show. Order matters: the
   // throttle is shared with unlock, so the throttled capture comes last and
   // the counter is reset afterwards, or the lock-screen capture below would
   // photograph a backoff instead of a wrong password.
   await step("change password dialog", async () => {
-    // aislop-ignore-next-line security/hardcoded-secret -- throwaway replacement password for the same discarded screenshot vault as PASSWORD above. It unlocks nothing that exists outside this run.
-    const NEW_PASSWORD = "Lichen-Harbour-Quill-2026";
+    const NEW_PASSWORD = CHANGED_PASSWORD;
     await safeClick(options.getByRole("tab", { name: "Security" }));
     const openDialog = async () => {
       await safeClick(options.getByRole("button", { name: "Change password", exact: true }));
@@ -697,6 +876,109 @@ try {
     }
   });
 
+  // A site with a remembered allow rule gets 60 silent signatures a minute. The
+  // next request opens the approval window like an unremembered one, with a
+  // line saying why. Photographed at the approval window's narrow width, the
+  // one the earlier review did not reach. The queue is emptied first so the
+  // request opens alone, on its detail.
+  await step("39-approval-over-budget", async () => {
+    const queued = await rpc(popup, { type: "approval.getAll" });
+    for (const request of queued?.requests ?? []) {
+      await rpc(popup, { type: "approval.resolve", requestId: request.id, action: "deny" });
+    }
+    const stoppedAt = await nostrichPage.evaluate(async () => {
+      for (let i = 0; i < 80; i += 1) {
+        const attempt = window.nostr
+          .signEvent({
+            kind: 7,
+            content: "+",
+            tags: [],
+            created_at: Math.floor(Date.now() / 1000) + i,
+          })
+          .then(
+            () => "signed",
+            (error) => String(error?.message || error)
+          );
+        const outcome = await Promise.race([
+          attempt,
+          new Promise((resolve) => setTimeout(() => resolve("waiting"), 1500)),
+        ]);
+        if (outcome === "waiting") {
+          window.__ostriloPending = (window.__ostriloPending || []).concat(attempt);
+          return i;
+        }
+      }
+      return -1;
+    });
+    console.log("auto-sign budget reached after", stoppedAt, "requests");
+    if (stoppedAt < 0) throw new Error("the auto-sign budget never asked");
+    await waitForPendingCount(popup, Date.now() + 8000);
+
+    const budget = await context.newPage();
+    await budget.setViewportSize({ width: 400, height: 600 });
+    await budget.goto(approvalUrl);
+    await budget.getByTestId("auto-sign-budget-notice").waitFor({ timeout: 15000 });
+    await budget
+      .getByRole("button", { name: /Approve & sign/i })
+      .waitFor({ state: "visible", timeout: 10000 });
+    await screenshot(budget, "39-approval-over-budget", { delay: 900 });
+    await rpc(popup, {
+      type: "approval.resolve",
+      requestId: (await rpc(popup, { type: "approval.getAll" })).requests[0].id,
+      action: "deny",
+    });
+    await budget.close();
+  });
+
+  // Why a request was refused. A saved deny rule answers without a prompt, and
+  // a site that queues more than five unanswered requests is refused for asking
+  // too often. The person's own denial is already in the log from earlier. A
+  // refusal because the key could not be read has no capture: it is only logged
+  // when a key fails after the person approved, which the runner cannot cause.
+  await step("38-activity-reasons", async () => {
+    await rpc(popup, {
+      type: "policy.setKindRule",
+      origin: nostrich,
+      kind: 30023,
+      mode: "deny",
+    });
+    const refused = await signFromPage(nostrichPage, {
+      kind: 30023,
+      content: "A long-form post the saved rule refuses",
+      tags: [["d", "post"]],
+      created_at: Math.floor(Date.now() / 1000),
+    });
+    console.log("sign under a deny rule", JSON.stringify(refused));
+
+    for (let i = 0; i < 7; i += 1) {
+      await beginSignFromPage(snortPage, {
+        kind: 1,
+        content: `Unanswered note ${i + 1}`,
+        tags: [],
+        created_at: Math.floor(Date.now() / 1000),
+      });
+    }
+    await waitForPendingCount(popup, Date.now() + 8000);
+    await popup.waitForTimeout(1000);
+    const queued = await rpc(popup, { type: "approval.getAll" });
+    for (const request of queued?.requests ?? []) {
+      await rpc(popup, { type: "approval.resolve", requestId: request.id, action: "deny" });
+    }
+
+    await popup.reload();
+    await safeClick(popup.getByRole("button", { name: /Activity/i }));
+    await popup.getByText("Recent Activity").waitFor({ timeout: 10000 });
+    await popup.getByText("Too many requests from this site").first().waitFor({ timeout: 10000 });
+    await screenshot(popup, "38-popup-activity-reasons", { delay: 600 });
+
+    // Three rows is all 600px shows, and the refusals with reasons sit below
+    // the person's own denials. Same width, more height, so the whole run of
+    // reasons is judged.
+    await popup.setViewportSize({ width: 400, height: 1400 });
+    await screenshot(popup, "38b-popup-activity-reasons-tall", { delay: 600 });
+    await popup.setViewportSize({ width: 400, height: 600 });
+  });
+
   await step("34-lock-screen-error", async () => {
     await popup.reload();
     await popup.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 15000 });
@@ -706,6 +988,132 @@ try {
     await popup.keyboard.press("Enter");
     await popup.getByRole("alert").waitFor({ timeout: 10000 });
     await screenshot(popup, "34-lock-screen-error");
+  });
+
+  // The lock screen says why it locked. The vault is locked for real here; the
+  // reason line is the only thing a page-level override of the background's
+  // answer changes, so each reason's copy is judged in the real screen, at the
+  // popup's width, in this theme. A background that does not answer at all is
+  // its own screen.
+  const lockReasons = [
+    ["manual", undefined],
+    ["inactivity", 35],
+    ["background_restarted", undefined],
+    ["state_unreadable", undefined],
+    ["clock_rollback", undefined],
+    ["browser_restarted", undefined],
+    ["extension_updated", undefined],
+  ];
+  for (const [reason, minutes] of lockReasons) {
+    await step(`36-lock-reason-${reason}`, async () => {
+      const page = await context.newPage();
+      await page.setViewportSize({ width: 400, height: 600 });
+      await page.addInitScript(
+        ({ lockReason, inactivityMinutes }) => {
+          const runtime = globalThis.chrome.runtime;
+          const original = runtime.sendMessage.bind(runtime);
+          runtime.sendMessage = (...args) => {
+            const answer = original(...args);
+            if (args[0]?.type !== "state.getLock") return answer;
+            return Promise.resolve(answer).then((response) =>
+              response?.ok && response.data?.isLocked
+                ? {
+                    ...response,
+                    data: { ...response.data, lockReason, inactivityMinutes },
+                  }
+                : response
+            );
+          };
+        },
+        { lockReason: reason, inactivityMinutes: minutes }
+      );
+      await page.goto(popupUrl);
+      await page.getByTestId("lock-reason").waitFor({ timeout: 15000 });
+      await screenshot(page, `36-lock-reason-${reason}`);
+      await page.close();
+    });
+  }
+
+  await step("36-lock-unreachable", async () => {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 400, height: 600 });
+    await page.addInitScript(() => {
+      const runtime = globalThis.chrome.runtime;
+      const original = runtime.sendMessage.bind(runtime);
+      runtime.sendMessage = (...args) =>
+        args[0]?.type === "state.getLock"
+          ? Promise.reject(new Error("The message port closed before a response was received."))
+          : original(...args);
+    });
+    await page.goto(popupUrl);
+    await page.getByRole("heading", { name: "Can't reach Ostrilo" }).waitFor({ timeout: 15000 });
+    await screenshot(page, "36-lock-unreachable");
+    await page.close();
+  });
+
+  // A key whose stored record cannot be decrypted. The vault opens with the
+  // others, selects nothing it cannot read and says which key is damaged. The
+  // record is damaged the way bit rot does it: a flipped bit fails the AEAD tag.
+  await step("37-unreadable-key", async () => {
+    await popup.reload();
+    await popup.locator('input[type="password"]').first().fill(CHANGED_PASSWORD);
+    await popup.keyboard.press("Enter");
+    await popup.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 20000 });
+
+    const list = await rpc(popup, { type: "keys.list" });
+    const work = list.find((k) => k.label === "Work");
+    await rpc(popup, { type: "vault.select", id: work.id });
+    await popup.evaluate(async (id) => {
+      // aislop-ignore-next-line eslint/no-undef -- runs in the page's browser context via page.evaluate, not in Node; `chrome` is defined there.
+      const { encryptedKeys } = await chrome.storage.local.get("encryptedKeys");
+      const damaged = encryptedKeys.map((record) =>
+        record.id === id ? { ...record, ct: record.ct.map((byte) => byte ^ 1) } : record
+      );
+      // aislop-ignore-next-line eslint/no-undef -- runs in the page's browser context via page.evaluate, not in Node; `chrome` is defined there.
+      await chrome.storage.local.set({ encryptedKeys: damaged });
+    }, work.id);
+    await rpc(popup, { type: "vault.lock" });
+    await popup.reload();
+    await popup.locator('input[type="password"]').first().fill(CHANGED_PASSWORD);
+    await popup.keyboard.press("Enter");
+    await popup.getByText(/could not be read/i).first().waitFor({ timeout: 20000 });
+    await screenshot(popup, "37-popup-home-unreadable-key");
+
+    await safeClick(popup.getByRole("button", { name: /Profile/i }));
+    await popup.getByText("Profile Settings").waitFor({ timeout: 10000 });
+    await screenshot(popup, "37b-popup-profile-unreadable-key");
+
+    await options.reload();
+    await options.getByText("Ostrilo Settings").waitFor({ timeout: 15000 });
+    await safeClick(options.getByRole("tab", { name: "Keys & Identities" }));
+    await options.getByText(/could not be read/i).first().waitFor({ timeout: 10000 });
+    await screenshot(options, "37c-options-keys-unreadable-key");
+  });
+
+  // Quick start is a first-run flow, so it needs a profile with no vault: a
+  // second browser profile, the same build, this theme.
+  await step("40-quick-start", async () => {
+    const fresh = await launchContext(`${userDataDir}-quick-start`);
+    try {
+      const id = await waitForExtensionId(fresh);
+      const page = await fresh.newPage();
+      await page.setViewportSize({ width: 400, height: 600 });
+      await page.goto(`chrome-extension://${id}/popup.html`);
+      await page.getByText("Welcome to Ostrilo").waitFor({ timeout: 15000 });
+      await safeClick(page.getByText("Quick start", { exact: true }));
+      await page.getByRole("heading", { name: "Quick start" }).waitFor({ timeout: 10000 });
+      await screenshot(page, "40-quick-start-password");
+      await page.getByLabel("Master Password").fill(PASSWORD);
+      await page.getByLabel("Confirm Password").fill(PASSWORD);
+      await safeClick(page.getByRole("button", { name: "Create identity" }), 10000);
+      await page.getByRole("heading", { name: "Your identity is ready" }).waitFor({ timeout: 20000 });
+      await screenshot(page, "40b-quick-start-notice");
+      await safeClick(page.getByRole("button", { name: "Continue" }));
+      await page.getByText("This key has no backup").waitFor({ timeout: 20000 });
+      await screenshot(page, "40c-quick-start-home");
+    } finally {
+      await fresh.close();
+    }
   });
 } finally {
   serverInfo.server.close();

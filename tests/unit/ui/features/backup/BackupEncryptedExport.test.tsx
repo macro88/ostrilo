@@ -2,16 +2,16 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BackupEncryptedExport } from "@/ui/features/onboarding/components/backup/BackupEncryptedExport";
+import { BackupEncryptedExport } from "@/ui/features/backup/components/BackupEncryptedExport";
 import {
   BACKUP_DECRYPT_FAILURE_MESSAGE,
   KeyBackupError,
   openKeyBackup,
   parseKeyBackupEnvelope,
   type KeyBackupPayload,
-} from "@/ui/features/onboarding/backup/key-backup-envelope";
+} from "@/ui/features/backup/key-backup-envelope";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
-import { background } from "./fake-background";
+import { background } from "../onboarding/fake-background";
 import {
   alertText,
   button,
@@ -23,9 +23,9 @@ import {
   settle,
   silenceConsole,
   unmountAll,
-} from "./dom";
+} from "../onboarding/dom";
 
-vi.mock("wxt/browser", async () => (await import("./fake-background")).wxtBrowserModule);
+vi.mock("wxt/browser", async () => (await import("../onboarding/fake-background")).wxtBrowserModule);
 
 const PAYLOAD: KeyBackupPayload = {
   nsec: "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5",

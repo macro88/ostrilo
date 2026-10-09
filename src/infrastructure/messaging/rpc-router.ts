@@ -9,6 +9,7 @@ import type { ActivityLogService } from "@/application/services/activity-log.ser
 import type { ProfileService } from "@/application/services/profile.service";
 import type { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
 import type { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
+import type { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import type { UserPresenceService } from "@/application/services/user-presence.service";
 
 /**
@@ -22,6 +23,11 @@ export interface ServiceContext {
   profile: ProfileService;
   unlockThrottle: UnlockThrottleService;
   disclosureRateLimit: DisclosureRateLimitService;
+  /**
+   * Meters requests that site policy signs without a prompt. Required rather
+   * than optional: a context built without it would sign unmetered.
+   */
+  autoSignBudget: AutoSignBudgetService;
   /**
    * Answers whether a user is at the machine, for the one path that needs it:
    * a signature produced without an approval prompt, asking to postpone the
@@ -131,14 +137,20 @@ const LOCKED_PROJECTIONS: ReadonlyMap<string, (data: unknown) => unknown> =
     ],
     [
       // The service already omits `lockAt` on every locked path. This is the
-      // second line: the projection reduces a locked response to the two
-      // fields the lock screen renders from, so a future field added to the
-      // unlocked response cannot reach a locked UI by being forgotten here.
+      // second line: the projection reduces a locked response to the fields
+      // the lock screen renders from, so a future field added to the unlocked
+      // response cannot reach a locked UI by being forgotten here. The lock
+      // reason and the timeout that elapsed are labels, not secrets.
       "state.getLock",
       (data: unknown) => {
         if (!data || typeof data !== "object") return data;
         const s = data as Record<string, unknown>;
-        return { isLocked: s.isLocked, selectedKeyId: s.selectedKeyId };
+        return {
+          isLocked: s.isLocked,
+          selectedKeyId: s.selectedKeyId,
+          lockReason: s.lockReason,
+          inactivityMinutes: s.inactivityMinutes,
+        };
       },
     ],
     [
@@ -364,7 +376,21 @@ export function createRpcMessageListener(
     const projection = lockedProjectionFor(message.type);
     if (gated || projection) {
       void (async () => {
-        const lockState = await context.vault.getLockState();
+        let lockState: Awaited<ReturnType<typeof context.vault.getLockState>>;
+        try {
+          lockState = await context.vault.getLockState();
+        } catch (error) {
+          // Nothing could establish that the vault is open, so it is reported
+          // locked and nothing is dispatched. Without a response the page would
+          // wait out its own deadline for an answer that never comes.
+          console.error("[RPC] Could not read the lock state for", message.type, error);
+          sendResponse(
+            createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+              method: message.type,
+            })
+          );
+          return;
+        }
         if (lockState.isLocked && gated) {
           console.log("[RPC] Refused while locked:", message.type);
           if (RpcRouter.isPageReachable(namespace)) {

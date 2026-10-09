@@ -33,4 +33,18 @@ describe("openOptionsTab", () => {
 
     expect(ext.opened).toEqual(["chrome-extension://ostrilo/options.html"]);
   });
+
+  it("carries the key whose backup the page should start", () => {
+    openOptionsTab("keys", { backupKeyId: "11111111-1111-4111-8111-111111111111" });
+
+    expect(ext.opened).toEqual([
+      "chrome-extension://ostrilo/options.html#keys?backup=11111111-1111-4111-8111-111111111111",
+    ]);
+  });
+
+  it("encodes the key id rather than splicing it into the address", () => {
+    openOptionsTab("keys", { backupKeyId: "a&b#c" });
+
+    expect(ext.opened).toEqual(["chrome-extension://ostrilo/options.html#keys?backup=a%26b%23c"]);
+  });
 });

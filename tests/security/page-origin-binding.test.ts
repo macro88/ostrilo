@@ -66,12 +66,13 @@ function send(message: Record<string, unknown>, sender: unknown) {
 
 /** Everything per-origin the background could have touched, for both origins. */
 async function perOriginState() {
+  const [key] = await context.vault.listKeys();
   return {
     settings: await settingsSnapshot(),
     activity: await context.activityLog.getRecent(50),
     pending: queue.getAllPending().map((p) => [p.origin, p.operation]),
-    trustedDisclosure: await context.policy.getIdentityDisclosure(TRUSTED),
-    attackerDisclosure: await context.policy.getIdentityDisclosure(ATTACKER),
+    trustedDisclosure: await context.policy.getIdentityDisclosure(TRUSTED, key.id),
+    attackerDisclosure: await context.policy.getIdentityDisclosure(ATTACKER, key.id),
   };
 }
 
@@ -83,6 +84,9 @@ beforeEach(async () => {
     JSON.stringify(await real.storage.local.get("appSettings"));
   await real.vault.importKey(SECRET_ONE, STRONG_PASSWORD);
   await real.vault.unlock(STRONG_PASSWORD);
+  // Settle the one-time consent migration first, so that what the tests compare
+  // is what a spoofed request changed and not the migration's own stamp.
+  await context.policy.migrate();
 
   const router = new RpcRouter();
   router.registerModule("nostr", new NostrRpcHandler(queue, async () => undefined));
@@ -96,7 +100,8 @@ afterEach(() => {
 
 describe("a claimed origin that disagrees with the sender", () => {
   it("cannot read the identity through getPublicKey", async () => {
-    await context.policy.setIdentityDisclosure(TRUSTED, "allow");
+    const [key] = await context.vault.listKeys();
+    await context.policy.grantIdentityDisclosure(TRUSTED, key.id);
     const consume = vi.spyOn(context.disclosureRateLimit, "tryConsume");
     const before = await perOriginState();
 

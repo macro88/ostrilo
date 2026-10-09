@@ -1,6 +1,6 @@
 import { Globe } from "lucide-react";
 import type { TrustLevel } from "@/domain/types";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { policyGetSessionGrants } from "@/infrastructure/messaging/client";
 import {
   OriginPolicyTable,
@@ -15,6 +15,7 @@ import { useAppSettings } from "@/hooks/useAppSettings";
 import { SealMark } from "@/ui/components/common/SealMark";
 import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
 import { useReauth } from "@/ui/hooks/useReauth";
+import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 
 export function PermissionsTab() {
   const {
@@ -25,7 +26,19 @@ export function PermissionsTab() {
     setPerKindRule,
     updateOriginTrustLevel,
     revokeIdentityDisclosure,
+    revokeIdentityDisclosureKey,
   } = useAppSettings();
+  const { keys } = useKeyManager();
+  const identities = useMemo(
+    () =>
+      keys.map((key) => ({
+        id: key.id,
+        label: key.label,
+        publicKeyBech32: key.publicKeyBech32,
+        isUnreadable: key.isUnreadable,
+      })),
+    [keys]
+  );
   const reauth = useReauth();
 
   // Read from the background rather than from the stored display flag, and
@@ -156,6 +169,8 @@ export function PermissionsTab() {
             onToggleSession={handleToggleSession}
             onSetPerKindRule={handleSetPerKindRule}
             onRevokeDisclosure={revokeIdentityDisclosure}
+            onRevokeDisclosureKey={revokeIdentityDisclosureKey}
+            identities={identities}
           />
         )}
       </SettingsSection>

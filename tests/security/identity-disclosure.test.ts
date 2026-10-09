@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
@@ -7,6 +7,7 @@ import {
   DISCLOSURE_RATE_LIMITS,
 } from "@/application/services/disclosure-rate-limit.service";
 import type { ActivityLogEntry } from "@/domain/types";
+import { memoryStorage } from "../helpers/vault";
 
 /**
  * `nostr.getPublicKey` had no origin, no rate limit and no audit entry. The
@@ -53,6 +54,7 @@ function makeContext(
   return {
     vault: {
       getLockState: async () => ({ isLocked: false }),
+      isKeyUnreadable: () => false,
       listKeys: async () => [
         { id: "k1", pubkey: PUBKEY, isSelected: true, label: "k1" },
       ],
@@ -214,7 +216,11 @@ describe("a polling origin is refused", () => {
       { id: "k1", pubkey: PUBKEY, isSelected: true, label: "k1" },
     ]);
     const context = consented({
-      vault: { getLockState: async () => ({ isLocked: false }), listKeys },
+      vault: {
+        getLockState: async () => ({ isLocked: false }),
+        isKeyUnreadable: () => false,
+        listKeys,
+      },
     });
 
     for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow + 3; i++) {
@@ -293,6 +299,53 @@ describe("every outcome reaches the activity log", () => {
     });
   });
 
+  describe("a burst of rate-limited refusals", () => {
+    const refusals = () => logged.filter((e) => e.decision === "deny");
+    const burst = async (handler: NostrRpcHandler, origin: string, calls: number) => {
+      const context = consented();
+      for (let i = 0; i < calls; i++) {
+        await handler.handleRequest(ask(origin), context);
+      }
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("writes one row per origin per window, and a new one once the window passes", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const handler = new NostrRpcHandler();
+      const over = DISCLOSURE_RATE_LIMITS.perOriginPerWindow + 30;
+
+      await burst(handler, "https://poll.example", over);
+      expect(refusals()).toHaveLength(1);
+
+      await burst(handler, "https://flood.example", over);
+      expect(refusals().map((e) => e.origin)).toEqual([
+        "https://poll.example",
+        "https://flood.example",
+      ]);
+
+      now += DISCLOSURE_RATE_LIMITS.windowMs + 1;
+      vi.setSystemTime(Date.now() + DISCLOSURE_RATE_LIMITS.windowMs + 1);
+      await burst(handler, "https://poll.example", over);
+      expect(refusals().filter((e) => e.origin === "https://poll.example")).toHaveLength(2);
+    });
+
+    it("still answers every refused call with rate_limited", async () => {
+      const handler = new NostrRpcHandler();
+      const context = consented();
+      for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow; i++) {
+        await handler.handleRequest(ask("https://poll.example"), context);
+      }
+      for (let i = 0; i < 5; i++) {
+        const res = await handler.handleRequest(ask("https://poll.example"), context);
+        expect(res.ok).toBe(false);
+        if (!res.ok) expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+      }
+    });
+  });
+
   it("is distinguishable from a signing entry", async () => {
     const handler = new NostrRpcHandler();
 
@@ -352,6 +405,30 @@ describe("a disclosure flood cannot crowd out a signature", () => {
   });
 });
 
+describe("a disclosure window survives a worker restart", () => {
+  it("refuses the first call a restarted worker receives when the stored window is full", async () => {
+    const storage = memoryStorage().session;
+    const before = new DisclosureRateLimitService(() => now, storage);
+    for (let i = 0; i < DISCLOSURE_RATE_LIMITS.perOriginPerWindow; i++) {
+      before.tryConsume("https://flood.example");
+    }
+    await before.settled();
+
+    // A new worker: nothing in memory, and the request arrives before the
+    // stored window has been read.
+    const restarted = new DisclosureRateLimitService(() => now, storage);
+    const res = await new NostrRpcHandler().handleRequest(
+      ask("https://flood.example"),
+      consented({ disclosureRateLimit: restarted })
+    );
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.RATE_LIMITED);
+    }
+  });
+});
+
 describe("public key disclosure requires per-origin consent", () => {
   /** A queue stub whose prompt answers with `decision`. */
   function queueAnswering(
@@ -371,7 +448,8 @@ describe("public key disclosure requires per-origin consent", () => {
           queueMicrotask(() => resolver(decision, decision));
           return request;
         },
-        wasTimeout: () => options.timedOut ?? false,
+        ready: async () => {},
+        denialCause: () => (options.timedOut ? "timeout" : undefined),
         resolve: () => true,
       },
     };
@@ -578,7 +656,8 @@ describe("a locked vault never reaches the consent gate", () => {
           enqueued.push(origin);
           return { id: "x", origin };
         },
-        wasTimeout: () => false,
+        ready: async () => {},
+        denialCause: () => undefined,
         resolve: () => true,
       },
     };

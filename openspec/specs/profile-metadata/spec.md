@@ -3,7 +3,6 @@
 ## Purpose
 Define how the extension fetches, caches, and displays Nostr profile metadata (kind 0) for managed identities, including relay query strategy, cache lifetime, untrusted-content handling, and failure behavior.
 ## Requirements
-
 ### Requirement: Profile Metadata Type Definition
 
 The extension SHALL define a `ProfileMetadata` type representing NIP-01 kind:0 event content structure. The validation schema for that type SHALL bound every field, SHALL restrict URL fields to the `https:` scheme, and SHALL NOT pass unknown relay-supplied keys through to storage or the UI.
@@ -249,7 +248,7 @@ The extension SHALL persist profile cache entries in a storage area that does no
 
 ### Requirement: ProfileView UI Integration
 
-The extension SHALL enhance ProfileView component to display real profile metadata. ProfileView SHALL NOT load an image from a relay-supplied URL.
+The extension SHALL enhance ProfileView component to display real profile metadata. ProfileView SHALL NOT load an image from a relay-supplied URL, except the one load of the user's own picture that a save or Refresh picture starts.
 
 #### Scenario: Display mode shows profile fields
 - **GIVEN** ProfileView is mounted
@@ -260,6 +259,8 @@ The extension SHALL enhance ProfileView component to display real profile metada
 - **AND** it SHALL display the local seal avatar with the profile initial
 - **AND** it SHALL NOT set profile.picture as an image source
 - **AND** it SHALL display profile.picture, when present, as monospace text with a copy affordance
+- **AND** it SHALL offer Refresh picture when profile.picture is an `https:` URL
+- **AND** it SHALL NOT load the picture when it opens
 - **AND** it SHALL display profile.about or "No bio" fallback
 - **AND** it SHALL display profile.website as a link opening in a new tab with `rel="noopener noreferrer"`, or "No website"
 - **AND** it SHALL show loading state while fetching
@@ -283,6 +284,7 @@ The extension SHALL enhance ProfileView component to display real profile metada
 - **AND** if validation passes, it SHALL call ProfileService.updateProfile(metadata)
 - **AND** it SHALL show saving indicator
 - **AND** on success, it SHALL switch back to display mode with updated profile
+- **AND** on success with a non-empty picture, it SHALL load that URL once to make the local copy the header shows, and on success with no picture it SHALL remove the copy
 - **AND** on error, it SHALL show error message and remain in edit mode
 
 #### Scenario: Manual refresh
@@ -292,8 +294,6 @@ The extension SHALL enhance ProfileView component to display real profile metada
 - **AND** it SHALL show loading indicator
 - **AND** it SHALL update display with fresh verified profile data
 - **AND** it SHALL update cache timestamp
-
----
 
 ### Requirement: Multi-Key Profile Awareness
 
@@ -478,7 +478,7 @@ The extension SHALL maintain security boundaries during profile operations. A re
 - **AND** only the `https:` scheme SHALL be accepted; `http:`, `javascript:`, `data:`, `blob:`, and `file:` SHALL be rejected
 - **AND** invalid URLs SHALL be omitted from validated metadata
 - **AND** URLs SHALL NOT be executed as JavaScript (no javascript: protocol)
-- **AND** picture and banner URLs SHALL NOT be used as an image source in an extension page
+- **AND** picture and banner URLs SHALL NOT be used as an image source in an extension page, other than the Profile page's one explicit load of the user's own picture
 - **AND** external links SHALL open in new tab with noopener noreferrer
 
 #### Scenario: Profile content not trusted
@@ -506,8 +506,6 @@ The extension SHALL maintain security boundaries during profile operations. A re
 - **THEN** the write SHALL target a storage area that does not contain `encryptedKeys`
 - **AND** relay-derived data volume SHALL NOT contribute to the quota of the area holding key records
 - **AND** a key creation or import write SHALL NOT fail because of cached relay data
-
----
 
 ### Requirement: Testing Coverage
 
@@ -542,3 +540,4 @@ The extension SHALL include comprehensive tests for profile functionality.
   - Validation errors in edit mode
   - Manual refresh
   - Offline mode with cached profile
+

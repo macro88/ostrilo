@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
 import { RpcRouter } from "@/infrastructure/messaging/rpc-router";
 import { VaultRpcHandler } from "@/infrastructure/messaging/handlers/vault-rpc";
@@ -24,6 +25,7 @@ describe("RPC Router and Handlers", () => {
     // Create mock service context
     mockContext = {
       disclosureRateLimit: new DisclosureRateLimitService(),
+      autoSignBudget: new AutoSignBudgetService(),
       unlockThrottle: {
         check: vi.fn().mockResolvedValue(0),
         recordFailure: vi.fn().mockResolvedValue(0),
@@ -359,6 +361,7 @@ describe("RPC Router and Handlers", () => {
       // Create mock context specific to Nostr handler tests
       nostrMockContext = {
         disclosureRateLimit: new DisclosureRateLimitService(),
+        autoSignBudget: new AutoSignBudgetService(),
         vault: {
           unlock: vi.fn().mockResolvedValue({ selectedKeyId: "test-key" }),
           lock: vi.fn().mockResolvedValue(undefined),
@@ -370,6 +373,7 @@ describe("RPC Router and Handlers", () => {
           sign: vi
             .fn()
             .mockResolvedValue({ sigHex: "a".repeat(128), keyId: "key-1" }), // 64-byte hex signature
+          isKeyUnreadable: vi.fn().mockReturnValue(false),
           listKeys: vi.fn().mockResolvedValue([
             {
               id: "key-1",

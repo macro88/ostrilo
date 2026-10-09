@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { RelayUrlListSchema } from "@/domain/relay/url";
+import { isAvatarDataUrl } from "@/domain/profile/avatar";
+import { isAllowedRemoteUrl } from "@/domain/profile/types";
 import {
   PASSWORD_POLICY,
   checkPassword,
@@ -325,6 +327,36 @@ export const UnsignedEventSchema = z
     }
   );
 
+/** A public key as the avatar requests name it: 64 lowercase hex characters. */
+export const AvatarPubkeySchema = HexString32Schema;
+
+/**
+ * What `avatar.save` accepts. The picture URL goes through the same `https:`
+ * allowlist as every other remote URL, and the encoded image through the avatar
+ * policy: type, size and a header that matches the declared type.
+ */
+export const AvatarSaveParamsSchema = z.object({
+  pubkey: AvatarPubkeySchema,
+  sourceUrl: z.string().refine(isAllowedRemoteUrl, {
+    message: "Picture URL must use the https: scheme",
+  }),
+  dataUrl: z.string().refine(isAvatarDataUrl, {
+    message: "Image must be a webp or png data URL of at most 64 KiB",
+  }),
+});
+
+/** What `avatar.get` returns, checked where the UI receives it. */
+export const AvatarGetResponseSchema = z.object({
+  avatar: z
+    .object({
+      pubkey: AvatarPubkeySchema,
+      sourceUrl: z.string().refine(isAllowedRemoteUrl),
+      dataUrl: z.string().refine(isAvatarDataUrl),
+      at: z.number().finite(),
+    })
+    .nullable(),
+});
+
 // Infer types from schemas
 export type UnsignedEventInput = z.infer<typeof UnsignedEventSchema>;
 
@@ -343,6 +375,32 @@ export const ActivityFilterByRequestSchema = z.object({
   kind: EventKindSchema.optional(),
   limit: z.number().int().min(1).max(100).optional(),
   offset: z.number().int().min(0).optional(),
+});
+
+/**
+ * What `activity.origins` answers. Every origin is the site-filterable kind
+ * (http or https): an internal origin such as `extension://profile` appears in
+ * the log but could not be sent back as a filter, so listing it would offer a
+ * choice that fails. Bounded by the log's own 500-entry ceiling.
+ */
+export const ActivityOriginsResponseSchema = z.object({
+  origins: z.array(OriginSchema).max(500),
+});
+
+/**
+ * What `backup.list` returns, checked where the UI receives it. Bounded by the
+ * number of keys a vault holds, not by the transport.
+ */
+export const BackupListResponseSchema = z.object({
+  statuses: z
+    .array(
+      z.object({
+        keyId: KeyIdSchema,
+        state: z.enum(["pending", "verified"]),
+        at: z.number().finite(),
+      })
+    )
+    .max(1000),
 });
 
 // Infer types from schemas

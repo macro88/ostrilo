@@ -1,3 +1,5 @@
+import type { StoragePort } from "@/application/ports/storage";
+import { RollingWindowCounters } from "./rolling-window-counters";
 import {
   ApprovalDecision,
   ApprovalAction,
@@ -56,7 +58,19 @@ export class ApprovalRateLimitError extends Error {
   }
 }
 
+/** Distinct from every other counter's record. */
+export const ENQUEUE_WINDOW_STORAGE_KEY = "rateWindow:approvalEnqueue";
+
 const DEFAULT_TIMEOUT_MS = APPROVAL_TIMEOUT_MS;
+
+/**
+ * Why a queued request was denied without the user pressing deny.
+ *
+ * A resolver only receives "deny", which cannot tell a refusal from a lock, an
+ * expiry or a page that gave up. The cause is recorded before the resolvers
+ * run, so a handler that logs the outcome can say which it was.
+ */
+export type QueueDenialCause = "timeout" | "vault_locked" | "abandoned";
 
 /** Callback type for when a request is resolved or times out */
 export type RequestResolver = (
@@ -106,11 +120,37 @@ export class ApprovalQueueService {
   private queue: Map<string, QueueEntry> = new Map();
   private eventIdMap: Map<string, QueueEntry> = new Map(); // Track by (origin, event ID hash) for de-duplication
   private timeoutMs: number;
-  private timedOutRequests: Set<string> = new Set(); // Track which requests timed out
+  private denialCauses: Map<string, QueueDenialCause> = new Map(); // Why a request was denied without the user's answer
   private changeCallback?: QueueChangeCallback; // Optional callback for queue changes
 
-  constructor(timeoutMs: number = DEFAULT_TIMEOUT_MS) {
+  /**
+   * @param storage - Where the per-origin enqueue window persists, so a worker
+   *   restart does not hand every origin a fresh allowance. The pending caps
+   *   count live entries, which cannot outlive the worker, so they need no
+   *   record.
+   */
+  constructor(timeoutMs: number = DEFAULT_TIMEOUT_MS, storage?: StoragePort) {
     this.timeoutMs = timeoutMs;
+    this.enqueueWindows = new RollingWindowCounters({
+      storage,
+      storageKey: ENQUEUE_WINDOW_STORAGE_KEY,
+      windowMs: QUEUE_LIMITS.windowMs,
+      maxPerOrigin: QUEUE_LIMITS.perOriginPerWindow,
+    });
+  }
+
+  /**
+   * Resolves once the persisted enqueue window has been read. Await before
+   * `enqueue`, so a request that wakes a restarted worker is judged against the
+   * window the worker had when it died.
+   */
+  ready(): Promise<void> {
+    return this.enqueueWindows.ready();
+  }
+
+  /** Resolves when every enqueue charged so far has been written. */
+  settled(): Promise<void> {
+    return this.enqueueWindows.settled();
   }
 
   /**
@@ -131,7 +171,7 @@ export class ApprovalQueueService {
   }
 
   /** Enqueue timestamps per origin, trimmed to the rolling window. */
-  private enqueueHistory: Map<string, number[]> = new Map();
+  private readonly enqueueWindows: RollingWindowCounters;
 
   /** Number of entries this origin currently has waiting. */
   private pendingForOrigin(origin: string): number {
@@ -151,24 +191,16 @@ export class ApprovalQueueService {
       throw new ApprovalRateLimitError("origin_full");
     }
 
-    const now = Date.now();
-    const recent = (this.enqueueHistory.get(origin) ?? []).filter(
-      (at) => now - at < QUEUE_LIMITS.windowMs
-    );
-    this.enqueueHistory.set(origin, recent);
-    if (recent.length >= QUEUE_LIMITS.perOriginPerWindow) {
+    if (
+      this.enqueueWindows.count(origin) >= QUEUE_LIMITS.perOriginPerWindow
+    ) {
       throw new ApprovalRateLimitError("rate");
     }
   }
 
   /** Charges one enqueue against this origin's rolling allowance. */
   private recordEnqueue(origin: string): void {
-    const now = Date.now();
-    const recent = (this.enqueueHistory.get(origin) ?? []).filter(
-      (at) => now - at < QUEUE_LIMITS.windowMs
-    );
-    recent.push(now);
-    this.enqueueHistory.set(origin, recent);
+    this.enqueueWindows.record(origin);
   }
 
   /**
@@ -192,7 +224,11 @@ export class ApprovalQueueService {
         entry.request.origin === origin &&
         entry.request.clientRequestId === clientRequestId
       ) {
-        return this.resolve(entry.request.id, "deny");
+        this.denialCauses.set(entry.request.id, "abandoned");
+        const resolved = this.resolve(entry.request.id, "deny");
+        // Read synchronously by the resolvers above; nothing asks afterwards.
+        this.denialCauses.delete(entry.request.id);
+        return resolved;
       }
     }
     return false;
@@ -229,7 +265,12 @@ export class ApprovalQueueService {
     event: UnsignedEvent,
     resolver: RequestResolver,
     eventIdHash?: string,
-    options?: { signingPubkey?: string; clientRequestId?: string }
+    options?: {
+      signingPubkey?: string;
+      signingKeyId?: string;
+      clientRequestId?: string;
+      exceededAutoSignBudget?: boolean;
+    }
   ): PendingRequest {
     // Check for a duplicate from THIS origin. The key is built here, inside the
     // service, so no caller can forget to include the origin.
@@ -255,7 +296,9 @@ export class ApprovalQueueService {
       createdAt: now,
       timeoutAt: now + Math.floor(this.timeoutMs / 1000),
       signingPubkey: options?.signingPubkey,
+      signingKeyId: options?.signingKeyId,
       clientRequestId: options?.clientRequestId,
+      ...(options?.exceededAutoSignBudget && { exceededAutoSignBudget: true }),
     };
 
     this.recordEnqueue(origin);
@@ -288,23 +331,33 @@ export class ApprovalQueueService {
   /**
    * Enqueue a request to disclose the user's public key to an origin.
    *
-   * De-duplicates on `(origin, "identity_disclosure")` rather than on an event
-   * hash - there is no event to hash. One pending disclosure prompt per origin
-   * is the correct semantics anyway: a page calling `getPublicKey` in a loop
-   * must produce one prompt, not one per call.
+   * De-duplicates on `(origin, key, "identity_disclosure")` rather than on an
+   * event hash - there is no event to hash. One pending disclosure prompt per
+   * origin and key is the correct semantics anyway: a page calling
+   * `getPublicKey` in a loop must produce one prompt, not one per call.
    *
    * `assertCapacity` and the rolling per-origin allowance still apply, so a
    * flooding origin is refused here exactly as a flooding signer is. Because
-   * the dedupe key collapses repeats from one origin into a single entry,
-   * repeated disclosure requests from that origin cannot displace a pending
+   * the dedupe key collapses repeats from one origin into a single entry per
+   * key, repeated disclosure requests from that origin cannot displace a pending
    * signing request from another.
    */
   enqueueDisclosure(
     origin: string,
     resolver: RequestResolver,
-    options?: { signingPubkey?: string; clientRequestId?: string }
+    options?: {
+      signingPubkey?: string;
+      signingKeyId?: string;
+      clientRequestId?: string;
+    }
   ): PendingRequest {
-    const dedupeKey = makeDedupeKey(origin, "identity_disclosure");
+    // One pending prompt per (origin, key). Keyed on the key as well, so a
+    // second caller that arrives after a key switch is not folded into a prompt
+    // that asked about the OTHER identity and answered with its decision.
+    const dedupeKey = makeDedupeKey(
+      origin,
+      `identity_disclosure:${options?.signingKeyId ?? ""}`
+    );
     const existingEntry = this.eventIdMap.get(dedupeKey);
     if (existingEntry) {
       existingEntry.resolvers.push(resolver);
@@ -322,6 +375,7 @@ export class ApprovalQueueService {
       createdAt: now,
       timeoutAt: now + Math.floor(this.timeoutMs / 1000),
       signingPubkey: options?.signingPubkey,
+      signingKeyId: options?.signingKeyId,
       clientRequestId: options?.clientRequestId,
     };
 
@@ -419,8 +473,7 @@ export class ApprovalQueueService {
       return;
     }
 
-    // Mark this request as timed out
-    this.timedOutRequests.add(requestId);
+    this.denialCauses.set(requestId, "timeout");
 
     // Remove from queue and event ID map
     this.queue.delete(requestId);
@@ -432,34 +485,38 @@ export class ApprovalQueueService {
     for (const resolveRequest of entry.resolvers) {
       resolveRequest("deny", "deny");
     }
+    // Read synchronously by the resolvers above; nothing asks afterwards, and
+    // a worker that lives for days must not keep one entry per expiry.
+    this.denialCauses.delete(requestId);
 
     // Notify listeners that queue has changed
     this.notifyChange();
   }
 
   /**
-   * Check if a request timed out (used by handlers to return appropriate error code)
-   * @param requestId - The unique request ID
-   * @returns true if request timed out, false otherwise
+   * Why a request was denied other than by the user, or undefined when it was
+   * not. Only meaningful from inside the resolver: the cause is forgotten as
+   * soon as the resolvers have run.
    */
-  wasTimeout(requestId: string): boolean {
-    return this.timedOutRequests.has(requestId);
+  denialCause(requestId: string): QueueDenialCause | undefined {
+    return this.denialCauses.get(requestId);
   }
 
   /**
-   * Clear all pending requests (used for cleanup/testing)
-   * All pending requests will be auto-denied
+   * Clear all pending requests. Run when the vault locks, and in tests.
+   * All pending requests are denied, with the cause recorded as a lock.
    */
   clear(): void {
     for (const entry of this.queue.values()) {
       clearTimeout(entry.timeoutId);
+      this.denialCauses.set(entry.request.id, "vault_locked");
       for (const resolveRequest of entry.resolvers) {
         resolveRequest("deny", "deny");
       }
     }
     this.queue.clear();
     this.eventIdMap.clear();
-    this.timedOutRequests.clear();
+    this.denialCauses.clear();
   }
 
   /**

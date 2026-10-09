@@ -17,6 +17,7 @@ import {
   getEffectiveMediumAllowKinds,
 } from "@/domain/policy/trust-definitions";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
+import { CONSENT_MIGRATION_VERSION } from "@/domain/policy/consent-migration";
 import { SettingsStore } from "./settings-store";
 
 export const SETTINGS_CHANGED_EVENT = BROADCAST_EVENTS.SETTINGS_CHANGED;
@@ -114,6 +115,7 @@ export class SettingsService {
     const d = defaultSettings();
     const next: AppSettingsV1 = {
       ...d,
+      ...consentStamp(existing),
       // Preserve known fields if present
       theme: (existing?.theme ?? d.theme) as Theme,
       sidePanel: existing?.sidePanel ?? d.sidePanel,
@@ -141,7 +143,7 @@ export class SettingsService {
   }
 
   async update(patch: Partial<AppSettingsV1>): Promise<AppSettingsV1> {
-    const current = (await this.get()) ?? defaultSettings();
+    const current = (await this.get()) ?? freshInstallSettings();
     const safePatch = { ...patch };
     if (Array.isArray(patch.mediumAllowKinds)) {
       safePatch.mediumAllowKinds = getEffectiveMediumAllowKinds(
@@ -176,6 +178,37 @@ export class SettingsService {
     }
     return next;
   }
+}
+
+/**
+ * Settings for an install that has none yet. Stamped as already migrated: there
+ * is no pre-existing consent data to repair, and the first migration run found
+ * no settings to stamp, so without this the next worker start would run the
+ * whole migration over the origins the user has chosen since - including the
+ * repair that turns `medium` into `low`, which Settings still lets them pick.
+ *
+ * Kept apart from `defaultSettings()` because callers spread that under settings
+ * that exist. A stamp in the base would be inherited by an upgrader's unstamped
+ * settings and skip their migration.
+ */
+export function freshInstallSettings(): AppSettingsV1 {
+  return { ...defaultSettings(), __consentMigrations: CONSENT_MIGRATION_VERSION };
+}
+
+/**
+ * The stamp a rebuilt settings object carries: its own when it has one, the
+ * current version when nothing was stored, none when stored settings are being
+ * rebuilt - their origins have not been migrated.
+ */
+function consentStamp(
+  existing: Record<string, any> | undefined
+): Pick<AppSettingsV1, "__consentMigrations"> {
+  if (existing === undefined) {
+    return { __consentMigrations: CONSENT_MIGRATION_VERSION };
+  }
+  return typeof existing.__consentMigrations === "number"
+    ? { __consentMigrations: existing.__consentMigrations }
+    : {};
 }
 
 export function defaultSettings(): AppSettingsV1 {

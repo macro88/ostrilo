@@ -25,6 +25,7 @@ const env = vi.hoisted(() => ({
   keysLoading: false,
   keys: [] as unknown[],
   selectedUnlockedKey: null as unknown,
+  refreshKeys: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/infrastructure/messaging/client", () => client);
@@ -34,6 +35,24 @@ vi.mock("wxt/browser", () => ({
     tabs,
     runtime: { getURL: (path: string) => `chrome-extension://ostrilo${path}` },
   },
+}));
+
+const backup = vi.hoisted(() => ({
+  status: "unknown" as "pending" | "verified" | "unknown",
+  session: new Map<string, unknown>(),
+}));
+
+vi.mock("@/ui/features/backup/hooks/useKeyBackupStatus", () => ({
+  useKeyBackupStatus: () => backup.status,
+}));
+
+vi.mock("@/infrastructure/storage/adapters", () => ({
+  createStorageSuite: () => ({
+    session: {
+      get: async (key: string) => backup.session.get(key),
+      set: async (key: string, value: unknown) => void backup.session.set(key, value),
+    },
+  }),
 }));
 
 vi.mock("@/ui/hooks/useAppSettings", () => ({
@@ -48,6 +67,7 @@ vi.mock("@/ui/features/authentication/hooks/useKeyManager", () => ({
     keys: env.keys,
     selectedUnlockedKey: env.selectedUnlockedKey,
     isLoading: env.keysLoading,
+    refreshKeys: env.refreshKeys,
   }),
 }));
 
@@ -117,12 +137,15 @@ beforeEach(() => {
   client.activityGetRecent.mockReset().mockResolvedValue({ entries: [], total: 0 });
   client.activityFilterBy.mockReset();
   tabs.create.mockReset();
+  backup.status = "unknown";
+  backup.session.clear();
   env.settingsLoading = false;
   env.relays = [];
   env.origins = [];
   env.keysLoading = false;
   env.keys = [ACTIVE];
   env.selectedUnlockedKey = ACTIVE;
+  env.refreshKeys.mockClear();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -165,6 +188,37 @@ describe("HomeView identity card", () => {
     const card = container.querySelector('section[aria-label="Active identity"]');
     expect(card?.textContent).toContain("could not be read");
     expect(card?.textContent).not.toContain("npub1");
+  });
+
+  it("names the key whose public key cannot be read, and never offers to create one", async () => {
+    env.selectedUnlockedKey = { ...ACTIVE, publicKeyBech32: "", isUnreadable: true };
+    await mount();
+    const card = container.querySelector('section[aria-label="Active identity"]');
+    expect(card?.textContent).toContain("key-main");
+    expect(card?.textContent).toContain("Choose another key");
+    expect(card?.textContent).toContain("has not deleted or changed it");
+    expect(card?.textContent).not.toContain("Unnamed");
+    expect(card?.textContent).not.toContain("Create or import");
+  });
+
+  it("offers a retry that reads the keys again when the public key cannot be read", async () => {
+    env.selectedUnlockedKey = { ...ACTIVE, publicKeyBech32: "", isUnreadable: true };
+    await mount();
+    const retry = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Try again"
+    );
+
+    await act(async () => retry?.click());
+
+    expect(env.refreshKeys).toHaveBeenCalledTimes(1);
+  });
+
+  it("says no key is selected, not that none exists, when keys exist without a selection", async () => {
+    env.selectedUnlockedKey = undefined;
+    await mount();
+    const card = container.querySelector('section[aria-label="Active identity"]');
+    expect(card?.textContent).toContain("No key is selected");
+    expect(card?.textContent).not.toContain("Create or import");
   });
 
   it("invites creating a key when the vault has none", async () => {
@@ -367,5 +421,89 @@ describe("HomeView recent activity", () => {
     await flush();
     expect(container.textContent).toContain("Recent activity");
     expect(container.textContent).not.toContain("See all");
+  });
+});
+
+describe("HomeView backup banner", () => {
+  const banner = () =>
+    container.querySelector<HTMLElement>('section[aria-label="Backup reminder"]');
+  const bannerButton = (name: string) =>
+    Array.from(banner()?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent === name || button.getAttribute("aria-label") === name
+    );
+
+  it("asks about a selected key whose backup is pending", async () => {
+    backup.status = "pending";
+    await mount(vi.fn());
+    await flush();
+    expect(banner()?.textContent).toContain("This key has no backup");
+  });
+
+  it.each(["verified", "unknown"] as const)("says nothing for a %s key", async (status) => {
+    backup.status = status;
+    await mount(vi.fn());
+    await flush();
+    expect(banner()).toBeNull();
+  });
+
+  it("does not ask about a key that cannot be read, since Back up is refused for it", async () => {
+    backup.status = "pending";
+    env.selectedUnlockedKey = { ...ACTIVE, publicKeyBech32: "", isUnreadable: true };
+    await mount(vi.fn());
+    await flush();
+    expect(container.textContent).toContain("could not be read");
+    expect(banner()).toBeNull();
+  });
+
+  it("opens Settings on Keys & Identities with this key's backup requested", async () => {
+    backup.status = "pending";
+    await mount(vi.fn());
+    await flush();
+    act(() => bannerButton("Back up")!.click());
+    expect(tabs.create).toHaveBeenCalledWith({
+      url: "chrome-extension://ostrilo/options.html#keys?backup=key-main",
+    });
+  });
+
+  it("hides on dismiss, remembers it for the session, and leaves other keys alone", async () => {
+    backup.status = "pending";
+    await mount(vi.fn());
+    await flush();
+    await act(async () => bannerButton("Dismiss backup reminder")!.click());
+    await flush();
+    expect(banner()).toBeNull();
+    expect(backup.session.get("backupBannerDismissed:key-main")).toBe(true);
+
+    // A new mount in the same browser session: still dismissed.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await mount(vi.fn());
+    await flush();
+    expect(banner()).toBeNull();
+
+    // Another key's banner is its own.
+    const other = { ...ACTIVE, id: "key-other" } as UIKeyInfo;
+    env.selectedUnlockedKey = other;
+    env.keys = [ACTIVE, other];
+    act(() => root.unmount());
+    root = createRoot(container);
+    await mount(vi.fn());
+    await flush();
+    expect(banner()).not.toBeNull();
+  });
+
+  it("returns in a new browser session until the key is backed up", async () => {
+    backup.status = "pending";
+    backup.session.set("backupBannerDismissed:key-main", true);
+    await mount(vi.fn());
+    await flush();
+    expect(banner()).toBeNull();
+
+    backup.session.clear();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await mount(vi.fn());
+    await flush();
+    expect(banner()).not.toBeNull();
   });
 });

@@ -66,6 +66,7 @@ type ActivityEntry = {
   kind?: number;
   operation?: string;
   decision: "allow" | "deny";
+  reason?: string;
   contentPreview?: string;
   keyId?: string;
 };
@@ -265,6 +266,8 @@ test.describe("request withdrawal", () => {
       .toBe(1);
     const [logged] = await signingActivity(popup);
     expect(logged.decision).toBe("deny");
+    // Nobody pressed deny: the page gave up, which the log says as unanswered.
+    expect(logged.reason).toBe("timeout");
     expect(logged.kind).toBe(7);
     expect(logged.origin).toBe(DAPP_ORIGIN);
     // keyId is written only on the signing path, so its absence is independent

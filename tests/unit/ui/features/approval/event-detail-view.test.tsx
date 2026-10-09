@@ -221,6 +221,12 @@ describe("what the dialog shows is what gets signed", () => {
     expect(container.textContent).toContain("bytes");
   });
 
+  it("says one byte, not 1 bytes, for a one-byte content", () => {
+    const { container } = renderWith({ content: "+" });
+    expect(container.textContent).toContain("Content · 1 byte");
+    expect(container.textContent).not.toContain("1 bytes");
+  });
+
   it("marks the end of the content, so nothing hides below a fold", () => {
     const { container } = renderWith({ content: "x".repeat(5_000) });
     expect(container.textContent).toContain("end of content");
@@ -342,6 +348,11 @@ describe("EventDetailView payload sections", () => {
   it("says plural when several characters are hidden", () => {
     const { container } = renderEvent({ content: "‮a‮b" });
     expect(container.textContent).toContain("2 hidden or direction-control characters are present");
+  });
+
+  it("says one byte, not 1 bytes, for a one-byte tags section", () => {
+    const { container } = renderEvent({ tags: [["a"]] });
+    expect(container.textContent).toMatch(/Tags · 1 · 1 byte(?!s)/);
   });
 
   it("omits the tags section for an event with no tags", () => {
@@ -476,5 +487,56 @@ describe("EventDetailView payload sections", () => {
     expect(checkbox.getAttribute("aria-describedby")).toBe(scope.id);
     click(checkbox);
     expect(scope.hidden).toBe(false);
+  });
+});
+
+describe("EventDetailView automatic-signing budget notice", () => {
+  function renderOverBudget(over: boolean) {
+    const onResolve = vi.fn();
+    const request = {
+      ...makeRequest(7),
+      ...(over && { exceededAutoSignBudget: true as const }),
+    };
+    const container = render(
+      <EventDetailView
+        request={request}
+        signingKey={null}
+        countdown={30}
+        originTrust="trusted"
+        onResolve={onResolve as (action: ApprovalAction) => void}
+        onBack={vi.fn()}
+      />
+    );
+    return { container, onResolve };
+  }
+
+  it("says the site went over its automatic-signing limit when it did", () => {
+    const { container } = renderOverBudget(true);
+    const notice = container.querySelector(
+      "[data-testid='auto-sign-budget-notice']"
+    );
+
+    expect(notice?.textContent).toContain("went over its automatic-signing limit");
+    expect(notice?.textContent).toContain("need your approval");
+    // The trust chip is unchanged: the site is still trusted, and the notice is
+    // what explains why it is being asked anyway.
+    expect(container.textContent).toContain("Trusted");
+  });
+
+  it("shows no notice for an ordinary request", () => {
+    const { container } = renderOverBudget(false);
+
+    expect(
+      container.querySelector("[data-testid='auto-sign-budget-notice']")
+    ).toBeNull();
+  });
+
+  it("does not change what approving does", () => {
+    const { container, onResolve } = renderOverBudget(true);
+
+    settleApprove();
+    click(findButton(container, "Approve & sign"));
+
+    expect(onResolve).toHaveBeenCalledWith("allow_once");
   });
 });

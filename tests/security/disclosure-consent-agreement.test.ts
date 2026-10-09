@@ -23,10 +23,11 @@ import { evaluatePolicy } from "@/domain/policy/evaluate";
 
 let setPerKindRule: ReturnType<typeof vi.fn>;
 let setIdentityDisclosure: ReturnType<typeof vi.fn>;
+let grantIdentityDisclosure: ReturnType<typeof vi.fn>;
 
 function makeContext(): ServiceContext {
   return {
-    policy: { setPerKindRule, setIdentityDisclosure },
+    policy: { setPerKindRule, setIdentityDisclosure, grantIdentityDisclosure },
   } as unknown as ServiceContext;
 }
 
@@ -43,6 +44,7 @@ const signing = (overrides: Partial<PendingRequest> = {}): PendingRequest => ({
   origin: "https://example.com",
   operation: "sign_event",
   event: { kind: 10002, content: "relays", tags: [], created_at: 1 },
+  signingKeyId: KEY_ID,
   createdAt: 1,
   timeoutAt: 61,
   ...overrides,
@@ -54,10 +56,13 @@ const disclosure = (
   id: REQUEST_ID,
   origin: "https://example.com",
   operation: "identity_disclosure",
+  signingKeyId: KEY_ID,
   createdAt: 1,
   timeoutAt: 61,
   ...overrides,
 });
+
+const KEY_ID = "0b6d6f5e-7a4c-4a52-8d3c-2f1e9a7c4b10";
 
 /** `ApprovalResolveRequestSchema` requires a UUID, so the ids here are real ones. */
 const REQUEST_ID = "6f1a0c8e-0d2f-4f5a-9a1e-3b7c8d9e0f11";
@@ -68,6 +73,7 @@ const resolveWith = (action: string) =>
 beforeEach(() => {
   setPerKindRule = vi.fn().mockResolvedValue(undefined);
   setIdentityDisclosure = vi.fn().mockResolvedValue(undefined);
+  grantIdentityDisclosure = vi.fn().mockResolvedValue(undefined);
 });
 
 describe("approving a signature records disclosure consent", () => {
@@ -77,9 +83,9 @@ describe("approving a signature records disclosure consent", () => {
 
     await handler.handleRequest(resolveWith("allow"), makeContext());
 
-    expect(setIdentityDisclosure).toHaveBeenCalledWith(
+    expect(grantIdentityDisclosure).toHaveBeenCalledWith(
       "https://example.com",
-      "allow"
+      KEY_ID
     );
   });
 
@@ -91,9 +97,9 @@ describe("approving a signature records disclosure consent", () => {
 
     await handler.handleRequest(resolveWith("allow_once"), makeContext());
 
-    expect(setIdentityDisclosure).toHaveBeenCalledWith(
+    expect(grantIdentityDisclosure).toHaveBeenCalledWith(
       "https://example.com",
-      "allow"
+      KEY_ID
     );
   });
 
@@ -104,6 +110,7 @@ describe("approving a signature records disclosure consent", () => {
     await handler.handleRequest(resolveWith("deny"), makeContext());
 
     expect(setIdentityDisclosure).not.toHaveBeenCalled();
+    expect(grantIdentityDisclosure).not.toHaveBeenCalled();
   });
 });
 
@@ -217,9 +224,9 @@ describe("an eventless approval does not break the pipeline", () => {
     const handler = new ApprovalRpcHandler(makeQueue(request) as never);
 
     await handler.handleRequest(resolveWith("allow"), makeContext());
-    expect(setIdentityDisclosure).toHaveBeenCalledWith(
+    expect(grantIdentityDisclosure).toHaveBeenCalledWith(
       "https://example.com",
-      "allow"
+      KEY_ID
     );
 
     setIdentityDisclosure.mockClear();
@@ -348,7 +355,8 @@ describe("revocation actually revokes", () => {
         queueMicrotask(() => resolver("allow"));
         return { id: "x", origin };
       },
-      wasTimeout: () => false,
+      ready: async () => {},
+      denialCause: () => undefined,
       resolve: () => true,
     };
     const handler = new NostrRpcHandler(queue as never, async () => 1);
@@ -356,6 +364,7 @@ describe("revocation actually revokes", () => {
     const context = {
       vault: {
         getLockState: async () => ({ isLocked: false }),
+        isKeyUnreadable: () => false,
         listKeys: async () => [
           { id: "k1", pubkey: "ab".repeat(32), isSelected: true },
         ],
@@ -366,7 +375,7 @@ describe("revocation actually revokes", () => {
         setIdentityDisclosure: async () => {},
       },
       activityLog: { addEntry: async () => {} },
-      disclosureRateLimit: { tryConsume: () => true },
+      disclosureRateLimit: { ready: async () => {}, tryConsume: () => true },
     };
 
     await handler.handleRequest(
@@ -399,7 +408,8 @@ describe("no origin is grandfathered", () => {
       local: { get: async () => undefined, set: async () => {} },
     };
     return new PolicyService(storage as never).getIdentityDisclosure(
-      policy.origin as string
+      policy.origin as string,
+      KEY_ID
     );
   }
 

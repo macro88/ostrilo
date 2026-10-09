@@ -7,11 +7,11 @@ import { createRoot, type Root } from "react-dom/client";
 import type { ComponentProps, ReactNode } from "react";
 import { OnboardingCreateKeyBackupStep } from "@/ui/features/onboarding/components/OnboardingCreateKeyBackupStep";
 import { OnboardingImportKeyStep } from "@/ui/features/onboarding/components/OnboardingImportKeyStep";
-import { VERIFICATION_SUFFIX_LENGTH } from "@/ui/features/onboarding/components/backup/BackupVerification";
+import { VERIFICATION_SUFFIX_LENGTH } from "@/ui/features/backup/components/BackupVerification";
 import {
   createKeyBackup,
   serializeKeyBackup,
-} from "@/ui/features/onboarding/backup/key-backup-envelope";
+} from "@/ui/features/backup/key-backup-envelope";
 
 vi.mock("@/infrastructure/messaging/client", () => ({
   evaluatePasswordStrength: vi.fn().mockResolvedValue({
