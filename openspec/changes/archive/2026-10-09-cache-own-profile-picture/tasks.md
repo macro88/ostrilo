@@ -18,5 +18,5 @@
 - [x] 3.1 `PRIVACY.md`, README privacy paragraph, `docs/managing-multiple-keys.md`, `docs/vault-storage-format.md` and `docs/roadmap.md`
 - [x] 3.2 Chrome e2e (`tests/e2e/profile-avatar.spec.ts`): one request per save or refresh, none on open, unlock, side panel or key switch; centre crop; failure notes; deletion; background refusals. `profile-long-values.spec.ts` covers the header image and the note beside long values
 - [x] 3.3 The design-review runner seeds a copy for the populated vault
-- [ ] 3.4 Light and dark review on the production build with a populated vault (Task 14 of phase 0.10)
-- [ ] 3.5 Archive this change (Task 14 of phase 0.10)
+- [x] 3.4 Light and dark review on the production build with a populated vault (Task 14 of phase 0.10)
+- [x] 3.5 Archive this change (Task 14 of phase 0.10)
