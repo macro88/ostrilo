@@ -131,8 +131,10 @@ Ostrilo signs for them.
 
 Private keys are encrypted, but settings, profile records and activity logs
 aren't. Revealing or copying a key also puts it in memory or on the clipboard,
-where complete erasure can't be guaranteed. The current extension doesn't load
-remote profile pictures or upload images.
+where complete erasure can't be guaranteed. Ostrilo loads your own profile
+picture once, when you save your profile or press Refresh picture, and keeps a
+small local copy for the header; opening the popup, unlocking and switching keys
+never request an image. It doesn't upload images.
 
 Read the [privacy policy](PRIVACY.md) for storage and network details, or
 [browser permissions](docs/extension-manifest.md) for why each permission is

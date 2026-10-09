@@ -16,11 +16,11 @@ the popup) is where keys are renamed and deleted.
 
 ## Switching Between Keys
 
-The key selector is located in the extension header and displays your currently active key with its profile avatar and display name.
+The key selector is located in the extension header and displays your currently active key with its picture (or a seal avatar) and display name.
 
 **To switch to a different key:**
 
-1. Click on the key selector in the header (shows current key's avatar and name)
+1. Click on the key selector in the header (shows current key's picture and name)
 2. A dropdown menu will appear showing all your available keys
 3. Each key displays:
    - A seal avatar showing the first letter of its name
@@ -30,11 +30,16 @@ The key selector is located in the extension header and displays your currently 
 4. Click any key to switch to it
 5. The dropdown closes automatically and all UI components update to reflect the new key
 
-**Why no profile pictures?** Ostrilo never loads the profile picture from your
-Nostr profile here. A picture URL points at a host chosen by whoever wrote the
-profile, and this is the screen where you confirm which identity is about to
-sign — fetching an image would tell that host your IP address every time you
-opened the menu. You get a local seal avatar instead.
+**Where does the header picture come from?** From a small copy Ostrilo keeps on
+your device. When you save your profile with a picture address, or press
+**Refresh picture** on the Profile screen, Ostrilo loads that address once and
+stores a 96 by 96 pixel copy for that key. The header shows only the copy. It
+never loads the picture when you open the popup, switch keys or approve a
+request: a picture address points at a host someone chose, and this is the
+screen where you confirm which identity is about to sign, so fetching it every
+time would tell that host your IP address each time you looked. A key with no
+copy, or whose picture host does not allow one, shows a local seal with its
+first letter. The rows in the dropdown are always seals.
 
 **Keyboard shortcuts:**
 - Press `Enter` or `Space` to open the dropdown
@@ -183,8 +188,9 @@ Ostrilo automatically fetches profile metadata for all your keys from Nostr rela
 - **Display Name**: Your preferred name (the `display_name` or `name` field from your kind:0 profile event)
 - **Fallback**: If no profile is found, shows your key label, or "Unnamed Key" if there is no label
 
-**Not displayed:** your profile picture. Key lists always use the local seal
-avatar — see "Why no profile pictures?" above.
+**Not displayed:** profile pictures in key lists. The dropdown and the settings
+list always use the local seal avatar. Only the header shows your own picture,
+from the local copy — see "Where does the header picture come from?" above.
 
 **Caching:**
 - Profile data is cached for one hour to reduce relay queries
@@ -209,7 +215,7 @@ avatar — see "Why no profile pictures?" above.
 
 ### Performance Tips
 
-- **Profile loading**: Key names and seal avatars render immediately. Display names from Nostr profiles arrive when the relay query resolves, and are cached for an hour afterwards
+- **Profile loading**: Key names, seal avatars and the header's stored picture copy render without any image request. Display names from Nostr profiles arrive when the relay query resolves, and are cached for an hour afterwards
 - **Key switching**: Switching is instant; no network requests required
 
 ## Keyboard Accessibility
@@ -235,7 +241,7 @@ the auto-lock slider).
 - Check your internet connection
 - Profile metadata may not exist on relays yet
 - The key label (or "Unnamed Key") is shown instead
-- Avatars are always the local seal, so a missing picture is not a fault
+- Dropdown and settings rows are always the local seal, so a missing picture there is not a fault. The header shows your picture only after you save or refresh your profile, and only if the host allows a copy
 
 ### Can't delete a key
 - Verify it's not your last remaining key (the last key cannot be deleted, and its delete button is disabled)

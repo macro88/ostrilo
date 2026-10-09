@@ -28,6 +28,7 @@ These are kept in the browser's local extension storage, which is not synced:
 | Public keys and key labels | Stored beside the encrypted keys so the vault can list them while locked. |
 | Activity log | For each request a site made: the time, the site's origin, the event kind, whether it was allowed or denied, the key used, and the first 100 characters of the event's content. It keeps 50 entries by default, and at most 500. |
 | Profile cache | Public Nostr profiles (kind 0 metadata) fetched from relays for your keys. |
+| Profile picture copy | A 96 by 96 pixel copy of your own profile picture, at most 64 KB, kept for each key you made one for, with the address it came from and the time. The header shows it. See [Images and uploads](#images-and-uploads). |
 | Relay partition salt | A random value that decides which relay is asked about which of your keys. See [Relays](#what-is-sent-to-nostr-relays). |
 | Settings | Site permissions (each site's origin, trust level, per-event-kind rules and whether it may read your public key), your relay addresses, the image upload endpoint, auto-lock and session-grant durations, the activity log size, theme, which key is active (an internal ID, not the key), and whether onboarding is complete. |
 
@@ -94,9 +95,25 @@ A website never receives a private key or your master password.
 
 ## Images and uploads
 
-Ostrilo does not load remote images in its own windows, so a profile picture URL
-does not cause a request from the extension. Ostrilo 0.9.0 has no image upload:
-you paste an image URL instead.
+Ostrilo does not load remote images in its windows, with one exception that you
+start: your own profile picture.
+
+When you save your profile with a picture address, or press **Refresh picture**
+on the Profile screen, Ostrilo loads that address once to make a small copy for
+the header. The request goes to the host named in the address, from your browser,
+so that host can see your IP address and the time. It carries no referrer and no
+cookies. Ostrilo shrinks the image to 96 by 96 pixels, keeps the copy on your
+device, and the header shows only that copy. It will not load images larger than
+4096 by 4096 pixels or addresses that do not start with `https://`, and it gives
+up after 10 seconds.
+
+That is the only time Ostrilo asks an image host for anything. Opening the popup
+or the side panel, unlocking, switching keys and approval windows make no image
+request, and nothing refreshes the copy in the background. If the host does not
+allow a copy, the header keeps the local seal and the Profile screen says so.
+Saving a profile with no picture, or deleting a key, removes that key's copy.
+
+Ostrilo 0.9.0 has no image upload: you paste an image URL instead.
 
 ## Permissions
 

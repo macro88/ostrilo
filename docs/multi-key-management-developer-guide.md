@@ -71,7 +71,7 @@ settings tab imports them directly from
 - **No props on MainApp**: components access state via context, not props
 - **Memoization**: `KeySelector` is wrapped in `React.memo` to prevent unnecessary re-renders
 - **Profile caching**: `ProfileService` caches metadata for one hour (`DEFAULT_TTL_SECONDS = 3600`) to reduce relay queries
-- **Local avatars only**: neither key surface loads the relay-supplied `picture` URL. Both render the local seal avatar with the key's initial. These are the surfaces on which a user confirms which identity is about to sign, so they make no request to a host a relay chose
+- **Local avatars only**: neither key surface loads the relay-supplied `picture` URL. The dropdown and the settings list render the local seal avatar with the key's initial; the header trigger renders the selected key's stored `data:` copy (`useOwnAvatar` and `OwnAvatarImage`) or the seal. These are the surfaces on which a user confirms which identity is about to sign, so they make no request to a host a relay chose. The only remote image load is the Profile page's explicit save or Refresh picture (`src/ui/lib/avatar-capture.ts`), which makes that copy
 - **Accessibility**: WCAG 2.1 AA target, with full keyboard navigation
 
 ## Components
@@ -182,7 +182,7 @@ aria-label={`${displayName} - ${truncatedNpub}${isSelected ? " (currently select
 **Performance Optimization:**
 - Component is wrapped with `React.memo()` to prevent re-renders
 - Profile metadata for every key is requested in parallel from one `useProfileMetadata(pubkeys)` call (`Promise.allSettled` over one `profile.get` RPC per pubkey — parallel, not a single batched request)
-- No avatar images are fetched, so there is nothing to lazy-load: the seal fallback renders synchronously
+- No avatar image is fetched here, so there is nothing to lazy-load: the header reads a stored `data:` copy from the background and shows the seal until it arrives
 
 ### KeySelectorCard
 

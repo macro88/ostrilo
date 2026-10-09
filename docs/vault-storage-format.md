@@ -10,7 +10,9 @@ Established by the OpenSpec change `harden-vault-key-derivation`.
 Two keys in `browser.storage.local`, plus a third, `vaultRotation`, that exists
 only while a password change is being committed (see
 [Password change](#password-change)). A fourth, `keyBackupStatus`, sits beside
-the vault and is not part of it (see [below](#keybackupstatus-not-part-of-the-vault)).
+the vault and is not part of it (see [below](#keybackupstatus-not-part-of-the-vault)),
+and a fifth, `profileAvatar`, holds the header's local picture copies (see
+[below](#profileavatar-not-part-of-the-vault)).
 
 ### `vaultEnvelope`
 
@@ -73,6 +75,32 @@ stored, and drops the entry when it deletes the key. The only write the UI has i
 predates the record have no entry, and read as unknown. The reader drops any
 entry that is malformed or whose key is not a key id, so a damaged record reads
 as "unknown" and never as an error.
+
+### `profileAvatar`: not part of the vault
+
+A separate item, owned by `ProfileAvatarService`, holding the local copy of each
+key's profile picture that the header shows. Like `keyBackupStatus` it holds no
+secret and changes without the vault password.
+
+```jsonc
+{
+  "__version": "profileAvatar.v1",
+  "avatars": {
+    "<public key hex>": {
+      "dataUrl": "data:image/webp;base64,...",   // or image/png; at most 64 KiB
+      "sourceUrl": "https://host.example/me.png", // the https address it was made from
+      "at": 1757000000000
+    }
+  }
+}
+```
+
+The Profile page makes the image and `avatar.save` stores it; the background never
+fetches a picture. At most one entry per vault key: a save drops entries for
+public keys the vault no longer holds, and `deleteKey` removes the deleted key's
+entry after the key is zeroized. The reader drops any entry whose image is not a
+png or webp `data:` URL with matching header bytes, whose source is not `https:`,
+or whose key is not 64 hex characters.
 
 ## Why an envelope
 

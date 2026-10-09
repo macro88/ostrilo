@@ -79,7 +79,7 @@ Defects in shipped code. Each belongs to the row named.
 | SEC-018 | Deterministic-signature detection | S | ❌ | Signing always uses fresh randomness and a page cannot request otherwise, so there is nothing to detect. |
 | SEC-019 | RPC privilege separation | M | ✅ | Page-reachable and UI-only namespaces, requests bound to the browser-attested sender origin, no payload logging, no passwordless key export. |
 | SEC-020 | Relay input validation | M | ✅ | Frames size-bounded and schema-checked; event ID and signature verified; `wss://` only; bounded reconnects. |
-| SEC-021 | Remote media and egress policy | M | ✅ | `https:` allowlist; extension pages never load relay-chosen images. |
+| SEC-021 | Remote media and egress policy | M | ✅ | `https:` allowlist; extension pages never load relay-chosen images. The one exception is the Profile page loading the user's own picture once, on a save or Refresh picture, to make the local copy the header shows. |
 | SEC-022 | Consent scope and trust allowlists | M | ✅ | Trust levels are allowlists, not denylists. Kinds 1, 5, 9734, 22242 and 27235 always prompt. |
 | SEC-023 | Bounded session grants | M | ✅ | Every session grant has an absolute expiry. |
 | SEC-024 | Identity-disclosure consent | M | ✅ | `getPublicKey` needs per-origin consent that is remembered, revocable and logged. Residual: a third-party script inside a consented page inherits the grant. |
@@ -114,7 +114,7 @@ Defects in shipped code. Each belongs to the row named.
 | ID | Title | Pri | Status | Notes |
 |----|-------|-----|--------|-------|
 | UX-001 | Persistent activity log | M | ✅ | Time, origin, kind, 100-character preview, result and key. Retention 10-500 (default 50), origin and kind filters, pagination. Gaps are in Known issues and UX-006. |
-| UX-002 | Profile fetch and display | S | ✅ | kind:0 fetch, one-hour cache, name, about and website, edit and publish. The picture shows as a URL and is never loaded, by design (SEC-021). |
+| UX-002 | Profile fetch and display | S | ✅ | kind:0 fetch, one-hour cache, name, about and website, edit and publish. The picture shows as a URL and is loaded only once, on an explicit save or Refresh picture, to make the local copy the header shows (SEC-021). |
 | UX-003 | Smart event preview | M | 🔄 | A consequence sentence for 13 kinds, trust and non-HTTPS chips, raw content, tags and JSON. Left: summaries parsed from the event (reply and zap targets, DM recipient, list diffs). |
 | UX-004 | One-click common actions | S | 🔄 | Copy public key and QR on Home, links to Keys, Relays, Permissions, Profile and Activity, Add Key in the header. Left: external profile link, export, keyboard shortcuts. |
 | UX-005 | Contextual help | S | 🔄 | Inline copy for trust levels, protected kinds and remember scope. Left: tooltips, help for event kinds, learn-more links. |
