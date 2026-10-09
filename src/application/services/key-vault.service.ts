@@ -21,6 +21,8 @@ import {
   AES_GCM_IV_LENGTH,
   DEK_LENGTH,
   normalizeAutoLockMinutes,
+  isLockReason,
+  type LockReason,
 } from "@/domain/types";
 import { verifierAad, dekAad, skAad } from "@/domain/crypto/aad";
 import { deriveLegacyKeyReadOnly } from "@/infrastructure/crypto/adapters";
@@ -61,7 +63,29 @@ type LockState = {
   isLocked: boolean;
   selectedKeyId?: string;
   lastActivity: number;
+  /** Present only on a locked record. A label, never key material. */
+  lockReason?: LockReason;
+  /** The timeout that elapsed, on an `inactivity` lock, so the lock screen can name it. */
+  inactivityMinutes?: number;
 };
+
+/** What `getLockState()` reports. `lockAt` is set only while unlocked; the rest only while locked. */
+export type VaultLockState = {
+  isLocked: boolean;
+  selectedKeyId?: string;
+  lockAt?: number;
+  lockReason?: LockReason;
+  inactivityMinutes?: number;
+};
+
+/** The outcome of checking an unlocked record against the clock and the timeout. */
+type SessionDeadline =
+  | { expired: false; lockAt: number }
+  | {
+      expired: true;
+      reason: Extract<LockReason, "inactivity" | "clock_rollback" | "state_unreadable">;
+      minutes: number;
+    };
 
 /** A password change refused because these records do not open. */
 export class VaultDamagedRecordsError extends Error {
@@ -859,7 +883,14 @@ export class KeyVaultService {
     this.unlocked.clear();
   }
 
-  async lock(): Promise<void> {
+  /**
+   * `reason` is recorded for the lock screen; it defaults to `manual` because
+   * the lock button is the one caller that names nothing.
+   */
+  async lock(
+    reason: LockReason = "manual",
+    inactivityMinutes?: number
+  ): Promise<void> {
     // The security-critical steps come first and do not depend on settings
     // storage: the keys are gone, the state says locked, and the grants are
     // revoked before anything else can fail.
@@ -868,6 +899,8 @@ export class KeyVaultService {
       isLocked: true,
       selectedKeyId: undefined,
       lastActivity: Date.now(),
+      lockReason: reason,
+      ...(inactivityMinutes === undefined ? {} : { inactivityMinutes }),
     });
     await this.storage.session.remove("sessionGrants");
 
@@ -938,32 +971,52 @@ export class KeyVaultService {
    *   1. No stored state, malformed state, or a read that throws.
    *   2. The stored state says unlocked but the deadline has passed.
    *   3. The stored state says unlocked but the background holds no key
-   *      material - which happens on every MV3 worker eviction. The record is
-   *      corrected on the way out so the two do not keep disagreeing.
+   *      material - which happens when the browser ends the MV3 service
+   *      worker. The record is corrected on the way out so the two do not
+   *      keep disagreeing.
+   *
+   * Each reports a `lockReason` except a state that was never written, which
+   * is the ordinary first state of a browser session. The reason is recorded
+   * at the moment of locking, so a surface opened later reads the same answer.
    */
-  async getLockState(): Promise<{
-    isLocked: boolean;
-    selectedKeyId?: string;
-    lockAt?: number;
-  }> {
+  async getLockState(): Promise<VaultLockState> {
     let state: LockState | undefined;
     try {
       state = await this.storage.session.get<LockState>(LOCK_STATE_STORAGE);
     } catch {
-      return { isLocked: true };
+      return { isLocked: true, lockReason: "state_unreadable" };
     }
 
-    // Absent or malformed: locked.
-    if (!state || typeof state !== "object" || state.isLocked !== false) {
-      return { isLocked: true, selectedKeyId: state?.selectedKeyId };
+    // Absent: nothing has been unlocked in this browser session. That is the
+    // normal first state, not a fault, so it carries no reason.
+    if (state === undefined) return { isLocked: true };
+
+    // Malformed: locked, and said so. `isLocked` must be a boolean; anything
+    // else is a record this code did not write.
+    if (!state || typeof state !== "object" || typeof state.isLocked !== "boolean") {
+      return { isLocked: true, lockReason: "state_unreadable" };
     }
 
-    // Deadline passed: locked. A future timestamp is treated as expired rather
-    // than trusted, so a clock change cannot extend a session indefinitely.
-    const deadline = await this.autoLockDeadline(state);
-    if (this.isPastAutoLockDeadline(deadline)) {
-      await this.lock();
-      return { isLocked: true };
+    if (state.isLocked) {
+      return {
+        isLocked: true,
+        selectedKeyId: state.selectedKeyId,
+        ...(isLockReason(state.lockReason) ? { lockReason: state.lockReason } : {}),
+        ...(typeof state.inactivityMinutes === "number"
+          ? { inactivityMinutes: state.inactivityMinutes }
+          : {}),
+      };
+    }
+
+    const deadline = await this.sessionDeadline(state);
+    if (deadline.expired) {
+      const minutes = deadline.reason === "inactivity" ? deadline.minutes : undefined;
+      await this.lock(deadline.reason, minutes);
+      return {
+        isLocked: true,
+        lockReason: deadline.reason,
+        ...(minutes === undefined ? {} : { inactivityMinutes: minutes }),
+      };
     }
 
     // Says unlocked, but there is nothing in memory: the worker was evicted.
@@ -974,16 +1027,20 @@ export class KeyVaultService {
         isLocked: true,
         selectedKeyId: undefined,
         lastActivity: Date.now(),
-      } as LockState);
-      return { isLocked: true };
+        lockReason: "background_restarted",
+      });
+      return { isLocked: true, lockReason: "background_restarted" };
     }
 
-    return { isLocked: false, selectedKeyId: state.selectedKeyId, lockAt: deadline };
+    return {
+      isLocked: false,
+      selectedKeyId: state.selectedKeyId,
+      lockAt: deadline.lockAt,
+    };
   }
 
   /**
-   * The absolute epoch-ms instant the vault auto-locks, from the stored
-   * last-activity timestamp and the normalized `autoLockMinutes`.
+   * Checks an unlocked record against the clock and the normalized timeout.
    *
    * Derived from a stored timestamp checked on access rather than from a timer
    * firing, because a `setTimeout` in an MV3 service worker does not survive
@@ -991,29 +1048,30 @@ export class KeyVaultService {
    *
    * The one formula behind both enforcement and what `getLockState()` reports,
    * so the deadline shown to the user cannot drift from the deadline applied.
-   * Unusable timestamps collapse to `0` - a deadline already past - so every
-   * fail-closed case stays closed when read as an instant.
+   * Every unusable timestamp is `expired`, so every fail-closed case stays
+   * closed - including `NaN`, which compares false against everything and
+   * would otherwise read as a deadline that never arrives.
    */
-  private async autoLockDeadline(state: LockState): Promise<number> {
+  private async sessionDeadline(state: LockState): Promise<SessionDeadline> {
     const settings = await this.getSettings();
     // Normalized, not read raw: a stored 0 used to mean "never lock", and
     // that reading is exactly the fail-open this change removes. It is now
     // the shipped default, as it is everywhere else settings are read.
     const minutes = normalizeAutoLockMinutes(settings?.autoLockMinutes);
 
-    const last = typeof state.lastActivity === "number" ? state.lastActivity : 0;
-    if (last <= 0) return 0;
+    const last = state.lastActivity;
+    if (typeof last !== "number" || !Number.isFinite(last) || last <= 0) {
+      return { expired: true, reason: "state_unreadable", minutes };
+    }
 
     // A timestamp in the future means the clock moved or the record was
     // tampered with. Treat it as expired rather than as a long lease.
-    if (last > Date.now()) return 0;
+    const now = Date.now();
+    if (last > now) return { expired: true, reason: "clock_rollback", minutes };
 
-    return last + minutes * 60 * 1000;
-  }
-
-  /** True when `autoLockMinutes` has elapsed since the last recorded activity. */
-  private isPastAutoLockDeadline(deadline: number): boolean {
-    return Date.now() >= deadline;
+    const lockAt = last + minutes * 60 * 1000;
+    if (now >= lockAt) return { expired: true, reason: "inactivity", minutes };
+    return { expired: false, lockAt };
   }
 
   /** Records user activity and pushes the auto-lock deadline out. */
@@ -1027,11 +1085,11 @@ export class KeyVaultService {
     // the surfaces report activity, an expired session reached by a late
     // report would be silently extended past a deadline that had already run
     // out. Locked means the same thing here as it does in `getLockState()`.
-    if (this.isPastAutoLockDeadline(await this.autoLockDeadline(state))) return;
+    if ((await this.sessionDeadline(state)).expired) return;
     await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
       ...state,
       lastActivity: Date.now(),
-    } as LockState);
+    });
   }
 
   private ensureUnlockedKey(keyId?: string): { keyId: string; sk: Uint8Array } {

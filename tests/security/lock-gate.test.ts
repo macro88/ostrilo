@@ -221,6 +221,29 @@ describe("locked behaviour at the message boundary", () => {
     expect(res.data).toEqual([{ id: "a" }, { id: "b" }]);
   });
 
+  it("passes the lock reason through state.getLock, and nothing else, while locked", async () => {
+    const res = await send({ type: "state.getLock" }, {
+      isLocked: true,
+      namespace: "state",
+      data: {
+        isLocked: true,
+        lockReason: "inactivity",
+        inactivityMinutes: 35,
+        lockAt: 1_800_000_000_000,
+        privateKeyHex: "ee".repeat(32),
+      },
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.data).toEqual({
+      isLocked: true,
+      selectedKeyId: undefined,
+      lockReason: "inactivity",
+      inactivityMinutes: 35,
+    });
+    expect(JSON.stringify(res.data)).not.toContain("ee".repeat(32));
+  });
+
   it("returns keys.list unredacted once unlocked", async () => {
     const records = [{ id: "a", label: "Trading key", publicKey: "ab".repeat(32) }];
     const res = await send({ type: "keys.list" }, {

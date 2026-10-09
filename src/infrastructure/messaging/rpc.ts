@@ -8,6 +8,7 @@ import type {
   SignedEvent,
   ApprovalAction,
   ActivityLogEntry,
+  LockReason,
 } from "@/domain/types";
 
 // Re-export error codes for convenience
@@ -119,6 +120,13 @@ export type LockStatePayload = {
   isLocked: boolean;
   selectedKeyId?: string;
   lockAt?: number;
+  /**
+   * Why the vault is locked, present only while locked and only when the
+   * background knows. Absent on a vault never unlocked in this browser session.
+   */
+  lockReason?: LockReason;
+  /** The timeout that elapsed, present with `lockReason: "inactivity"`. */
+  inactivityMinutes?: number;
 };
 
 // NIP-07 specific response types

@@ -131,14 +131,20 @@ const LOCKED_PROJECTIONS: ReadonlyMap<string, (data: unknown) => unknown> =
     ],
     [
       // The service already omits `lockAt` on every locked path. This is the
-      // second line: the projection reduces a locked response to the two
-      // fields the lock screen renders from, so a future field added to the
-      // unlocked response cannot reach a locked UI by being forgotten here.
+      // second line: the projection reduces a locked response to the fields
+      // the lock screen renders from, so a future field added to the unlocked
+      // response cannot reach a locked UI by being forgotten here. The lock
+      // reason and the timeout that elapsed are labels, not secrets.
       "state.getLock",
       (data: unknown) => {
         if (!data || typeof data !== "object") return data;
         const s = data as Record<string, unknown>;
-        return { isLocked: s.isLocked, selectedKeyId: s.selectedKeyId };
+        return {
+          isLocked: s.isLocked,
+          selectedKeyId: s.selectedKeyId,
+          lockReason: s.lockReason,
+          inactivityMinutes: s.inactivityMinutes,
+        };
       },
     ],
     [

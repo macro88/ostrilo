@@ -1,6 +1,6 @@
 import { browser } from "wxt/browser";
 import { sanitizeRelayUrls } from "@/domain/relay/url";
-import { normalizeAutoLockMinutes } from "@/domain/types";
+import { normalizeAutoLockMinutes, type LockReason } from "@/domain/types";
 import { createStorageSuite } from "@/infrastructure/storage/adapters";
 import {
   WebCryptoAesGcm,
@@ -466,16 +466,16 @@ export default defineBackground(() => {
 
   // A fresh browser session starts locked. Session storage is normally cleared
   // by the browser, but do not rely on that for a security property.
-  const startLocked = async () => {
+  const startLocked = async (reason: LockReason) => {
     try {
-      await vault.lock();
+      await vault.lock(reason);
       await browser.alarms.clear(AUTO_LOCK_ALARM);
     } catch (err) {
       console.warn('[Background] failed to force locked state at startup', err);
     }
   };
-  browser.runtime.onStartup.addListener(() => void startLocked());
-  browser.runtime.onInstalled.addListener(() => void startLocked());
+  browser.runtime.onStartup.addListener(() => void startLocked('browser_restarted'));
+  browser.runtime.onInstalled.addListener(() => void startLocked('extension_updated'));
 
   // Re-arm whenever the timeout changes or activity is recorded.
   void armAutoLock();

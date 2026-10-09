@@ -167,7 +167,10 @@ describe("key lifecycle through the client and the real background", () => {
     const created = await client.importKey(SECRET_ONE, STRONG_PASSWORD, "labelled");
     await client.lockVault();
 
-    expect(await client.getLockState()).toEqual({ isLocked: true, selectedKeyId: undefined });
+    expect(await client.getLockState()).toEqual({
+      isLocked: true,
+      lockReason: "manual",
+    });
     expect(await client.listKeys()).toEqual([{ id: created.id }]);
     const refused = await rejection(client.renameKey(created.id, "while locked"));
     expect(refused).toMatchObject({ errorCode: RPC_ERROR_CODES.LOCKED });

@@ -220,6 +220,43 @@ export function normalizeAutoLockMinutes(value: unknown): number {
   return Math.min(whole, AUTO_LOCK_BOUNDS.max);
 }
 
+/**
+ * Why the vault is locked, recorded in session storage beside the lock flag.
+ *
+ * A label and nothing else: it carries no key material and is safe to show a
+ * locked surface. It exists so the lock screen can tell a lock the user or the
+ * timer chose from one the browser or a damaged record forced.
+ *
+ *  - `manual`: the user pressed Lock.
+ *  - `inactivity`: the auto-lock deadline passed.
+ *  - `background_restarted`: the record said unlocked but the background held
+ *    no keys - the browser ended the MV3 service worker, or it crashed.
+ *  - `state_unreadable`: the lock record was missing fields, malformed, or
+ *    could not be read at all.
+ *  - `clock_rollback`: the last recorded activity is in the future.
+ *  - `browser_restarted`, `extension_updated`: the background started fresh
+ *    and locked on purpose.
+ */
+export const LOCK_REASONS = [
+  "manual",
+  "inactivity",
+  "background_restarted",
+  "state_unreadable",
+  "clock_rollback",
+  "browser_restarted",
+  "extension_updated",
+] as const;
+
+export type LockReason = (typeof LOCK_REASONS)[number];
+
+/** Narrows an untrusted value - a stored record or an RPC payload - to a lock reason. */
+export function isLockReason(value: unknown): value is LockReason {
+  return (
+    typeof value === "string" &&
+    (LOCK_REASONS as readonly string[]).includes(value)
+  );
+}
+
 export const DEFAULT_RELAY_URLS = ["wss://relay.primal.net"] as const;
 
 // Default settings shipped with the extension

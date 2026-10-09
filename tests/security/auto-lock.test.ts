@@ -925,3 +925,165 @@ describe("a 35 minute timeout on a deterministic clock", () => {
     expect(AUTO_LOCK_BOUNDS.max).toBeGreaterThanOrEqual(35);
   });
 });
+
+describe("why the vault is locked", () => {
+  const T0 = 1_760_000_000_000;
+  let suite: StorageSuite;
+  let maps: ReturnType<typeof memoryStorage>["maps"];
+  let vault: KeyVaultService;
+
+  function newVault(s: StorageSuite) {
+    return new KeyVaultService(
+      s,
+      WebCryptoAesGcm,
+      fastKdf as never,
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
+    );
+  }
+
+  function recordedState() {
+    return maps.session.get("lockState") as Record<string, unknown>;
+  }
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(T0);
+    ({ suite, maps } = memoryStorage());
+    vault = newVault(suite);
+    await vault.generateKey(PASSWORD, "k1");
+    maps.local.set("appSettings", {
+      __version: "settings.v1",
+      autoLockMinutes: 35,
+    });
+    await vault.unlock(PASSWORD);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("says nothing before the vault has ever been unlocked", async () => {
+    const fresh = memoryStorage();
+    const state = await newVault(fresh.suite).getLockState();
+    expect(state.isLocked).toBe(true);
+    expect(state.lockReason).toBeUndefined();
+  });
+
+  it("reports an unlocked vault with no reason", async () => {
+    const state = await vault.getLockState();
+    expect(state.isLocked).toBe(false);
+    expect(state.lockReason).toBeUndefined();
+  });
+
+  it("records a manual lock", async () => {
+    await vault.lock();
+    expect(await vault.getLockState()).toMatchObject({
+      isLocked: true,
+      lockReason: "manual",
+    });
+  });
+
+  it("records the inactivity timeout with the minutes it elapsed", async () => {
+    vi.setSystemTime(T0 + 35 * MINUTE_MS);
+    expect(await vault.getLockState()).toMatchObject({
+      isLocked: true,
+      lockReason: "inactivity",
+      inactivityMinutes: 35,
+    });
+    // Stored, so the next read - a surface opened later - says the same.
+    expect(await vault.getLockState()).toMatchObject({
+      isLocked: true,
+      lockReason: "inactivity",
+      inactivityMinutes: 35,
+    });
+  });
+
+  it("records a worker that restarted while the state said unlocked", async () => {
+    const restarted = newVault(suite);
+    expect(await restarted.getLockState()).toMatchObject({
+      isLocked: true,
+      lockReason: "background_restarted",
+    });
+    expect(recordedState().lockReason).toBe("background_restarted");
+    expect(await restarted.getLockState()).toMatchObject({
+      lockReason: "background_restarted",
+    });
+  });
+
+  it("records a state that cannot be read", async () => {
+    for (const bad of [null, 42, "unlocked", {}, { isLocked: "no" }]) {
+      maps.session.set("lockState", bad);
+      expect(await vault.getLockState()).toMatchObject({
+        isLocked: true,
+        lockReason: "state_unreadable",
+      });
+    }
+  });
+
+  it("records a storage read that throws", async () => {
+    const throwing = {
+      ...suite,
+      session: {
+        async get(): Promise<never> {
+          throw new Error("storage unavailable");
+        },
+        async set(): Promise<void> {},
+        async remove(): Promise<void> {},
+      },
+    } as unknown as StorageSuite;
+    expect(await newVault(throwing).getLockState()).toMatchObject({
+      isLocked: true,
+      lockReason: "state_unreadable",
+    });
+  });
+
+  it("locks, and says why, when the recorded activity is not a usable time", async () => {
+    for (const lastActivity of [Number.NaN, "yesterday", undefined, 0, -5]) {
+      await vault.unlock(PASSWORD);
+      maps.session.set("lockState", { ...recordedState(), lastActivity });
+      expect(
+        await vault.getLockState(),
+        `lastActivity ${String(lastActivity)} must fail closed`
+      ).toMatchObject({ isLocked: true, lockReason: "state_unreadable" });
+    }
+  });
+
+  it("records a clock that moved back past the last activity", async () => {
+    maps.session.set("lockState", {
+      ...recordedState(),
+      lastActivity: T0 + 10 * 60 * MINUTE_MS,
+    });
+    expect(await vault.getLockState()).toMatchObject({
+      isLocked: true,
+      lockReason: "clock_rollback",
+    });
+    await expect(vault.sign("ab".repeat(32))).rejects.toThrow();
+  });
+
+  it("forgets the reason at the next unlock", async () => {
+    await vault.lock();
+    await vault.unlock(PASSWORD);
+    const state = await vault.getLockState();
+    expect(state.isLocked).toBe(false);
+    expect(state.lockReason).toBeUndefined();
+    expect(recordedState()).not.toHaveProperty("lockReason");
+  });
+
+  it("ignores a stored reason it does not recognise", async () => {
+    await vault.lock();
+    maps.session.set("lockState", { ...recordedState(), lockReason: "<b>x</b>" });
+    const state = await vault.getLockState();
+    expect(state.isLocked).toBe(true);
+    expect(state.lockReason).toBeUndefined();
+  });
+
+  it("keeps the reason a label: no key material rides with it", async () => {
+    vi.setSystemTime(T0 + 35 * MINUTE_MS);
+    await vault.getLockState();
+    expect(Object.keys(recordedState()).sort()).toEqual(
+      ["inactivityMinutes", "isLocked", "lastActivity", "lockReason", "selectedKeyId"].sort()
+    );
+  });
+});
