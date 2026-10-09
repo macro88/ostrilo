@@ -472,7 +472,7 @@ export default defineBackground(() => {
   // long as the idle window. `SessionKeepAlive` makes one cheap API call every
   // 20 seconds from unlock until the vault locks by any path, and it checks the
   // vault's deadline on every tick, so it cannot outlast the auto-lock. See
-  // openspec/changes/keep-unlocked-session-alive/design.md.
+  // openspec/changes/archive/2026-10-09-keep-unlocked-session-alive/design.md.
   // ==========================================================================
   const AUTO_LOCK_ALARM = 'ostrilo.autoLock';
 
