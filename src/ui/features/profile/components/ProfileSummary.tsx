@@ -73,15 +73,14 @@ function PictureCopyBlock({
           Ostrilo loads your picture once, when you save or refresh it, and
           keeps a small copy for the header.
         </p>
-        <p
-          role="status"
+        <output
           className={cn(
-            "break-words empty:hidden",
+            "block break-words empty:hidden",
             status.kind === "failed" && "text-[var(--ink-amber)]"
           )}
         >
           {pictureStatusText(status)}
-        </p>
+        </output>
       </div>
       {canRefresh && (
         <Button
@@ -153,6 +152,61 @@ function ProfileError({
   );
 }
 
+function PublicProfileCard({
+  profile,
+  profileName,
+  username,
+  loading,
+  onEdit,
+}: {
+  profile: ProfileMetadata | null;
+  profileName: string;
+  username: string | undefined;
+  loading: boolean;
+  onEdit: (field?: ProfileEditField) => void;
+}) {
+  return (
+    <div className="ink-card overflow-hidden" aria-busy={loading}>
+      <ProfileTextField
+        label="Display Name"
+        loading={loading}
+        value={profileName}
+        onAdd={() => onEdit("display_name")}
+      />
+      {username && <ProfileField label="Username" loading={false} value={username} />}
+      <ProfileTextField
+        label="About"
+        loading={loading}
+        value={profile?.about}
+        multiline
+        onAdd={() => onEdit("about")}
+      />
+
+      <RemoteUrlField
+        label="Website"
+        loading={loading}
+        value={profile?.website}
+        onAdd={() => onEdit("website")}
+        openLabel="Open website in a new tab"
+      />
+      <RemoteUrlField
+        label="Picture URL"
+        loading={loading}
+        value={profile?.picture}
+        onAdd={() => onEdit("picture")}
+        openLabel="Open picture in a new tab"
+      />
+
+      {profile?.nip05 && (
+        <ProfileField label="NIP-05" loading={false} value={profile.nip05} />
+      )}
+      {profile?.lud16 && (
+        <ProfileField label="Lightning Address" loading={false} value={profile.lud16} />
+      )}
+    </div>
+  );
+}
+
 export function ProfileSummary({
   profile,
   loading,
@@ -215,57 +269,13 @@ export function ProfileSummary({
 
           <section className="space-y-2">
             <p className="section-label">Public profile</p>
-            <div
-              className="ink-card overflow-hidden"
-              aria-busy={showLoadingField}
-            >
-              <ProfileTextField
-                label="Display Name"
-                loading={showLoadingField}
-                value={profileName}
-                onAdd={() => onEdit("display_name")}
-              />
-              {username && (
-                <ProfileField label="Username" loading={false} value={username} />
-              )}
-              <ProfileTextField
-                label="About"
-                loading={showLoadingField}
-                value={profile?.about}
-                multiline
-                onAdd={() => onEdit("about")}
-              />
-
-              <RemoteUrlField
-                label="Website"
-                loading={showLoadingField}
-                value={profile?.website}
-                onAdd={() => onEdit("website")}
-                openLabel="Open website in a new tab"
-              />
-              <RemoteUrlField
-                label="Picture URL"
-                loading={showLoadingField}
-                value={profile?.picture}
-                onAdd={() => onEdit("picture")}
-                openLabel="Open picture in a new tab"
-              />
-
-              {profile?.nip05 && (
-                <ProfileField
-                  label="NIP-05"
-                  loading={false}
-                  value={profile.nip05}
-                />
-              )}
-              {profile?.lud16 && (
-                <ProfileField
-                  label="Lightning Address"
-                  loading={false}
-                  value={profile.lud16}
-                />
-              )}
-            </div>
+            <PublicProfileCard
+              profile={profile}
+              profileName={profileName}
+              username={username}
+              loading={showLoadingField}
+              onEdit={onEdit}
+            />
             <PictureCopyBlock
               canRefresh={!showLoadingField && isAllowedRemoteUrl(profile?.picture)}
               status={pictureStatus}

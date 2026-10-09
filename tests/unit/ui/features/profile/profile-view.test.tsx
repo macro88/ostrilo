@@ -462,7 +462,7 @@ describe("ProfileView picture copy", () => {
     await mount();
     await click(buttonByText("Refresh picture")!);
 
-    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+    expect(container.querySelector("output")?.textContent).toBe(
       "This image host doesn't allow Ostrilo to keep a copy."
     );
     expect(client.saveOwnAvatar).not.toHaveBeenCalled();
@@ -499,7 +499,7 @@ describe("ProfileView picture copy", () => {
     await click(buttonByText("Refresh picture")!);
 
     expect(client.removeOwnAvatar).not.toHaveBeenCalled();
-    expect(container.querySelector('[role="status"]')?.textContent).toContain("took too long");
+    expect(container.querySelector("output")?.textContent).toContain("took too long");
   });
 
   it("reports a failure to store the copy without claiming success", async () => {
@@ -507,7 +507,7 @@ describe("ProfileView picture copy", () => {
     await mount();
     await click(buttonByText("Refresh picture")!);
 
-    expect(container.querySelector('[role="status"]')?.textContent).toContain(
+    expect(container.querySelector("output")?.textContent).toContain(
       "couldn't save the copy"
     );
     expect(container.textContent).not.toContain("The header now shows this picture.");
