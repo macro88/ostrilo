@@ -63,6 +63,15 @@ export const ENQUEUE_WINDOW_STORAGE_KEY = "rateWindow:approvalEnqueue";
 
 const DEFAULT_TIMEOUT_MS = APPROVAL_TIMEOUT_MS;
 
+/**
+ * Why a queued request was denied without the user pressing deny.
+ *
+ * A resolver only receives "deny", which cannot tell a refusal from a lock, an
+ * expiry or a page that gave up. The cause is recorded before the resolvers
+ * run, so a handler that logs the outcome can say which it was.
+ */
+export type QueueDenialCause = "timeout" | "vault_locked" | "abandoned";
+
 /** Callback type for when a request is resolved or times out */
 export type RequestResolver = (
   decision: ApprovalDecision,
@@ -111,7 +120,7 @@ export class ApprovalQueueService {
   private queue: Map<string, QueueEntry> = new Map();
   private eventIdMap: Map<string, QueueEntry> = new Map(); // Track by (origin, event ID hash) for de-duplication
   private timeoutMs: number;
-  private timedOutRequests: Set<string> = new Set(); // Track which requests timed out
+  private denialCauses: Map<string, QueueDenialCause> = new Map(); // Why a request was denied without the user's answer
   private changeCallback?: QueueChangeCallback; // Optional callback for queue changes
 
   /**
@@ -215,7 +224,11 @@ export class ApprovalQueueService {
         entry.request.origin === origin &&
         entry.request.clientRequestId === clientRequestId
       ) {
-        return this.resolve(entry.request.id, "deny");
+        this.denialCauses.set(entry.request.id, "abandoned");
+        const resolved = this.resolve(entry.request.id, "deny");
+        // Read synchronously by the resolvers above; nothing asks afterwards.
+        this.denialCauses.delete(entry.request.id);
+        return resolved;
       }
     }
     return false;
@@ -460,8 +473,7 @@ export class ApprovalQueueService {
       return;
     }
 
-    // Mark this request as timed out
-    this.timedOutRequests.add(requestId);
+    this.denialCauses.set(requestId, "timeout");
 
     // Remove from queue and event ID map
     this.queue.delete(requestId);
@@ -484,23 +496,33 @@ export class ApprovalQueueService {
    * @returns true if request timed out, false otherwise
    */
   wasTimeout(requestId: string): boolean {
-    return this.timedOutRequests.has(requestId);
+    return this.denialCauses.get(requestId) === "timeout";
   }
 
   /**
-   * Clear all pending requests (used for cleanup/testing)
-   * All pending requests will be auto-denied
+   * Why a request was denied other than by the user, or undefined when it was
+   * not (or has not been). Read from inside the resolver, which runs while the
+   * cause is still recorded.
+   */
+  denialCause(requestId: string): QueueDenialCause | undefined {
+    return this.denialCauses.get(requestId);
+  }
+
+  /**
+   * Clear all pending requests. Run when the vault locks, and in tests.
+   * All pending requests are denied, with the cause recorded as a lock.
    */
   clear(): void {
     for (const entry of this.queue.values()) {
       clearTimeout(entry.timeoutId);
+      this.denialCauses.set(entry.request.id, "vault_locked");
       for (const resolveRequest of entry.resolvers) {
         resolveRequest("deny", "deny");
       }
     }
     this.queue.clear();
     this.eventIdMap.clear();
-    this.timedOutRequests.clear();
+    this.denialCauses.clear();
   }
 
   /**

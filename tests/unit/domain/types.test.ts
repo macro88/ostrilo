@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   describeActivityAction,
   describeActivityEntry,
+  describeDenialReason,
   getKindName,
+  parseActivityReason,
+  ACTIVITY_REASONS,
 } from "@/domain/types";
 
 describe("getKindName", () => {
@@ -87,6 +90,31 @@ describe("describeActivityAction", () => {
     expect(
       describeActivityAction({ operation: "sign_event", decision: "deny" })
     ).toBe("Denied unknown request");
+  });
+});
+
+describe("activity denial reasons", () => {
+  it.each(ACTIVITY_REASONS)("recognises %s and gives it copy on a denial", (reason) => {
+    expect(parseActivityReason(reason)).toBe(reason);
+    expect(describeDenialReason({ decision: "deny", reason })).toEqual(
+      expect.any(String)
+    );
+  });
+
+  it.each([undefined, null, "", "policy", "USER", 3, {}, "__proto__"])(
+    "treats %s as no reason",
+    (value) => {
+      expect(parseActivityReason(value)).toBeUndefined();
+      expect(
+        describeDenialReason({ decision: "deny", reason: value })
+      ).toBeUndefined();
+    }
+  );
+
+  it("says nothing about an allowed entry, whatever reason it carries", () => {
+    expect(
+      describeDenialReason({ decision: "allow", reason: "remembered" })
+    ).toBeUndefined();
   });
 });
 

@@ -356,7 +356,7 @@ describe("revocation actually revokes", () => {
         return { id: "x", origin };
       },
       ready: async () => {},
-      wasTimeout: () => false,
+      denialCause: () => undefined,
       resolve: () => true,
     };
     const handler = new NostrRpcHandler(queue as never, async () => 1);

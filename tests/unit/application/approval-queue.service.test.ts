@@ -211,6 +211,62 @@ describe("ApprovalQueueService", () => {
     });
   });
 
+  describe("why a request was denied", () => {
+    it("reports a lock as the cause to the resolver, and forgets it afterwards", () => {
+      let cause: string | undefined;
+      const request = queue.enqueue("https://first.com", mockEvent, () => {
+        cause = queue.denialCause(request.id);
+      });
+
+      queue.clear();
+
+      expect(cause).toBe("vault_locked");
+      expect(queue.denialCause(request.id)).toBeUndefined();
+      expect(queue.wasTimeout(request.id)).toBe(false);
+    });
+
+    it("reports an expiry as a timeout", () => {
+      let cause: string | undefined;
+      const request = queue.enqueue("https://first.com", mockEvent, () => {
+        cause = queue.denialCause(request.id);
+      });
+
+      vi.advanceTimersByTime(1000);
+
+      expect(cause).toBe("timeout");
+    });
+
+    it("reports a page's withdrawal as abandoned, not as a timeout", () => {
+      let cause: string | undefined;
+      const request = queue.enqueue(
+        "https://first.com",
+        mockEvent,
+        () => {
+          cause = queue.denialCause(request.id);
+        },
+        undefined,
+        { clientRequestId: "c1" }
+      );
+
+      expect(queue.cancelByClientRequestId("https://first.com", "c1")).toBe(true);
+
+      expect(cause).toBe("abandoned");
+      expect(queue.wasTimeout(request.id)).toBe(false);
+      expect(queue.denialCause(request.id)).toBeUndefined();
+    });
+
+    it("has no cause for a decision the user made", () => {
+      let cause: string | undefined = "unset";
+      const request = queue.enqueue("https://first.com", mockEvent, () => {
+        cause = queue.denialCause(request.id);
+      });
+
+      queue.resolve(request.id, "deny");
+
+      expect(cause).toBeUndefined();
+    });
+  });
+
   describe("clear", () => {
     it("clears all pending requests", () => {
       const resolver1 = vi.fn();

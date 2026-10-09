@@ -755,6 +755,56 @@ export function isDisclosureRequest(
 // ============================================
 
 /**
+ * Why a request was refused, or allowed without a prompt.
+ *
+ * - `user`: the person pressed deny.
+ * - `remembered`: a saved rule answered, with no prompt.
+ * - `timeout`: no answer arrived - the prompt expired, the window was closed or
+ *   the page gave up waiting.
+ * - `rate_limited`: the site asked too often.
+ * - `vault_locked`: the vault locked before the request could be answered.
+ * - `key_unreadable`: the selected key could not be opened to sign.
+ */
+export const ACTIVITY_REASONS = [
+  "user",
+  "remembered",
+  "timeout",
+  "rate_limited",
+  "vault_locked",
+  "key_unreadable",
+] as const;
+
+export type ActivityReason = (typeof ACTIVITY_REASONS)[number];
+
+/** The reason a stored value names, or undefined for anything unrecognised. */
+export function parseActivityReason(value: unknown): ActivityReason | undefined {
+  return ACTIVITY_REASONS.find((reason) => reason === value);
+}
+
+const DENIAL_REASON_COPY: Record<ActivityReason, string> = {
+  user: "You denied it",
+  remembered: "Blocked by a remembered rule",
+  timeout: "No answer in time, or the window was closed",
+  rate_limited: "Too many requests from this site",
+  vault_locked: "Ostrilo was locked",
+  key_unreadable: "The signing key could not be read",
+};
+
+/**
+ * Short copy for why a request was refused, or undefined when there is nothing
+ * to say: an allowed entry, an entry from before reasons were recorded, or a
+ * stored value this build does not recognise. The row then shows no reason
+ * rather than a guess.
+ */
+export function describeDenialReason(
+  entry: Pick<ActivityLogEntry, "decision"> & { reason?: unknown }
+): string | undefined {
+  if (entry.decision !== "deny") return undefined;
+  const reason = parseActivityReason(entry.reason);
+  return reason === undefined ? undefined : DENIAL_REASON_COPY[reason];
+}
+
+/**
  * Activity log entry tracking signing operations
  * Stored in local storage for audit trail
  */
@@ -789,9 +839,11 @@ export interface ActivityLogEntry {
    *
    * A closed union, never free text: an activity log is read by people and
    * must not become a channel for whatever a handler happened to have in a
-   * string. Absent when the decision speaks for itself.
+   * string. Absent when the decision speaks for itself, and on every entry
+   * written before reasons were recorded. Storage is untrusted on read - use
+   * `parseActivityReason`, which treats an unrecognised value as absent.
    */
-  reason?: "user" | "policy" | "remembered" | "timeout" | "rate_limited";
+  reason?: ActivityReason;
   /** User decision: "allow" | "deny" */
   decision: "allow" | "deny";
   /** Content preview (first 100 chars, sanitized) */

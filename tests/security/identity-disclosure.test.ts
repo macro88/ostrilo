@@ -402,7 +402,7 @@ describe("public key disclosure requires per-origin consent", () => {
           return request;
         },
         ready: async () => {},
-        wasTimeout: () => options.timedOut ?? false,
+        denialCause: () => (options.timedOut ? "timeout" : undefined),
         resolve: () => true,
       },
     };
@@ -610,7 +610,7 @@ describe("a locked vault never reaches the consent gate", () => {
           return { id: "x", origin };
         },
         ready: async () => {},
-        wasTimeout: () => false,
+        denialCause: () => undefined,
         resolve: () => true,
       },
     };
