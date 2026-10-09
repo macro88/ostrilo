@@ -122,11 +122,13 @@ onboarding screens, Home with the backup banner, the approval window with a
 queued request over its auto-sign budget, every settings tab, the Back up dialog,
 Profile, the lock screen, the "Can't reach Ostrilo" screen and the unreadable-key
 states. It fails on any `serious` or `critical` violation and prints the
-moderate and minor ones. No rule or element is excluded; `KNOWN_FALSE_POSITIVES` in the spec
-lists the three Radix findings it ignores (the page behind the open key menu and
-the open activity filter, and the filter's scrolling viewport), each with its
-reason and each applied only to the nodes carrying Radix's own marker. A surface
-added to the product should be added to the spec, and to `REQUIRED_SURFACES`.
+moderate and minor ones. No rule is switched off and no region is skipped.
+`KNOWN_FALSE_POSITIVES` in the spec drops three findings that Radix's own markup
+causes (the page behind the open key menu and the open activity filter, and the
+filter's scrolling viewport), each with its reason and each only on the nodes
+carrying Radix's own marker; the same rule on any other node of those surfaces
+still fails the run. The side panel layout is not scanned. A surface added to the
+product should be added to the spec, and to `REQUIRED_SURFACES`.
 
 To drive the extension by hand while writing a spec, see `docs/agent-loop.md`.
 
