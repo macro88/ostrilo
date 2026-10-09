@@ -17,6 +17,10 @@ import {
 import { evaluatePolicy } from "@/domain/policy/evaluate";
 import { formatOrigin } from "@/domain/display/origin";
 import {
+  disclosureKeyIds,
+  disclosureState,
+} from "@/domain/policy/disclosure-grants";
+import {
   DisclosureGrants,
   type DisclosureIdentity,
 } from "./DisclosureGrants";
@@ -179,7 +183,7 @@ export function OriginPolicyTable({
         const displayName = o.name || formatted.display;
         const level = normaliseLevel(o.trustLevel);
         const grantedKeyIds = disclosureKeyIds(o);
-        const disclosure = normaliseDisclosure(o, grantedKeyIds);
+        const disclosure = disclosureState(o);
         const liveGrant = liveGrants.get(o.origin);
         const grantOn = sessionGrants
           ? liveGrant !== undefined
@@ -460,28 +464,6 @@ function getPolicyKinds(policy: OriginPolicy): number[] {
 
 function normaliseLevel(level: TrustLevel | undefined): TrustLevel {
   return level && TRUST_LEVELS.includes(level) ? level : "low";
-}
-
-/**
- * The key ids a site may read, as enforced: only an `allow` has any, and a
- * malformed list is read as none rather than guessed at.
- */
-function disclosureKeyIds(policy: OriginPolicy): string[] {
-  const held: unknown = policy.identityDisclosureKeyIds;
-  if (policy.identityDisclosure !== "allow" || !Array.isArray(held)) return [];
-  return held.filter((id): id is string => typeof id === "string" && id !== "");
-}
-
-/**
- * What the site can actually do. An `allow` that names no key discloses
- * nothing, so it is shown as the prompting state it behaves as.
- */
-function normaliseDisclosure(
-  policy: OriginPolicy,
-  grantedKeyIds: readonly string[]
-): keyof typeof DISCLOSURE_COPY {
-  if (policy.identityDisclosure === "deny") return "deny";
-  return grantedKeyIds.length > 0 ? "allow" : "ask";
 }
 
 function formatRule(rule: string): string {

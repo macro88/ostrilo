@@ -8,14 +8,33 @@ import type { Authorisation, OriginPolicy } from "@/domain/types";
  * record and leaves the fields it does not own alone.
  */
 
+/** The well-formed ids of a stored key list; anything but an array reads as none. */
+export function wellFormedKeyIds(held: unknown): string[] {
+  if (!Array.isArray(held)) return [];
+  return held.filter((id): id is string => typeof id === "string" && id !== "");
+}
+
 /**
  * The key ids an origin may read, as enforced: only an `allow` has any, and a
- * list that is not an array of non-empty strings is read as none.
+ * malformed list is read as none.
  */
 export function disclosureKeyIds(policy: OriginPolicy | undefined): string[] {
-  const held: unknown = policy?.identityDisclosureKeyIds;
-  if (policy?.identityDisclosure !== "allow" || !Array.isArray(held)) return [];
-  return held.filter((id): id is string => typeof id === "string" && id !== "");
+  return policy?.identityDisclosure === "allow"
+    ? wellFormedKeyIds(policy.identityDisclosureKeyIds)
+    : [];
+}
+
+/**
+ * What an origin can actually do about disclosure, for surfaces that describe
+ * it. An `allow` that names no key discloses nothing, so it reads as `ask`.
+ * Settings derives its display from this, so it cannot show a grant that
+ * `disclosureFor` would not honour.
+ */
+export function disclosureState(
+  policy: OriginPolicy | undefined
+): Authorisation {
+  if (policy?.identityDisclosure === "deny") return "deny";
+  return disclosureKeyIds(policy).length > 0 ? "allow" : "ask";
 }
 
 /**

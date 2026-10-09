@@ -4,6 +4,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OriginPolicy } from "@/domain/types";
 import { OriginPolicyTable } from "@/ui/features/settings/components/shared";
+import {
+  disclosureKeyIds,
+  disclosureState,
+} from "@/domain/policy/disclosure-grants";
+import { SHAPES } from "../../../../helpers/disclosure-shapes";
 import { buttonByText, click, render, unmountAll } from "./settings-dom";
 
 const ORIGIN = "https://primal.net";
@@ -192,6 +197,22 @@ describe("OriginPolicyTable", () => {
         expect(disclosure(container).querySelector("li")).toBeNull();
       }
     });
+
+    it.each(SHAPES.slice(1).map((shape) => [...shape]))(
+      "shows %s as the same state the enforcement reads",
+      (_name, record) => {
+        const container = table([{ ...record!, origin: ORIGIN }], { identities });
+        const state = disclosureState(record);
+        const text = row(container).textContent!;
+
+        expect(text.includes("Can read")).toBe(state === "allow");
+        expect(text.includes("Refused your public key")).toBe(state === "deny");
+        expect(text.includes("Asks before reading your key")).toBe(state === "ask");
+        expect(
+          disclosure(container).querySelectorAll("li").length
+        ).toBe(state === "allow" ? disclosureKeyIds(record).length : 0);
+      }
+    );
 
     it("offers no per-grant revoke on a refusal, which is per site", () => {
       const container = table(
