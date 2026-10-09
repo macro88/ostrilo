@@ -3,7 +3,7 @@
 What Ostrilo is working toward, and how far the code has got. For what the current
 release ships, the README and `CHANGELOG.md` are the authority.
 
-**Status as of 2026-10-09 (0.9.0).** ✅ means the row's purpose is met and verified in
+**Status as of 2026-10-10 (0.9.0, plus the unreleased phase 0.10 changes).** ✅ means the row's purpose is met and verified in
 the code. 🔄 means a real slice ships and something specific is missing. Both say what.
 
 | Symbol | Meaning |
@@ -19,27 +19,34 @@ Priority is MoSCoW: **M**ust, **S**hould, **C**ould, **W**on't.
 
 | Priority | Total | ✅ | 🔄 | ⬜ | ❌ |
 |----------|-------|----|----|----|----|
-| Must     | 29 | 16 | 8 | 5 | 0 |
-| Should   | 58 | 5 | 10 | 39 | 4 |
+| Must     | 29 | 19 | 7 | 3 | 0 |
+| Should   | 59 | 6 | 10 | 39 | 4 |
 | Could    | 31 | 0 | 0 | 29 | 2 |
 | Won't    | 1 | 0 | 0 | 0 | 1 |
-| **Total**| **119** | **21** | **18** | **73** | **7** |
+| **Total**| **120** | **25** | **17** | **71** | **7** |
 
 ## What ships today
 
 - **Signer:** NIP-07 `getPublicKey` and `signEvent`, HTTPS-only, with signing and key
   operations confined to the background.
 - **Vault:** Argon2id-encrypted keys, multiple identities, import, encrypted backup at
-  onboarding, and master-password change.
+  onboarding or later from Settings, a password-only Quick start, and master-password
+  change.
 - **Approvals:** a managed approval window and queue, three trust levels, protected kinds
-  that always prompt, remembered per-site rules, identity-disclosure consent.
-- **Session lock:** fail-closed lock with a sliding 1-60 minute auto-lock and a countdown.
+  that always prompt, remembered per-site rules with an auto-sign budget, per-key
+  identity-disclosure consent.
+- **Session lock:** fail-closed lock with a sliding 1-60 minute auto-lock, a countdown
+  and a lock screen that says why it locked. The background stays alive while the vault
+  is unlocked, so the setting is honoured.
 - **Profiles and relays:** kind:0 fetch, edit and publish; relay settings; untrusted relay
   data validated at the boundary.
-- **Activity log:** persistent, filterable, exportable (see Known issues).
+- **Activity log:** persistent, filterable, exportable, with the reason for each refusal.
 - **Settings:** device-local, in an options page with light, dark and system themes.
+- **Provider API:** `window.nostr.getPublicKey`, `signEvent` and a frozen `capabilities`,
+  under the policy in `docs/api-versioning.md`.
 - **Quality gates:** typecheck, lint, coverage thresholds, both builds with manifest and
-  bundle assertions, dependency audit, secret scan, Playwright journeys, aislop.
+  bundle assertions, dependency audit, secret scan, Playwright journeys, an axe
+  accessibility gate, aislop.
   See `docs/ci-verification.md`.
 
 ## Known issues
@@ -48,10 +55,7 @@ Defects in shipped code. Each belongs to the row named.
 
 | Issue | Row |
 |-------|-----|
-| Activity export fails when retention is above 100 entries: the export asks for up to 500 and the RPC caps `limit` at 100. | UX-013 |
-| `content.ts` sends pages two non-canonical error strings ("Invalid event parameter", "Unknown method"). `docs/rpc-error-codes.md` shows an old response shape. | DEV-001 |
-| Any `appSettings` write, a theme change included, drops every relay socket. | PERF-006 |
-| Activity log: the origin filter lists only origins on the loaded page; the kind filter can't reach kinds 5, 22242 and 27235; denials don't record why; the preview doesn't escape hidden characters. | UX-001 |
+| A remembered per-kind signing rule, high trust and a session grant are not tied to a key. After a key switch, a site trusted under key A signs as key B without asking. | SEC-028 |
 
 ---
 
@@ -70,9 +74,9 @@ Defects in shipped code. Each belongs to the row named.
 | SEC-009 | Biometric unlock | S | ⬜ | WebAuthn PRF. Proposal open at `openspec/changes/add-biometric-unlock`. |
 | SEC-010 | Multi-factor authentication | S | ⬜ | For key export, settings changes and large zaps. |
 | SEC-011 | Backup and recovery | M | 🔄 | Encrypted backup file (Argon2id + AES-GCM, separate passphrase) at first-key onboarding, restored on import. Settings backs up any key behind the master password, and tracks per-key backup status. Left: optional remote target. |
-| SEC-012 | Gradual session lock | S | 🔄 | Flat fail-closed lock with a sliding 1-60 minute deadline, presence-gated postponement and a countdown. Left: an intermediate tier that stops auto-signing before asking for the password. |
+| SEC-012 | Gradual session lock | S | 🔄 | Flat fail-closed lock with a sliding 1-60 minute deadline, presence-gated postponement and a countdown. The lock screen names the cause (you locked it, inactivity, the browser or the background restarting, an update, an unreadable state, a clock that moved backwards). Left: an intermediate tier that stops auto-signing before asking for the password. |
 | SEC-013 | Tamper-evident audit log | S | ⬜ | The activity log is user-facing, with no hash chain and no lock, unlock or settings events. |
-| SEC-014 | Erase all data | M | ⬜ | An in-app action that deletes every key, setting, permission and log after re-authentication. Erasure at uninstall is impossible: extensions cannot run code at uninstall. |
+| SEC-014 | Erase all data | M | ⬜ | An in-app action that deletes every key, setting, permission and log after re-authentication. It must clear every storage item, including `keyBackupStatus` and `profileAvatar`. Erasure at uninstall is impossible: extensions cannot run code at uninstall. |
 | SEC-015 | Argon2id key derivation | M | ✅ | Tunable parameters; KDF costs bounded above and below on stored and imported data. |
 | SEC-016 | Sandboxed crypto | S | ⬜ | Crypto in a worker or separate context. |
 | SEC-017 | Supply-chain verification | M | 🔄 | Frozen lockfile, release-age and no-downgrade policy, audit blocking on high and critical, SHA-pinned actions, Renovate. Left: reproducible-build check and published digests. |
@@ -84,8 +88,9 @@ Defects in shipped code. Each belongs to the row named.
 | SEC-023 | Bounded session grants | M | ✅ | Every session grant has an absolute expiry. |
 | SEC-024 | Identity-disclosure consent | M | ✅ | `getPublicKey` needs per-origin consent that is remembered, revocable and logged. Residual: a third-party script inside a consented page inherits the grant. |
 | SEC-025 | Contact-list replacement guard | S | ⬜ | Confirm before a kind 3 wipes most of the user's follows. |
-| SEC-026 | Per-key consent scope | S | ✅ | A `getPublicKey` allow binds to the key it was granted for; after a key switch the site is asked again, and switching back needs no prompt. A refusal stays per site. Settings → Permissions names each grant's identity and revokes it alone; existing allows were bound to the key selected at the upgrade. Residual: a remembered per-kind signing rule is not key-bound, so an auto-signed event under another key still carries that key's public key. |
+| SEC-026 | Per-key consent scope | S | ✅ | A `getPublicKey` allow binds to the key it was granted for; after a key switch the site is asked again, and switching back needs no prompt. A refusal stays per site. Settings → Permissions names each grant's identity and revokes it alone; existing allows were bound to the key selected at the upgrade. Residual: signing grants are not key-bound (SEC-028). |
 | SEC-027 | Encrypted activity log | S | ⬜ | Entries keep 100 characters of signed content in plaintext. |
+| SEC-028 | Per-key signing scope | S | ⬜ | Remembered per-kind rules, high trust and session grants apply to every key; bind them to the key selected when they were granted, as SEC-026 does for `getPublicKey`. |
 
 ## 2. Protocol Support
 
@@ -113,19 +118,19 @@ Defects in shipped code. Each belongs to the row named.
 
 | ID | Title | Pri | Status | Notes |
 |----|-------|-----|--------|-------|
-| UX-001 | Persistent activity log | M | ✅ | Time, origin, kind, 100-character preview, result and key. Retention 10-500 (default 50), origin and kind filters, pagination. Gaps are in Known issues and UX-006. |
+| UX-001 | Persistent activity log | M | ✅ | Time, origin, kind, 100-character preview, result, key and the reason for a refusal. Retention 10-500 (default 50), pagination. The origin filter lists every stored origin and the kind filter reaches kinds 5, 22242 and 27235. The preview escapes hidden and direction-control characters, and a site that floods the log with rate-limited requests is recorded once per window. More filters are UX-006. |
 | UX-002 | Profile fetch and display | S | ✅ | kind:0 fetch, one-hour cache, name, about and website, edit and publish. The picture shows as a URL and is loaded only once, on an explicit save or Refresh picture, to make the local copy the header shows (SEC-021). |
 | UX-003 | Smart event preview | M | 🔄 | A consequence sentence for 13 kinds, trust and non-HTTPS chips, raw content, tags and JSON. Left: summaries parsed from the event (reply and zap targets, DM recipient, list diffs). |
 | UX-004 | One-click common actions | S | 🔄 | Copy public key and QR on Home, links to Keys, Relays, Permissions, Profile and Activity, Add Key in the header. Left: external profile link, export, keyboard shortcuts. |
 | UX-005 | Contextual help | S | 🔄 | Inline copy for trust levels, protected kinds and remember scope. Left: tooltips, help for event kinds, learn-more links. |
 | UX-006 | Activity search and filters | S | 🔄 | Combinable origin and kind filters. Left: full-text search, date and result filters, saved presets. |
 | UX-007 | Theme customization | S | 🔄 | Light, dark and system. Left: more themes (including high-contrast), colour picker, font size. |
-| UX-008 | Onboarding tutorial | S | 🔄 | Setup wizard: create or import, password, verified backup. Left: a concepts tutorial and dismissible tips. |
+| UX-008 | Onboarding tutorial | S | 🔄 | Setup wizard: create or import, password, verified backup; or Quick start, which takes a password and one key and leaves the backup for a Home reminder. Left: a concepts tutorial and dismissible tips. |
 | UX-009 | Bulk permission management | S | ⬜ | |
 | UX-010 | Notifications | S | ⬜ | With a Do Not Disturb mode. |
-| UX-011 | Accessibility (WCAG 2.1 AA) | M | 🔄 | Keyboard and ARIA coverage on key management and Radix controls, AA token contrast, labelled and keyboard-operable sliders. Left: a repo-wide audit, automated axe checks, remediation. |
+| UX-011 | Accessibility (WCAG 2.1 AA) | M | 🔄 | Keyboard and ARIA coverage on key management and Radix controls, AA token contrast, labelled and keyboard-operable sliders, and an axe gate over 36 surfaces in both themes that fails the build on a serious or critical finding. Left: the side panel layout is not scanned, axe finds only part of WCAG 2.1 AA, and there has been no manual screen-reader pass. |
 | UX-012 | Mobile UI | S | ⬜ | |
-| UX-013 | Activity export | S | 🔄 | JSON export from the Activity Log settings. Left: fix the over-100 failure (Known issues), add CSV. |
+| UX-013 | Activity export | S | 🔄 | JSON export from the Activity Log settings, which reads the whole log in pages of 100. Left: CSV. |
 | UX-014 | Internationalization | C | ⬜ | |
 | UX-015 | Automatic dark/light switching | S | ✅ | Follows the system preference live across all surfaces. Time-of-day and scheduled switching were dropped from the row. |
 | UX-016 | Compact view | C | ⬜ | |
@@ -136,7 +141,7 @@ Defects in shipped code. Each belongs to the row named.
 
 | ID | Title | Pri | Status | Notes |
 |----|-------|-----|--------|-------|
-| DEV-001 | Standard error codes | M | 🔄 | Canonical codes with JSON-RPC numeric mapping inside the extension, plus a test that fails on hard-coded error strings. Left: fix the page boundary and rewrite `docs/rpc-error-codes.md` (Known issues). |
+| DEV-001 | Standard error codes | M | ✅ | Canonical codes with JSON-RPC numeric mapping inside the extension. A page receives only a canonical code, and `docs/rpc-error-codes.md` is checked against the code by a test that also fails on hard-coded error strings. |
 | DEV-002 | TypeScript definitions package | M | ⬜ | `window.nostr` types for dApps. |
 | DEV-003 | Developer console | S | ⬜ | |
 | DEV-004 | Test mode with mock signatures | S | ⬜ | |
@@ -145,10 +150,10 @@ Defects in shipped code. Each belongs to the row named.
 | DEV-007 | Framework SDKs | S | ⬜ | |
 | DEV-008 | Webhooks for local development | C | ⬜ | |
 | DEV-009 | Browser DevTools panel | C | ⬜ | |
-| DEV-010 | API versioning and deprecation policy | M | ⬜ | |
+| DEV-010 | API versioning and deprecation policy | M | ✅ | `docs/api-versioning.md`: what is public API, how release numbers map to it, the deprecation period, and the `BREAKING (API)` and `BREAKING (RPC)` marks. |
 | DEV-011 | Performance profiling tools | C | ⬜ | |
 | DEV-012 | Batch signing | S | ❌ | Conflicts with the deliberate removal of bulk approve. |
-| DEV-013 | Capability detection API | M | ⬜ | The provider advertises only the methods it implements, but there is no `capabilities` API. |
+| DEV-013 | Capability detection API | M | ✅ | A frozen `window.nostr.capabilities` lists the implemented methods from the same constant the provider and the content script's relay allowlist use. It carries no version, on purpose. |
 
 ## 5. Performance and Reliability
 
@@ -159,9 +164,9 @@ Defects in shipped code. Each belongs to the row named.
 | PERF-003 | Background bundle size | M | ✅ | 74 KB gzipped against a 150 KB target. A CI size gate is PERF-009. |
 | PERF-004 | Memory-leak detection in CI | S | ⬜ | Should until it has a measurable target. |
 | PERF-005 | Efficient storage access | S | 🔄 | A 5-second settings cache in the UI client, debounced docked-panel writes, parallel policy reads. Left: a background settings cache and stop rewriting the whole `appSettings` object on every change. |
-| PERF-006 | Relay connection reuse | S | ✅ | One shared `RelayManager`; sockets are reused and reconnect with jittered backoff. A settings write currently drops them (Known issues). |
+| PERF-006 | Relay connection reuse | S | ✅ | One shared `RelayManager`; sockets are reused and reconnect with jittered backoff, and a settings write that does not touch the relay list leaves them open. |
 | PERF-007 | Signature caching | S | ⬜ | |
-| PERF-008 | Service-worker lifecycle | M | ✅ | Lock state and grants in `storage.session`, the lock deadline in `chrome.alarms`, the unlock throttle in `storage.local`. Rate-limit windows in `storage.session`, so an evicted worker does not reset them. A request waiting for approval when the worker ends gets `approval_failed` from the content script, not a hang. Key material is deliberately gone after eviction, so the vault re-locks rather than staying open. The original wording asked for the opposite. |
+| PERF-008 | Service-worker lifecycle | M | ✅ | Lock state and grants in `storage.session`, the lock deadline in `chrome.alarms`, the unlock throttle in `storage.local`. Rate-limit windows in `storage.session`, so an evicted worker does not reset them. A request waiting for approval when the worker ends gets `approval_failed` from the content script, not a hang. Key material is deliberately gone after eviction, so the vault re-locks rather than staying open, and the lock screen says the background was restarted. While unlocked, a bounded keepalive keeps the worker running until the auto-lock deadline, so a long auto-lock setting is not cut short by the browser. The original wording asked for the opposite of keeping keys across eviction. |
 | PERF-009 | Bundle analysis and size gate | S | ⬜ | Include a gzip gate on `background.js` and size trends. |
 | PERF-010 | Startup time | S | ⬜ | Should until it has a measurable target. |
 | PERF-011 | Policy evaluation caching | S | ⬜ | |
