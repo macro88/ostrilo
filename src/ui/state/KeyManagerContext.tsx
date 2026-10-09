@@ -25,17 +25,8 @@ import {
   RpcClientError,
 } from "@/infrastructure/messaging/client";
 import type { KeyListEntry } from "@/infrastructure/messaging/handlers/vault-rpc";
-import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
-import { browser } from "wxt/browser";
-
-/**
- * How often an open surface re-checks the lock state.
- *
- * Short enough that a vault which locks behind a visible page is noticed
- * within a few seconds; long enough that an idle options page is not what
- * keeps the MV3 service worker alive.
- */
-const LOCK_POLL_MS = 5_000;
+import type { LockReason } from "@/domain/types";
+import { applyLockState, useLockSync } from "./lock-sync";
 
 /**
  * The code returned when an unlock fails for a reason the background did not
@@ -116,6 +107,10 @@ export interface UILockState {
    * Absent while locked, and cleared on every transition to locked.
    */
   lockAt?: number;
+  /** Why the vault is locked, when the background said. Cleared on every unlock. */
+  lockReason?: LockReason;
+  /** The timeout that elapsed, with `lockReason: "inactivity"`. */
+  inactivityMinutes?: number;
 }
 
 interface KeyManagerContextType {
@@ -133,6 +128,19 @@ interface KeyManagerContextType {
   isInitialising: boolean;
   /** The inactivity deadline, for surfaces that display the time remaining. */
   lockAt?: number;
+  /** Why the vault is locked, for the lock screen. Absent when unlocked or unknown. */
+  lockReason?: LockReason;
+  /** The timeout that elapsed, with `lockReason: "inactivity"`. */
+  inactivityMinutes?: number;
+  /**
+   * True while the background is not answering lock-state requests.
+   *
+   * Not the same as locked. A request that fails says nothing about the vault:
+   * the vault is locked only when the background says so. Surfaces show a
+   * retry instead of a lock screen, and show no vault content meanwhile.
+   * `isLocked` keeps the last answer the background gave.
+   */
+  lockCheckFailed: boolean;
   selectedKeyInfo?: UIKeyInfo;
   keys: UIKeyInfo[];
   hasKeys: boolean;
@@ -148,6 +156,8 @@ interface KeyManagerContextType {
   ) => Promise<string>;
   selectKey: (keyId: string) => Promise<void>;
   refreshKeys: () => Promise<void>;
+  /** Asks the background again after `lockCheckFailed`. */
+  retryLockCheck: () => void;
 }
 
 const KeyManagerContext = createContext<KeyManagerContextType | undefined>(
@@ -169,7 +179,9 @@ interface KeyManagerProviderProps {
 }
 
 export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
-  const [isLoading, setIsLoading] = useState(false);
+  // True from mount: the first read starts with the first effect, so there is
+  // no render in which a load has not begun.
+  const [isLoading, setIsLoading] = useState(true);
   const [isInitialising, setIsInitialising] = useState(true);
   // Lazy initializer: `Date.now()` is impure, so the eager form re-ran it on
   // every render to produce a value useState discards after mount. Evaluated
@@ -180,23 +192,35 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     lastActivity: Date.now(),
   }));
   const [keys, setKeys] = useState<UIKeyInfo[]>([]);
+  const [lockCheckFailed, setLockCheckFailed] = useState(false);
 
-  // Load initial state
+  // Bumped by a retry, so the load below is an effect of state and not a
+  // function the effect has to call.
+  const [loadAttempt, setLoadAttempt] = useState(0);
+
+  const retryLockCheck = useCallback(() => {
+    setIsLoading(true);
+    setLoadAttempt((attempt) => attempt + 1);
+  }, []);
+
+  // Load initial state, and again on every retry.
   useEffect(() => {
-    const loadInitialState = async () => {
+    let cancelled = false;
+
+    const loadState = async () => {
       try {
-        setIsLoading(true);
         const [lockStateResult, keysResult] = await Promise.all([
           getLockState(),
           listKeys(),
         ]);
+        if (cancelled) return;
 
-        setLockState({
-          isLocked: lockStateResult.isLocked,
+        setLockState((prev) => ({
+          ...applyLockState(prev, lockStateResult),
           selectedKeyId: lockStateResult.selectedKeyId,
           lastActivity: Date.now(),
-          lockAt: lockStateResult.isLocked ? undefined : lockStateResult.lockAt,
-        });
+        }));
+        setLockCheckFailed(false);
 
         // Convert KeyRecord to UIKeyInfo (remove sensitive fields)
         const uiKeys: UIKeyInfo[] = keysResult.map(toUIKeyInfo);
@@ -204,81 +228,22 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
         setKeys(uiKeys);
       } catch (error) {
         console.error("Failed to load key manager state:", error);
+        if (!cancelled) setLockCheckFailed(true);
       } finally {
-        setIsLoading(false);
-        setIsInitialising(false);
-      }
-    };
-
-    loadInitialState();
-  }, []);
-
-  /**
-   * Keeps an open surface honest about the lock state.
-   *
-   * It was read once on mount and never again, so a vault that locked while
-   * the options page was open left the page showing key labels, origin
-   * policies and the relay list until someone reloaded it. Mutation from
-   * that stale page is refused by the background, but the disclosure had
-   * already happened.
-   *
-   * Two signals, because neither is sufficient alone:
-   *  - the broadcast, which is immediate but is lost if the worker was
-   *    evicted before it could send;
-   *  - the poll, which is the backstop, and is also what evaluates the
-   *    auto-lock deadline, since that is checked lazily on access.
-   */
-  useEffect(() => {
-    let cancelled = false;
-
-    const sync = async () => {
-      try {
-        const state = await getLockState();
-        if (cancelled) return;
-        // `lockAt` is compared as well as `isLocked`, and both are usually
-        // unchanged: the deadline only moves when activity is recorded or the
-        // timeout changes. Returning `prev` on a match keeps the poll from
-        // re-rendering every consumer every five seconds.
-        const lockAt = state.isLocked ? undefined : state.lockAt;
-        setLockState((prev) =>
-          prev.isLocked === state.isLocked && prev.lockAt === lockAt
-            ? prev
-            : { ...prev, isLocked: state.isLocked, lockAt }
-        );
-      } catch {
-        // Unreachable background: assume locked. Failing closed here costs
-        // the user a password; failing open costs them their key material.
         if (!cancelled) {
-          setLockState((prev) =>
-            prev.isLocked && prev.lockAt === undefined
-              ? prev
-              : { ...prev, isLocked: true, lockAt: undefined }
-          );
+          setIsLoading(false);
+          setIsInitialising(false);
         }
       }
     };
 
-    const onMessage = (message: unknown) => {
-      if (
-        typeof message === "object" &&
-        message !== null &&
-        "__event" in message &&
-        (message as { __event?: unknown }).__event ===
-          BROADCAST_EVENTS.VAULT_LOCKED
-      ) {
-        setLockState((prev) => ({ ...prev, isLocked: true, lockAt: undefined }));
-      }
-    };
-
-    browser.runtime.onMessage.addListener(onMessage);
-    const interval = setInterval(sync, LOCK_POLL_MS);
-
+    loadState();
     return () => {
       cancelled = true;
-      clearInterval(interval);
-      browser.runtime.onMessage.removeListener(onMessage);
     };
-  }, []);
+  }, [loadAttempt]);
+
+  useLockSync(setLockState, setLockCheckFailed);
 
   const refreshKeys = useCallback(async () => {
     try {
@@ -294,7 +259,13 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
     try {
       setIsLoading(true);
       await lockVault();
-      setLockState((prev) => ({ ...prev, isLocked: true, lockAt: undefined }));
+      setLockState((prev) => ({
+        ...prev,
+        isLocked: true,
+        lockAt: undefined,
+        lockReason: "manual",
+        inactivityMinutes: undefined,
+      }));
     } catch (error) {
       console.error("Lock failed:", error);
     } finally {
@@ -322,7 +293,10 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
         selectedKeyId: result.selectedKeyId ?? prev.selectedKeyId,
         lastActivity: Date.now(),
         lockAt: deadline,
+        lockReason: undefined,
+        inactivityMinutes: undefined,
       }));
+      setLockCheckFailed(false);
       return { ok: true };
     } catch (error) {
       // `RpcClientError.message` is the machine string `rpc:<method>:<code>`
@@ -418,6 +392,9 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
       isLoading,
       isInitialising,
       lockAt: lockState.lockAt,
+      lockReason: lockState.lockReason,
+      inactivityMinutes: lockState.inactivityMinutes,
+      lockCheckFailed,
       selectedKeyInfo,
       keys,
       hasKeys: keys.length > 0,
@@ -429,10 +406,15 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
       importKey,
       selectKey,
       refreshKeys,
+      retryLockCheck,
     }),
     [
       lockState.isLocked,
       lockState.lockAt,
+      lockState.lockReason,
+      lockState.inactivityMinutes,
+      lockCheckFailed,
+      retryLockCheck,
       isLoading,
       isInitialising,
       selectedKeyInfo,

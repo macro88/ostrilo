@@ -35,6 +35,8 @@ const unlock = vi.fn();
 const keyManagerState = {
   isLocked: true,
   isLoading: false,
+  lockReason: undefined as string | undefined,
+  inactivityMinutes: undefined as number | undefined,
   selectedUnlockedKey: undefined,
   keys: [],
   hasKeys: true,
@@ -115,6 +117,8 @@ beforeEach(() => {
   unlock.mockReset();
   keyManagerState.isLoading = false;
   keyManagerState.hasKeys = true;
+  keyManagerState.lockReason = undefined;
+  keyManagerState.inactivityMinutes = undefined;
 });
 
 afterEach(() => {
@@ -123,6 +127,40 @@ afterEach(() => {
     container.remove();
   }
   vi.clearAllMocks();
+});
+
+describe("LockScreen lock reason", () => {
+  function reasonLine(container: HTMLElement) {
+    return container.querySelector('[data-testid="lock-reason"]')?.textContent;
+  }
+
+  it("says nothing when the background gave no reason", () => {
+    const container = render(<LockScreen />);
+    expect(reasonLine(container)).toBeUndefined();
+  });
+
+  it("names the timeout that elapsed", () => {
+    keyManagerState.lockReason = "inactivity";
+    keyManagerState.inactivityMinutes = 35;
+    const container = render(<LockScreen />);
+    expect(reasonLine(container)).toBe("Locked after 35 minutes without activity.");
+  });
+
+  it("says the browser restarted the background, rather than claiming a timeout", () => {
+    keyManagerState.lockReason = "background_restarted";
+    const container = render(<LockScreen />);
+    expect(reasonLine(container)).toBe(
+      "Locked because the browser restarted Ostrilo's background."
+    );
+    expect(container.textContent).not.toMatch(/without activity/i);
+  });
+
+  it("keeps the unlock form beside the reason", () => {
+    keyManagerState.lockReason = "manual";
+    const container = render(<LockScreen />);
+    expect(reasonLine(container)).toBe("You locked Ostrilo.");
+    expect(container.querySelector("form")).not.toBeNull();
+  });
 });
 
 describe("LockScreen unlock failure reporting", () => {

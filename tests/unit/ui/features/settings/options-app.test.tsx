@@ -21,6 +21,8 @@ const keyManagerState = {
   isLoading: false,
   isInitialising: false,
   hasKeys: true,
+  lockCheckFailed: false,
+  retryLockCheck: vi.fn(),
 };
 
 vi.mock("@/ui/state/KeyManagerContext", () => ({
@@ -93,6 +95,7 @@ beforeEach(() => {
   keyManagerState.isLoading = false;
   keyManagerState.isInitialising = false;
   keyManagerState.hasKeys = true;
+  keyManagerState.lockCheckFailed = false;
 });
 
 afterEach(() => {
@@ -171,6 +174,17 @@ describe("OptionsApp lock gating", () => {
         `SECURITY REGRESSION: ${panel} rendered behind a locked vault`
       ).not.toContain(panel);
     }
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
+  });
+
+  it("offers a retry, and no tabs, when the background does not answer", () => {
+    keyManagerState.lockCheckFailed = true;
+    keyManagerState.hasKeys = false;
+    const container = render(<OptionsApp />);
+
+    expect(container.textContent).toContain("Can't reach Ostrilo");
+    expect(container.textContent).not.toContain("Lock screen");
+    expect(container.textContent).not.toContain("Create a key");
     expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
   });
 

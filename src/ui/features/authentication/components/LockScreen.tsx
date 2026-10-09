@@ -9,6 +9,7 @@ import { useEphemeralInputTeardown } from "../hooks/useEphemeralInputTeardown";
 import { AlertTriangle, Lock } from "lucide-react";
 import { Logo } from "@/ui/components/logo/Logo";
 import { SealMark } from "@/components/common/SealMark";
+import { describeLockReason } from "@/ui/lib/lock-reason";
 
 interface LockScreenProps {
   onUnlock?: () => void;
@@ -64,7 +65,7 @@ export function LockScreen({
   onUnlock,
   title = "Ostrilo is Locked",
 }: LockScreenProps) {
-  const { unlock, isLoading } = useKeyManager();
+  const { unlock, isLoading, lockReason, inactivityMinutes } = useKeyManager();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const passwordFieldRef = useRef<HTMLInputElement>(null);
@@ -121,6 +122,14 @@ export function LockScreen({
         </div>
 
         <h1 className="screen-title mt-6 text-center text-[20px]">{title}</h1>
+        {lockReason && (
+          <p
+            className="mt-1.5 text-center text-[13px] leading-snug text-muted-foreground"
+            data-testid="lock-reason"
+          >
+            {describeLockReason(lockReason, inactivityMinutes)}
+          </p>
+        )}
 
         <div className="mt-4 w-full">
           <PasswordInput

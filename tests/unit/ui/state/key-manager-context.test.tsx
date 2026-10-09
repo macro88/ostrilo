@@ -215,15 +215,42 @@ describe("KeyManagerProvider", () => {
     expect(latest().lockAt).toBeUndefined();
   });
 
-  it("finishes initialising locked and empty when the first read fails", async () => {
+  it("finishes initialising with a failed lock check, not a lock, when the first read fails", async () => {
     rpc.getLockState.mockRejectedValue(new Error("no_response"));
 
     await mountProvider();
 
     expect(latest().isInitialising).toBe(false);
     expect(latest().isLoading).toBe(false);
-    expect(latest().isLocked).toBe(true);
+    expect(latest().lockCheckFailed).toBe(true);
+    expect(latest().lockReason).toBeUndefined();
     expect(latest().keys).toEqual([]);
+  });
+
+  it("clears the failure when a retry gets an answer", async () => {
+    rpc.getLockState.mockRejectedValueOnce(new Error("no_response"));
+    await mountProvider();
+    expect(latest().lockCheckFailed).toBe(true);
+
+    rpc.getLockState.mockResolvedValue(unlockedState());
+    rpc.listKeys.mockResolvedValue([entry({ id: "a", isSelected: true })]);
+    act(() => latest().retryLockCheck());
+    await settle();
+
+    expect(latest().lockCheckFailed).toBe(false);
+    expect(latest().isLocked).toBe(false);
+    expect(latest().keys).toHaveLength(1);
+  });
+
+  it("keeps the failure when the retry fails too", async () => {
+    rpc.getLockState.mockRejectedValue(new Error("no_response"));
+    await mountProvider();
+
+    act(() => latest().retryLockCheck());
+    await settle();
+
+    expect(latest().lockCheckFailed).toBe(true);
+    expect(latest().isLoading).toBe(false);
   });
 
   it("notices on the next poll that the vault locked behind the page", async () => {
@@ -260,19 +287,89 @@ describe("KeyManagerProvider", () => {
     expect(renders.length).toBe(before);
   });
 
-  it("fails closed when the background stops answering the poll", async () => {
+  it("reports a failed lock check, not a lock, when the background stops answering the poll", async () => {
     rpc.getLockState.mockResolvedValue(unlockedState());
     await mountProvider();
 
     rpc.getLockState.mockRejectedValue(new Error("transport_error"));
     await advancePoll();
 
-    expect(latest().isLocked).toBe(true);
-    expect(latest().lockAt).toBeUndefined();
+    expect(latest().lockCheckFailed).toBe(true);
+    // The last answer the background gave is kept: a failed request is not a
+    // lock, and is not a reason to claim one.
+    expect(latest().isLocked).toBe(false);
+    expect(latest().lockReason).toBeUndefined();
 
     const before = renders.length;
     await advancePoll();
     expect(renders.length).toBe(before);
+  });
+
+  it("recovers by itself when the background answers a later poll", async () => {
+    rpc.getLockState.mockResolvedValue(unlockedState());
+    await mountProvider();
+    rpc.getLockState.mockRejectedValue(new Error("transport_error"));
+    await advancePoll();
+    expect(latest().lockCheckFailed).toBe(true);
+
+    rpc.getLockState.mockResolvedValue(unlockedState());
+    await advancePoll();
+
+    expect(latest().lockCheckFailed).toBe(false);
+    expect(latest().isLocked).toBe(false);
+  });
+
+  it("adopts the lock reason the background reports", async () => {
+    rpc.getLockState.mockResolvedValue({
+      isLocked: true,
+      lockReason: "inactivity",
+      inactivityMinutes: 35,
+    });
+
+    await mountProvider();
+
+    expect(latest().isLocked).toBe(true);
+    expect(latest().lockReason).toBe("inactivity");
+    expect(latest().inactivityMinutes).toBe(35);
+  });
+
+  it("ignores a lock reason it does not recognise", async () => {
+    rpc.getLockState.mockResolvedValue({
+      isLocked: true,
+      lockReason: "<b>bad</b>" as never,
+    });
+
+    await mountProvider();
+
+    expect(latest().isLocked).toBe(true);
+    expect(latest().lockReason).toBeUndefined();
+  });
+
+  it("learns the reason from the poll after a lock it was only told about", async () => {
+    rpc.getLockState.mockResolvedValue(unlockedState());
+    await mountProvider();
+
+    rpc.getLockState.mockResolvedValue({
+      isLocked: true,
+      lockReason: "background_restarted",
+    });
+    broadcast({ __event: BROADCAST_EVENTS.VAULT_LOCKED });
+    await settle();
+
+    expect(latest().isLocked).toBe(true);
+    expect(latest().lockReason).toBe("background_restarted");
+  });
+
+  it("drops the reason once the vault is unlocked again", async () => {
+    rpc.getLockState.mockResolvedValue({ isLocked: true, lockReason: "manual" });
+    await mountProvider();
+    expect(latest().lockReason).toBe("manual");
+
+    rpc.getLockState.mockResolvedValue(unlockedState());
+    await advancePoll();
+
+    expect(latest().isLocked).toBe(false);
+    expect(latest().lockReason).toBeUndefined();
   });
 
   it("locks at once on the vault-locked broadcast and ignores other events", async () => {
@@ -431,6 +528,7 @@ describe("KeyManagerProvider", () => {
 
       expect(latest().isLocked).toBe(true);
       expect(latest().lockAt).toBeUndefined();
+      expect(latest().lockReason).toBe("manual");
       expect(latest().isLoading).toBe(false);
     });
 

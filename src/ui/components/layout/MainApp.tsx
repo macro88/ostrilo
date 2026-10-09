@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/ui/components/layout/AppLayout";
 import { LockScreen } from "@/ui/features/authentication/components/LockScreen";
+import { BackgroundUnreachable } from "@/ui/features/authentication/components/BackgroundUnreachable";
 import { OnboardingContainer } from "@/ui/features/onboarding/components/OnboardingContainer";
 import { HomeView } from "@/ui/features/home/components/HomeView";
 import { ProfileView } from "@/ui/features/profile/components/ProfileView";
@@ -16,12 +17,24 @@ export function MainApp() {
   const { activeTab, setActiveTab } = useAppNavigation("home");
   const [isAddKeyDialogOpen, setIsAddKeyDialogOpen] = useState(false);
   const { needsOnboarding } = useOnboarding();
-  const { isLoading, isLocked, refreshKeys } =
+  const { isLoading, isLocked, lockCheckFailed, retryLockCheck, refreshKeys } =
     useKeyManager();
 
   const handleAddKey = () => {
     setIsAddKeyDialogOpen(true);
   };
+
+  // Before onboarding and before the lock screen: with the background silent
+  // the key list is empty too, which would read as a first run, and the lock
+  // state is unknown, which is not the same as locked.
+  if (lockCheckFailed) {
+    return (
+      <BackgroundUnreachable
+        onRetry={retryLockCheck}
+        isRetrying={isLoading}
+      />
+    );
+  }
 
   // Show onboarding for first-time users
   if (needsOnboarding) {

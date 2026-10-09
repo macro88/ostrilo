@@ -94,8 +94,11 @@ describe("activity is reported only from deliberate action", () => {
 
   it("is not reachable from the lock-state poll or the broadcast handler", () => {
     const source = readFileSync(
-      join(SRC_DIR, "ui", "state", "KeyManagerContext.tsx"),
+      join(SRC_DIR, "ui", "state", "lock-sync.ts"),
       "utf8"
+    );
+    expect(source, "the poll must not import the reporter at all").not.toMatch(
+      /\breportActivity\b/
     );
     expect(bodyOf(source, "const sync = async ()")).not.toContain(
       "reportActivity"

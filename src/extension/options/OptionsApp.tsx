@@ -4,6 +4,7 @@ import {
   useKeyManagerContext,
 } from "@/ui/state/KeyManagerContext";
 import { LockScreen } from "@/ui/features/authentication/components/LockScreen";
+import { BackgroundUnreachable } from "@/ui/features/authentication/components/BackgroundUnreachable";
 import { useTheme } from "@/ui/hooks/useTheme";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralSettingsTab } from "@/ui/features/settings/components/GeneralSettingsTab";
@@ -63,7 +64,14 @@ function getHashTab(): TabKey {
  * message directly.
  */
 function OptionsGate({ children }: { children: React.ReactNode }) {
-  const { isLocked, isInitialising, hasKeys } = useKeyManagerContext();
+  const {
+    isLocked,
+    isInitialising,
+    hasKeys,
+    lockCheckFailed,
+    retryLockCheck,
+    isLoading,
+  } = useKeyManagerContext();
 
   // `isInitialising`, NOT `isLoading`. `isLoading` is also true for the
   // duration of an unlock attempt, so gating on it unmounted the lock screen
@@ -72,6 +80,16 @@ function OptionsGate({ children }: { children: React.ReactNode }) {
   // This gate only exists to avoid flashing the wrong branch before the first
   // lock-state read resolves.
   if (isInitialising) return null;
+
+  // Ahead of the no-keys notice: a silent background also yields no keys.
+  if (lockCheckFailed) {
+    return (
+      <BackgroundUnreachable
+        onRetry={retryLockCheck}
+        isRetrying={isLoading}
+      />
+    );
+  }
 
   // No vault yet: nothing to lock, and nothing to show.
   if (!hasKeys) {
