@@ -49,10 +49,8 @@ Defects in shipped code. Each belongs to the row named.
 | Issue | Row |
 |-------|-----|
 | Activity export fails when retention is above 100 entries: the export asks for up to 500 and the RPC caps `limit` at 100. | UX-013 |
-| `content.ts` sends pages three non-canonical error strings ("Invalid event parameter", "Unknown method", a raw exception message). `docs/rpc-error-codes.md` shows an old response shape. | DEV-001 |
-| Requests that policy auto-signs never enter the queue, so no rate limit applies to them. | SEC-006 |
+| `content.ts` sends pages two non-canonical error strings ("Invalid event parameter", "Unknown method"). `docs/rpc-error-codes.md` shows an old response shape. | DEV-001 |
 | Any `appSettings` write, a theme change included, drops every relay socket. | PERF-006 |
-| The approval queue and rate-limit counters are lost when the service worker is evicted. | PERF-008 |
 | Activity log: the origin filter lists only origins on the loaded page; the kind filter can't reach kinds 5, 22242 and 27235; denials don't record why; the preview doesn't escape hidden characters. | UX-001 |
 
 ---
@@ -66,7 +64,7 @@ Defects in shipped code. Each belongs to the row named.
 | SEC-003 | Secure UI isolation | M | 🔄 | The revealed key lives in a ref, passwords clear on every exit, secret inputs opt out of autofill. Left: dedicated `keyflow.html` and `welcome.html` documents, so onboarding and unlock stop sharing a realm with the main app. |
 | SEC-004 | CSP enforcement in CI | M | ✅ | Manifest CSP and bundle hygiene (no source maps, no `console`) asserted against fresh Chrome and Firefox builds. |
 | SEC-005 | Secret scanning in CI | M | ✅ | gitleaks on every PR and push. |
-| SEC-006 | Rate limiting | S | 🔄 | Approval queue: 10 per minute and 5 pending per origin, 20 globally. `getPublicKey`: 6 per minute. Left: meter auto-signed requests, make limits configurable, persist counters. |
+| SEC-006 | Rate limiting | S | 🔄 | Approval queue: 10 per minute and 5 pending per origin, 20 globally. `getPublicKey`: 6 per minute. Auto-signed requests: 60 per origin per minute; beyond that the request goes to the approval window like an unremembered one, and is never refused for the budget. The enqueue and disclosure windows and the auto-sign budget persist in `storage.session`. Left: make limits configurable. |
 | SEC-007 | Phishing blocklist | S | ⬜ | Warn before signing on known-bad domains. Needs a list-source decision: a remote feed is a network contact `PRIVACY.md` does not describe, and a bundled list goes stale. |
 | SEC-008 | Risk analysis in approvals | M | 🔄 | Display integrity ships: full origin, non-HTTPS chip, byte lengths, hidden characters escaped, protected-kind notice. Left: zap amounts, DM content, relay-list changes, a risk score. |
 | SEC-009 | Biometric unlock | S | ⬜ | WebAuthn PRF. Proposal open at `openspec/changes/add-biometric-unlock`. |
@@ -84,7 +82,7 @@ Defects in shipped code. Each belongs to the row named.
 | SEC-021 | Remote media and egress policy | M | ✅ | `https:` allowlist; extension pages never load relay-chosen images. |
 | SEC-022 | Consent scope and trust allowlists | M | ✅ | Trust levels are allowlists, not denylists. Kinds 1, 5, 9734, 22242 and 27235 always prompt. |
 | SEC-023 | Bounded session grants | M | ✅ | Every session grant has an absolute expiry. |
-| SEC-024 | Identity-disclosure consent | M | ✅ | `getPublicKey` needs per-origin consent that is remembered, revocable and logged. Residual: a third-party script inside a consented page inherits the grant, and the rate limiter resets on worker eviction. |
+| SEC-024 | Identity-disclosure consent | M | ✅ | `getPublicKey` needs per-origin consent that is remembered, revocable and logged. Residual: a third-party script inside a consented page inherits the grant. |
 | SEC-025 | Contact-list replacement guard | S | ⬜ | Confirm before a kind 3 wipes most of the user's follows. |
 | SEC-026 | Per-key consent scope | S | ⬜ | Today a site allowed for key A also gets key B's public key after a switch. |
 | SEC-027 | Encrypted activity log | S | ⬜ | Entries keep 100 characters of signed content in plaintext. |
@@ -163,7 +161,7 @@ Defects in shipped code. Each belongs to the row named.
 | PERF-005 | Efficient storage access | S | 🔄 | A 5-second settings cache in the UI client, debounced docked-panel writes, parallel policy reads. Left: a background settings cache and stop rewriting the whole `appSettings` object on every change. |
 | PERF-006 | Relay connection reuse | S | ✅ | One shared `RelayManager`; sockets are reused and reconnect with jittered backoff. A settings write currently drops them (Known issues). |
 | PERF-007 | Signature caching | S | ⬜ | |
-| PERF-008 | Service-worker lifecycle | M | ✅ | Lock state and grants in `storage.session`, the lock deadline in `chrome.alarms`, the unlock throttle in `storage.local`. Key material is deliberately gone after eviction, so the vault re-locks rather than staying open. The original wording asked for the opposite. |
+| PERF-008 | Service-worker lifecycle | M | ✅ | Lock state and grants in `storage.session`, the lock deadline in `chrome.alarms`, the unlock throttle in `storage.local`. Rate-limit windows in `storage.session`, so an evicted worker does not reset them. A request waiting for approval when the worker ends gets `approval_failed` from the content script, not a hang. Key material is deliberately gone after eviction, so the vault re-locks rather than staying open. The original wording asked for the opposite. |
 | PERF-009 | Bundle analysis and size gate | S | ⬜ | Include a gzip gate on `background.js` and size trends. |
 | PERF-010 | Startup time | S | ⬜ | Should until it has a measurable target. |
 | PERF-011 | Policy evaluation caching | S | ⬜ | |
