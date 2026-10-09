@@ -1,5 +1,6 @@
 import { browser } from "wxt/browser";
 import type { RpcRequest, RpcResponse } from "@/infrastructure/messaging/rpc";
+import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
 /**
  * Content script for NIP-07 window.nostr provider
@@ -160,12 +161,15 @@ async function handlePageMessage(event: MessageEvent): Promise<void> {
       const errorCode = response.error.data.errorCode;
       sendResponse(data.id, undefined, errorCode);
     }
-  } catch (error) {
-    sendResponse(
-      data.id,
-      undefined,
-      error instanceof Error ? error.message : "Unknown error"
-    );
+  } catch {
+    // The background did not answer: it was ended while the request was open
+    // (the queue entry and this request's message port live in its memory), or
+    // the extension was reloaded under a page that was already open. The
+    // browser's own wording for that ("the message channel closed before a
+    // response was received") is internal and unstable, and a dapp cannot act on
+    // it. A fixed code says the request did not complete; a retry then reports
+    // whether the vault is locked.
+    sendResponse(data.id, undefined, RPC_ERROR_CODES.APPROVAL_FAILED);
   }
 }
 

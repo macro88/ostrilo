@@ -491,6 +491,7 @@ if (!this.modules.has(namespace)) {
 - Approval queue service throws unexpected error
 - Popup window fails to open
 - Internal state corruption in approval system
+- The background was ended while the request was open (the content script reports this, since the background can no longer answer; a retry then reports `locked`)
 
 **Handler Usage**:
 ```typescript
