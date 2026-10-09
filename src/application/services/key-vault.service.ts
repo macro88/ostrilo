@@ -844,6 +844,7 @@ export class KeyVaultService {
           selectedKeyId: undefined,
           lastActivity: Date.now(),
         });
+        await this.revokeSessionGrants();
         throw new Error("vault_keys_unreadable");
       }
 
@@ -1029,6 +1030,22 @@ export class KeyVaultService {
     }
   }
 
+  /**
+   * Ends every grant that lasts "until lock" for a lock `lock()` did not run.
+   *
+   * The grants go first and must succeed. The display flags only mirror them
+   * for the settings page, so a failure to clear those is logged, not thrown:
+   * it must not turn a lock-state read into an error.
+   */
+  private async revokeSessionGrants(): Promise<void> {
+    await this.storage.session.remove("sessionGrants");
+    try {
+      await this.clearSessionDisplayFlags();
+    } catch (error) {
+      console.warn("[Vault] could not clear the session grant display flags:", error);
+    }
+  }
+
   /** Clears the `sessionGrantAll` display flags that mirror the revoked grants. */
   private async clearSessionDisplayFlags(): Promise<void> {
     const settings = (await this.getSettings()) ?? ({} as AppSettingsV1);
@@ -1156,6 +1173,10 @@ export class KeyVaultService {
         lastActivity: Date.now(),
         lockReason: "background_restarted",
       });
+      // `storage.session` outlives the worker, so a grant made before the
+      // eviction would be live again after the next unlock. A grant lasts until
+      // the vault locks, and this is a lock.
+      await this.revokeSessionGrants();
       return { isLocked: true, lockReason: "background_restarted" };
     }
 

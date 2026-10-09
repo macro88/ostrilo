@@ -1014,6 +1014,44 @@ describe("why the vault is locked", () => {
     });
   });
 
+  it("revokes session grants when the worker restart is detected, so they are not live after the next unlock", async () => {
+    const expiresAt = Date.now() + 10 * MINUTE_MS;
+    maps.session.set("sessionGrants", { "https://dapp.example": expiresAt });
+    const settings = maps.local.get("appSettings") as Record<string, unknown>;
+    maps.local.set("appSettings", {
+      ...settings,
+      origins: [
+        { origin: "https://dapp.example", policy: "ask", sessionGrantAll: true },
+      ],
+    });
+
+    const restarted = newVault(suite);
+    expect(await restarted.getLockState()).toMatchObject({
+      lockReason: "background_restarted",
+    });
+
+    expect(maps.session.has("sessionGrants")).toBe(false);
+    const after = maps.local.get("appSettings") as {
+      origins: Array<{ sessionGrantAll?: boolean }>;
+    };
+    expect(after.origins[0].sessionGrantAll).toBe(false);
+
+    await restarted.unlock(PASSWORD);
+    expect(maps.session.has("sessionGrants")).toBe(false);
+  });
+
+  it("revokes session grants when an unlock opens no key", async () => {
+    maps.session.set("sessionGrants", { "https://dapp.example": Date.now() + MINUTE_MS });
+    const records = maps.local.get("encryptedKeys") as Array<Record<string, unknown>>;
+    maps.local.set("encryptedKeys", [{ ...records[0], pubkey: "cd".repeat(32) }]);
+
+    await expect(newVault(suite).unlock(PASSWORD)).rejects.toThrow(
+      "vault_keys_unreadable"
+    );
+
+    expect(maps.session.has("sessionGrants")).toBe(false);
+  });
+
   it("records a state that cannot be read", async () => {
     for (const bad of [null, 42, "unlocked", {}, { isLocked: "no" }]) {
       maps.session.set("lockState", bad);
