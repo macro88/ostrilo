@@ -49,6 +49,7 @@ function makeContext(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     vault: {
       getLockState: async () => ({ isLocked: false }),
+      isKeyUnreadable: () => false,
       listKeys: async () => [
         { id: "k1", pubkey: PUBKEY, isSelected: true, label: "k1" },
       ],

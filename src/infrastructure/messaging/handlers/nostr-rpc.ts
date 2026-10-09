@@ -2,6 +2,7 @@ import type { RpcRequest, RpcResponse } from "../rpc";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import type {
+  KeyRecord,
   SignedEvent,
   UnsignedEvent,
   ApprovalDecision,
@@ -56,6 +57,33 @@ export class NostrRpcHandler implements RpcModule {
     private approvalQueue?: ApprovalQueueService,
     private windowManager?: () => Promise<number | undefined>
   ) {}
+
+  /** The key a request would use, or the refusal to send instead. */
+  private async resolveSigningKey(
+    method: string,
+    context: ServiceContext
+  ): Promise<
+    { ok: true; key: KeyRecord } | { ok: false; response: RpcResponse }
+  > {
+    const keys = await context.vault.listKeys();
+    const key = keys.find((k) => k.isSelected);
+    if (!key) {
+      return {
+        ok: false,
+        response: createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, { method }),
+      };
+    }
+    if (context.vault.isKeyUnreadable(key.id)) {
+      return {
+        ok: false,
+        response: createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
+          details: UNREADABLE_KEY_DETAILS,
+          method,
+        }),
+      };
+    }
+    return { ok: true, key };
+  }
 
   async handleRequest(
     message: RpcRequest,
@@ -139,25 +167,12 @@ export class NostrRpcHandler implements RpcModule {
       });
     }
 
-    // Get the selected key
-    const keys = await context.vault.listKeys();
-    const selectedKey = keys.find((k) => k.isSelected);
-
-    if (!selectedKey) {
-      return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
-        method: message.type,
-      });
-    }
-
-    // The public key is stored in the clear, so it would be disclosed even
-    // though this key cannot sign. Refused instead: the site would otherwise
-    // learn an identity that every following request fails to use.
-    if (context.vault.isKeyUnreadable(selectedKey.id)) {
-      return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
-        details: UNREADABLE_KEY_DETAILS,
-        method: message.type,
-      });
-    }
+    // The public key is stored in the clear, so an unreadable key would still
+    // be disclosed. Refused instead: the site would otherwise learn an
+    // identity that every following request fails to use.
+    const selection = await this.resolveSigningKey(message.type, context);
+    if (!selection.ok) return selection.response;
+    const selectedKey = selection.key;
 
     // Recorded consent. UNDEFINED IS NOT CONSENT - it is the prompting state.
     // Nothing infers consent from a stored policy record, a trust level or a
@@ -342,15 +357,11 @@ export class NostrRpcHandler implements RpcModule {
       });
     }
 
-    // Get the selected key
-    const keys = await context.vault.listKeys();
-    const selectedKey = keys.find((k) => k.isSelected);
-
-    if (!selectedKey) {
-      return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
-        method: message.type,
-      });
-    }
+    // Before policy and before any prompt: a key that cannot sign must not
+    // raise an approval window, or have a "remember" decision stored for it.
+    const selection = await this.resolveSigningKey(message.type, context);
+    if (!selection.ok) return selection.response;
+    const selectedKey = selection.key;
 
     const event = message.event as UnsignedEvent;
     const pubkey = selectedKey.pubkey;

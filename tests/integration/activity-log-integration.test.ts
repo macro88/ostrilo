@@ -40,6 +40,7 @@ describe("Activity Log Integration", () => {
 
     mockVault = {
       getLockState: vi.fn().mockResolvedValue({ isLocked: false }),
+      isKeyUnreadable: vi.fn().mockReturnValue(false),
       listKeys: vi
         .fn()
         .mockResolvedValue([

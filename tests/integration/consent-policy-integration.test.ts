@@ -72,6 +72,7 @@ describe("consent policy integration", () => {
     context = {
       vault: {
         getLockState: vi.fn().mockResolvedValue({ isLocked: false }),
+        isKeyUnreadable: vi.fn().mockReturnValue(false),
         listKeys: vi
           .fn()
           .mockResolvedValue([{ id: "key-1", pubkey: PUBKEY, isSelected: true }]),
