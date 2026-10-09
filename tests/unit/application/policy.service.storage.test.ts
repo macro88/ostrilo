@@ -7,6 +7,7 @@ import { memoryStorage } from "../../helpers/vault";
 
 const A = "https://a.example";
 const B = "https://b.example";
+const KEY_A = "11111111-1111-4111-8111-111111111111";
 
 function policy(origin: string, overrides: Partial<OriginPolicy> = {}): OriginPolicy {
   return { origin, trustLevel: "low", rules: {}, updatedAt: 1, ...overrides };
@@ -27,7 +28,7 @@ describe("PolicyService stored-settings handling", () => {
 
   describe("settings stored without an origins list", () => {
     beforeEach(async () => {
-      await storage.local.set("appSettings", { __version: "settings.v1", __consentMigrations: 1 });
+      await storage.local.set("appSettings", { __version: "settings.v1", __consentMigrations: 2 });
     });
 
     it("creates a low-trust record when setting an origin policy", async () => {
@@ -45,11 +46,11 @@ describe("PolicyService stored-settings handling", () => {
 
     it("records an identity disclosure decision", async () => {
       await service.setIdentityDisclosure(A, "deny");
-      expect(await service.getIdentityDisclosure(A)).toBe("deny");
+      expect(await service.getIdentityDisclosure(A, KEY_A)).toBe("deny");
     });
 
     it("reports no disclosure decision for an unknown origin", async () => {
-      expect(await service.getIdentityDisclosure(A)).toBeUndefined();
+      expect(await service.getIdentityDisclosure(A, KEY_A)).toBeUndefined();
     });
 
     it("records a per-kind rule", async () => {
@@ -129,7 +130,7 @@ describe("PolicyService stored-settings handling", () => {
       storage.local.set = realSet;
       await service.evaluate({ origin: A, kind: 1 });
 
-      expect((await stored())?.__consentMigrations).toBe(1);
+      expect((await stored())?.__consentMigrations).toBe(2);
       expect((await stored())?.origins?.[0].trustLevel).toBe("low");
     });
   });

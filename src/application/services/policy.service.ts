@@ -9,8 +9,15 @@ import { DEFAULT_MEDIUM_ALLOW_KINDS } from "@/domain/policy/trust-definitions";
 import {
   computeGrantExpiry,
   isGrantActive,
-  resolveSessionTTLMinutes,
 } from "@/domain/policy/session-grants";
+import { migrateConsentSettings } from "@/domain/policy/consent-migration";
+import {
+  disclosureFor,
+  disclosureKeyIds,
+  withDisclosureDecision,
+  withDisclosureGrant,
+  withoutDisclosureGrant,
+} from "@/domain/policy/disclosure-grants";
 import { StorageSuite } from "@/application/ports/storage";
 import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
 import { SettingsStore } from "./settings-store";
@@ -121,29 +128,21 @@ export class PolicyService {
     origin: string,
     patch: Partial<OriginPolicy>
   ): Promise<void> {
-    const settings = await this.getSettings();
-    const origins: OriginPolicy[] = settings.origins ?? [];
-    const idx = origins.findIndex((o) => o.origin === origin);
-    const now = Math.floor(Date.now() / 1000);
-    if (idx >= 0) {
-      origins[idx] = {
-        ...origins[idx],
-        ...patch,
-        updatedAt: now,
-      } as OriginPolicy;
-    } else {
-      // A record created as a side effect of a decision starts untrusted. The
-      // caller's patch may still set a level the user actually chose.
-      origins.push({
-        origin,
-        trustLevel: "low",
-        rules: {},
-        updatedAt: now,
-        ...patch,
-      } as OriginPolicy);
-    }
-    const next = { ...settings, origins };
-    await this.putSettings(next);
+    // A disclosure `allow` names a key and a patch does not, so it is not
+    // written here: `grantIdentityDisclosure` is the only way to record one, and
+    // the key list is never taken from a patch. Any other decision withdraws
+    // every key grant with it.
+    const { identityDisclosure, ...rest } = patch;
+    delete rest.identityDisclosureKeyIds;
+    // A record created as a side effect of a decision starts untrusted (see
+    // `updateOriginRecord`). The caller's patch may still set a level the user
+    // actually chose.
+    await this.updateOriginRecord(origin, (record) => {
+      const merged = { ...record, ...rest } as OriginPolicy;
+      return identityDisclosure === undefined || identityDisclosure === "allow"
+        ? merged
+        : withDisclosureDecision(merged, identityDisclosure);
+    });
   }
 
   async removeOriginPolicy(origin: string): Promise<void> {
@@ -155,54 +154,98 @@ export class PolicyService {
   }
 
   /**
-   * Record whether an origin may read the user's public key.
+   * Record a refused or withdrawn disclosure decision for an origin.
    *
-   * Per ORIGIN, not per kind - an identity disclosure signs nothing, so there
-   * is no kind to key it on. Like `setPerKindRule`, creating a record here
-   * grants `low` trust and nothing else: a remembered decision must never also
-   * hand the origin a trust level it was not given.
+   * A refusal is per ORIGIN: it covers every key, because "this site may not
+   * know who I am" is not a statement about one identity. An `allow` is never
+   * written here - it belongs to one key; see `grantIdentityDisclosure`.
+   * Either decision drops every key grant, so a later revoke-to-ask cannot bring
+   * an old grant back.
+   *
+   * Like `setPerKindRule`, creating a record here grants `low` trust and
+   * nothing else: a remembered decision must never also hand the origin a trust
+   * level it was not given.
    */
   async setIdentityDisclosure(
     origin: string,
-    mode: Authorisation
+    mode: Exclude<Authorisation, "allow">
   ): Promise<void> {
-    const settings = await this.getSettings();
-    const origins: OriginPolicy[] = settings.origins ?? [];
-    const idx = origins.findIndex((o) => o.origin === origin);
-    const now = Math.floor(Date.now() / 1000);
-    if (idx >= 0) {
-      origins[idx] = {
-        ...origins[idx],
-        identityDisclosure: mode,
-        updatedAt: now,
-      };
-    } else {
-      origins.push({
-        origin,
-        trustLevel: "low",
-        rules: {},
-        identityDisclosure: mode,
-        updatedAt: now,
-      });
-    }
-    await this.putSettings({ ...settings, origins });
+    await this.updateOriginRecord(origin, (record) =>
+      withDisclosureDecision(record, mode)
+    );
+  }
+
+  /** Allow an origin to read one more key. Replaces a refusal; names no other key. */
+  async grantIdentityDisclosure(origin: string, keyId: string): Promise<void> {
+    await this.updateOriginRecord(origin, (record) =>
+      withDisclosureGrant(record, keyId)
+    );
   }
 
   /**
-   * The recorded disclosure decision for an origin, or undefined when none has
-   * been recorded.
+   * Withdraw one key's grant. The origin goes back to being asked about that
+   * key; its grants for other keys stand. A refusal, and a key that holds no
+   * grant, are left as they are and nothing is written.
+   */
+  async revokeIdentityDisclosureKey(
+    origin: string,
+    keyId: string
+  ): Promise<void> {
+    const settings = await this.getSettings();
+    const record = (settings.origins ?? []).find(
+      (o: OriginPolicy) => o.origin === origin
+    );
+    if (!disclosureKeyIds(record).includes(keyId)) return;
+    await this.updateOriginRecord(origin, (current) =>
+      withoutDisclosureGrant(current, keyId)
+    );
+  }
+
+  /**
+   * The disclosure decision in force for an origin AND a key, or undefined when
+   * none applies.
    *
    * UNDEFINED IS NOT CONSENT. It is the prompting state. Nothing infers consent
    * from a stored policy record, a trust level or a per-kind rule: a record is
    * written whenever a signing decision is made, INCLUDING a refusal, so its
    * existence is evidence of a decision about signing and of nothing else.
+   * `disclosureFor` is the one place that decides which key an `allow` covers.
    */
   async getIdentityDisclosure(
-    origin: string
+    origin: string,
+    keyId: string
   ): Promise<Authorisation | undefined> {
+    const read = await this.store.read<any>();
+    // A legacy `allow` has no key list until migrated, and the answer below is
+    // only right for migrated data.
+    const settings = (await this.ensureConsentMigration(read)) ?? read;
+    const origins: OriginPolicy[] = settings?.origins ?? [];
+    return disclosureFor(
+      origins.find((o) => o.origin === origin),
+      keyId
+    );
+  }
+
+  /** Read-modify-write of one origin's record, created `low` if absent. */
+  private async updateOriginRecord(
+    origin: string,
+    change: (record: OriginPolicy) => OriginPolicy
+  ): Promise<void> {
     const settings = await this.getSettings();
     const origins: OriginPolicy[] = settings.origins ?? [];
-    return origins.find((o) => o.origin === origin)?.identityDisclosure;
+    const idx = origins.findIndex((o) => o.origin === origin);
+    const now = Math.floor(Date.now() / 1000);
+    const current: OriginPolicy =
+      idx >= 0
+        ? origins[idx]
+        : { origin, trustLevel: "low", rules: {}, updatedAt: now };
+    const updated = { ...change(current), updatedAt: now };
+    if (idx >= 0) {
+      origins[idx] = updated;
+    } else {
+      origins.push(updated);
+    }
+    await this.putSettings({ ...settings, origins });
   }
 
   async setPerKindRule(
@@ -253,62 +296,31 @@ export class PolicyService {
   }
 
   /**
-   * Repair consent data written before trust levels stopped being fabricated.
-   *
-   * Every stored `medium` trust level was assigned by `setPerKindRule` or
-   * `setOriginPolicy`, not chosen by a user: no shipped UI path has ever
-   * written a trust level. `high` cannot have come from those paths, so it is
-   * left alone, and explicit per-kind rules are preserved untouched - the
-   * migration changes one field per record.
-   *
-   * Stored `allow` rules for the newly protected kinds are deliberately left in
-   * place: evaluation forces a protected kind to `ask` regardless, so they are
-   * inert, and the settings surface shows them as always requiring approval.
+   * Repair and reshape stored consent data; the steps are in
+   * `@/domain/policy/consent-migration`. Versioned and idempotent: the stamp is
+   * written with the result, so re-running is a no-op.
    *
    * @param settings - Settings already read by the caller, to avoid a second read.
    * @returns The migrated settings when a write happened, otherwise undefined.
    */
   async runConsentMigration(settings?: any): Promise<any | undefined> {
-    const current =
-      settings ?? (await this.store.read<any>());
-
-    if (!current || typeof current !== "object") {
-      // Nothing stored yet, so nothing to repair.
-      return undefined;
-    }
-
-    if (
-      typeof current.__consentMigrations === "number" &&
-      current.__consentMigrations >= CONSENT_MIGRATION_VERSION
-    ) {
-      return undefined;
-    }
-
-    const origins: any[] = Array.isArray(current.origins) ? current.origins : [];
-    const migratedOrigins = origins.map((origin) => {
-      if (!origin || typeof origin !== "object") {
-        return origin;
-      }
-      const next = { ...origin };
-      if (next.trustLevel === "medium") {
-        next.trustLevel = "low";
-      }
-      if (next.sessionGrantAll === true) {
-        // Live grant state is session storage only; a persisted `true` is stale.
-        delete next.sessionGrantAll;
-      }
-      return next;
-    });
-
-    const next = {
-      ...current,
-      origins: migratedOrigins,
-      sessionTTLMinutes: resolveSessionTTLMinutes(current.sessionTTLMinutes),
-      __consentMigrations: CONSENT_MIGRATION_VERSION,
-    };
-
+    const next = migrateConsentSettings(
+      settings ?? (await this.store.read<any>()),
+      CONSENT_MIGRATION_VERSION
+    );
+    if (!next) return undefined;
     await this.putSettings(next);
     return next;
+  }
+
+  /**
+   * Run the consent migration now. The background calls this at worker start,
+   * so the "selected key at migration time" is the one the user had when the
+   * extension was updated, not whichever they switch to before a site first
+   * asks.
+   */
+  async migrate(): Promise<void> {
+    await this.ensureConsentMigration(await this.store.read<any>());
   }
 
   /**
@@ -378,4 +390,4 @@ const SESSION_GRANTS_KEY = "sessionGrants";
  * Bumped when a new consent repair is added. A stored settings object at or
  * above this version is left alone, which is what makes re-running a no-op.
  */
-const CONSENT_MIGRATION_VERSION = 1;
+const CONSENT_MIGRATION_VERSION = 2;

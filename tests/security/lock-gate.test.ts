@@ -156,6 +156,7 @@ describe("locked behaviour at the message boundary", () => {
       "policy.setSession",
       "policy.clearSession",
       "policy.removeOrigin",
+      "policy.revokeDisclosure",
       "policy.evaluate",
     ]) {
       let reached = false;

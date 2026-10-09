@@ -254,6 +254,7 @@ export class ApprovalQueueService {
     eventIdHash?: string,
     options?: {
       signingPubkey?: string;
+      signingKeyId?: string;
       clientRequestId?: string;
       exceededAutoSignBudget?: boolean;
     }
@@ -282,6 +283,7 @@ export class ApprovalQueueService {
       createdAt: now,
       timeoutAt: now + Math.floor(this.timeoutMs / 1000),
       signingPubkey: options?.signingPubkey,
+      signingKeyId: options?.signingKeyId,
       clientRequestId: options?.clientRequestId,
       ...(options?.exceededAutoSignBudget && { exceededAutoSignBudget: true }),
     };
@@ -316,23 +318,33 @@ export class ApprovalQueueService {
   /**
    * Enqueue a request to disclose the user's public key to an origin.
    *
-   * De-duplicates on `(origin, "identity_disclosure")` rather than on an event
-   * hash - there is no event to hash. One pending disclosure prompt per origin
-   * is the correct semantics anyway: a page calling `getPublicKey` in a loop
-   * must produce one prompt, not one per call.
+   * De-duplicates on `(origin, key, "identity_disclosure")` rather than on an
+   * event hash - there is no event to hash. One pending disclosure prompt per
+   * origin and key is the correct semantics anyway: a page calling
+   * `getPublicKey` in a loop must produce one prompt, not one per call.
    *
    * `assertCapacity` and the rolling per-origin allowance still apply, so a
    * flooding origin is refused here exactly as a flooding signer is. Because
-   * the dedupe key collapses repeats from one origin into a single entry,
-   * repeated disclosure requests from that origin cannot displace a pending
+   * the dedupe key collapses repeats from one origin into a single entry per
+   * key, repeated disclosure requests from that origin cannot displace a pending
    * signing request from another.
    */
   enqueueDisclosure(
     origin: string,
     resolver: RequestResolver,
-    options?: { signingPubkey?: string; clientRequestId?: string }
+    options?: {
+      signingPubkey?: string;
+      signingKeyId?: string;
+      clientRequestId?: string;
+    }
   ): PendingRequest {
-    const dedupeKey = makeDedupeKey(origin, "identity_disclosure");
+    // One pending prompt per (origin, key). Keyed on the key as well, so a
+    // second caller that arrives after a key switch is not folded into a prompt
+    // that asked about the OTHER identity and answered with its decision.
+    const dedupeKey = makeDedupeKey(
+      origin,
+      `identity_disclosure:${options?.signingKeyId ?? ""}`
+    );
     const existingEntry = this.eventIdMap.get(dedupeKey);
     if (existingEntry) {
       existingEntry.resolvers.push(resolver);
@@ -350,6 +362,7 @@ export class ApprovalQueueService {
       createdAt: now,
       timeoutAt: now + Math.floor(this.timeoutMs / 1000),
       signingPubkey: options?.signingPubkey,
+      signingKeyId: options?.signingKeyId,
       clientRequestId: options?.clientRequestId,
     };
 

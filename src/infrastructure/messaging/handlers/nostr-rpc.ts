@@ -177,13 +177,19 @@ export class NostrRpcHandler implements RpcModule {
     if (!selection.ok) return selection.response;
     const selectedKey = selection.key;
 
-    // Recorded consent. UNDEFINED IS NOT CONSENT - it is the prompting state.
+    // Recorded consent FOR THIS KEY. A grant is bound to the key it was given
+    // for, so one the user gave for another key does not answer here - the site
+    // is asked about this one. A refusal is per origin and covers every key.
+    // UNDEFINED IS NOT CONSENT - it is the prompting state.
     // Nothing infers consent from a stored policy record, a trust level or a
     // per-kind rule: such a record is written whenever a signing decision is
     // made, INCLUDING a refusal, and `low` is the level assigned by default
     // when one is created as a side effect. So its existence is evidence of a
     // signing decision and of nothing else. No origin is grandfathered.
-    const recorded = await context.policy.getIdentityDisclosure(origin);
+    const recorded = await context.policy.getIdentityDisclosure(
+      origin,
+      selectedKey.id
+    );
 
     if (recorded === "deny") {
       // Answered without a prompt. Without this, any https origin could
@@ -212,7 +218,7 @@ export class NostrRpcHandler implements RpcModule {
       try {
         decision = await this.requestDisclosureApproval(
           origin,
-          selectedKey.pubkey,
+          selectedKey,
           message.clientRequestId
         );
       } catch (error) {
@@ -284,13 +290,14 @@ export class NostrRpcHandler implements RpcModule {
   /**
    * Queue a prompt asking whether this origin may read the public key.
    *
-   * De-duplicates on `(origin, "identity_disclosure")` inside the queue, so a
-   * page calling `getPublicKey` in a loop produces ONE prompt whose answer fans
-   * out to every waiting caller - not one prompt per call.
+   * De-duplicates on `(origin, key, "identity_disclosure")` inside the queue, so
+   * a page calling `getPublicKey` in a loop produces ONE prompt whose answer
+   * fans out to every waiting caller - not one prompt per call. A caller that
+   * arrives after a key switch gets its own prompt, never the old one's answer.
    */
   private async requestDisclosureApproval(
     origin: string,
-    pubkey: string,
+    key: KeyRecord,
     clientRequestId?: string
   ): Promise<ApprovalDecision | "timeout"> {
     await this.approvalQueue!.ready();
@@ -307,7 +314,11 @@ export class NostrRpcHandler implements RpcModule {
             resolve(decision);
           }
         },
-        { signingPubkey: pubkey, clientRequestId }
+        {
+          signingPubkey: key.pubkey,
+          signingKeyId: key.id,
+          clientRequestId,
+        }
       );
 
       this.openApprovalPopup(pendingRequest.id).catch((err) => {
@@ -445,6 +456,7 @@ export class NostrRpcHandler implements RpcModule {
           message.origin,
           event,
           pubkey,
+          selectedKey.id,
           eventIdHash,
           message.clientRequestId,
           overAutoSignBudget
@@ -650,6 +662,7 @@ export class NostrRpcHandler implements RpcModule {
     origin: string,
     event: UnsignedEvent,
     pubkey: string,
+    keyId: string,
     eventIdHash: string,
     clientRequestId?: string,
     exceededAutoSignBudget = false
@@ -677,7 +690,12 @@ export class NostrRpcHandler implements RpcModule {
         // The key that will actually sign, bound to the request here, so the
         // dialog cannot show a different one if the user switches keys while
         // the prompt is open.
-        { signingPubkey: pubkey, clientRequestId, exceededAutoSignBudget }
+        {
+          signingPubkey: pubkey,
+          signingKeyId: keyId,
+          clientRequestId,
+          exceededAutoSignBudget,
+        }
       );
 
       // Open approval popup

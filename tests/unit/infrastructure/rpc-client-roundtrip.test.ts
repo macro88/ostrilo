@@ -192,6 +192,18 @@ describe("policy through the client", () => {
     expect((await client.evaluatePolicy(SITE, 7)).mode).toBe("allow");
   });
 
+  it("revokes one key's disclosure grant and leaves the site's other grants", async () => {
+    await client.importKey(SECRET_TWO, STRONG_PASSWORD);
+    const [a, b] = await vault.listKeys();
+    await policy.grantIdentityDisclosure(SITE, a.id);
+    await policy.grantIdentityDisclosure(SITE, b.id);
+
+    await client.policyRevokeDisclosure(SITE, a.id);
+
+    expect(await policy.getIdentityDisclosure(SITE, a.id)).toBeUndefined();
+    expect(await policy.getIdentityDisclosure(SITE, b.id)).toBe("allow");
+  });
+
   it("writes kind rules, session grants and removal", async () => {
     await client.policySetKindRule(SITE, 7, "deny");
     expect((await client.evaluatePolicy(SITE, 7)).mode).toBe("deny");
@@ -202,7 +214,9 @@ describe("policy through the client", () => {
     expect(await client.policyGetSessionGrants()).toEqual([]);
 
     await client.policyRemoveOrigin(SITE);
-    expect(await policy.getIdentityDisclosure(SITE)).toBeUndefined();
+    expect(
+      await policy.getIdentityDisclosure(SITE, (await vault.listKeys())[0].id)
+    ).toBeUndefined();
     expect((await client.evaluatePolicy(SITE, 7)).mode).toBe("ask");
   });
 });

@@ -68,6 +68,8 @@ export type RpcRequest =
       password?: string;
     }
   | { type: "policy.removeOrigin"; origin: string }
+  // Withdraws one key's disclosure grant for a site, leaving its other grants.
+  | { type: "policy.revokeDisclosure"; origin: string; keyId: string }
   | { type: "crypto.evaluatePassword"; password: string; label?: string }
   | { type: "crypto.parsePrivateKey"; keyInput: string }
   // NIP-07 Nostr operations

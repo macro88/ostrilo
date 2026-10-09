@@ -131,6 +131,9 @@ describe("signing that needs approval", () => {
     expect(await verifies(event)).toBe(true);
     expect((await storedPolicy(SITE))?.rules[REACTION]).toBe("allow");
     expect((await storedPolicy(SITE))?.identityDisclosure).toBe("allow");
+    expect((await storedPolicy(SITE))?.identityDisclosureKeyIds).toEqual([
+      (await vault.listKeys())[0].id,
+    ]);
     expect(windowsClosed).toBe(1);
   });
 
@@ -324,7 +327,9 @@ describe("identity disclosure through the approval queue", () => {
 
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.APPROVAL_FAILED);
     expect(JSON.stringify(res)).not.toContain(PUBKEY_ONE);
-    expect(await policy.getIdentityDisclosure(SITE)).toBeUndefined();
+    expect(
+      await policy.getIdentityDisclosure(SITE, (await vault.listKeys())[0].id)
+    ).toBeUndefined();
   });
 
   it("remembers an allowed disclosure per origin without writing a kind rule", async () => {
@@ -338,7 +343,11 @@ describe("identity disclosure through the approval queue", () => {
     );
 
     expect(dataOf(await pending)).toEqual({ pubkey: PUBKEY_ONE });
-    expect(await storedPolicy(SITE)).toMatchObject({ identityDisclosure: "allow", rules: {} });
+    expect(await storedPolicy(SITE)).toMatchObject({
+      identityDisclosure: "allow",
+      identityDisclosureKeyIds: [(await vault.listKeys())[0].id],
+      rules: {},
+    });
   });
 
   it("remembers a refused disclosure so the next request is answered without a prompt", async () => {

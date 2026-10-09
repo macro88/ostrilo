@@ -212,7 +212,7 @@ describe("selection that no longer exists", () => {
     const records = await world.vault.listKeys();
     const settings = await world.storage.local.get<Record<string, unknown>>("appSettings");
     await world.storage.local.set("appSettings", { ...settings, selectedKeyId: "deleted-key" });
-    await world.context.policy.setIdentityDisclosure("https://site.example", "allow");
+    await world.context.policy.grantIdentityDisclosure("https://site.example", records[0].id);
     await world.context.policy.setPerKindRule("https://site.example", 7, "allow");
     await world.vault.unlock(STRONG_PASSWORD);
     return { world, records };

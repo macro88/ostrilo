@@ -372,7 +372,7 @@ export function subscribeSettingsChanged(cb: () => void) {
 
 /**
  * `password` is required only when the patch raises trust to `high` or sets
- * `identityDisclosure` to `allow`. Per-kind rules go through
+ * `identityDisclosure` to `allow`, which grants the key selected at the time. Per-kind rules go through
  * `policySetKindRule`, and session grants through `policySetSession`.
  */
 export async function policySetOrigin(
@@ -419,6 +419,11 @@ export async function policySetSession(
 
 export async function policyRemoveOrigin(origin: string) {
   return rpc<null>({ type: "policy.removeOrigin", origin });
+}
+
+/** Withdraws one key's public-key grant for a site. Not password-gated. */
+export async function policyRevokeDisclosure(origin: string, keyId: string) {
+  return rpc<null>({ type: "policy.revokeDisclosure", origin, keyId });
 }
 
 /**

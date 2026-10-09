@@ -229,7 +229,7 @@ export default defineBackground(() => {
     settingsStore
       .migrate()
       .catch((err) => console.warn("[Background] settings migration failed", err));
-  void migrateSettings();
+  const settingsMigrated = migrateSettings();
   browser.runtime.onStartup.addListener(() => void migrateSettings());
   browser.runtime.onInstalled.addListener(() => void migrateSettings());
   const vault = new KeyVaultService(
@@ -242,6 +242,12 @@ export default defineBackground(() => {
     settingsStore
   );
   const policy = new PolicyService(storage, settingsStore);
+  // Reshapes stored consent once settings are in local storage. At worker start
+  // rather than on first use: it binds an old disclosure grant to the key
+  // selected NOW, and the user must not be able to switch keys first.
+  void settingsMigrated
+    .then(() => policy.migrate())
+    .catch((err) => console.warn("[Background] consent migration failed", err));
   const settings = new SettingsService(storage, settingsStore);
   const activityLog = new ActivityLogService(storage.local);
 

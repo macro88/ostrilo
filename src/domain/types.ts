@@ -161,8 +161,22 @@ export interface OriginPolicy {
    * `low` is the level assigned by default when a record is created as a side
    * effect. So an existing record is evidence of a signing decision and of
    * nothing else. Every origin prompts once on next use.
+   *
+   * `deny` is per ORIGIN and covers every key. `allow` is per KEY: it is only
+   * ever in force for the key ids listed in `identityDisclosureKeyIds`, and an
+   * `allow` that names no key discloses nothing.
    */
   identityDisclosure?: Authorisation;
+  /**
+   * The key ids this origin has been allowed to read, when `identityDisclosure`
+   * is `allow`.
+   *
+   * Key ids, not public keys: the id is the vault's own immutable handle, so a
+   * grant cannot follow a key that was deleted and re-imported - that key asks
+   * again. Present only alongside `allow`; absent on a legacy record, where the
+   * migration binds it to the key selected at the time.
+   */
+  identityDisclosureKeyIds?: string[];
   updatedAt: number;
 }
 
@@ -680,6 +694,12 @@ export interface PendingRequest {
    * thing they were about to authorize.
    */
   signingPubkey?: string;
+  /**
+   * The id of the key `signingPubkey` belongs to, captured with it. A
+   * remembered approval binds to this key id, so switching keys while a prompt
+   * is open cannot move the grant onto the new selection.
+   */
+  signingKeyId?: string;
   /**
    * The page-side correlation id, when the request came from a web page.
    *
