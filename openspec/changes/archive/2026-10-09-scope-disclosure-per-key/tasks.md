@@ -26,4 +26,4 @@
 
 - [x] 4.1 `docs/roadmap.md` (SEC-026 and its residual), `docs/agent-loop.md`
 - [x] 4.2 Chrome e2e: key switch through a real page and approval window (`tests/e2e/identity-disclosure.spec.ts`)
-- [ ] 4.3 Archive this change (Task 14 of phase 0.10)
+- [x] 4.3 Archive this change (Task 14 of phase 0.10)
