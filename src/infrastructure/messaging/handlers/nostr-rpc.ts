@@ -334,6 +334,13 @@ export class NostrRpcHandler implements RpcModule {
 
       if (outcome !== "allow") {
         await this.recordDisclosureRefusal(context, origin, refusalReason(outcome));
+        // A lock killed the prompt: the page is told the vault is locked, so it
+        // can ask again after an unlock instead of reading a refusal.
+        if (outcome === "vault_locked") {
+          return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+            method: message.type,
+          });
+        }
         return createRpcErrorResponse(RPC_ERROR_CODES.DISCLOSURE_REFUSED, {
           details: "You refused to share your public key with this site.",
           method: message.type,
@@ -558,6 +565,12 @@ export class NostrRpcHandler implements RpcModule {
             reason: refusalReason(outcome),
             contentPreview: event.content.substring(0, 100),
           });
+
+          if (outcome === "vault_locked") {
+            return createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+              method: message.type,
+            });
+          }
 
           return createRpcErrorResponse(RPC_ERROR_CODES.DENIED, {
             details: "user rejected",

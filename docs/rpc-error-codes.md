@@ -92,7 +92,7 @@ A retry after `approval_failed` reports whether the vault is locked. The page-si
 
 ### Authorization
 
-- `locked`: the operation needs the keys and the vault is locked. A page request refused while locked also raises the toolbar badge; it does not open the unlock popup.
+- `locked`: the operation needs the keys and the vault is locked. This includes a request whose approval prompt was open when the vault locked: the page hears `locked`, not `denied` or `disclosure_refused`, so it can ask again after an unlock. A page request refused while locked also raises the toolbar badge; it does not open the unlock popup.
 - `denied`: policy or the user refused this operation. Distinct from `disclosure_refused`: a refused signature is about one event, so a different event is a reasonable retry.
 - `disclosure_refused`: the user refused to disclose the public key to this origin, or a refusal is remembered for it and no prompt is shown. Retrying only burns the origin's rate allowance.
 - `needs_approval`: the request needs the user's approval and no approval queue is available.

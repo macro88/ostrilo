@@ -267,7 +267,8 @@ describe("signing that needs approval", () => {
 
     const res = await nostr.handleRequest(signRequest(), context);
 
-    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.DENIED);
+    // `clear()` is what a lock does to the queue, so the page hears `locked`.
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.LOCKED);
     expect(browserBoundary.badgeTexts).toEqual([""]);
   });
 
@@ -380,7 +381,9 @@ describe("why a refused signing request was refused", () => {
     // What the background does on lock.
     queue.clear();
 
-    expect(errorCodeOf(await pending)).toBe(RPC_ERROR_CODES.DENIED);
+    // `locked`, not `denied`: a dapp retries after an unlock, and does not
+    // retry a refusal the user chose.
+    expect(errorCodeOf(await pending)).toBe(RPC_ERROR_CODES.LOCKED);
     expect(await reasonLogged()).toMatchObject({ decision: "deny", reason: "vault_locked" });
     expect(await logged()).toBe(1);
   });
@@ -437,7 +440,7 @@ describe("why a refused signing request was refused", () => {
 
     queue.clear();
 
-    expect(errorCodeOf(await pending)).toBe(RPC_ERROR_CODES.DISCLOSURE_REFUSED);
+    expect(errorCodeOf(await pending)).toBe(RPC_ERROR_CODES.LOCKED);
     expect(await reasonLogged()).toMatchObject({
       operation: "identity_disclosure",
       decision: "deny",

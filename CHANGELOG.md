@@ -55,6 +55,11 @@ been set for them.
 
 ### Fixed
 
+- **A lock while a request was waiting for you now reaches the site as "locked",
+  not as a refusal.** If the vault locked with a signature or public-key prompt
+  open, the site was told you had said no, and it could not tell that from a
+  real refusal. It now hears that the vault is locked and can ask again after
+  you unlock. The activity log already recorded the lock as the reason.
 - **A 35-minute auto-lock now lasts 35 minutes.** The browser ends an idle
   extension background after about half a minute, and the unlocked keys live
   only in that background's memory, so with every Ostrilo window closed the
