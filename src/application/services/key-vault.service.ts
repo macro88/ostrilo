@@ -33,7 +33,11 @@ import { CRYPTO_CONSTANTS } from "@/domain/crypto/constants";
 import { bytesToHex, hexToBytes, isValidHex } from "@/domain/utils/hex";
 import { zeroize } from "@/domain/utils/memory";
 import { SerialLock } from "@/domain/utils/serial-lock";
-import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
+import {
+  SETTINGS_CHANGED_EVENT,
+  defaultSettings,
+  freshInstallSettings,
+} from "./settings.service";
 import {
   ROTATION_JOURNAL_STORAGE,
   isRotationJournal,
@@ -502,7 +506,7 @@ export class KeyVaultService {
       if (!hasSelected && records.length === 0) {
         record.isSelected = true;
         // also set selectedKeyId in settings
-        const settings = (await this.getSettings()) ?? defaultSettings();
+        const settings = (await this.getSettings()) ?? freshInstallSettings();
         await this.settingsStore.write<AppSettingsV1>({
           ...defaultSettings(),
           ...settings,
@@ -564,7 +568,7 @@ export class KeyVaultService {
         records.find((r) => r.isSelected)?.id;
       if (!hasSelected && records.length === 0) {
         record.isSelected = true;
-        const settings = (await this.getSettings()) ?? defaultSettings();
+        const settings = (await this.getSettings()) ?? freshInstallSettings();
         await this.settingsStore.write<AppSettingsV1>({
           ...defaultSettings(),
           ...settings,
@@ -587,7 +591,7 @@ export class KeyVaultService {
 
   private async selectKeyNow(id: string): Promise<void> {
     // Update selectedKeyId in settings
-    const settings = (await this.getSettings()) ?? defaultSettings();
+    const settings = (await this.getSettings()) ?? freshInstallSettings();
     await this.settingsStore.write<AppSettingsV1>({
       ...defaultSettings(),
       ...settings,

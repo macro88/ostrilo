@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { KeyVaultService } from "@/application/services/key-vault.service";
-import { SETTINGS_CHANGED_EVENT, defaultSettings } from "@/application/services/settings.service";
+import { SETTINGS_CHANGED_EVENT, defaultSettings, freshInstallSettings } from "@/application/services/settings.service";
 import type { CryptoAead, CryptoKdf, SecretBytes } from "@/application/ports/crypto";
 import type { StorageSuite } from "@/application/ports/storage";
 import {
@@ -394,7 +394,7 @@ describe("KeyVaultService failure and edge paths", () => {
       await vault.selectKey(record.id);
 
       expect(await settings()).toEqual({
-        ...defaultSettings(),
+        ...freshInstallSettings(),
         selectedKeyId: record.id,
       });
     });

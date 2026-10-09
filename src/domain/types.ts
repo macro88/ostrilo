@@ -204,6 +204,8 @@ export interface AppSettingsV1 {
   uploadEndpoint?: string;
   onboardingCompleted?: boolean; // track if user completed onboarding
   onboardingCompletedAt?: number; // epoch seconds when onboarding was completed
+  /** Consent-migration version already applied; absent means none has run. */
+  __consentMigrations?: number;
 }
 
 /**

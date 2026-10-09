@@ -10,7 +10,10 @@ import {
   computeGrantExpiry,
   isGrantActive,
 } from "@/domain/policy/session-grants";
-import { migrateConsentSettings } from "@/domain/policy/consent-migration";
+import {
+  CONSENT_MIGRATION_VERSION,
+  migrateConsentSettings,
+} from "@/domain/policy/consent-migration";
 import {
   disclosureFor,
   disclosureKeyIds,
@@ -19,7 +22,7 @@ import {
   withoutDisclosureGrant,
 } from "@/domain/policy/disclosure-grants";
 import { StorageSuite } from "@/application/ports/storage";
-import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
+import { SETTINGS_CHANGED_EVENT, freshInstallSettings } from "./settings.service";
 import { SettingsStore } from "./settings-store";
 
 export class PolicyService {
@@ -108,7 +111,7 @@ export class PolicyService {
 
   private async getSettings(): Promise<any> {
     return (
-      (await this.store.read<any>()) ?? defaultSettings()
+      (await this.store.read<any>()) ?? freshInstallSettings()
     );
   }
 
@@ -385,9 +388,3 @@ export class PolicyService {
 }
 
 const SESSION_GRANTS_KEY = "sessionGrants";
-
-/**
- * Bumped when a new consent repair is added. A stored settings object at or
- * above this version is left alone, which is what makes re-running a no-op.
- */
-const CONSENT_MIGRATION_VERSION = 2;

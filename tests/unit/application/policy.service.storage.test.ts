@@ -3,7 +3,8 @@ import { PolicyService } from "@/application/services/policy.service";
 import type { StorageSuite } from "@/application/ports/storage";
 import type { AppSettingsV1, OriginPolicy } from "@/domain/types";
 import { DEFAULT_MEDIUM_ALLOW_KINDS } from "@/domain/policy/trust-definitions";
-import { memoryStorage } from "../../helpers/vault";
+import { SettingsService } from "@/application/services/settings.service";
+import { memoryStorage, testVault, TEST_VAULT_PASSWORD } from "../../helpers/vault";
 
 const A = "https://a.example";
 const B = "https://b.example";
@@ -110,6 +111,51 @@ describe("PolicyService stored-settings handling", () => {
       });
 
       expect(migrated?.origins).toEqual([null, 7, policy(A)]);
+    });
+
+    describe("a fresh install", () => {
+      /** A worker restart: a new service over the same storage, started by `migrate()`. */
+      const restartWorker = () => new PolicyService(storage).migrate();
+
+      it("does not migrate again, so an origin the user set to medium is not lowered", async () => {
+        // Worker start on a fresh install: no settings yet, so nothing to migrate.
+        await service.migrate();
+        await testVault(storage).vault.generateKey(TEST_VAULT_PASSWORD, "first");
+        await service.setOriginPolicy(A, { trustLevel: "medium" });
+
+        await restartWorker();
+
+        expect((await stored())?.__consentMigrations).toBe(2);
+        expect((await stored())?.origins?.[0]).toMatchObject({
+          origin: A,
+          trustLevel: "medium",
+        });
+      });
+
+      it("is stamped when settings are first written by the settings page", async () => {
+        await service.migrate();
+        await new SettingsService(storage).get();
+        await service.setOriginPolicy(A, { trustLevel: "medium" });
+
+        await restartWorker();
+
+        expect((await stored())?.origins?.[0].trustLevel).toBe("medium");
+      });
+
+      it("still migrates an upgrader whose stored settings carry no stamp, after a key is selected", async () => {
+        await storage.local.set("appSettings", {
+          __version: "settings.v1",
+          origins: [policy(A, { trustLevel: "medium" })],
+        });
+        const { vault } = testVault(storage);
+        await vault.generateKey(TEST_VAULT_PASSWORD, "first");
+        expect((await stored())?.__consentMigrations).toBeUndefined();
+
+        await restartWorker();
+
+        expect((await stored())?.__consentMigrations).toBe(2);
+        expect((await stored())?.origins?.[0].trustLevel).toBe("low");
+      });
     });
 
     it("keeps evaluating when the migration write fails, and retries on the next call", async () => {

@@ -2,6 +2,12 @@ import { wellFormedKeyIds } from "./disclosure-grants";
 import { resolveSessionTTLMinutes } from "./session-grants";
 
 /**
+ * Bumped when a new consent repair is added. A stored settings object at or
+ * above this version is left alone, which is what makes re-running a no-op.
+ */
+export const CONSENT_MIGRATION_VERSION = 2;
+
+/**
  * The consent migration. Versioned: each step runs once, for a settings object
  * stamped below the version that introduced it (repair of trust levels: 1,
  * disclosure binding: 2), and the stamp is written with the result.
