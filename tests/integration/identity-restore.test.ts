@@ -11,6 +11,7 @@ import {
 } from "@/infrastructure/messaging/handlers/vault-rpc";
 import { lockedProjectionFor } from "@/infrastructure/messaging/rpc-router";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
+import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import { memoryStorage, testVault } from "../helpers/vault";
@@ -206,16 +207,53 @@ describe.each(VAULTS)("a vault with %s", (_name, setup) => {
 });
 
 describe("selection that no longer exists", () => {
-  it("falls back to the first key, and leaves every record as it was", async () => {
+  async function missingSelection() {
     const world = await build(VAULTS[2][1]);
     const records = await world.vault.listKeys();
     const settings = await world.storage.local.get<Record<string, unknown>>("appSettings");
     await world.storage.local.set("appSettings", { ...settings, selectedKeyId: "deleted-key" });
-
+    await world.context.policy.setIdentityDisclosure("https://site.example", "allow");
+    await world.context.policy.setPerKindRule("https://site.example", 7, "allow");
     await world.vault.unlock(STRONG_PASSWORD);
+    return { world, records };
+  }
+
+  it("falls back to the first key, and changes nothing in a record but which one is selected", async () => {
+    const { world, records } = await missingSelection();
 
     expect((await lockStateOf(world)).selectedKeyId).toBe(records[0].id);
-    expect(await world.vault.listKeys()).toEqual(records as KeyRecord[]);
+    const after = await world.vault.listKeys();
+    const unflagged = (list: KeyRecord[]) => list.map(({ isSelected: _s, ...rest }) => rest);
+    expect(unflagged(after)).toEqual(unflagged(records as KeyRecord[]));
+    expect(after.map((k) => k.isSelected)).toEqual(records.map((_, i) => i === 0));
+  });
+
+  it("persists the fallback, so the UI and a page resolve the same key", async () => {
+    const { world, records } = await missingSelection();
+    const nostr = new NostrRpcHandler(undefined, async () => 1);
+    const first = records[0];
+
+    expect((await world.vault.getSettings())?.selectedKeyId).toBe(first.id);
+    expect((await lockStateOf(world)).selectedKeyId).toBe(first.id);
+    const page = dataOf<{ pubkey: string } | string>(
+      await nostr.handleRequest(
+        { type: "nostr.getPublicKey", origin: "https://site.example" },
+        world.context
+      )
+    );
+    expect(typeof page === "string" ? page : page.pubkey).toBe(first.pubkey);
+    const signed = dataOf<{ event: SignedEvent }>(
+      await nostr.handleRequest(
+        {
+          type: "nostr.signEvent",
+          origin: "https://site.example",
+          event: { kind: 7, created_at: 1_700_000_000, tags: [], content: "x" },
+        },
+        world.context
+      )
+    ).event;
+    expect(signed.pubkey).toBe(first.pubkey);
+    expect(verifies(signed)).toBe(true);
   });
 
   it("creates no key when the password is wrong", async () => {
@@ -278,6 +316,43 @@ describe("a selected key that could not be opened", () => {
 
     expect(signed.pubkey).toBe(healthy.pubkey);
     expect(verifies(signed)).toBe(true);
+  });
+
+  it("raises no approval and stores no rule for a request it cannot sign", async () => {
+    const { world } = await damagedSelection();
+    // A kind with no remembered rule is the "ask" case: the approval window is
+    // what the user would be shown for an event that can never be signed.
+    const queue = new ApprovalQueueService();
+    const nostr = new NostrRpcHandler(queue, async () => 1);
+    const before = await world.storage.local.get<{ origins?: unknown[] }>("appSettings");
+
+    const res = await nostr.handleRequest(
+      {
+        type: "nostr.signEvent",
+        origin: "https://other.example",
+        event: { kind: 1, created_at: 1_700_000_000, tags: [], content: "ask" },
+      },
+      world.context
+    );
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
+    expect(queue.count()).toBe(0);
+    const after = await world.storage.local.get<{ origins?: unknown[] }>("appSettings");
+    expect(after?.origins).toEqual(before?.origins);
+    queue.clear();
+  });
+
+  it("signs for an omitted key ID with the selected key, never the first key", async () => {
+    const world = await build(VAULTS[2][1]);
+    await world.vault.unlock(STRONG_PASSWORD);
+    const hash = "ab".repeat(32);
+    const { sigHex, keyId } = await world.vault.sign(hash);
+    const selected = (await world.vault.listKeys()).find((k) => k.id === world.expectedSelectedId)!;
+
+    expect(keyId).toBe(world.expectedSelectedId);
+    expect(
+      NobleSchnorr.verify(hexToBytes(sigHex), hexToBytes(hash), hexToBytes(selected.pubkey))
+    ).toBe(true);
   });
 
   it("does not disclose the public key of a key that cannot sign", async () => {
