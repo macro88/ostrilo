@@ -122,6 +122,19 @@ export function EventDetailView({
           sentence={describeSigningConsequence(request.event.kind)}
         />
 
+        {request.exceededAutoSignBudget && (
+          // Without this a site shown as Trusted that suddenly needs approval
+          // reads as a fault, and the user cannot tell a busy site from a
+          // flooding one.
+          <output
+            className="block rounded-[10px] bg-[var(--ink-amber-soft)] px-3 py-2 text-xs font-semibold leading-[1.45] text-[var(--ink-amber)]"
+            data-testid="auto-sign-budget-notice"
+          >
+            This site went over its automatic-signing limit for the past
+            minute. Requests beyond it need your approval.
+          </output>
+        )}
+
         <section className="ink-card" aria-label="Request facts">
           <SigningAsRow
             pubkey={signingPubkey}

@@ -478,3 +478,54 @@ describe("EventDetailView payload sections", () => {
     expect(scope.hidden).toBe(false);
   });
 });
+
+describe("EventDetailView automatic-signing budget notice", () => {
+  function renderOverBudget(over: boolean) {
+    const onResolve = vi.fn();
+    const request = {
+      ...makeRequest(7),
+      ...(over && { exceededAutoSignBudget: true as const }),
+    };
+    const container = render(
+      <EventDetailView
+        request={request}
+        signingKey={null}
+        countdown={30}
+        originTrust="trusted"
+        onResolve={onResolve as (action: ApprovalAction) => void}
+        onBack={vi.fn()}
+      />
+    );
+    return { container, onResolve };
+  }
+
+  it("says the site went over its automatic-signing limit when it did", () => {
+    const { container } = renderOverBudget(true);
+    const notice = container.querySelector(
+      "[data-testid='auto-sign-budget-notice']"
+    );
+
+    expect(notice?.textContent).toContain("went over its automatic-signing limit");
+    expect(notice?.textContent).toContain("need your approval");
+    // The trust chip is unchanged: the site is still trusted, and the notice is
+    // what explains why it is being asked anyway.
+    expect(container.textContent).toContain("Trusted");
+  });
+
+  it("shows no notice for an ordinary request", () => {
+    const { container } = renderOverBudget(false);
+
+    expect(
+      container.querySelector("[data-testid='auto-sign-budget-notice']")
+    ).toBeNull();
+  });
+
+  it("does not change what approving does", () => {
+    const { container, onResolve } = renderOverBudget(true);
+
+    settleApprove();
+    click(findButton(container, "Approve & sign"));
+
+    expect(onResolve).toHaveBeenCalledWith("allow_once");
+  });
+});

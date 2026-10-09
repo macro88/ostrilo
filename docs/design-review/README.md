@@ -365,3 +365,37 @@ capture comes last and the step resets the shared throttle afterwards, so
 - `tests/unit/ui/components/dialogs/ChangePasswordDialog.test.tsx` — 11 passed.
 - `tests/e2e/security-settings.spec.ts` — 11 passed, including the end-to-end change.
 - Light capture — 41 screenshots. Dark capture — 41 screenshots.
+
+# Review: automatic-signing limit notice
+
+Date: 2026-10-09
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §6 (banned patterns), §7 (Warnings), §8 (approval surface), §12 (PR checklist)
+Build reviewed: production (`pnpm run agent:loop:prod`), both themes, populated state: a trusted (high trust) site with a remembered allow rule that had just used its 60 automatic signatures.
+
+## What changed
+
+A request over a site's automatic-signing budget goes to the approval window like an
+unremembered one. The signing prompt gains one amber line under the origin block:
+"This site went over its automatic-signing limit for the past minute. Requests beyond
+it need your approval." Without it a site still carrying the mint TRUSTED chip that
+suddenly needs approval reads as a fault.
+
+## Findings
+
+- The line reuses the §7 warning panel already used for hidden characters on the same
+  screen (`--ink-amber-soft` fill, amber text, radius 10, no border, no rail). No new
+  component, colour or icon.
+- Both themes: the panel keeps its contrast on Deep Ink and the amber role reads as a
+  note, not an error. The TRUSTED chip is unchanged on purpose: the site is still trusted
+  and the line explains why it is being asked.
+- The line is absent for an ordinary prompt (unit test), and approving still resolves as
+  `allow_once` (unit test).
+- Not covered: the full screenshot runner was not extended or re-run for this change. The
+  capture came from a scratch spec at the default 960x640 approval size; the narrow,
+  single-pane approval layout was not photographed.
+
+## Verification
+
+- `tests/unit/ui/features/approval/event-detail-view.test.tsx` passed.
+- `tests/e2e/auto-sign-budget.spec.ts`: 60 silent signatures, then the 61st opens the
+  approval window with the notice and signs on approval.
