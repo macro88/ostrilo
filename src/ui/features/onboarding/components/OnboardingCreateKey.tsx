@@ -1,10 +1,8 @@
-import { describeViolation } from "@/domain/utils/password-policy";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import {
   generateKey as rpcGenerateKey,
   unlockVault,
-  evaluatePasswordStrength,
   revealKey,
   markKeyBackupVerified,
 } from "@/infrastructure/messaging/client";
@@ -17,6 +15,7 @@ import {
   useExpiringClipboard,
 } from "../backup/useExpiringClipboard";
 import type { KeyBackupPayload } from "@/ui/features/backup/key-backup-envelope";
+import { newPasswordProblem } from "../validate-new-password";
 import { userFacingError } from "@/ui/lib/user-facing-error";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
@@ -192,46 +191,11 @@ export function OnboardingCreateKey({
   }, []);
 
   const validatePassword = async () => {
-    if (!state.password) {
-      dispatch({ type: "setPasswordError", value: "Password is required" });
-      return false;
-    }
-
-    if (state.password !== state.confirmPassword) {
-      dispatch({ type: "setPasswordError", value: "Passwords do not match" });
-      return false;
-    }
-
-    try {
-      // The verdict comes from the background, which has the blocklist, so
-      // `acceptable` is authoritative. A score threshold here would drop the
-      // domain predicate's length term and accept "Aa1!" as a vault password.
-      const strength = await evaluatePasswordStrength(state.password);
-      if (!strength.acceptable) {
-        dispatch({
-          type: "setPasswordError",
-          value:
-            strength.violations.length > 0
-              ? describeViolation(strength.violations[0])
-              : "Password does not meet the policy.",
-        });
-        return false;
-      }
-    } catch {
-      dispatch({
-        type: "setPasswordError",
-        value: "Could not validate password strength",
-      });
-      return false;
-    }
-
-    if (!state.keyName.trim()) {
-      dispatch({ type: "setPasswordError", value: "Key name is required" });
-      return false;
-    }
-
-    dispatch({ type: "setPasswordError", value: "" });
-    return true;
+    const problem =
+      (await newPasswordProblem(state.password, state.confirmPassword)) ||
+      (state.keyName.trim() ? "" : "Key name is required");
+    dispatch({ type: "setPasswordError", value: problem });
+    return problem === "";
   };
 
   const handleGenerateKey = async () => {
