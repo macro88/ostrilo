@@ -661,8 +661,12 @@ export class KeyVaultService {
     let newSelectedKeyId: string | undefined;
 
     if (settings?.selectedKeyId === id) {
-      // A key always remains: deleting the last one is refused above.
-      newSelectedKeyId = updatedRecords[0].id;
+      // A key always remains: deleting the last one is refused above. One the
+      // last unlock could open is preferred, so the user is not left selecting
+      // a key that cannot sign; the first record stands in when none opened.
+      newSelectedKeyId = (
+        updatedRecords.find((r) => !this.unreadable.has(r.id)) ?? updatedRecords[0]
+      ).id;
       await this.selectKeyNow(newSelectedKeyId);
     }
 

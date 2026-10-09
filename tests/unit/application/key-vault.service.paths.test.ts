@@ -470,6 +470,25 @@ describe("KeyVaultService failure and edge paths", () => {
       });
     });
 
+    it("falls back to the first readable key, not an unreadable one, when the selected key is deleted", async () => {
+      const a = await vault.importKey(SK_A, PASSWORD);
+      const damaged = await vault.importKey(SK_B, PASSWORD);
+      const c = await vault.importKey("33".repeat(32), PASSWORD);
+      await storage.local.set(
+        "encryptedKeys",
+        (await keys()).map((r) =>
+          r.id === damaged.id ? { ...r, pubkey: pubkeyOf(SK_A) } : r
+        )
+      );
+      await vault.unlock(PASSWORD);
+      expect(vault.isKeyUnreadable(damaged.id)).toBe(true);
+
+      const result = await vault.deleteKey(a.id);
+
+      expect(result.newSelectedKeyId).toBe(c.id);
+      expect((await settings())?.selectedKeyId).toBe(c.id);
+    });
+
     it("keeps the selection when deleting a key that is not selected", async () => {
       const a = await vault.importKey(SK_A, PASSWORD);
       const b = await vault.importKey(SK_B, PASSWORD);
