@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/ui/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { Check, Copy, Pencil, Trash2, X } from "lucide-react";
+import { Check, Copy, Download, Pencil, Trash2, X } from "lucide-react";
+import type { KeyBackupStatus } from "@/domain/backup/status";
 
 export interface KeyRecord {
   id: string;
@@ -35,7 +36,13 @@ interface KeySelectorCardProps {
   onSelectKey?: (keyId: string) => void;
   onRename?: (keyId: string, newLabel: string) => void;
   onDelete?: (keyId: string) => void;
+  /** Marks a key whose backup is `pending`. Absent: no marker is drawn. */
+  backupStatusOf?: (keyId: string) => KeyBackupStatus;
+  onBackup?: (keyId: string) => void;
 }
+
+const UNREADABLE_BACKUP_HINT =
+  "This key's record could not be read, so there is nothing to back up.";
 
 /** `npub1ppgfek6a…772ha9`: mono, middle-truncated, copyable (DESIGN_RULES §7). */
 function truncateNpub(npub: string): string {
@@ -59,6 +66,8 @@ export function KeySelectorCard({
   onSelectKey,
   onRename,
   onDelete,
+  backupStatusOf,
+  onBackup,
 }: KeySelectorCardProps) {
   const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
@@ -186,6 +195,11 @@ export function KeySelectorCard({
                     {isActive && (
                       <span className="seal-chip seal-chip-success">Active</span>
                     )}
+                    {backupStatusOf?.(key.id) === "pending" && (
+                      <span className="seal-chip seal-chip-warning">
+                        No backup
+                      </span>
+                    )}
                   </div>
                   {key.isUnreadable ? (
                     /*
@@ -236,6 +250,20 @@ export function KeySelectorCard({
                     className="h-8 px-3 text-xs"
                   >
                     Set Active
+                  </Button>
+                )}
+                {onBackup && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onBackup(key.id)}
+                    disabled={key.isUnreadable}
+                    title={key.isUnreadable ? UNREADABLE_BACKUP_HINT : undefined}
+                    className="h-8 px-3 text-xs"
+                    aria-label={`Back up ${displayName}`}
+                  >
+                    <Download aria-hidden="true" />
+                    Back up
                   </Button>
                 )}
                 {onRename && (

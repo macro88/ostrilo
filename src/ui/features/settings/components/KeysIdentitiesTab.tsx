@@ -20,6 +20,9 @@ import { ImportKeyForm } from "@/ui/components/dialogs/ImportKeyForm";
 import { useState } from "react";
 import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
 import { useReauth } from "@/ui/hooks/useReauth";
+import { KeyBackupDialog } from "@/ui/features/backup/components/KeyBackupDialog";
+import { useKeyBackup } from "@/ui/features/backup/hooks/useKeyBackup";
+import { useKeyBackupStatuses } from "@/ui/features/backup/hooks/useKeyBackupStatus";
 
 type AddKeyMode = "choice" | "create" | "import" | null;
 
@@ -33,6 +36,8 @@ export function KeysIdentitiesTab() {
   const { profiles } = useProfileMetadata(pubkeys);
   const [addKeyMode, setAddKeyMode] = useState<AddKeyMode>(null);
   const reauth = useReauth();
+  const backup = useKeyBackup(reauth);
+  const backupStatuses = useKeyBackupStatuses();
 
   // Deleting a key is irreversible, and for a key that was never backed up
   // it destroys the identity. The background refuses the deletion without a
@@ -51,6 +56,11 @@ export function KeysIdentitiesTab() {
     } catch {
       // Cancelled. Nothing was deleted.
     }
+  };
+
+  const handleBackup = (keyId: string) => {
+    const key = keys.find((k) => k.id === keyId);
+    if (key) void backup.start({ id: key.id, label: key.label });
   };
 
   const handleSelectKey = async (keyId: string) => {
@@ -92,10 +102,24 @@ export function KeysIdentitiesTab() {
           onSelectKey={handleSelectKey}
           onRename={handleRename}
           onDelete={handleDelete}
+          onBackup={handleBackup}
+          backupStatusOf={backupStatuses.statusOf}
         />
       </SettingsSection>
 
       <ReauthDialog {...reauth.dialogProps} />
+
+      <KeyBackupDialog
+        target={backup.target}
+        getPayload={backup.getPayload}
+        lockedMidBackup={backup.lockedMidBackup}
+        onRecorded={() => {
+          backup.release();
+          backupStatuses.refresh();
+        }}
+        onVaultLocked={backup.release}
+        onClose={backup.close}
+      />
 
       {/* Add Key Dialog */}
       <Dialog open={addKeyMode !== null} onOpenChange={(open) => !open && setAddKeyMode(null)}>

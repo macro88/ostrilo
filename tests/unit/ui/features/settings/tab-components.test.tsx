@@ -94,6 +94,8 @@ vi.mock("@/infrastructure/messaging/client", () => ({
   renameKey: vi.fn(),
   deleteKey: vi.fn(),
   activityGetRecent: vi.fn().mockResolvedValue({ entries: [], total: 0 }),
+  listBackupStatuses: vi.fn().mockResolvedValue([]),
+  subscribeKeyBackupChanged: vi.fn(() => () => {}),
 }));
 
 // The "Open extension in" row writes the legacy docking flag and the
