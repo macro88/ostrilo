@@ -84,7 +84,7 @@ Defects in shipped code. Each belongs to the row named.
 | SEC-023 | Bounded session grants | M | ✅ | Every session grant has an absolute expiry. |
 | SEC-024 | Identity-disclosure consent | M | ✅ | `getPublicKey` needs per-origin consent that is remembered, revocable and logged. Residual: a third-party script inside a consented page inherits the grant. |
 | SEC-025 | Contact-list replacement guard | S | ⬜ | Confirm before a kind 3 wipes most of the user's follows. |
-| SEC-026 | Per-key consent scope | S | ⬜ | Today a site allowed for key A also gets key B's public key after a switch. |
+| SEC-026 | Per-key consent scope | S | ✅ | A `getPublicKey` allow binds to the key it was granted for; after a key switch the site is asked again, and switching back needs no prompt. A refusal stays per site. Settings → Permissions names each grant's identity and revokes it alone; existing allows were bound to the key selected at the upgrade. Residual: a remembered per-kind signing rule is not key-bound, so an auto-signed event under another key still carries that key's public key. |
 | SEC-027 | Encrypted activity log | S | ⬜ | Entries keep 100 characters of signed content in plaintext. |
 
 ## 2. Protocol Support

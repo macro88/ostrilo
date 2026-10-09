@@ -495,6 +495,21 @@ try {
       patch: { trustLevel: "high", identityDisclosure: "allow", name: "Nostrich" },
       password: PASSWORD,
     });
+    // A grant is for the key selected when it is made, so a site that may read
+    // two identities needs the grant made once under each. Without the second,
+    // the Permissions capture would only ever show a one-grant row.
+    const list = await rpc(popup, { type: "keys.list" });
+    const all = Array.isArray(list) ? list : list?.keys ?? [];
+    const jimbo = all.find((k) => k.label === KEY_NAME);
+    const work = all.find((k) => k.label === "Work");
+    await rpc(popup, { type: "vault.select", id: work.id });
+    await rpc(popup, {
+      type: "policy.setOrigin",
+      origin: nostrich,
+      patch: { identityDisclosure: "allow" },
+      password: PASSWORD,
+    });
+    await rpc(popup, { type: "vault.select", id: jimbo.id });
     await rpc(popup, {
       type: "policy.setKindRule",
       origin: nostrich,

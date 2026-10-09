@@ -399,3 +399,28 @@ suddenly needs approval reads as a fault.
 - `tests/unit/ui/features/approval/event-detail-view.test.tsx` passed.
 - `tests/e2e/auto-sign-budget.spec.ts`: 60 silent signatures, then the 61st opens the
   approval window with the notice and signs on approval.
+
+# Review: per-key public-key grants in Permissions
+
+Date: 2026-10-09
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §6 (banned patterns), §7 (npub display, grouped rows), §12 (PR checklist)
+Build reviewed: production (`pnpm run build`), both themes, populated vault from `capture-screenshots.mjs`: a high-trust site granted under two keys, a medium-trust site with no decision and a refused site.
+
+## What changed
+
+A public-key `allow` now belongs to one key, so Settings → Permissions names each grant's identity. The collapsed row counts them ("Can read 2 public keys"). Under "Your public key" the open row lists one entry per grant: key name, short middle-truncated npub with a copy button, and its own Revoke. The consent prompt's remember note says the site will not ask again for this identity. The runner now makes the Nostrich grant under both seeded keys, so the capture shows a two-grant row and not the one-grant case.
+
+## Findings
+
+- The list is a hairline-divided block inside the existing row panel, the same treatment as "Rules by kind". No new card, chip, colour or icon; Revoke is the existing outline button.
+- npubs are mono and middle-truncated with a copy affordance (§7). A key that is gone is named "Removed key" and stays revocable; an unreadable key is named as unreadable and shows no npub (unit tests; not reachable from the runner).
+- Both themes: the entry block keeps its hairline and text contrast on Deep Ink, and the copy icon reads as secondary in both.
+- Each Revoke carries an `aria-label` naming the key, so the two buttons are not announced identically.
+- The captured consent prompt (33) is unchanged apart from the note under "Remember this site", which shows only once the box is ticked and was not photographed.
+- Not covered: the narrow popup width for this tab (the Permissions tab is an options-page surface), and a grant list longer than a few keys.
+
+## Verification
+
+- `tests/unit/ui/features/settings/OriginPolicyTable.test.tsx`, `PermissionsTab.test.tsx`, `tests/unit/ui/hooks/use-app-settings.test.tsx` passed.
+- `tests/e2e/identity-disclosure.spec.ts` (key switch through a real page and approval window) and `tests/e2e/settings-origin-policy.spec.ts` passed.
+- Light capture and dark capture both completed.
