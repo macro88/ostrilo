@@ -485,24 +485,18 @@ export class ApprovalQueueService {
     for (const resolveRequest of entry.resolvers) {
       resolveRequest("deny", "deny");
     }
+    // Read synchronously by the resolvers above; nothing asks afterwards, and
+    // a worker that lives for days must not keep one entry per expiry.
+    this.denialCauses.delete(requestId);
 
     // Notify listeners that queue has changed
     this.notifyChange();
   }
 
   /**
-   * Check if a request timed out (used by handlers to return appropriate error code)
-   * @param requestId - The unique request ID
-   * @returns true if request timed out, false otherwise
-   */
-  wasTimeout(requestId: string): boolean {
-    return this.denialCauses.get(requestId) === "timeout";
-  }
-
-  /**
    * Why a request was denied other than by the user, or undefined when it was
-   * not (or has not been). Read from inside the resolver, which runs while the
-   * cause is still recorded.
+   * not. Only meaningful from inside the resolver: the cause is forgotten as
+   * soon as the resolvers have run.
    */
   denialCause(requestId: string): QueueDenialCause | undefined {
     return this.denialCauses.get(requestId);
