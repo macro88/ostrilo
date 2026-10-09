@@ -22,6 +22,8 @@ import { useActivityLog } from "@/ui/features/activity/hooks/useActivityLog";
 import type { TabKey } from "@/ui/components/navigation/BottomTabs";
 import type { UIKeyInfo } from "@/ui/state/KeyManagerContext";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
+import { BackupBanner } from "@/ui/features/backup/components/BackupBanner";
+import { useBackupBanner } from "@/ui/features/backup/hooks/useBackupBanner";
 
 type ActivityEntry = ReturnType<typeof useActivityLog>["entries"][number];
 
@@ -127,6 +129,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
     activePubkeyHex ? [activePubkeyHex] : []
   );
   const profileSettled = useProfileSettled(activePubkeyHex, profileLoading);
+  const backupBanner = useBackupBanner(selectedUnlockedKey?.id);
 
   if (settingsLoading || keysLoading) {
     return <HomeSkeleton />;
@@ -159,6 +162,14 @@ export function HomeView({ onNavigate }: HomeViewProps) {
           hasKeys={keys.length > 0}
           onRetry={refreshKeys}
         />
+        {backupBanner.visible && selectedUnlockedKey && (
+          <BackupBanner
+            onBackUp={() =>
+              openOptionsTab("keys", { backupKeyId: selectedUnlockedKey.id })
+            }
+            onDismiss={backupBanner.dismiss}
+          />
+        )}
         <SignerStatus
           keyCount={keys.length}
           relayCount={settings.relays.length}

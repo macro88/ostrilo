@@ -6,6 +6,7 @@ import {
 import { LockScreen } from "@/ui/features/authentication/components/LockScreen";
 import { BackgroundUnreachable } from "@/ui/features/authentication/components/BackgroundUnreachable";
 import { useTheme } from "@/ui/hooks/useTheme";
+import { BACKUP_HASH_PARAM } from "@/ui/lib/open-options";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralSettingsTab } from "@/ui/features/settings/components/GeneralSettingsTab";
 import { KeysIdentitiesTab } from "@/ui/features/settings/components/KeysIdentitiesTab";
@@ -43,9 +44,21 @@ function isTabKey(value: string): value is TabKey {
   return (TAB_KEYS as readonly string[]).includes(value);
 }
 
+/** The hash is `#tab`, optionally `#tab?param=value`. */
+function splitHash(): { tab: string; params: URLSearchParams } {
+  const [tab, query = ""] = window.location.hash.slice(1).split("?");
+  return { tab, params: new URLSearchParams(query) };
+}
+
 function getHashTab(): TabKey {
-  const hash = window.location.hash.slice(1);
-  return isTabKey(hash) ? hash : "general";
+  const { tab } = splitHash();
+  return isTabKey(tab) ? tab : "general";
+}
+
+/** The key the Home banner asked to back up, when the page was opened for it. */
+function getHashBackupKeyId(): string | null {
+  const { tab, params } = splitHash();
+  return tab === "keys" ? params.get(BACKUP_HASH_PARAM) : null;
 }
 
 /**
@@ -114,6 +127,14 @@ export function OptionsApp() {
   useTheme();
 
   const [activeTab, setActiveTab] = useState<TabKey>(getHashTab);
+  // Read once, at load. Cleared from the address once Keys & Identities has
+  // acted on it, so reloading the page does not open the backup a second time.
+  const [backupKeyId, setBackupKeyId] = useState(getHashBackupKeyId);
+
+  const handleBackupRequestHandled = useCallback(() => {
+    setBackupKeyId(null);
+    window.history.replaceState(null, "", "#keys");
+  }, []);
 
   // Handle URL hash navigation
   useEffect(() => {
@@ -211,7 +232,10 @@ export function OptionsApp() {
                 </TabsContent>
 
                 <TabsContent value="keys">
-                  <KeysIdentitiesTab />
+                  <KeysIdentitiesTab
+                    backupRequestKeyId={backupKeyId}
+                    onBackupRequestHandled={handleBackupRequestHandled}
+                  />
                 </TabsContent>
 
                 <TabsContent value="security">

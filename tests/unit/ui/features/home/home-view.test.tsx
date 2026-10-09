@@ -37,6 +37,24 @@ vi.mock("wxt/browser", () => ({
   },
 }));
 
+const backup = vi.hoisted(() => ({
+  status: "unknown" as "pending" | "verified" | "unknown",
+  session: new Map<string, unknown>(),
+}));
+
+vi.mock("@/ui/features/backup/hooks/useKeyBackupStatus", () => ({
+  useKeyBackupStatus: () => backup.status,
+}));
+
+vi.mock("@/infrastructure/storage/adapters", () => ({
+  createStorageSuite: () => ({
+    session: {
+      get: async (key: string) => backup.session.get(key),
+      set: async (key: string, value: unknown) => void backup.session.set(key, value),
+    },
+  }),
+}));
+
 vi.mock("@/ui/hooks/useAppSettings", () => ({
   useAppSettings: () => ({
     settings: { relays: env.relays, origins: env.origins },
@@ -119,6 +137,8 @@ beforeEach(() => {
   client.activityGetRecent.mockReset().mockResolvedValue({ entries: [], total: 0 });
   client.activityFilterBy.mockReset();
   tabs.create.mockReset();
+  backup.status = "unknown";
+  backup.session.clear();
   env.settingsLoading = false;
   env.relays = [];
   env.origins = [];
@@ -401,5 +421,80 @@ describe("HomeView recent activity", () => {
     await flush();
     expect(container.textContent).toContain("Recent activity");
     expect(container.textContent).not.toContain("See all");
+  });
+});
+
+describe("HomeView backup banner", () => {
+  const banner = () =>
+    container.querySelector<HTMLElement>('section[aria-label="Backup reminder"]');
+  const bannerButton = (name: string) =>
+    Array.from(banner()?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent === name || button.getAttribute("aria-label") === name
+    );
+
+  it("asks about a selected key whose backup is pending", async () => {
+    backup.status = "pending";
+    await mount(vi.fn());
+    await flush();
+    expect(banner()?.textContent).toContain("This key has no backup");
+  });
+
+  it.each(["verified", "unknown"] as const)("says nothing for a %s key", async (status) => {
+    backup.status = status;
+    await mount(vi.fn());
+    await flush();
+    expect(banner()).toBeNull();
+  });
+
+  it("opens Settings on Keys & Identities with this key's backup requested", async () => {
+    backup.status = "pending";
+    await mount(vi.fn());
+    await flush();
+    act(() => bannerButton("Back up")!.click());
+    expect(tabs.create).toHaveBeenCalledWith({
+      url: "chrome-extension://ostrilo/options.html#keys?backup=key-main",
+    });
+  });
+
+  it("hides on dismiss, remembers it for the session, and leaves other keys alone", async () => {
+    backup.status = "pending";
+    await mount(vi.fn());
+    await flush();
+    await act(async () => bannerButton("Dismiss backup reminder")!.click());
+    await flush();
+    expect(banner()).toBeNull();
+    expect(backup.session.get("backupBannerDismissed:key-main")).toBe(true);
+
+    // A new mount in the same browser session: still dismissed.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await mount(vi.fn());
+    await flush();
+    expect(banner()).toBeNull();
+
+    // Another key's banner is its own.
+    const other = { ...ACTIVE, id: "key-other" } as UIKeyInfo;
+    env.selectedUnlockedKey = other;
+    env.keys = [ACTIVE, other];
+    act(() => root.unmount());
+    root = createRoot(container);
+    await mount(vi.fn());
+    await flush();
+    expect(banner()).not.toBeNull();
+  });
+
+  it("returns in a new browser session until the key is backed up", async () => {
+    backup.status = "pending";
+    backup.session.set("backupBannerDismissed:key-main", true);
+    await mount(vi.fn());
+    await flush();
+    expect(banner()).toBeNull();
+
+    backup.session.clear();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await mount(vi.fn());
+    await flush();
+    expect(banner()).not.toBeNull();
   });
 });

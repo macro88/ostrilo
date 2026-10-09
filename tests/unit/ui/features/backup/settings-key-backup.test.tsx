@@ -264,3 +264,38 @@ describe("the backup dialog when the vault locks", () => {
     expect(client.markKeyBackupVerified).not.toHaveBeenCalled();
   });
 });
+
+describe("a backup requested by the Home banner", () => {
+  it("opens the same password step for that key, and acts on the request once", async () => {
+    const handled = vi.fn();
+    const container = render(
+      <KeysIdentitiesTab backupRequestKeyId={TRADING.id} onBackupRequestHandled={handled} />
+    );
+    await act(async () => {});
+
+    expect(reauthDialog()?.textContent).toContain("Back up “Trading”.");
+    expect(handled).toHaveBeenCalledTimes(1);
+
+    await confirmReauth(MASTER);
+    expect(client.revealKey).toHaveBeenCalledWith(MASTER, TRADING.id);
+    expect(dialog().textContent).toContain("Back up “Trading”");
+    expect(container.textContent).toContain("Trading");
+  });
+
+  it("ignores a request naming a key the vault does not hold", async () => {
+    const handled = vi.fn();
+    render(<KeysIdentitiesTab backupRequestKeyId="no-such-key" onBackupRequestHandled={handled} />);
+    await act(async () => {});
+
+    expect(reauthDialog()).toBeNull();
+    expect(client.revealKey).not.toHaveBeenCalled();
+    expect(handled).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing when the page was not opened for a backup", async () => {
+    render(<KeysIdentitiesTab />);
+    await act(async () => {});
+
+    expect(reauthDialog()).toBeNull();
+  });
+});

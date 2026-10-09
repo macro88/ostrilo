@@ -45,7 +45,21 @@ vi.mock("@/ui/features/settings/components/GeneralSettingsTab", () => ({
 }));
 
 vi.mock("@/ui/features/settings/components/KeysIdentitiesTab", () => ({
-  KeysIdentitiesTab: () => <section>Keys panel</section>,
+  KeysIdentitiesTab: ({
+    backupRequestKeyId,
+    onBackupRequestHandled,
+  }: {
+    backupRequestKeyId?: string | null;
+    onBackupRequestHandled?: () => void;
+  }) => (
+    <section>
+      Keys panel
+      <output>{backupRequestKeyId ?? "no request"}</output>
+      <button type="button" onClick={onBackupRequestHandled}>
+        Handle request
+      </button>
+    </section>
+  ),
 }));
 
 vi.mock("@/ui/features/settings/components/SecuritySettingsTab", () => ({
@@ -133,6 +147,40 @@ describe("OptionsApp", () => {
       "active"
     );
     expect(container.textContent).toContain("Security panel");
+  });
+
+  it("opens Keys & Identities with the key the Home banner asked to back up", () => {
+    window.history.replaceState(null, "", "/options.html#keys?backup=key-7");
+
+    const container = render(<OptionsApp />);
+
+    expect(tabByName(container, "Keys & Identities")?.getAttribute("data-state")).toBe(
+      "active"
+    );
+    expect(container.querySelector("output")?.textContent).toBe("key-7");
+  });
+
+  it("drops the request from the address once it has been handled", () => {
+    window.history.replaceState(null, "", "/options.html#keys?backup=key-7");
+    const container = render(<OptionsApp />);
+
+    act(() => {
+      Array.from(container.querySelectorAll("button"))
+        .find((candidate) => candidate.textContent === "Handle request")!
+        .click();
+    });
+
+    expect(window.location.hash).toBe("#keys");
+    expect(container.querySelector("output")?.textContent).toBe("no request");
+  });
+
+  it("ignores a backup request on any other tab", () => {
+    window.history.replaceState(null, "", "/options.html#security?backup=key-7");
+
+    const container = render(<OptionsApp />);
+
+    expect(tabByName(container, "Security")?.getAttribute("data-state")).toBe("active");
+    expect(container.querySelector("output")).toBeNull();
   });
 
   it("updates the URL hash during keyboard tab navigation", () => {
