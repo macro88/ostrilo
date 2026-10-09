@@ -884,6 +884,9 @@ test.describe("auto-lock countdown", () => {
       timeout: 15_000,
     });
     await expect(popup.getByRole("timer")).toHaveCount(0);
+    await expect(popup.getByTestId("lock-reason")).toHaveText(
+      /^Locked after \d+ minutes? without activity\.$/
+    );
   });
 
   test("shows no countdown on the approval window", async ({
