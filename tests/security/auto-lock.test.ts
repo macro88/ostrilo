@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import {
   WebCryptoAesGcm,
@@ -803,5 +803,125 @@ describe("a locked vault reports locked, not denied", () => {
     await expect(vault.sign("ab".repeat(32))).rejects.toThrow(
       new RegExp(VAULT_LOCKED_ERRORS.join("|"))
     );
+  });
+});
+
+const MINUTE_MS = 60 * 1000;
+
+describe("a 35 minute timeout on a deterministic clock", () => {
+  const T0 = 1_760_000_000_000;
+  let maps: ReturnType<typeof memoryStorage>["maps"];
+  let vault: KeyVaultService;
+
+  function newVault(suite: StorageSuite) {
+    return new KeyVaultService(
+      suite,
+      WebCryptoAesGcm,
+      fastKdf as never,
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32
+    );
+  }
+
+  function setTimeoutMinutes(minutes: number) {
+    maps.local.set("appSettings", {
+      __version: "settings.v1",
+      autoLockMinutes: minutes,
+    });
+  }
+
+  beforeEach(async () => {
+    // Only Date is faked: the KDF and WebCrypto run on real time.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(T0);
+    let suite: StorageSuite;
+    ({ suite, maps } = memoryStorage());
+    vault = newVault(suite);
+    await vault.generateKey(PASSWORD, "k1");
+    setTimeoutMinutes(35);
+    vi.setSystemTime(T0);
+    await vault.unlock(PASSWORD);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("is 2,100,000 ms from the last activity", async () => {
+    const state = await vault.getLockState();
+    expect(state.lockAt).toBe(T0 + 2_100_000);
+  });
+
+  it("does not lock one second before the deadline and locks at it", async () => {
+    vi.setSystemTime(T0 + 2_099_000);
+    expect((await vault.getLockState()).isLocked).toBe(false);
+
+    vi.setSystemTime(T0 + 2_099_999);
+    expect((await vault.getLockState()).isLocked).toBe(false);
+
+    vi.setSystemTime(T0 + 2_100_000);
+    expect(
+      (await vault.getLockState()).isLocked,
+      "the vault must lock exactly at the 35 minute deadline"
+    ).toBe(true);
+    await expect(vault.sign("ab".repeat(32))).rejects.toThrow();
+  });
+
+  it("measures from the last activity, not from the unlock", async () => {
+    vi.setSystemTime(T0 + 30 * MINUTE_MS);
+    await vault.touchActivity();
+
+    vi.setSystemTime(T0 + 64 * MINUTE_MS + 59_000);
+    expect((await vault.getLockState()).isLocked).toBe(false);
+    vi.setSystemTime(T0 + 65 * MINUTE_MS);
+    expect((await vault.getLockState()).isLocked).toBe(true);
+  });
+
+  it("applies a shortened timeout to the session already running", async () => {
+    vi.setSystemTime(T0 + 10 * MINUTE_MS);
+    expect((await vault.getLockState()).isLocked).toBe(false);
+
+    setTimeoutMinutes(5);
+
+    expect(
+      (await vault.getLockState()).isLocked,
+      "the old 35 minute deadline must not outlive the new 5 minute setting"
+    ).toBe(true);
+  });
+
+  it("applies a lengthened timeout to the session already running", async () => {
+    setTimeoutMinutes(5);
+    vi.setSystemTime(T0 + 4 * MINUTE_MS);
+    expect((await vault.getLockState()).isLocked).toBe(false);
+
+    setTimeoutMinutes(35);
+
+    vi.setSystemTime(T0 + 6 * MINUTE_MS);
+    const state = await vault.getLockState();
+    expect(state.isLocked).toBe(false);
+    expect(state.lockAt).toBe(T0 + 35 * MINUTE_MS);
+  });
+
+  it("starts a fresh deadline at every unlock", async () => {
+    vi.setSystemTime(T0 + 30 * MINUTE_MS);
+    await vault.lock();
+    await vault.unlock(PASSWORD);
+
+    expect((await vault.getLockState()).lockAt).toBe(T0 + 65 * MINUTE_MS);
+    vi.setSystemTime(T0 + 36 * MINUTE_MS);
+    expect(
+      (await vault.getLockState()).isLocked,
+      "the first session's deadline must not lock the second"
+    ).toBe(false);
+  });
+
+  it("stores the setting as whole minutes and reads 35 back as 35", async () => {
+    // The brief's unit/parse hypothesis: nothing between the slider and the
+    // deadline may rescale the value.
+    const { normalizeAutoLockMinutes } = await import("@/domain/types");
+    expect(normalizeAutoLockMinutes(35)).toBe(35);
+    expect(normalizeAutoLockMinutes("35")).toBe(AUTO_LOCK_BOUNDS.default);
+    expect(AUTO_LOCK_BOUNDS.max).toBeGreaterThanOrEqual(35);
   });
 });
