@@ -787,7 +787,7 @@ const DENIAL_REASON_COPY: Record<ActivityReason, string> = {
   timeout: "No answer in time, or the window was closed",
   rate_limited: "Too many requests from this site",
   vault_locked: "Ostrilo was locked",
-  key_unreadable: "The signing key could not be read",
+  key_unreadable: "Not signed: the signing key could not be read",
 };
 
 /**

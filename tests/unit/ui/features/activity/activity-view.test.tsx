@@ -280,7 +280,7 @@ describe("ActivityView denial reasons and previews", () => {
     ["rate_limited", "Too many requests from this site"],
     ["vault_locked", "Ostrilo was locked"],
     ["timeout", "No answer in time, or the window was closed"],
-    ["key_unreadable", "The signing key could not be read"],
+    ["key_unreadable", "Not signed: the signing key could not be read"],
   ] as const)("says why a %s denial happened", async (reason, copy) => {
     const [row] = await mountWith([entry({ id: "d", decision: "deny", reason })]);
     expect(row.textContent).toContain(copy);
