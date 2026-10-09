@@ -121,6 +121,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const KEY_ID = "11111111-1111-4111-8111-111111111111";
+
 describe("OptionsApp", () => {
   it("renders the full settings tab set", () => {
     const container = render(<OptionsApp />);
@@ -150,18 +152,18 @@ describe("OptionsApp", () => {
   });
 
   it("opens Keys & Identities with the key the Home banner asked to back up", () => {
-    window.history.replaceState(null, "", "/options.html#keys?backup=key-7");
+    window.history.replaceState(null, "", `/options.html#keys?backup=${KEY_ID}`);
 
     const container = render(<OptionsApp />);
 
     expect(tabByName(container, "Keys & Identities")?.getAttribute("data-state")).toBe(
       "active"
     );
-    expect(container.querySelector("output")?.textContent).toBe("key-7");
+    expect(container.querySelector("output")?.textContent).toBe(KEY_ID);
   });
 
   it("drops the request from the address once it has been handled", () => {
-    window.history.replaceState(null, "", "/options.html#keys?backup=key-7");
+    window.history.replaceState(null, "", `/options.html#keys?backup=${KEY_ID}`);
     const container = render(<OptionsApp />);
 
     act(() => {
@@ -174,8 +176,26 @@ describe("OptionsApp", () => {
     expect(container.querySelector("output")?.textContent).toBe("no request");
   });
 
+  it.each(["not-a-key-id", "", "11111111-1111-4111-8111-11111111111", "<script>"])(
+    "drops a backup request whose value is %j, naming no key",
+    (value) => {
+      window.history.replaceState(
+        null,
+        "",
+        `/options.html#keys?backup=${encodeURIComponent(value)}`
+      );
+
+      const container = render(<OptionsApp />);
+
+      expect(tabByName(container, "Keys & Identities")?.getAttribute("data-state")).toBe(
+        "active"
+      );
+      expect(container.querySelector("output")?.textContent).toBe("no request");
+    }
+  );
+
   it("ignores a backup request on any other tab", () => {
-    window.history.replaceState(null, "", "/options.html#security?backup=key-7");
+    window.history.replaceState(null, "", `/options.html#security?backup=${KEY_ID}`);
 
     const container = render(<OptionsApp />);
 

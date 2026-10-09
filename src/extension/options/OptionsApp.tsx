@@ -7,6 +7,7 @@ import { LockScreen } from "@/ui/features/authentication/components/LockScreen";
 import { BackgroundUnreachable } from "@/ui/features/authentication/components/BackgroundUnreachable";
 import { useTheme } from "@/ui/hooks/useTheme";
 import { BACKUP_HASH_PARAM } from "@/ui/lib/open-options";
+import { KeyIdSchema } from "@/infrastructure/validation/schemas";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralSettingsTab } from "@/ui/features/settings/components/GeneralSettingsTab";
 import { KeysIdentitiesTab } from "@/ui/features/settings/components/KeysIdentitiesTab";
@@ -55,10 +56,16 @@ function getHashTab(): TabKey {
   return isTabKey(tab) ? tab : "general";
 }
 
-/** The key the Home banner asked to back up, when the page was opened for it. */
+/**
+ * The key the Home banner asked to back up, when the page was opened for it.
+ * The address is input like any other: a value that is not a key id is dropped
+ * before it is looked up.
+ */
 function getHashBackupKeyId(): string | null {
   const { tab, params } = splitHash();
-  return tab === "keys" ? params.get(BACKUP_HASH_PARAM) : null;
+  if (tab !== "keys") return null;
+  const parsed = KeyIdSchema.safeParse(params.get(BACKUP_HASH_PARAM));
+  return parsed.success ? parsed.data : null;
 }
 
 /**
