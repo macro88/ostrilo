@@ -82,7 +82,6 @@ describe("OriginPolicyTable", () => {
   });
 
   it.each([
-    ["allow", "Can read your public key", "This site can read your public key", true],
     ["deny", "Refused your public key", "This site is refused your public key", true],
     [undefined, "Asks before reading your key", "You will be asked next time this site wants it", false],
   ] as const)(
@@ -105,6 +104,105 @@ describe("OriginPolicyTable", () => {
       ).toBe(revocable);
     }
   );
+
+  describe("per-key public-key grants", () => {
+    const KEY_A = "0b6d6f5e-7a4c-4a52-8d3c-2f1e9a7c4b10";
+    const KEY_B = "7c1d3a90-5b2e-4f08-9a63-1d8e4c2b6f77";
+    const identities = [
+      { id: KEY_A, label: "Main", publicKeyBech32: `npub1${"a".repeat(58)}` },
+      { id: KEY_B, label: "Work", publicKeyBech32: `npub1${"b".repeat(58)}` },
+    ];
+    const grants = (...ids: string[]) =>
+      site({ identityDisclosure: "allow", identityDisclosureKeyIds: ids });
+    const disclosure = (container: HTMLElement) =>
+      container.querySelector(`[data-testid="origin-disclosure-${ORIGIN}"]`)!;
+
+    it("counts the keys a site may read in the collapsed row", () => {
+      expect(row(table([grants(KEY_A)], { identities })).textContent).toContain(
+        "Can read 1 public key"
+      );
+      expect(
+        row(table([grants(KEY_A, KEY_B)], { identities })).textContent
+      ).toContain("Can read 2 public keys");
+    });
+
+    it("lists each grant by key name and short npub, middle-truncated", () => {
+      const container = table([grants(KEY_A, KEY_B)], { identities });
+
+      const main = disclosure(container).querySelector(
+        `[data-testid="disclosure-grant-${KEY_A}"]`
+      )!;
+      expect(main.textContent).toContain("Main");
+      expect(main.textContent).toContain(`npub1aaaaaaa…${"a".repeat(6)}`);
+      expect(main.textContent).not.toContain("a".repeat(58));
+    });
+
+    it("revokes the grant that was pressed, for its own key", async () => {
+      const onRevokeDisclosureKey = vi.fn();
+      const container = table([grants(KEY_A, KEY_B)], {
+        identities,
+        onRevokeDisclosureKey,
+      });
+
+      await click(
+        buttonByText(
+          disclosure(container).querySelector(
+            `[data-testid="disclosure-grant-${KEY_B}"]`
+          )!,
+          "Revoke"
+        )
+      );
+
+      expect(onRevokeDisclosureKey).toHaveBeenCalledOnce();
+      expect(onRevokeDisclosureKey).toHaveBeenCalledWith(ORIGIN, KEY_B);
+    });
+
+    it("still lists and can revoke a grant for a key that was removed", async () => {
+      const onRevokeDisclosureKey = vi.fn();
+      const container = table([grants("deleted-key")], {
+        identities,
+        onRevokeDisclosureKey,
+      });
+
+      const grant = disclosure(container).querySelector(
+        `[data-testid="disclosure-grant-deleted-key"]`
+      )!;
+      expect(grant.textContent).toContain("Removed key");
+      await click(buttonByText(grant, "Revoke"));
+      expect(onRevokeDisclosureKey).toHaveBeenCalledWith(ORIGIN, "deleted-key");
+    });
+
+    it("does not name an unreadable key by an npub", () => {
+      const container = table([grants(KEY_A)], {
+        identities: [{ ...identities[0], isUnreadable: true }],
+      });
+
+      expect(disclosure(container).textContent).toContain("could not be read");
+      expect(disclosure(container).textContent).not.toContain("npub1");
+    });
+
+    it("shows an allow that names no key as the prompting state it behaves as", () => {
+      for (const policy of [
+        site({ identityDisclosure: "allow" }),
+        site({ identityDisclosure: "allow", identityDisclosureKeyIds: [] }),
+      ]) {
+        const container = table([policy], { identities });
+
+        expect(row(container).textContent).toContain("Asks before reading your key");
+        expect(disclosure(container).querySelector("li")).toBeNull();
+      }
+    });
+
+    it("offers no per-grant revoke on a refusal, which is per site", () => {
+      const container = table(
+        [site({ identityDisclosure: "deny", identityDisclosureKeyIds: [KEY_A] })],
+        { identities, onRevokeDisclosureKey: vi.fn(), onRevokeDisclosure: vi.fn() }
+      );
+
+      expect(disclosure(container).querySelector("li")).toBeNull();
+      expect(row(container).textContent).toContain("Refused your public key");
+    });
+  });
 
   it("revokes the disclosure for the site whose Revoke was pressed", async () => {
     const onRevokeDisclosure = vi.fn();

@@ -160,7 +160,7 @@ describe("DisclosureDetailView decisions", () => {
   it("records a standing allow when remember is ticked", () => {
     const { onResolve } = mount();
     remember();
-    expect(container.textContent).toContain("https://primal.net will not ask again.");
+    expect(container.textContent).toContain("https://primal.net will not ask again for this identity.");
     cooldown();
     act(() => buttonByText("Share public key").click());
     expect(onResolve).toHaveBeenCalledWith("allow");
