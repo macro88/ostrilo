@@ -20,8 +20,13 @@ import {
 export const VERIFICATION_SUFFIX_LENGTH = 8;
 
 interface BackupVerificationProps {
-  /** `true` when a suffix matches the nsec the flow holds. Never gets the key. */
-  checkSuffix: (value: string) => boolean;
+  /**
+   * `true` when a suffix matches the nsec the flow holds. Never gets the key.
+   * Omitted by a flow that never shows the user the key, such as backing up a
+   * key from Settings: re-entering characters nobody was shown proves nothing,
+   * so the file is the only route offered.
+   */
+  checkSuffix?: (value: string) => boolean;
   /** `true` when a decrypted backup is the key this flow just created. */
   checkNsec: (nsec: string) => boolean;
   verified: boolean;
@@ -54,7 +59,10 @@ export function BackupVerification({
   onVerified,
   fileRouteAvailable,
 }: BackupVerificationProps) {
-  const [route, setRoute] = useState<Route>("transcription");
+  const transcriptionAvailable = checkSuffix !== undefined;
+  const [route, setRoute] = useState<Route>(
+    transcriptionAvailable ? "transcription" : "file"
+  );
   const [suffix, setSuffix] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState("");
@@ -73,7 +81,7 @@ export function BackupVerification({
   }, []);
 
   const handleCheckSuffix = useCallback(() => {
-    if (checkSuffix(suffix.trim())) {
+    if (checkSuffix?.(suffix.trim())) {
       setError("");
       setSuffix("");
       setPassphrase("");
@@ -152,7 +160,7 @@ export function BackupVerification({
     <div className="ink-card mt-3 p-4">
       <div className="section-label">Check your backup</div>
 
-      {fileRouteAvailable && (
+      {transcriptionAvailable && fileRouteAvailable && (
         <div
           className="mt-2 flex gap-2"
           role="tablist"
@@ -187,7 +195,7 @@ export function BackupVerification({
         </div>
       )}
 
-      {route === "transcription" || !fileRouteAvailable ? (
+      {transcriptionAvailable && (route === "transcription" || !fileRouteAvailable) ? (
         <div className="mt-3">
           <Label htmlFor="backupVerification" className={FIELD_LABEL_CLASS}>
             Last {VERIFICATION_SUFFIX_LENGTH} characters of your nsec

@@ -304,6 +304,21 @@ export async function listBackupStatuses(): Promise<KeyBackupStatusRow[]> {
   return BackupListResponseSchema.parse(data).statuses;
 }
 
+/** Calls `cb` when another surface verified a backup. Returns the unsubscribe. */
+export function subscribeKeyBackupChanged(cb: () => void) {
+  const handler = (msg: unknown) => {
+    if (
+      typeof msg === "object" &&
+      msg !== null &&
+      (msg as { __event?: unknown }).__event === BROADCAST_EVENTS.KEY_BACKUP_CHANGED
+    ) {
+      cb();
+    }
+  };
+  browser.runtime.onMessage.addListener(handler);
+  return () => browser.runtime.onMessage.removeListener(handler);
+}
+
 /** Records that a backup of this key was made and checked. */
 export async function markKeyBackupVerified(keyId: string) {
   return rpc<null>({ type: "backup.markVerified", keyId });
