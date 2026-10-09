@@ -801,6 +801,10 @@ export class KeyVaultService {
       });
 
       await this.notifyUnlocked();
+      // A surface that opened while locked read the settings redacted - no
+      // relays, no origins, no selected key - and keeps them until told
+      // otherwise. This is what tells it the real ones are now readable.
+      await this.broadcastSettingsChanged();
 
       return { selectedKeyId, unlockedKeyIds, damagedKeyIds };
     } finally {
@@ -953,12 +957,21 @@ export class KeyVaultService {
       })),
     } satisfies AppSettingsV1;
     await this.settingsStore.write<AppSettingsV1>(next);
+    await this.broadcastSettingsChanged();
+  }
+
+  /**
+   * Tells every open surface to read the settings again.
+   *
+   * Best-effort: no listener is the normal case (no extension page open), and
+   * a failed broadcast changes nothing that was stored.
+   */
+  private async broadcastSettingsChanged(): Promise<void> {
     try {
       const { browser } = await import("wxt/browser");
       browser.runtime.sendMessage({ __event: SETTINGS_CHANGED_EVENT });
     } catch {
-      // No listener is the normal case (no extension page open); the
-      // broadcast is best-effort and its failure changes nothing here.
+      // Nothing to deliver to.
     }
   }
 

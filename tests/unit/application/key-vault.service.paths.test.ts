@@ -247,6 +247,26 @@ describe("KeyVaultService failure and edge paths", () => {
     expect(await keys()).toEqual([]);
   });
 
+  describe("unlock", () => {
+    it("tells open surfaces to read the settings again, because they were redacted while locked", async () => {
+      await vault.importKey(SK_A, PASSWORD);
+      broadcasts.length = 0;
+
+      await build(storage).unlock(PASSWORD);
+
+      expect(broadcasts).toEqual([{ __event: SETTINGS_CHANGED_EVENT }]);
+    });
+
+    it("broadcasts nothing when the password is wrong", async () => {
+      await vault.importKey(SK_A, PASSWORD);
+      broadcasts.length = 0;
+
+      await expect(build(storage).unlock("not the password")).rejects.toThrow();
+
+      expect(broadcasts).toEqual([]);
+    });
+  });
+
   describe("unlock with damaged records", () => {
     it("reports a versioned record without a wrapped DEK as damaged and unlocks the rest", async () => {
       const a = await vault.importKey(SK_A, PASSWORD);
