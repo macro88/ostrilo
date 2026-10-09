@@ -45,8 +45,10 @@ Priority is MoSCoW: **M**ust, **S**hould, **C**ould, **W**on't.
 - **Provider API:** `window.nostr.getPublicKey`, `signEvent` and a frozen `capabilities`,
   under the policy in `docs/api-versioning.md`.
 - **Quality gates:** typecheck, lint, coverage thresholds, both builds with manifest and
-  bundle assertions, dependency audit, secret scan, Playwright journeys, an axe
-  accessibility gate, aislop.
+  bundle assertions, dependency audit, secret scan, Playwright journeys, aislop.
+  The Playwright suite, which includes an axe accessibility scan, is not a required
+  check: it runs nightly, on pushes to main, on demand and on pull requests labelled
+  `run-e2e`.
   See `docs/ci-verification.md`.
 
 ## Known issues
@@ -128,7 +130,7 @@ Defects in shipped code. Each belongs to the row named.
 | UX-008 | Onboarding tutorial | S | 🔄 | Setup wizard: create or import, password, verified backup; or Quick start, which takes a password and one key and leaves the backup for a Home reminder. Left: a concepts tutorial and dismissible tips. |
 | UX-009 | Bulk permission management | S | ⬜ | |
 | UX-010 | Notifications | S | ⬜ | With a Do Not Disturb mode. |
-| UX-011 | Accessibility (WCAG 2.1 AA) | M | 🔄 | Keyboard and ARIA coverage on key management and Radix controls, AA token contrast, labelled and keyboard-operable sliders, and an axe gate over 36 surfaces in both themes that fails the build on a serious or critical finding. Left: the side panel layout is not scanned, axe finds only part of WCAG 2.1 AA, and there has been no manual screen-reader pass. |
+| UX-011 | Accessibility (WCAG 2.1 AA) | M | 🔄 | Keyboard and ARIA coverage on key management and Radix controls, AA token contrast, labelled and keyboard-operable sliders, and an axe scan over 36 surfaces in both themes that fails the e2e run (nightly, on main, and on pull requests labelled `run-e2e`) on a serious or critical finding. Left: the side panel layout is not scanned, axe finds only part of WCAG 2.1 AA, and there has been no manual screen-reader pass. |
 | UX-012 | Mobile UI | S | ⬜ | |
 | UX-013 | Activity export | S | 🔄 | JSON export from the Activity Log settings, which reads the whole log in pages of 100. Left: CSV. |
 | UX-014 | Internationalization | C | ⬜ | |
