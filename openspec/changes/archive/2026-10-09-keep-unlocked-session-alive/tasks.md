@@ -41,5 +41,5 @@
 - [x] 5.1 `pnpm run compile`, `pnpm run lint`, `pnpm test`, the touched e2e specs, `pnpm run build`, `pnpm run build:firefox`
 - [ ] 5.2 Manual check in a real Chrome profile with DevTools closed: unlock with the popup closed and `autoLockMinutes` of 35, wait at least five minutes, confirm the vault is still unlocked; lock manually and confirm the lock screen says "You locked Ostrilo."
 - [ ] 5.3 Manual check in Firefox: note whether the event page unloads before the timeout and that the lock screen then says the browser restarted the background
-- [ ] 5.4 Screenshots in both themes against a populated vault for the reason line and "Can't reach Ostrilo" (`docs/design-review/`)
-- [ ] 5.5 Archive this change (Task 14 of phase 0.10)
+- [x] 5.4 Screenshots in both themes against a populated vault for the reason line and "Can't reach Ostrilo" (`docs/design-review/`)
+- [x] 5.5 Archive this change (Task 14 of phase 0.10)
