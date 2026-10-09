@@ -101,10 +101,12 @@ To restore the file in a fresh installation, choose it during setup, enter its
 passphrase and set a new vault password. Check that the restored public key
 matches your original identity.
 
-**Backup for keys added later is not available yet.** There is no export button
-in Settings yet. Keep your own copy of imported keys. A key created through
-Settings currently has no backup option, so losing that installation could mean
-losing the identity.
+**Keys added later can be backed up from Settings.** In Keys & Identities, choose
+**Back up** on any key, enter your vault password, save the encrypted file, then
+select it again with its passphrase so Ostrilo can check that it opens. A key
+you create in Settings shows **No backup** until you do. The file restores
+through the same import step as a first-key backup. If you import a key, you
+already hold its `nsec`; keep your own copy.
 
 ### Move to another signer
 
@@ -145,8 +147,7 @@ Current version: [0.9.0](CHANGELOG.md).
 | Encrypted key storage, automatic locking and password changes | Available |
 | Site permissions and signing history | Available |
 | Profile editing and relay selection | Available |
-| Encrypted key backup and restore | Available during first-key setup |
-| Backup for keys added later | Planned for 1.0 |
+| Encrypted key backup and restore | Available |
 | Encrypted messaging with NIP-44 | Planned |
 | Remote signing with NIP-46 | Planned |
 | Seed-phrase recovery and settings sync across devices | Planned |

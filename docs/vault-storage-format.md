@@ -9,7 +9,8 @@ Established by the OpenSpec change `harden-vault-key-derivation`.
 
 Two keys in `browser.storage.local`, plus a third, `vaultRotation`, that exists
 only while a password change is being committed (see
-[Password change](#password-change)).
+[Password change](#password-change)). A fourth, `keyBackupStatus`, sits beside
+the vault and is not part of it (see [below](#keybackupstatus-not-part-of-the-vault)).
 
 ### `vaultEnvelope`
 
@@ -51,6 +52,27 @@ One entry per key.
 
 A record with **no `v`** is legacy: PBKDF2-HMAC-SHA256 at 100,000 iterations,
 a per-record `salt`, no `wrappedDek`, and no AAD.
+
+### `keyBackupStatus`: not part of the vault
+
+A separate item, owned by `KeyBackupStatusService`, that records whether each key
+has a verified backup. It is deliberately outside the envelope and the key
+records: it holds no secret, it changes without the vault password, and writing
+it never rewrites a key.
+
+```jsonc
+{
+  "__version": "keyBackup.v1",
+  "keys": { "<key id>": { "state": "pending" | "verified", "at": 1757000000000 } }
+}
+```
+
+The vault writes `pending` when it generates a key, before the key record is
+stored, and drops the entry when it deletes the key. The only write the UI has is
+`verified`, through `backup.markVerified`. An imported key and a key that
+predates the record have no entry, and read as unknown. The reader drops any
+entry that is malformed or whose key is not a key id, so a damaged record reads
+as "unknown" and never as an error.
 
 ## Why an envelope
 

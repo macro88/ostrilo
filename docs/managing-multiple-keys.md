@@ -198,7 +198,7 @@ avatar — see "Why no profile pictures?" above.
 ### Organizing Multiple Identities
 
 - **Use descriptive labels**: "Work - Alice", "Personal", "Anon Blogger"
-- **Back up when you create**: Ostrilo offers an encrypted backup only while you are creating your first key during onboarding. There is no export on the settings page, so a key you add later cannot be backed up from within Ostrilo. If you import a key, keep your own copy of the nsec
+- **Back up what you create**: a key you create in Settings is marked **No backup** until you choose **Back up** on its row, enter your password, save the encrypted file and check it. If you import a key, keep your own copy of the nsec
 
 ### Security Considerations
 
@@ -263,11 +263,10 @@ A: You cannot. The delete button is disabled when only one key remains, and the
 background refuses the request even if something else tries to send it.
 
 **Q: Can I export a key before deleting it?**  
-A: No. Ostrilo offers an encrypted backup only during onboarding, while you are
-creating your very first key. There is no export on the settings page, so a key
-you created later cannot be exported at all. Keep your own copy of any key you
-import, and treat deletion of a later-added key as permanent loss of that
-identity.
+A: You can save an encrypted backup. Choose **Back up** on the key's row, enter
+your password, save the file, then select it again to check it opens. There is no
+plaintext export. Keep your own copy of any key you import, and treat deletion
+of a key with no backup as permanent loss of that identity.
 
 **Q: Does adding a key switch me to it?**  
 A: No. A new key is added to your vault but the key that was signing before keeps

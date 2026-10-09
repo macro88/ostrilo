@@ -69,7 +69,7 @@ Defects in shipped code. Each belongs to the row named.
 | SEC-008 | Risk analysis in approvals | M | 🔄 | Display integrity ships: full origin, non-HTTPS chip, byte lengths, hidden characters escaped, protected-kind notice. Left: zap amounts, DM content, relay-list changes, a risk score. |
 | SEC-009 | Biometric unlock | S | ⬜ | WebAuthn PRF. Proposal open at `openspec/changes/add-biometric-unlock`. |
 | SEC-010 | Multi-factor authentication | S | ⬜ | For key export, settings changes and large zaps. |
-| SEC-011 | Backup and recovery | M | 🔄 | Encrypted backup file (Argon2id + AES-GCM, separate passphrase) at first-key onboarding, restored on import. Left: back up keys added later from Settings behind re-auth; optional remote target. |
+| SEC-011 | Backup and recovery | M | 🔄 | Encrypted backup file (Argon2id + AES-GCM, separate passphrase) at first-key onboarding, restored on import. Settings backs up any key behind the master password, and tracks per-key backup status. Left: optional remote target. |
 | SEC-012 | Gradual session lock | S | 🔄 | Flat fail-closed lock with a sliding 1-60 minute deadline, presence-gated postponement and a countdown. Left: an intermediate tier that stops auto-signing before asking for the password. |
 | SEC-013 | Tamper-evident audit log | S | ⬜ | The activity log is user-facing, with no hash chain and no lock, unlock or settings events. |
 | SEC-014 | Erase all data | M | ⬜ | An in-app action that deletes every key, setting, permission and log after re-authentication. Erasure at uninstall is impossible: extensions cannot run code at uninstall. |
@@ -203,7 +203,7 @@ authenticates its author.
 | KEYMGMT-005 | Emergency access | C | ⬜ | |
 | KEYMGMT-006 | Key strength indicator | S | ⬜ | |
 | KEYMGMT-007 | Master password change | M | ✅ | Settings → Security. Throttled like unlock; re-wraps every key through a journal that recovers from an interrupted change. |
-| KEYMGMT-008 | Standard import and export formats | S | 🔄 | nsec, hex and `0x` hex import; encrypted backup export and import inside onboarding. Left: export from Settings for any key, hex export, NIP-49. |
+| KEYMGMT-008 | Standard import and export formats | S | 🔄 | nsec, hex and `0x` hex import; encrypted backup export and import inside onboarding, and encrypted backup of any key from Settings. Left: hex export, NIP-49. |
 | KEYMGMT-009 | NIP-49 `ncryptsec` import | S | ⬜ | Needs scrypt and XChaCha20-Poly1305 behind crypto ports. |
 
 ## 9. Social and Discovery
