@@ -74,6 +74,15 @@ export const KeySelector = memo(function KeySelector({
 
   // Get display info for a key
   const getKeyDisplay = (key: UIKeyInfo) => {
+    // A key whose public key cannot be read has no profile to look up and no
+    // npub to show. It is named for what it is, with its ID: "Unnamed" here
+    // read as an empty vault and was never the truth about this record.
+    if (key.isUnreadable) {
+      return {
+        displayName: "Unreadable key",
+        truncatedNpub: `ID ${key.id.slice(0, 8)}`,
+      };
+    }
     const profile = profiles.get(key.publicKeyHex);
     const displayName =
       profile?.display_name || profile?.name || key.label || "Unnamed Key";

@@ -198,6 +198,7 @@ export function KeySelectorCard({
                     */
                     <p className="mt-0.5 text-[13px] text-destructive">
                       Unreadable record: stored public key is not valid
+                      (key ID {key.id})
                     </p>
                   ) : (
                     <div className="mt-0.5 flex items-center gap-1">

@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { useProfileMetadata } from "@/ui/hooks/useProfileMetadata";
 import { useActivityLog } from "@/ui/features/activity/hooks/useActivityLog";
 import type { TabKey } from "@/ui/components/navigation/BottomTabs";
+import type { UIKeyInfo } from "@/ui/state/KeyManagerContext";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 
 type ActivityEntry = ReturnType<typeof useActivityLog>["entries"][number];
@@ -110,8 +111,12 @@ function useProfileSettled(
  */
 export function HomeView({ onNavigate }: HomeViewProps) {
   const { settings, isLoading: settingsLoading } = useAppSettings();
-  const { keys, selectedUnlockedKey, isLoading: keysLoading } =
-    useKeyManager();
+  const {
+    keys,
+    selectedUnlockedKey,
+    isLoading: keysLoading,
+    refreshKeys,
+  } = useKeyManager();
   const { entries, loading: activityLoading } = useActivityLog();
 
   // Read before the early return: hooks cannot be called conditionally. The
@@ -150,8 +155,9 @@ export function HomeView({ onNavigate }: HomeViewProps) {
           instead of the shell scrolling. */}
       <div className="flex w-full flex-1 flex-col gap-4 @min-[420px]:mx-auto @min-[420px]:max-w-[384px]">
         <IdentityCard
-          npub={selectedUnlockedKey?.publicKeyBech32}
-          hasActiveKey={Boolean(selectedUnlockedKey)}
+          activeKey={selectedUnlockedKey}
+          hasKeys={keys.length > 0}
+          onRetry={refreshKeys}
         />
         <SignerStatus
           keyCount={keys.length}
@@ -172,23 +178,28 @@ export function HomeView({ onNavigate }: HomeViewProps) {
 }
 
 function IdentityCard({
-  npub,
-  hasActiveKey,
+  activeKey,
+  hasKeys,
+  onRetry,
 }: {
-  npub?: string;
-  hasActiveKey: boolean;
+  activeKey?: UIKeyInfo;
+  hasKeys: boolean;
+  onRetry: () => Promise<void>;
 }) {
-  if (npub) {
+  if (activeKey && !activeKey.isUnreadable && activeKey.publicKeyBech32) {
     return (
       <section
         className="ink-card shrink-0 overflow-hidden"
         aria-label="Active identity"
       >
-        <Pubkey pubkey={npub} layout="block" label="Public key" />
+        <Pubkey pubkey={activeKey.publicKeyBech32} layout="block" label="Public key" />
       </section>
     );
   }
 
+  // Three different facts, and none of them is "create a key": the key the
+  // vault selected cannot be read, no key is selected although keys exist, or
+  // there are no keys. Only the last one invites creating anything.
   return (
     <section
       className="ink-card shrink-0 overflow-hidden"
@@ -196,11 +207,28 @@ function IdentityCard({
     >
       <div className="px-4 py-3.5">
         <p className="section-label">Public key</p>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          {hasActiveKey
-            ? "The stored public key for this key could not be read."
-            : "Create or import a key to start signing locally."}
-        </p>
+        {activeKey ? (
+          <>
+            <p className="mt-1.5 text-sm text-destructive" role="alert">
+              The stored public key for key{" "}
+              <span className="break-all font-mono text-xs">{activeKey.id}</span>{" "}
+              could not be read. Ostrilo has not deleted or changed this key.
+            </p>
+            <button
+              type="button"
+              onClick={() => void onRetry()}
+              className="-mx-2 mt-1 h-11 rounded-lg px-2 text-[13px] font-semibold text-[var(--ink-violet)] transition-colors duration-150 hover:bg-card"
+            >
+              Try again
+            </button>
+          </>
+        ) : (
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {hasKeys
+              ? "No key is selected. Choose one from the key menu in the header."
+              : "Create or import a key to start signing locally."}
+          </p>
+        )}
       </div>
     </section>
   );

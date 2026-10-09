@@ -94,6 +94,7 @@ describe("KeySelectorCard", () => {
     expect(container.textContent).toContain(
       "Unreadable record: stored public key is not valid"
     );
+    expect(container.textContent).toContain(`key ID ${MAIN.id}`);
     expect(container.textContent).not.toContain("npub1");
     expect(
       container.querySelector('[aria-label="Copy public key for Main"]')

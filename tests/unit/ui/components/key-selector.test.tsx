@@ -167,6 +167,19 @@ describe("KeySelector trigger", () => {
     expect(labels[2]).toMatch(/^Unnamed Key - npub1ccccccc\.\.\.cccc$/);
   });
 
+  it("names a key whose public key cannot be read, with its ID, instead of calling it Unnamed", () => {
+    keyManager.selectedUnlockedKey = { ...MAIN, label: "Unnamed", publicKeyBech32: "", isUnreadable: true };
+    keyManager.keys = [keyManager.selectedUnlockedKey, ALT];
+    mount();
+
+    expect(trigger().textContent).toContain("Unreadable key");
+    expect(trigger().textContent).not.toContain("Unnamed");
+    open();
+    const first = options()[0].getAttribute("aria-label");
+    expect(first).toContain(`ID ${MAIN.id.slice(0, 8)}`);
+    expect(first).toContain("(currently selected)");
+  });
+
   it("asks for the profile of every key in the vault", () => {
     mount();
     expect(profileState.requested.at(-1)).toEqual([

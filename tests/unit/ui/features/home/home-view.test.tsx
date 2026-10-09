@@ -25,6 +25,7 @@ const env = vi.hoisted(() => ({
   keysLoading: false,
   keys: [] as unknown[],
   selectedUnlockedKey: null as unknown,
+  refreshKeys: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/infrastructure/messaging/client", () => client);
@@ -48,6 +49,7 @@ vi.mock("@/ui/features/authentication/hooks/useKeyManager", () => ({
     keys: env.keys,
     selectedUnlockedKey: env.selectedUnlockedKey,
     isLoading: env.keysLoading,
+    refreshKeys: env.refreshKeys,
   }),
 }));
 
@@ -123,6 +125,7 @@ beforeEach(() => {
   env.keysLoading = false;
   env.keys = [ACTIVE];
   env.selectedUnlockedKey = ACTIVE;
+  env.refreshKeys.mockClear();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -165,6 +168,36 @@ describe("HomeView identity card", () => {
     const card = container.querySelector('section[aria-label="Active identity"]');
     expect(card?.textContent).toContain("could not be read");
     expect(card?.textContent).not.toContain("npub1");
+  });
+
+  it("names the key whose public key cannot be read, and never offers to create one", async () => {
+    env.selectedUnlockedKey = { ...ACTIVE, publicKeyBech32: "", isUnreadable: true };
+    await mount();
+    const card = container.querySelector('section[aria-label="Active identity"]');
+    expect(card?.textContent).toContain("key-main");
+    expect(card?.textContent).toContain("has not deleted or changed this key");
+    expect(card?.textContent).not.toContain("Unnamed");
+    expect(card?.textContent).not.toContain("Create or import");
+  });
+
+  it("offers a retry that reads the keys again when the public key cannot be read", async () => {
+    env.selectedUnlockedKey = { ...ACTIVE, publicKeyBech32: "", isUnreadable: true };
+    await mount();
+    const retry = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Try again"
+    );
+
+    await act(async () => retry?.click());
+
+    expect(env.refreshKeys).toHaveBeenCalledTimes(1);
+  });
+
+  it("says no key is selected, not that none exists, when keys exist without a selection", async () => {
+    env.selectedUnlockedKey = undefined;
+    await mount();
+    const card = container.querySelector('section[aria-label="Active identity"]');
+    expect(card?.textContent).toContain("No key is selected");
+    expect(card?.textContent).not.toContain("Create or import");
   });
 
   it("invites creating a key when the vault has none", async () => {
