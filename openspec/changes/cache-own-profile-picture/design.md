@@ -63,7 +63,7 @@ Keyed by public key rather than key id because the picture belongs to the identi
 
 A failure keeps the seal and says so on the Profile view, in the place the user acted. It is never retried. The one judgement call is a copy that already exists: a failure to refresh the same URL keeps the old copy (a transient failure is not evidence the old copy is wrong), and a failure for a different URL removes it (it would show a picture the user has replaced).
 
-Notes: a host that blocks cross-origin reads gets the owner's sentence, "This image host doesn't allow Ostrilo to keep a copy." A browser reports a CORS refusal on a `crossorigin` image as a plain load error, and a 404 or a DNS failure is the same event, so the page cannot tell them apart and the sentence covers both. A second, uncredentialed load to find out would be a second request, which the policy forbids. Timeout, oversize, a non-`https:` URL and an encoding failure each have their own short note.
+Notes: every load failure gets one generic note, "Ostrilo couldn't load this picture to keep a copy, so the header shows your seal." A browser reports a CORS refusal on a `crossorigin` image as a plain load error, and a 404 or a DNS failure is the same event, so the page cannot tell them apart, and a CORS-specific sentence would be wrong for most of them. A second, uncredentialed load to find out would be a second request, which the policy forbids. The same note covers a tainted canvas. Only what the page can tell apart locally has its own short note: a timeout, an oversize image, a non-`https:` URL and an encoding failure.
 
 ### Decision 5: The header cannot show the wrong identity
 
@@ -71,7 +71,7 @@ Notes: a host that blocks cross-origin reads gets the owner's sentence, "This im
 
 ### Decision 6: The platform may be more permissive than the fallback assumes
 
-In the Chromium the e2e suite runs, an extension page whose manifest declares `https://*/*` content-script matches loaded an image from a host that sent no CORS headers and read it back, so a canvas was not tainted. That is the platform being generous, not the extension: the code still requests the image anonymously and still handles both a load error and a tainted canvas, and the tainted path is covered by unit tests with a forced `SecurityError`. It is recorded here because it means the "host blocks cross-origin reads" fallback is, today, mostly exercised by hosts that fail to load at all, and because a browser that does not extend content-script patterns to extension pages (Firefox) will exercise it for real.
+In the Chromium the e2e suite runs, an extension page whose manifest declares `https://*/*` content-script matches loaded an image from a host that sent no CORS headers and read it back, so a canvas was not tainted. That is the platform being generous, not the extension: the code still requests the image anonymously and still handles both a load error and a tainted canvas, and the tainted path is covered by unit tests with a forced `SecurityError`. It is recorded here because it means the CORS-related failure paths are, today, mostly exercised by pictures that fail to load at all, and because a browser that does not extend content-script patterns to extension pages (Firefox) will exercise it for real.
 
 ### Decision 7: Alternatives considered
 

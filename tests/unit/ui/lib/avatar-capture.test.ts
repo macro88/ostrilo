@@ -279,12 +279,12 @@ describe("captureAvatar failures", () => {
 });
 
 describe("avatarCaptureNote", () => {
-  it("uses the brief's sentence for a host that does not allow a copy", () => {
+  it("uses one generic note for every load failure, since they cannot be told apart", () => {
     expect(avatarCaptureNote("tainted")).toBe(
-      "This image host doesn't allow Ostrilo to keep a copy."
+      "Ostrilo couldn't load this picture to keep a copy, so the header shows your seal."
     );
     expect(avatarCaptureNote("load-failed")).toBe(
-      "This image host doesn't allow Ostrilo to keep a copy."
+      "Ostrilo couldn't load this picture to keep a copy, so the header shows your seal."
     );
   });
 

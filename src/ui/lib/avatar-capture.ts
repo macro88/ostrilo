@@ -185,7 +185,9 @@ export function avatarCaptureNote(reason: AvatarCaptureFailure): string {
   switch (reason) {
     case "tainted":
     case "load-failed":
-      return "This image host doesn't allow Ostrilo to keep a copy.";
+      // A refused CORS read, a 404 and a DNS failure all arrive as the same
+      // load error, so one note covers every way the load can fail.
+      return "Ostrilo couldn't load this picture to keep a copy, so the header shows your seal.";
     case "timeout":
       return "This image took too long to load, so Ostrilo couldn't keep a copy.";
     case "too-large":

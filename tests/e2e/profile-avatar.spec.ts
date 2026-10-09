@@ -349,7 +349,7 @@ test.describe("own profile picture in the header", () => {
     await popup.getByRole("button", { name: "Refresh picture" }).click();
 
     await expect(note(popup)).toHaveText(
-      "This image host doesn't allow Ostrilo to keep a copy.",
+      "Ostrilo couldn't load this picture to keep a copy, so the header shows your seal.",
       { timeout: 20_000 }
     );
     await expect(popup.locator(HEADER_IMAGE)).toHaveCount(0);

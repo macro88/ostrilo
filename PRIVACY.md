@@ -109,8 +109,8 @@ up after 10 seconds.
 
 That is the only time Ostrilo asks an image host for anything. Opening the popup
 or the side panel, unlocking, switching keys and approval windows make no image
-request, and nothing refreshes the copy in the background. If the host does not
-allow a copy, the header keeps the local seal and the Profile screen says so.
+request, and nothing refreshes the copy in the background. If the picture cannot
+be loaded or kept, the header keeps the local seal and the Profile screen says so.
 Saving a profile with no picture, or deleting a key, removes that key's copy.
 
 Ostrilo 0.9.0 has no image upload: you paste an image URL instead.

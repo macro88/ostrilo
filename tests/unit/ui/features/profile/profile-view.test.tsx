@@ -456,14 +456,14 @@ describe("ProfileView picture copy", () => {
     expect(buttonByText("Refresh picture")).toBeUndefined();
   });
 
-  it("says why when the host does not allow a copy, and never retries", async () => {
+  it("says the picture could not be loaded, and never retries", async () => {
     const { AvatarCaptureError } = await import("@/ui/lib/avatar-capture");
     capture.captureAvatar.mockRejectedValue(new AvatarCaptureError("tainted"));
     await mount();
     await click(buttonByText("Refresh picture")!);
 
     expect(container.querySelector("output")?.textContent).toBe(
-      "This image host doesn't allow Ostrilo to keep a copy."
+      "Ostrilo couldn't load this picture to keep a copy, so the header shows your seal."
     );
     expect(client.saveOwnAvatar).not.toHaveBeenCalled();
     expect(capture.captureAvatar).toHaveBeenCalledTimes(1);

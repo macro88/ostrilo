@@ -38,7 +38,7 @@ never loads the picture when you open the popup, switch keys or approve a
 request: a picture address points at a host someone chose, and this is the
 screen where you confirm which identity is about to sign, so fetching it every
 time would tell that host your IP address each time you looked. A key with no
-copy, or whose picture host does not allow one, shows a local seal with its
+copy, or whose picture cannot be loaded, shows a local seal with its
 first letter. The rows in the dropdown are always seals.
 
 **Keyboard shortcuts:**
@@ -241,7 +241,7 @@ the auto-lock slider).
 - Check your internet connection
 - Profile metadata may not exist on relays yet
 - The key label (or "Unnamed Key") is shown instead
-- Dropdown and settings rows are always the local seal, so a missing picture there is not a fault. The header shows your picture only after you save or refresh your profile, and only if the host allows a copy
+- Dropdown and settings rows are always the local seal, so a missing picture there is not a fault. The header shows your picture only after you save or refresh your profile, and only if the picture can be loaded
 
 ### Can't delete a key
 - Verify it's not your last remaining key (the last key cannot be deleted, and its delete button is disabled)

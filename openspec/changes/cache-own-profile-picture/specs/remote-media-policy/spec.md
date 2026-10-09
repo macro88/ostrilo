@@ -85,12 +85,12 @@ The extension SHALL show the user's own profile picture in the header from a sma
 - **AND** it MUST draw the centre-cropped square of the image onto a 96 by 96 canvas
 - **AND** it MUST encode the result as `image/webp`, falling back to `image/png` where the browser has no webp encoder
 
-#### Scenario: A host that cannot be read keeps the seal
+#### Scenario: A picture that cannot be loaded keeps the seal
 
 - **GIVEN** the load fails, the canvas is tainted, the load times out, the image is over the size limit, or the image cannot be encoded
 - **WHEN** the Profile page settles
 - **THEN** no copy MUST be stored and the header MUST keep the seal
-- **AND** the Profile view MUST say so in a short note, using "This image host doesn't allow Ostrilo to keep a copy." for a host that does not allow it
+- **AND** the Profile view MUST say so in a short note, using one generic note ("Ostrilo couldn't load this picture to keep a copy, so the header shows your seal.") for a failed load, a refused cross-origin read and a tainted canvas, because a browser reports them alike, and distinct notes for a timeout, an oversize image, a non-`https:` URL and an encoding failure
 - **AND** a copy made from an earlier picture URL MUST be removed, because it would show a picture the user has replaced
 - **AND** a copy made from the same URL MUST be kept
 
