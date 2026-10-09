@@ -22,6 +22,7 @@ import { DisclosureRateLimitService } from "@/application/services/disclosure-ra
 import { UserPresenceService } from "@/application/services/user-presence.service";
 import { ProfileService } from "@/application/services/profile.service";
 import { RelayManager } from "@/infrastructure/relay";
+import { SessionKeepAlive } from "@/infrastructure/lifecycle/session-keepalive";
 import {
   RpcRouter,
   createRpcMessageListener,
@@ -310,6 +311,15 @@ export default defineBackground(() => {
   // Create approval queue service
   const approvalQueue = new ApprovalQueueService();
 
+  // Keeps this worker alive while the vault is unlocked. See "Auto-lock" below.
+  // `getPlatformInfo` is the cheapest extension API call there is: it reads a
+  // constant and touches no storage, network or user data.
+  const keepAlive = new SessionKeepAlive({
+    ping: () => browser.runtime.getPlatformInfo(),
+    getLockState: () => vault.getLockState(),
+  });
+  vault.onUnlock(() => keepAlive.start());
+
   // Locking denies whatever is waiting for approval.
   //
   // A pending request outlived the session that raised it: the badge kept
@@ -324,6 +334,7 @@ export default defineBackground(() => {
   });
 
   vault.onLock(() => {
+    keepAlive.stop();
     approvalQueue.clear();
     void updateApprovalBadge(0);
     // Tell every open surface. Best-effort: with no listener this rejects,
@@ -435,7 +446,17 @@ export default defineBackground(() => {
   //      timer firing is a lock that can silently never happen.
   //
   // No key material, password or derived key is persisted to survive worker
-  // termination. Eviction drops the keys, which is the desired outcome.
+  // termination. If the browser ends the worker anyway, the keys are gone, the
+  // vault fails closed, and the lock screen says the background restarted.
+  //
+  // What stops that from being routine is a keepalive, and only while unlocked.
+  // Chrome ends an idle MV3 service worker about 30 seconds after its last
+  // event or extension API call, and the keys live in that worker's memory, so
+  // with every extension page closed a 35 minute setting used to last about as
+  // long as the idle window. `SessionKeepAlive` makes one cheap API call every
+  // 20 seconds from unlock until the vault locks by any path, and it checks the
+  // vault's deadline on every tick, so it cannot outlast the auto-lock. See
+  // openspec/changes/keep-unlocked-session-alive/design.md.
   // ==========================================================================
   const AUTO_LOCK_ALARM = 'ostrilo.autoLock';
 
@@ -486,8 +507,10 @@ export default defineBackground(() => {
     const nextSettings = localSettingsChange(changes, areaName);
     if (nextSettings) {
       syncRelayManager(nextSettings as RelaySettings);
-      // The timeout may have changed; re-arm against the new deadline.
+      // The timeout may have changed; re-arm against the new deadline, and
+      // let the keepalive check it now rather than at its next tick.
       void armAutoLock();
+      keepAlive.refresh();
     }
 
     if (DOCKED_STORAGE_KEY in changes) {
