@@ -6,7 +6,7 @@ import { UNLOCK_FAILED, type UnlockResult } from "@/ui/state/KeyManagerContext";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import { countdownDetail } from "@/ui/lib/password-failure";
 import { useEphemeralInputTeardown } from "../hooks/useEphemeralInputTeardown";
-import { AlertTriangle, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { Logo } from "@/ui/components/logo/Logo";
 import { SealMark } from "@/components/common/SealMark";
 import { describeLockReason } from "@/ui/lib/lock-reason";
@@ -140,19 +140,11 @@ export function LockScreen({
             onChange={setPassword}
             disabled={isLoading}
             idPrefix="unlock"
+            // aislop-ignore-next-line jsx-a11y/no-autofocus -- the lock screen has one control worth touching, and the user opened it to type this password
             autoFocus
             inputRef={passwordFieldRef}
-            invalid={Boolean(error)}
+            error={error}
           />
-          {error && (
-            <p
-              className="mt-2 flex items-start gap-1.5 text-xs font-medium text-destructive"
-              role="alert"
-            >
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{error}</span>
-            </p>
-          )}
         </div>
 
         <Button type="submit" disabled={isLoading} className="mt-4 h-12 w-full">

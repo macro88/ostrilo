@@ -6,8 +6,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { PasswordInput } from "@/ui/components/ui/password-input";
 
+const evaluate = vi.hoisted(() => vi.fn());
 vi.mock("@/infrastructure/messaging/client", () => ({
-  evaluatePasswordStrength: vi.fn().mockResolvedValue(null),
+  evaluatePasswordStrength: evaluate,
 }));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -17,6 +18,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  evaluate.mockReset().mockResolvedValue(null);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -85,15 +87,38 @@ describe("PasswordInput error semantics", () => {
     expect(container.querySelector(`[id="${second}"]`)?.textContent).toBe("B failed");
   });
 
-  it("points nothing at a message when there is none, and for a caller-owned alert", () => {
+  it("points nothing at a message when there is none", () => {
     render();
     expect(input("password").getAttribute("aria-describedby")).toBeNull();
     expect(input("password").hasAttribute("aria-invalid")).toBe(false);
+    expect(container.querySelector('[role="alert"], [role="status"]')).toBeNull();
+  });
 
-    render({ invalid: true });
-    const field = input("password");
-    expect(field.getAttribute("aria-invalid")).toBe("true");
-    expect(field.hasAttribute("aria-describedby")).toBe(false);
-    expect(container.querySelector('[role="alert"]')).toBeNull();
+  it("hides the warning icon from assistive technology", () => {
+    render({ error: "Nope" });
+    expect(container.querySelector('[role="alert"] svg')?.getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
+describe("PasswordInput strength verdict", () => {
+  it("does not show the previous password's verdict after the field was emptied", async () => {
+    vi.useFakeTimers();
+    try {
+      evaluate.mockResolvedValue({ score: 4, acceptable: true, requirements: [] });
+      render({ value: "first-password", showStrengthMeter: true });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+      expect(container.textContent).toContain("Strong");
+
+      render({ value: "", showStrengthMeter: true });
+      expect(container.textContent).not.toContain("Strong");
+
+      evaluate.mockReturnValue(new Promise(() => {}));
+      render({ value: "s", showStrengthMeter: true });
+      expect(container.textContent).not.toContain("Strong");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

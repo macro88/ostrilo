@@ -289,6 +289,15 @@ describe("LockScreen unlock failure reporting", () => {
     const message = container.querySelector('[role="alert"]');
     expect(message?.textContent).toMatch(/incorrect password/i);
     expect(message?.textContent).not.toContain(entered);
+
+    // The field points at the message, so it is read with the field and not
+    // only announced once.
+    const field = passwordField(container);
+    expect(message?.id).toBeTruthy();
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    expect(field.getAttribute("aria-describedby")).toBe(message?.id);
+    expect(field.getAttribute("aria-errormessage")).toBe(message?.id);
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1);
   });
 });
 

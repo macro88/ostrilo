@@ -86,11 +86,6 @@ interface PasswordInputProps {
    * the single field is for, a second line saying it again is noise.
    */
   labelHidden?: boolean;
-  /**
-   * Marks the field invalid without rendering a message, for callers that
-   * announce the failure themselves (the lock screen owns its `role="alert"`).
-   */
-  invalid?: boolean;
 }
 
 function getStrengthColor(score: number) {
@@ -144,13 +139,18 @@ function useDebouncedStrength(
   enabled: boolean
 ): PasswordStrength | null {
   const [strength, setStrength] = useState<PasswordStrength | null>(null);
+  const [wasEnabled, setWasEnabled] = useState(enabled);
+
+  // Switching the meter off drops the verdict, so a password typed after the
+  // field was emptied is not shown the previous one's. Adjusted while
+  // rendering, from the change in `enabled`, rather than in the effect below.
+  if (wasEnabled !== enabled) {
+    setWasEnabled(enabled);
+    if (!enabled) setStrength(null);
+  }
 
   useEffect(() => {
-    if (!enabled) {
-      // aislop-ignore-next-line react/set-state-in-effect -- clears the verdict when the meter is switched off; deriving it per render would flash a stale verdict on the next keystroke
-      setStrength(null);
-      return;
-    }
+    if (!enabled) return;
 
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -371,7 +371,6 @@ export function PasswordInput({
   autoFocus = false,
   inputRef,
   labelHidden = false,
-  invalid = false,
 }: PasswordInputProps) {
   const shouldShowStrength = showStrengthMeter && value.length > 0;
   const strength = useDebouncedStrength(value, shouldShowStrength);
@@ -400,7 +399,7 @@ export function PasswordInput({
           value={value}
           onChange={onChange}
           disabled={disabled}
-          invalid={Boolean(error) || invalid}
+          invalid={Boolean(error)}
           errorId={error ? errorId : undefined}
           // aislop-ignore-next-line jsx-a11y/no-autofocus -- forwards the same opt-in prop, off by default
           autoFocus={autoFocus}
