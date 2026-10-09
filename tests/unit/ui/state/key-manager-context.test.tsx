@@ -281,6 +281,23 @@ describe("KeyManagerProvider", () => {
     expect(latest().keys).toHaveLength(1);
   });
 
+  it("reads the key list again when a poll reports a locked vault after the first read failed", async () => {
+    rpc.getLockState.mockRejectedValueOnce(new Error("no_response"));
+    rpc.listKeys.mockRejectedValueOnce(new Error("no_response"));
+    await mountProvider();
+    expect(latest().lockCheckFailed).toBe(true);
+    expect(latest().hasKeys).toBe(false);
+
+    rpc.getLockState.mockResolvedValue({ isLocked: true, selectedKeyId: "a" });
+    rpc.listKeys.mockResolvedValue([{ id: "a" }, { id: "b" }]);
+    await advancePoll();
+
+    expect(latest().lockCheckFailed).toBe(false);
+    expect(latest().isLocked).toBe(true);
+    expect(latest().hasKeys).toBe(true);
+    expect(latest().keys.map((key) => key.id)).toEqual(["a", "b"]);
+  });
+
   it("keeps the failure when the retry fails too", async () => {
     rpc.getLockState.mockRejectedValue(new Error("no_response"));
     await mountProvider();

@@ -199,6 +199,13 @@ function useLockObservers(
       if (!stamps.isCurrent(stamp)) return;
       const prev = latest.current;
       if (state.isLocked) {
+        // A surface whose first read failed never loaded its key list. Marking
+        // it healthy over that empty list would tell a vault that has keys it
+        // has none, so it reads the list instead.
+        if (prev.lockCheckFailed && prev.lock.isLocked) {
+          void hydrate();
+          return;
+        }
         if (!prev.lock.isLocked) stamps.lock();
         update((p) => ({
           ...p,
