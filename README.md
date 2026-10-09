@@ -39,7 +39,7 @@ your signing history.
 </p>
 
 Ostrilo in light and dark themes. Screenshot from the
-[September 2026 design review](docs/design-review/README.md), using sample data.
+[design review](docs/design-review/README.md), using sample data.
 
 ## Install
 
@@ -73,8 +73,9 @@ Private keys are encrypted on your device. Ostrilo signs inside the extension
 and returns the signed event to the website. The website never receives your
 private key.
 
-You choose which sites may see your public key. Signing an event also shares
-that key, because it's part of the event. A site's permission applies to scripts
+You choose which sites may see your public key, one identity at a time: a site
+you allow for one key asks again after you switch to another. Signing an event
+also shares that key, because it's part of the event. A site's permission applies to scripts
 running on that page too.
 
 For sites you trust, you can allow some actions without a prompt each time.
@@ -208,8 +209,10 @@ Ostrilo provides `window.nostr.getPublicKey()` and `window.nostr.signEvent()`
 through NIP-07 on top-level HTTPS pages. `getRelays`, `nip04.*` and `nip44.*`
 aren't available. NIP-44 is planned. NIP-04 won't be added.
 
-Check for each method before calling it and handle refusal or a locked vault
-without retrying in a loop. See the [error codes](docs/rpc-error-codes.md),
+Check for each method before calling it, with `window.nostr.capabilities.methods`
+or by testing for the function, and handle refusal or a locked vault without
+retrying in a loop. See the [API versioning policy](docs/api-versioning.md), the
+[error codes](docs/rpc-error-codes.md),
 [provider code](src/extension/injected.ts) and
 [local HTTPS setup](docs/local-https-development.md).
 
