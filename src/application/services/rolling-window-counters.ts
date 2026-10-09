@@ -71,7 +71,10 @@ export class RollingWindowCounters {
   /** Resolves when every change made so far has been written. */
   async settled(): Promise<void> {
     await this.hydration;
-    while (this.writing) await this.writing;
+    if (!this.writing) return;
+    await this.writing;
+    // A change made while that write ran starts another; wait for it too.
+    return this.settled();
   }
 
   /** Entries this origin still has inside the window. */
@@ -184,20 +187,26 @@ export class RollingWindowCounters {
   }
 
   private async flush(): Promise<void> {
-    const { storage, storageKey } = this.options;
     await this.hydration;
-    while (this.dirty) {
-      this.dirty = false;
-      try {
-        await storage!.set(storageKey, this.serialise());
-      } catch (err) {
-        // The in-memory window still applies; only restart survival is lost.
-        console.warn(`[RollingWindowCounters] ${storageKey} not saved:`, err);
-      }
+    await this.writeWhileDirty();
+  }
+
+  private async writeWhileDirty(): Promise<void> {
+    if (!this.dirty) {
+      // Cleared in the same synchronous step as the `dirty` check, so a change
+      // made after the last write always starts a new one.
+      this.writing = undefined;
+      return;
     }
-    // Cleared in the same synchronous step as the `dirty` check above, so a
-    // change made after the last write always starts a new one.
-    this.writing = undefined;
+    this.dirty = false;
+    const { storage, storageKey } = this.options;
+    try {
+      await storage!.set(storageKey, this.serialise());
+    } catch (err) {
+      // The in-memory window still applies; only restart survival is lost.
+      console.warn(`[RollingWindowCounters] ${storageKey} not saved:`, err);
+    }
+    return this.writeWhileDirty();
   }
 }
 
