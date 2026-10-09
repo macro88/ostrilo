@@ -376,7 +376,21 @@ export function createRpcMessageListener(
     const projection = lockedProjectionFor(message.type);
     if (gated || projection) {
       void (async () => {
-        const lockState = await context.vault.getLockState();
+        let lockState: Awaited<ReturnType<typeof context.vault.getLockState>>;
+        try {
+          lockState = await context.vault.getLockState();
+        } catch (error) {
+          // Nothing could establish that the vault is open, so it is reported
+          // locked and nothing is dispatched. Without a response the page would
+          // wait out its own deadline for an answer that never comes.
+          console.error("[RPC] Could not read the lock state for", message.type, error);
+          sendResponse(
+            createRpcErrorResponse(RPC_ERROR_CODES.LOCKED, {
+              method: message.type,
+            })
+          );
+          return;
+        }
         if (lockState.isLocked && gated) {
           console.log("[RPC] Refused while locked:", message.type);
           if (RpcRouter.isPageReachable(namespace)) {

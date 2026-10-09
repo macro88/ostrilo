@@ -103,6 +103,7 @@ describe("locked behaviour at the message boundary", () => {
     message: unknown,
     opts: {
       isLocked: boolean;
+      lockStateFails?: boolean;
       data?: unknown;
       namespace: string;
       onCall?: (m: unknown) => void;
@@ -117,7 +118,12 @@ describe("locked behaviour at the message boundary", () => {
       },
     });
     const listener = mod.createRpcMessageListener(router, {
-      vault: { getLockState: async () => ({ isLocked: opts.isLocked }) },
+      vault: {
+        getLockState: async () => {
+          if (opts.lockStateFails) throw new Error("storage unavailable");
+          return { isLocked: opts.isLocked };
+        },
+      },
     } as never);
 
     return await new Promise<any>((res) => {
@@ -148,6 +154,38 @@ describe("locked behaviour at the message boundary", () => {
       "SECURITY REGRESSION: a locked vault permitted a settings write"
     ).toBe(false);
   });
+
+  it.each([
+    ["a gated method", "settings.update", "settings"],
+    ["a lock-aware read", "keys.list", "keys"],
+  ])(
+    "answers locked, and does not dispatch, when the lock state cannot be read for %s",
+    async (_label, type, namespace) => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      let reached = false;
+      const res = await Promise.race([
+        send(
+          { type, patch: {} },
+          {
+            isLocked: false,
+            lockStateFails: true,
+            namespace,
+            onCall: () => {
+              reached = true;
+            },
+          }
+        ),
+        new Promise<"no response">((r) => setTimeout(() => r("no response"), 500)),
+      ]);
+
+      expect(res, "the caller was left waiting for its own deadline").not.toBe(
+        "no response"
+      );
+      expect(res.ok).toBe(false);
+      expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.LOCKED);
+      expect(reached).toBe(false);
+    }
+  );
 
   it("refuses every policy mutation while locked", async () => {
     for (const type of [
