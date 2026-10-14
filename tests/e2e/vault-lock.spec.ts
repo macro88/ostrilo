@@ -457,7 +457,7 @@ test.describe("locking cancels work in flight", () => {
    * dropped without being resolved leaves the page hanging until its own
    * timeout, and a page that never hears "no" retries.
    */
-  test("the header Lock button denies a signing prompt still in flight", async ({
+  test("the header Lock button answers a signing prompt still in flight as locked", async ({
     openPopup,
     extensionContext,
     extensionId,
