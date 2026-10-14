@@ -142,6 +142,15 @@ describe("PolicyService stored-settings handling", () => {
         expect((await stored())?.origins?.[0].trustLevel).toBe("medium");
       });
 
+      it("rebuilds a stored null into defaults without inventing a stamp", async () => {
+        await storage.local.set("appSettings", null);
+
+        const rebuilt = await new SettingsService(storage).get();
+
+        expect(rebuilt).toMatchObject({ __version: "settings.v1", theme: "system", origins: [] });
+        expect(rebuilt?.__consentMigrations).toBeUndefined();
+      });
+
       it("still migrates an upgrader whose stored settings carry no stamp, after a key is selected", async () => {
         await storage.local.set("appSettings", {
           __version: "settings.v1",

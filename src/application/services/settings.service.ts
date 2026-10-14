@@ -206,7 +206,7 @@ function consentStamp(
   if (existing === undefined) {
     return { __consentMigrations: CONSENT_MIGRATION_VERSION };
   }
-  return typeof existing.__consentMigrations === "number"
+  return typeof existing?.__consentMigrations === "number"
     ? { __consentMigrations: existing.__consentMigrations }
     : {};
 }
