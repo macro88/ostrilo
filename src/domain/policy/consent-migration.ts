@@ -19,11 +19,13 @@ export const CONSENT_MIGRATION_VERSION = 2;
 
 /**
  * Undo trust levels the extension, not the user, assigned. Every stored
- * `medium` was assigned by `setPerKindRule` or `setOriginPolicy`: no shipped UI
- * path has ever written a trust level. `high` cannot have come from those paths,
- * so it is left alone, and explicit per-kind rules are untouched. Stored `allow`
- * rules for the newly protected kinds stay in place: evaluation forces a
- * protected kind to `ask` regardless, so they are inert.
+ * `medium` was assigned by `setPerKindRule` or `setOriginPolicy`: at the time of
+ * this repair no shipped UI path had written a trust level. Settings now lets
+ * the user choose one, which is why a fresh install is stamped and never
+ * migrated. `high` cannot have come from those paths, so it is left alone, and
+ * explicit per-kind rules are untouched. Stored `allow` rules for the newly
+ * protected kinds stay in place: evaluation forces a protected kind to `ask`
+ * regardless, so they are inert.
  */
 function repairFabricatedTrust(origin: any): any {
   const next = { ...origin };
