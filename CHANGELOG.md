@@ -1,9 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 — 2026-10-16
 
-Changes since 0.9.0. They are not in a release yet, and no version number has
-been set for them.
+This release fixes the two problems reported against 0.9.0:
+
+- **Auto-lock now waits as long as you set it.** In 0.9.0 the vault could lock
+  a minute or two after every Ostrilo window closed, whatever the auto-lock
+  setting said.
+- **Your identity comes back after you unlock.** In 0.9.0 the header could read
+  "Unnamed" and the Public Key card "could not be read" after an unlock. No key
+  was lost; the screen was showing a list it had read while the vault was
+  locked.
+
+It also adds Quick start, a backup from Settings for any key, and your own
+picture in the header. Site developers should read the `BREAKING (API)` entry
+under Security: permission to read a public key now belongs to one key, so a
+site asks again after you switch keys.
 
 ### Added
 
@@ -17,9 +29,10 @@ been set for them.
   backed up. Quick start is offered only on a new install and never changes an
   existing vault.
 - **Back up any key from Settings.** Settings → Keys & Identities has a **Back
-  up** button on every readable key. It asks for your master password, writes the same
-  encrypted backup file as first-key onboarding, with its own passphrase, and
-  then asks you to open the saved file to check that it holds this key. Only
+  up** button on every readable key. It asks for your master password, writes
+  the same encrypted backup file as first-key onboarding, with its own
+  passphrase, and then asks you to open the saved file to check that it holds
+  this key. Only
   then is the key marked backed up. The key itself is never shown. A key you
   make in Settings or with Quick start is marked **No backup** until you do
   this. An imported key, or one that predates this tracking, is not marked: you
