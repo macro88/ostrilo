@@ -1,18 +1,17 @@
-import { describeViolation } from "@/domain/utils/password-policy";
 import { useCallback, useLayoutEffect, useReducer, useRef } from "react";
 import { useEncryptedBackupImport } from "../backup/useEncryptedBackupImport";
-import type { KeyBackupPayload } from "../backup/key-backup-envelope";
+import type { KeyBackupPayload } from "@/ui/features/backup/key-backup-envelope";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import {
   importKey as rpcImportKey,
   unlockVault,
   parsePrivateKey,
-  evaluatePasswordStrength,
 } from "@/infrastructure/messaging/client";
 import { OnboardingImportKeyStep } from "./OnboardingImportKeyStep";
 import { OnboardingImportPasswordStep } from "./OnboardingImportPasswordStep";
 import { OnboardingImportSuccessStep } from "./OnboardingImportSuccessStep";
 import { OnboardingStepDots } from "./OnboardingStepDots";
+import { newPasswordProblem } from "../validate-new-password";
 import { userFacingError } from "@/ui/lib/user-facing-error";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
@@ -251,42 +250,12 @@ export function OnboardingImportKey({
   };
 
   const validatePassword = async () => {
-    if (!state.password) {
-      dispatch({ type: "setPasswordError", value: "Password is required" });
-      return false;
-    }
-
-    if (state.password !== state.confirmPassword) {
-      dispatch({ type: "setPasswordError", value: "Passwords do not match" });
-      return false;
-    }
-
-    try {
-      // The verdict comes from the background, which has the blocklist, so
-      // `acceptable` is authoritative. This used to be `strength.score < 3`,
-      // re-implementing half of the domain predicate and dropping its length
-      // term - which is why "Aa1!" was accepted as a vault password.
-      const strength = await evaluatePasswordStrength(state.password);
-      if (!strength.acceptable) {
-        dispatch({
-          type: "setPasswordError",
-          value:
-            strength.violations.length > 0
-              ? describeViolation(strength.violations[0])
-              : "Password does not meet the policy.",
-        });
-        return false;
-      }
-    } catch {
-      dispatch({
-        type: "setPasswordError",
-        value: "Could not validate password strength",
-      });
-      return false;
-    }
-
-    dispatch({ type: "setPasswordError", value: "" });
-    return true;
+    const problem = await newPasswordProblem(
+      state.password,
+      state.confirmPassword
+    );
+    dispatch({ type: "setPasswordError", value: problem });
+    return problem === "";
   };
 
   const handleImportKey = async () => {

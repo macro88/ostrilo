@@ -17,4 +17,8 @@ useDefault = true
       '''^Umbral-Pinecone-Drizzle-47$''',
       '''^encryption-test-456$''',
       '''^signature-test-789$''',
+      # Vault key IDs in the per-key consent tests. Key IDs are random UUIDs
+      # (crypto.randomUUID) and identify a record; they grant nothing.
+      '''^0b6d6f5e-7a4c-4a52-8d3c-2f1e9a7c4b10$''',
+      '''^7c1d3a90-5b2e-4f08-9a63-1d8e4c2b6f77$''',
     ]

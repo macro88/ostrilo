@@ -271,8 +271,20 @@ test.describe("Activity view", () => {
       popup.getByRole("heading", { level: 3, name: "Application Data" })
     ).toBeVisible();
 
-    // The origin dropdown is built from the loaded entries, so the fixture
-    // origin is the only real option; selecting it must keep every row.
+    // Protected kinds always prompt, so they are the ones a user goes looking
+    // for in an audit. Each has to be selectable.
+    await filterTrigger(popup, "All Kinds").click();
+    for (const option of [
+      "Event Deletion Request (5)",
+      "Client Authentication (22242)",
+      "HTTP Auth (27235)",
+    ]) {
+      await expect(popup.getByRole("option", { name: option, exact: true })).toBeVisible();
+    }
+    await popup.keyboard.press("Escape");
+
+    // The origin dropdown is read from the stored log, and the fixture origin
+    // is the only one in it; selecting it must keep every row.
     await chooseFilter(popup, "All Origins", DAPP_ORIGIN);
     await expect(
       popup.getByRole("heading", { level: 3, name: "Reaction" })
@@ -408,6 +420,7 @@ test.describe("Activity view", () => {
       "a refusal must be logged - an audit trail of approvals only hides exactly the events worth reviewing"
     ).toBeTruthy();
     expect(denied?.decision).toBe("deny");
+    expect(denied?.reason, "a refusal must say why").toBe("user");
 
     await openActivityTab(popup);
 
@@ -416,6 +429,7 @@ test.describe("Activity view", () => {
     const deniedRow = activityRow(popup, "Short Text Note");
     await expect(deniedRow).toContainText("Denied", { timeout: 10_000 });
     await expect(deniedRow).not.toContainText("Approved");
+    await expect(deniedRow).toContainText("You denied it");
 
     const approvedRow = activityRow(popup, "Reaction");
     await expect(approvedRow).toContainText("Approved");

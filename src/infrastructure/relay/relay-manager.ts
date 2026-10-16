@@ -28,12 +28,25 @@ import { RELAY_BOUNDS, sanitizeRelayUrls } from "@/domain/relay";
  */
 export class RelayManager implements INostrRelay {
   private relays: NostrRelayAdapter[] = [];
+  private relayUrls: string[] = [];
 
   constructor(relayUrls: string[]) {
     this.setRelayAdapters(relayUrls);
   }
 
+  /**
+   * Replace the relay list. A list that sanitises to the one already in use is
+   * a no-op: callers apply this on every settings write, and rebuilding would
+   * drop every open socket and live subscription for a change (a theme, say)
+   * that did not touch the relays.
+   */
   async setRelayUrls(relayUrls: string[]): Promise<void> {
+    const accepted = sanitizeRelayUrls(relayUrls);
+    const unchanged =
+      accepted.length === this.relayUrls.length &&
+      accepted.every((url, index) => url === this.relayUrls[index]);
+    if (unchanged) return;
+
     await this.disconnect();
     this.setRelayAdapters(relayUrls);
   }
@@ -48,6 +61,7 @@ export class RelayManager implements INostrRelay {
       );
     }
 
+    this.relayUrls = accepted;
     this.relays = accepted.map((url) => new NostrRelayAdapter(url));
   }
 

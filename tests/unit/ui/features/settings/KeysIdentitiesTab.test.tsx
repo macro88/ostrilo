@@ -31,6 +31,10 @@ const client = vi.hoisted(() => ({
   renameKey: vi.fn(),
   deleteKey: vi.fn(),
   evaluatePasswordStrength: vi.fn(),
+  revealKey: vi.fn(),
+  markKeyBackupVerified: vi.fn(),
+  listBackupStatuses: vi.fn(),
+  subscribeKeyBackupChanged: vi.fn(() => () => {}),
 }));
 
 vi.mock("@/ui/features/authentication/hooks/useKeyManager", () => ({
@@ -104,6 +108,9 @@ beforeEach(() => {
   keyManager.selectKey.mockReset().mockResolvedValue(undefined);
   client.renameKey.mockReset().mockResolvedValue(undefined);
   client.deleteKey.mockReset().mockResolvedValue(undefined);
+  client.revealKey.mockReset();
+  client.markKeyBackupVerified.mockReset().mockResolvedValue(null);
+  client.listBackupStatuses.mockReset().mockResolvedValue([]);
 });
 
 afterEach(() => {

@@ -12,11 +12,13 @@ const PASSWORD = "correct-horse-battery-staple-42"; // gitleaks:allow
 const revealKey = vi.fn();
 const generateKey = vi.fn();
 const unlockVault = vi.fn();
+const markKeyBackupVerified = vi.fn();
 
 vi.mock("@/infrastructure/messaging/client", () => ({
   revealKey: (...args: unknown[]) => revealKey(...args),
   generateKey: (...args: unknown[]) => generateKey(...args),
   unlockVault: (...args: unknown[]) => unlockVault(...args),
+  markKeyBackupVerified: (...args: unknown[]) => markKeyBackupVerified(...args),
   evaluatePasswordStrength: vi.fn().mockResolvedValue({
     acceptable: true,
     violations: [],
@@ -101,6 +103,7 @@ beforeEach(() => {
   revealKey.mockResolvedValue({ nsec: NSEC, hex: HEX });
   generateKey.mockResolvedValue({ id: "k1" });
   unlockVault.mockResolvedValue(undefined);
+  markKeyBackupVerified.mockResolvedValue(null);
   Object.defineProperty(globalThis.navigator, "clipboard", {
     value: { writeText: vi.fn().mockResolvedValue(undefined) },
     configurable: true,
@@ -222,5 +225,43 @@ describe("create-key flow drops key material on every exit", () => {
     await click(button(container, "Finish"));
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(container.innerHTML).not.toContain(NSEC);
+  });
+
+  it("records the key's backup as verified only once verification passes", async () => {
+    const { container } = render(
+      <OnboardingCreateKey onBack={() => {}} onComplete={() => {}} />
+    );
+    await reachRevealedBackupStep(container);
+    expect(markKeyBackupVerified).not.toHaveBeenCalled();
+
+    setValue(
+      container.querySelector<HTMLInputElement>("#backupVerification")!,
+      "wrongend"
+    );
+    await click(button(container, "Check"));
+    expect(markKeyBackupVerified).not.toHaveBeenCalled();
+
+    setValue(
+      container.querySelector<HTMLInputElement>("#backupVerification")!,
+      NSEC.slice(-8)
+    );
+    await click(button(container, "Check"));
+    expect(markKeyBackupVerified).toHaveBeenCalledExactlyOnceWith("k1");
+  });
+
+  it("still lets the user finish when the status write fails", async () => {
+    markKeyBackupVerified.mockRejectedValue(new Error("rpc:backup.markVerified:locked"));
+    const onComplete = vi.fn();
+    const { container } = render(
+      <OnboardingCreateKey onBack={() => {}} onComplete={onComplete} />
+    );
+    await reachRevealedBackupStep(container);
+    setValue(
+      container.querySelector<HTMLInputElement>("#backupVerification")!,
+      NSEC.slice(-8)
+    );
+    await click(button(container, "Check"));
+    await click(button(container, "Finish"));
+    expect(onComplete).toHaveBeenCalledTimes(1);
   });
 });

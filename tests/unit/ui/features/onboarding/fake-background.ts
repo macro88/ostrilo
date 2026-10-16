@@ -42,6 +42,7 @@ const defaultResponders: Record<string, Responder> = {
     data: { id: "imported-key", label: request.label },
   }),
   "vault.unlock": () => ({ ok: true, data: {} }),
+  "backup.markVerified": () => ({ ok: true, data: null }),
 };
 
 let responders: Record<string, Responder> = { ...defaultResponders };

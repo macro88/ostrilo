@@ -1,21 +1,21 @@
-import { describeViolation } from "@/domain/utils/password-policy";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import {
   generateKey as rpcGenerateKey,
   unlockVault,
-  evaluatePasswordStrength,
   revealKey,
+  markKeyBackupVerified,
 } from "@/infrastructure/messaging/client";
 import { OnboardingCreateKeyBackupStep } from "./OnboardingCreateKeyBackupStep";
 import { OnboardingCreateKeyInputStep } from "./OnboardingCreateKeyInputStep";
 import { OnboardingStepDots } from "./OnboardingStepDots";
-import { VERIFICATION_SUFFIX_LENGTH } from "./backup/BackupVerification";
+import { VERIFICATION_SUFFIX_LENGTH } from "@/ui/features/backup/components/BackupVerification";
 import {
   CLIPBOARD_CLEAR_MS,
   useExpiringClipboard,
 } from "../backup/useExpiringClipboard";
-import type { KeyBackupPayload } from "../backup/key-backup-envelope";
+import type { KeyBackupPayload } from "@/ui/features/backup/key-backup-envelope";
+import { newPasswordProblem } from "../validate-new-password";
 import { userFacingError } from "@/ui/lib/user-facing-error";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 
@@ -149,6 +149,9 @@ export function OnboardingCreateKey({
   // Use refs for ephemeral sensitive data (not useState)
   const privateKeyRef = useRef<{ nsec: string; hex: string } | null>(null);
   const passwordBackupRef = useRef<string>("");
+  // The id is not secret. It is what the backup status is recorded against once
+  // the verification below passes.
+  const createdKeyIdRef = useRef<string | null>(null);
 
   /**
    * The single teardown. Every exit from the flow runs it: finishing, stepping
@@ -188,47 +191,11 @@ export function OnboardingCreateKey({
   }, []);
 
   const validatePassword = async () => {
-    if (!state.password) {
-      dispatch({ type: "setPasswordError", value: "Password is required" });
-      return false;
-    }
-
-    if (state.password !== state.confirmPassword) {
-      dispatch({ type: "setPasswordError", value: "Passwords do not match" });
-      return false;
-    }
-
-    try {
-      // The verdict comes from the background, which has the blocklist, so
-      // `acceptable` is authoritative. This used to be `strength.score < 3`,
-      // re-implementing half of the domain predicate and dropping its length
-      // term - which is why "Aa1!" was accepted as a vault password.
-      const strength = await evaluatePasswordStrength(state.password);
-      if (!strength.acceptable) {
-        dispatch({
-          type: "setPasswordError",
-          value:
-            strength.violations.length > 0
-              ? describeViolation(strength.violations[0])
-              : "Password does not meet the policy.",
-        });
-        return false;
-      }
-    } catch {
-      dispatch({
-        type: "setPasswordError",
-        value: "Could not validate password strength",
-      });
-      return false;
-    }
-
-    if (!state.keyName.trim()) {
-      dispatch({ type: "setPasswordError", value: "Key name is required" });
-      return false;
-    }
-
-    dispatch({ type: "setPasswordError", value: "" });
-    return true;
+    const problem =
+      (await newPasswordProblem(state.password, state.confirmPassword)) ||
+      (state.keyName.trim() ? "" : "Key name is required");
+    dispatch({ type: "setPasswordError", value: problem });
+    return problem === "";
   };
 
   const handleGenerateKey = async () => {
@@ -237,7 +204,8 @@ export function OnboardingCreateKey({
     dispatch({ type: "setGenerating", value: true });
     try {
       // Generate key in background and set as selected if first
-      await rpcGenerateKey(state.password, state.keyName.trim());
+      const created = await rpcGenerateKey(state.password, state.keyName.trim());
+      createdKeyIdRef.current = created.id;
       // Immediately unlock session so user can proceed
       await unlockVault(state.password);
       // Store password in ref for backup step (not in state)
@@ -291,6 +259,17 @@ export function OnboardingCreateKey({
       // no key and no explanation.
       dispatch({ type: "toggleTranscription" });
     }
+  };
+
+  const handleVerified = () => {
+    dispatch({ type: "setVerified" });
+    const keyId = createdKeyIdRef.current;
+    if (!keyId) return;
+    // The vault set this key pending when it made it. Verification is what
+    // turns that into verified, so it is recorded here and nowhere earlier. A
+    // failed write leaves the key pending, which is the honest state: the
+    // Home banner will ask for a backup rather than trust one nobody recorded.
+    void markKeyBackupVerified(keyId).catch(() => undefined);
   };
 
   const handleBackToInput = () => {
@@ -366,7 +345,7 @@ export function OnboardingCreateKey({
             onBackupFileSaved={() => dispatch({ type: "setBackupFileSaved" })}
             onVerifySuffix={verifySuffix}
             onVerifyNsec={verifyNsec}
-            onVerified={() => dispatch({ type: "setVerified" })}
+            onVerified={handleVerified}
             onAcknowledgedChange={(value) =>
               dispatch({ type: "setAcknowledged", value })
             }

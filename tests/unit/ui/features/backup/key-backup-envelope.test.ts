@@ -12,7 +12,7 @@ import {
   serializeKeyBackup,
   type KeyBackupEnvelopeV1,
   type KeyBackupPayload,
-} from "@/ui/features/onboarding/backup/key-backup-envelope";
+} from "@/ui/features/backup/key-backup-envelope";
 
 /**
  * The file that replaced the plaintext key download.

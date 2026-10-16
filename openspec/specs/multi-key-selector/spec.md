@@ -11,7 +11,6 @@ Implemented by `src/ui/components/layout/KeySelector.tsx` (header),
 `src/ui/features/settings/components/KeysIdentitiesTab.tsx` (settings page), and
 `src/ui/components/dialogs/AddKeyDialog.tsx`. Visual rules come from
 `docs/design/DESIGN_RULES.md`.
-
 ## Requirements
 ### Requirement: REQ-MKS-001 - Key Selector Component
 
@@ -46,8 +45,9 @@ The system SHALL provide a KeySelector component that displays all available key
 ### Requirement: REQ-MKS-002 - Profile-Aware Key Display
 
 The system SHALL integrate profile metadata for each key, displaying the profile
-display name when available. It SHALL NOT load relay-supplied profile pictures on
-any key-selection surface.
+display name when available. The header trigger SHALL show the selected key's own
+profile picture from a local copy when one exists. It SHALL NOT load relay-supplied
+profile pictures on any key-selection surface.
 
 **Priority:** High  
 **Category:** Integration
@@ -55,7 +55,8 @@ any key-selection surface.
 #### Acceptance Criteria
 - KeySelector requests profile metadata for all keys on mount, in parallel, keyed by hex public key
 - Display name shown as: `metadata.display_name || metadata.name || key.label || "Unnamed Key"`
-- Avatars are ALWAYS the local seal bearing the display name's first letter. `metadata.picture` MUST NOT be used as an image source on the header selector or the settings key list
+- List rows (the dropdown and the settings key list) are ALWAYS the local seal bearing the display name's first letter. `metadata.picture` MUST NOT be used as an image source on any key-selection surface
+- The header trigger shows the selected key's local picture copy, a `data:` image at a fixed size with the display name as its alternative text, and the seal when the key has none. It never shows another key's copy, not even while a switch settles
 - Npub shown as secondary text, middle-truncated, in mono (`DESIGN_RULES` §7)
 - A failed profile fetch degrades to the label with no error UI
 
@@ -67,6 +68,15 @@ any key-selection surface.
 **And** no request is made to the picture URL's host  
 **And** the key shows "Alice" as the primary text  
 **And** the key shows the truncated npub as secondary text
+
+#### Scenario: Selected key with a local picture copy
+**Given** the selected key has a local copy of its picture  
+**When** the KeySelector renders  
+**Then** the header trigger shows that image at a fixed size, named for the display name  
+**And** the image source is a `data:` URL  
+**And** the dropdown rows still show seals  
+**When** the user switches to a key with no copy  
+**Then** the header shows that key's seal and never the previous key's image
 
 #### Scenario: Key without profile metadata
 **Given** the user has a key with label "Work Account"  
@@ -81,8 +91,6 @@ any key-selection surface.
 **When** the settings key list renders that record  
 **Then** the row states that the record is unreadable  
 **And** no npub is rendered for it
-
----
 
 ### Requirement: REQ-MKS-003 - Add Key Action
 
@@ -250,32 +258,35 @@ The system SHALL support full keyboard navigation for the KeySelector component.
 
 ### Requirement: REQ-MKS-006 - ARIA Attributes
 
-The system SHALL provide proper ARIA attributes for screen reader accessibility.
+The system SHALL provide proper ARIA attributes for screen reader accessibility. The key selector SHALL be a menu, not a listbox, because it holds an action ("Add Key") beside the keys and a listbox may contain only options.
 
 **Priority:** High  
 **Category:** Accessibility
 
 #### Acceptance Criteria
-- KeySelector dropdown has `role="listbox"` and `aria-label="Available keys"`
-- Each key item has `role="option"`
-- Active key has `aria-selected="true"`
-- Trigger has `aria-label="Select active key"`, `aria-haspopup="listbox"` and `aria-controls="key-selector-listbox"`
-- "Add Key" item has `aria-label="Add new key"`
-- Each option carries ONE composed `aria-label` — display name, truncated npub, and "(currently selected)" on the active key. `aria-describedby` is NOT used for the npub
+- KeySelector dropdown has `role="menu"` and `aria-label="Available keys"`
+- Each key item has `role="menuitemradio"`
+- Active key has `aria-checked="true"` and every other key `aria-checked="false"`
+- Trigger has `aria-label="Select active key"` and `aria-haspopup="menu"`
+- "Add Key" item has `role="menuitem"` and `aria-label="Add new key"`
+- Each key item carries ONE composed `aria-label` — display name, truncated npub, and "(currently selected)" on the active key. `aria-describedby` is NOT used for the npub
 - Dropdown state communicated via `aria-expanded`
 - The trigger is wrapped in an `<h2>` that points `aria-labelledby` at the key's name, so the screen's heading is the active key's name rather than "Select active key"
 - Decorative icons (chevron, check, plus) are `aria-hidden`
 
 #### Scenario: Screen reader announces key selection
-**Given** a screen reader user navigates to KeySelector  
-**When** the trigger receives focus  
-**Then** screen reader announces "Select active key, button, collapsed"  
-**When** the user activates the trigger  
-**Then** the listbox is announced as expanded  
-**When** the user navigates to the second key  
-**Then** that option is announced with its display name and truncated npub
+- **GIVEN** a screen reader user navigates to KeySelector
+- **WHEN** the trigger receives focus
+- **THEN** the screen reader announces "Select active key, button, collapsed"
+- **WHEN** the user activates the trigger
+- **THEN** the menu is announced as expanded
+- **WHEN** the user navigates to the second key
+- **THEN** that item is announced with its display name and truncated npub, as a radio menu item that is not checked
 
----
+#### Scenario: Every child of the menu is a legal menu child
+- **GIVEN** the dropdown is open and the host supplies an "Add Key" action
+- **WHEN** the page is checked with axe
+- **THEN** no `aria-required-children` or `aria-required-parent` violation SHALL be reported for the dropdown
 
 ### Requirement: REQ-MKS-007 - Loading and Error States
 
@@ -363,7 +374,7 @@ The system SHALL render the key list and handle interactions with minimal latenc
 - Key switching completes in <500ms (excluding network)
 - Profile metadata for all keys is requested in parallel, and one failure does not sink the rest
 - `KeySelector` is wrapped in `React.memo` to prevent unnecessary re-renders
-- No avatar images are loaded, so no image lazy-loading is required
+- The header image is a stored `data:` copy read from the background, so no remote image is loaded and no image lazy-loading is required
 - Dropdown open/close animation is smooth
 
 #### Scenario: Fast rendering with multiple keys
@@ -372,8 +383,6 @@ The system SHALL render the key list and handle interactions with minimal latenc
 **Then** all 10 keys render within 100ms  
 **And** no jank or lag is visible  
 **And** scrolling is smooth (60fps)
-
----
 
 ### Requirement: REQ-MKS-010 - Delete Key Safety
 

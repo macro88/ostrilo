@@ -108,11 +108,14 @@ async function reloadHome(popup: Page, activeLabel: string): Promise<void> {
  * `aria-labelledby` at the trigger, and `aria-labelledby` wins. Naming it
  * anything else here matches nothing, and a selector that matches nothing
  * passes every assertion that follows it.
+ *
+ * It is a menu whose key rows are `menuitemradio`. It was a listbox of
+ * options until axe showed that a listbox cannot hold the "Add Key" action.
  */
 function keySelector(popup: Page) {
   return {
     trigger: popup.getByRole("button", { name: "Select active key" }),
-    listbox: popup.getByRole("listbox", { name: "Select active key" }),
+    listbox: popup.getByRole("menu", { name: "Select active key" }),
   };
 }
 
@@ -144,7 +147,7 @@ test.describe("Multi-Key Selector", () => {
     const { trigger, listbox } = keySelector(popup);
     await trigger.click();
     await expect(listbox).toBeVisible();
-    await expect(listbox.getByRole("option")).toHaveCount(1);
+    await expect(listbox.getByRole("menuitemradio")).toHaveCount(1);
 
     await popup.getByRole("menuitem", { name: "Add new key" }).click();
 
@@ -185,8 +188,8 @@ test.describe("Multi-Key Selector", () => {
     await expect(addDialog).toBeHidden();
 
     await trigger.click();
-    await expect(listbox.getByRole("option")).toHaveCount(2);
-    await listbox.getByRole("option", { name: optionName(work) }).click();
+    await expect(listbox.getByRole("menuitemradio")).toHaveCount(2);
+    await listbox.getByRole("menuitemradio", { name: optionName(work) }).click();
     await expect(listbox).toBeHidden();
 
     // The home screen is what a user reads before signing, so it has to show
@@ -217,17 +220,17 @@ test.describe("Multi-Key Selector", () => {
 
     const { trigger, listbox } = keySelector(popup);
     await trigger.click();
-    await expect(listbox.getByRole("option")).toHaveCount(3);
+    await expect(listbox.getByRole("menuitemradio")).toHaveCount(3);
 
     // Each key with its OWN npub beside its own label. A dropdown that listed
     // three rows all carrying the active key's npub would look perfectly fine.
     for (const key of stored) {
       await expect(
-        listbox.getByRole("option", { name: optionName(key) })
+        listbox.getByRole("menuitemradio", { name: optionName(key) })
       ).toBeVisible();
     }
 
-    const selected = listbox.getByRole("option", { selected: true });
+    const selected = listbox.getByRole("menuitemradio", { checked: true });
     await expect(selected).toHaveCount(1);
     await expect(selected).toHaveAttribute(
       "aria-label",
@@ -243,7 +246,7 @@ test.describe("Multi-Key Selector", () => {
 
     const { trigger, listbox } = keySelector(popup);
 
-    const options = listbox.getByRole("option");
+    const options = listbox.getByRole("menuitemradio");
 
     // Escape must close the menu and leave the active identity alone. A menu
     // that committed the highlighted row on dismiss would change who signs by
@@ -288,7 +291,7 @@ test.describe("Multi-Key Selector", () => {
 
     const { trigger, listbox } = keySelector(popup);
     await trigger.click();
-    await listbox.getByRole("option", { name: optionName(work) }).click();
+    await listbox.getByRole("menuitemradio", { name: optionName(work) }).click();
     await expect(
       popup.getByRole("heading", { level: 2, name: "Work" })
     ).toBeVisible();

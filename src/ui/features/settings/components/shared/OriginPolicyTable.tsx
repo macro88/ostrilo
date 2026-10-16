@@ -16,6 +16,14 @@ import {
 } from "@/domain/policy/trust-definitions";
 import { evaluatePolicy } from "@/domain/policy/evaluate";
 import { formatOrigin } from "@/domain/display/origin";
+import {
+  disclosureKeyIds,
+  disclosureState,
+} from "@/domain/policy/disclosure-grants";
+import {
+  DisclosureGrants,
+  type DisclosureIdentity,
+} from "./DisclosureGrants";
 
 type PolicyRule = "allow" | "deny" | "ask";
 
@@ -77,17 +85,20 @@ const DECISION_COPY: Record<PolicyRule, string> = {
 
 /** The public-key decision, as the full sentence the details panel shows. */
 const DISCLOSURE_COPY = {
-  allow: "This site can read your public key",
+  allow: "This site can read the public keys below",
   deny: "This site is refused your public key",
   ask: "You will be asked next time this site wants it",
 } as const;
 
 /** The same decision, short enough for the collapsed row. */
-const DISCLOSURE_SHORT = {
-  allow: "Can read your public key",
-  deny: "Refused your public key",
-  ask: "Asks before reading your key",
-} as const;
+function disclosureShort(decision: keyof typeof DISCLOSURE_COPY, grants: number) {
+  if (decision === "allow") {
+    return grants === 1 ? "Can read 1 public key" : `Can read ${grants} public keys`;
+  }
+  return decision === "deny"
+    ? "Refused your public key"
+    : "Asks before reading your key";
+}
 
 interface OriginPolicyTableProps {
   origins: OriginPolicy[];
@@ -111,10 +122,17 @@ interface OriginPolicyTableProps {
   sessionGrants?: Array<{ origin: string; expiresAt: number }>;
   onSetPerKindRule?: (origin: string, kind: number, rule: string) => void;
   /**
-   * Revokes a recorded identity-disclosure decision, so the next
-   * `getPublicKey` from that origin prompts again.
+   * Revokes a recorded refusal of the public key, so the next `getPublicKey`
+   * from that origin prompts again.
    */
   onRevokeDisclosure?: (origin: string) => void;
+  /**
+   * Withdraws ONE key's grant. The site's grants for other keys stand, and the
+   * next `getPublicKey` that would disclose this key prompts again.
+   */
+  onRevokeDisclosureKey?: (origin: string, keyId: string) => void;
+  /** The keys the vault holds, so each grant can be named by its identity. */
+  identities?: readonly DisclosureIdentity[];
 }
 
 /**
@@ -137,6 +155,8 @@ export function OriginPolicyTable({
   sessionGrants,
   onSetPerKindRule,
   onRevokeDisclosure,
+  onRevokeDisclosureKey,
+  identities,
 }: OriginPolicyTableProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -162,7 +182,8 @@ export function OriginPolicyTable({
         const formatted = formatOrigin(o.origin);
         const displayName = o.name || formatted.display;
         const level = normaliseLevel(o.trustLevel);
-        const disclosure = normaliseDisclosure(o.identityDisclosure);
+        const grantedKeyIds = disclosureKeyIds(o);
+        const disclosure = disclosureState(o);
         const liveGrant = liveGrants.get(o.origin);
         const grantOn = sessionGrants
           ? liveGrant !== undefined
@@ -203,7 +224,7 @@ export function OriginPolicyTable({
                       {" · "}
                     </>
                   )}
-                  {DISCLOSURE_SHORT[disclosure]}
+                  {disclosureShort(disclosure, grantedKeyIds.length)}
                 </span>
               </span>
               {grantOn && (
@@ -249,7 +270,7 @@ export function OriginPolicyTable({
                   <p className="text-sm font-medium text-foreground">
                     {DISCLOSURE_COPY[disclosure]}
                   </p>
-                  {onRevokeDisclosure && disclosure !== "ask" && (
+                  {onRevokeDisclosure && disclosure === "deny" && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -259,6 +280,16 @@ export function OriginPolicyTable({
                     </Button>
                   )}
                 </div>
+                {disclosure === "allow" && (
+                  <DisclosureGrants
+                    keyIds={grantedKeyIds}
+                    identities={identities ?? []}
+                    onRevoke={
+                      onRevokeDisclosureKey &&
+                      ((keyId) => onRevokeDisclosureKey(o.origin, keyId))
+                    }
+                  />
+                )}
               </section>
 
               <section>
@@ -433,12 +464,6 @@ function getPolicyKinds(policy: OriginPolicy): number[] {
 
 function normaliseLevel(level: TrustLevel | undefined): TrustLevel {
   return level && TRUST_LEVELS.includes(level) ? level : "low";
-}
-
-function normaliseDisclosure(
-  decision: OriginPolicy["identityDisclosure"]
-): keyof typeof DISCLOSURE_COPY {
-  return decision === "allow" || decision === "deny" ? decision : "ask";
 }
 
 function formatRule(rule: string): string {

@@ -122,6 +122,45 @@ function unlockedState(overrides: Partial<LockStatePayload> = {}): LockStatePayl
   return { isLocked: false, selectedKeyId: "a", lockAt: 90_000, ...overrides };
 }
 
+/**
+ * A background that redacts the way the real router does: while locked,
+ * `keys.list` returns identifiers only and `state.getLock` carries no
+ * deadline. The fixtures elsewhere in this file preload full keys regardless
+ * of the lock state, which is exactly what hid the unlock-refresh defect.
+ */
+function fakeBackend(keys: KeyListEntry[], selectedKeyId: string) {
+  const backend = {
+    locked: true,
+    selectedKeyId,
+    keys,
+    lockReason: undefined as LockStatePayload["lockReason"],
+  };
+  rpc.getLockState.mockImplementation(async () =>
+    backend.locked
+      ? { isLocked: true, selectedKeyId: backend.selectedKeyId, lockReason: backend.lockReason }
+      : { isLocked: false, selectedKeyId: backend.selectedKeyId, lockAt: 90_000 }
+  );
+  rpc.listKeys.mockImplementation(async () =>
+    backend.locked
+      ? backend.keys.map((k) => ({ id: k.id }))
+      : backend.keys.map((k) => ({ ...k, isSelected: k.id === backend.selectedKeyId }))
+  );
+  rpc.unlockVault.mockImplementation(async () => {
+    backend.locked = false;
+    return { selectedKeyId: backend.selectedKeyId };
+  });
+  rpc.lockVault.mockImplementation(async () => {
+    backend.locked = true;
+    backend.lockReason = "manual";
+    return null;
+  });
+  rpc.selectKey.mockImplementation(async (id: string) => {
+    backend.selectedKeyId = id;
+    return null;
+  });
+  return backend;
+}
+
 describe("KeyManagerProvider", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -215,15 +254,59 @@ describe("KeyManagerProvider", () => {
     expect(latest().lockAt).toBeUndefined();
   });
 
-  it("finishes initialising locked and empty when the first read fails", async () => {
+  it("finishes initialising with a failed lock check, not a lock, when the first read fails", async () => {
     rpc.getLockState.mockRejectedValue(new Error("no_response"));
 
     await mountProvider();
 
     expect(latest().isInitialising).toBe(false);
     expect(latest().isLoading).toBe(false);
-    expect(latest().isLocked).toBe(true);
+    expect(latest().lockCheckFailed).toBe(true);
+    expect(latest().lockReason).toBeUndefined();
     expect(latest().keys).toEqual([]);
+  });
+
+  it("clears the failure when a retry gets an answer", async () => {
+    rpc.getLockState.mockRejectedValueOnce(new Error("no_response"));
+    await mountProvider();
+    expect(latest().lockCheckFailed).toBe(true);
+
+    rpc.getLockState.mockResolvedValue(unlockedState());
+    rpc.listKeys.mockResolvedValue([entry({ id: "a", isSelected: true })]);
+    act(() => latest().retryLockCheck());
+    await settle();
+
+    expect(latest().lockCheckFailed).toBe(false);
+    expect(latest().isLocked).toBe(false);
+    expect(latest().keys).toHaveLength(1);
+  });
+
+  it("reads the key list again when a poll reports a locked vault after the first read failed", async () => {
+    rpc.getLockState.mockRejectedValueOnce(new Error("no_response"));
+    rpc.listKeys.mockRejectedValueOnce(new Error("no_response"));
+    await mountProvider();
+    expect(latest().lockCheckFailed).toBe(true);
+    expect(latest().hasKeys).toBe(false);
+
+    rpc.getLockState.mockResolvedValue({ isLocked: true, selectedKeyId: "a" });
+    rpc.listKeys.mockResolvedValue([{ id: "a" }, { id: "b" }]);
+    await advancePoll();
+
+    expect(latest().lockCheckFailed).toBe(false);
+    expect(latest().isLocked).toBe(true);
+    expect(latest().hasKeys).toBe(true);
+    expect(latest().keys.map((key) => key.id)).toEqual(["a", "b"]);
+  });
+
+  it("keeps the failure when the retry fails too", async () => {
+    rpc.getLockState.mockRejectedValue(new Error("no_response"));
+    await mountProvider();
+
+    act(() => latest().retryLockCheck());
+    await settle();
+
+    expect(latest().lockCheckFailed).toBe(true);
+    expect(latest().isLoading).toBe(false);
   });
 
   it("notices on the next poll that the vault locked behind the page", async () => {
@@ -260,19 +343,106 @@ describe("KeyManagerProvider", () => {
     expect(renders.length).toBe(before);
   });
 
-  it("fails closed when the background stops answering the poll", async () => {
+  it("reports a failed lock check, not a lock, when the background stops answering the poll", async () => {
     rpc.getLockState.mockResolvedValue(unlockedState());
     await mountProvider();
 
     rpc.getLockState.mockRejectedValue(new Error("transport_error"));
     await advancePoll();
 
-    expect(latest().isLocked).toBe(true);
-    expect(latest().lockAt).toBeUndefined();
+    expect(latest().lockCheckFailed).toBe(true);
+    // The last answer the background gave is kept: a failed request is not a
+    // lock, and is not a reason to claim one.
+    expect(latest().isLocked).toBe(false);
+    expect(latest().lockReason).toBeUndefined();
 
     const before = renders.length;
     await advancePoll();
     expect(renders.length).toBe(before);
+  });
+
+  it("recovers by itself when the background answers a later poll", async () => {
+    rpc.getLockState.mockResolvedValue(unlockedState());
+    await mountProvider();
+    rpc.getLockState.mockRejectedValue(new Error("transport_error"));
+    await advancePoll();
+    expect(latest().lockCheckFailed).toBe(true);
+
+    rpc.getLockState.mockResolvedValue(unlockedState());
+    await advancePoll();
+
+    expect(latest().lockCheckFailed).toBe(false);
+    expect(latest().isLocked).toBe(false);
+  });
+
+  it("adopts the lock reason the background reports", async () => {
+    rpc.getLockState.mockResolvedValue({
+      isLocked: true,
+      lockReason: "inactivity",
+      inactivityMinutes: 35,
+    });
+
+    await mountProvider();
+
+    expect(latest().isLocked).toBe(true);
+    expect(latest().lockReason).toBe("inactivity");
+    expect(latest().inactivityMinutes).toBe(35);
+  });
+
+  it("drops an inactivity duration that is not a whole number of permitted minutes", async () => {
+    for (const bad of [1.5, Number.POSITIVE_INFINITY, 0, 9_999]) {
+      rpc.getLockState.mockResolvedValue({
+        isLocked: true,
+        lockReason: "inactivity",
+        inactivityMinutes: bad,
+      });
+      renders.length = 0;
+      act(() => root.unmount());
+      root = createRoot(container);
+      await mountProvider();
+
+      expect(latest().lockReason, String(bad)).toBe("inactivity");
+      expect(latest().inactivityMinutes, String(bad)).toBeUndefined();
+    }
+  });
+
+  it("ignores a lock reason it does not recognise", async () => {
+    rpc.getLockState.mockResolvedValue({
+      isLocked: true,
+      lockReason: "<b>bad</b>" as never,
+    });
+
+    await mountProvider();
+
+    expect(latest().isLocked).toBe(true);
+    expect(latest().lockReason).toBeUndefined();
+  });
+
+  it("learns the reason from the poll after a lock it was only told about", async () => {
+    rpc.getLockState.mockResolvedValue(unlockedState());
+    await mountProvider();
+
+    rpc.getLockState.mockResolvedValue({
+      isLocked: true,
+      lockReason: "background_restarted",
+    });
+    broadcast({ __event: BROADCAST_EVENTS.VAULT_LOCKED });
+    await settle();
+
+    expect(latest().isLocked).toBe(true);
+    expect(latest().lockReason).toBe("background_restarted");
+  });
+
+  it("drops the reason once the vault is unlocked again", async () => {
+    rpc.getLockState.mockResolvedValue({ isLocked: true, lockReason: "manual" });
+    await mountProvider();
+    expect(latest().lockReason).toBe("manual");
+
+    rpc.getLockState.mockResolvedValue(unlockedState());
+    await advancePoll();
+
+    expect(latest().isLocked).toBe(false);
+    expect(latest().lockReason).toBeUndefined();
   });
 
   it("locks at once on the vault-locked broadcast and ignores other events", async () => {
@@ -333,12 +503,16 @@ describe("KeyManagerProvider", () => {
 
   describe("unlock", () => {
     it("opens the vault, adopts the background's selection and reads the deadline", async () => {
-      rpc.listKeys.mockResolvedValue([entry({ id: "a" }), entry({ id: "b" })]);
+      const backend = fakeBackend([entry({ id: "a" }), entry({ id: "b" })], "b");
       await mountProvider();
 
       const pendingUnlock = deferred<{ selectedKeyId?: string }>();
-      rpc.unlockVault.mockReturnValueOnce(pendingUnlock.promise);
-      rpc.getLockState.mockResolvedValueOnce(unlockedState({ lockAt: 77_000 }));
+      rpc.unlockVault.mockReturnValueOnce(
+        pendingUnlock.promise.then((value) => {
+          backend.locked = false;
+          return value;
+        })
+      );
 
       let result: unknown;
       await act(async () => {
@@ -349,6 +523,7 @@ describe("KeyManagerProvider", () => {
           });
       });
       expect(latest().isLoading).toBe(true);
+      expect(latest().isLocked).toBe(true);
       expect(rpc.unlockVault).toHaveBeenCalledWith("hunter2");
 
       pendingUnlock.resolve({ selectedKeyId: "b" });
@@ -357,17 +532,15 @@ describe("KeyManagerProvider", () => {
       expect(result).toEqual({ ok: true });
       expect(latest().isLoading).toBe(false);
       expect(latest().isLocked).toBe(false);
-      expect(latest().lockAt).toBe(77_000);
+      expect(latest().lockAt).toBe(90_000);
       expect(latest().selectedKeyInfo?.id).toBe("b");
       expect(rpc.reportActivity).toHaveBeenCalledTimes(1);
     });
 
-    it("keeps the prior selection and leaves the deadline absent when the follow-up read fails", async () => {
-      rpc.getLockState.mockResolvedValueOnce({ isLocked: true, selectedKeyId: "a" });
-      rpc.listKeys.mockResolvedValue([entry({ id: "a" })]);
+    it("does not claim a ready session when the read after a successful unlock fails, and recovers on retry", async () => {
+      const backend = fakeBackend([entry({ id: "a" })], "a");
       await mountProvider();
-
-      rpc.unlockVault.mockResolvedValueOnce({});
+      const answer = rpc.getLockState.getMockImplementation()!;
       rpc.getLockState.mockRejectedValueOnce(new Error("no_response"));
 
       let result: unknown;
@@ -376,9 +549,19 @@ describe("KeyManagerProvider", () => {
       });
 
       expect(result).toEqual({ ok: true });
+      expect(backend.locked).toBe(false);
+      expect(latest().isLocked).toBe(true);
+      expect(latest().lockCheckFailed).toBe(true);
+      expect(latest().selectedKeyInfo).toBeUndefined();
+
+      rpc.getLockState.mockImplementation(answer);
+      act(() => latest().retryLockCheck());
+      await settle();
+
+      expect(latest().lockCheckFailed).toBe(false);
       expect(latest().isLocked).toBe(false);
-      expect(latest().lockAt).toBeUndefined();
       expect(latest().selectedKeyInfo?.id).toBe("a");
+      expect(latest().selectedKeyInfo?.label).toBe("Key a");
     });
 
     it("reports the structured reason for a wrong password and stays locked", async () => {
@@ -431,6 +614,7 @@ describe("KeyManagerProvider", () => {
 
       expect(latest().isLocked).toBe(true);
       expect(latest().lockAt).toBeUndefined();
+      expect(latest().lockReason).toBe("manual");
       expect(latest().isLoading).toBe(false);
     });
 
@@ -522,6 +706,7 @@ describe("KeyManagerProvider", () => {
       await mountProvider();
 
       rpc.selectKey.mockResolvedValueOnce(null);
+      rpc.getLockState.mockResolvedValue(unlockedState({ selectedKeyId: "b" }));
       rpc.listKeys.mockResolvedValueOnce([
         entry({ id: "a" }),
         entry({ id: "b", isSelected: true }),
@@ -563,6 +748,256 @@ describe("KeyManagerProvider", () => {
       });
 
       expect(latest().keys.map((k) => k.id)).toEqual(["a"]);
+    });
+  });
+  describe("restoring the identity after unlock", () => {
+    const a = entry({ id: "a", label: "Alice" });
+    const b = entry({ id: "b", label: "Bob" });
+
+    it("shows the same name, public key and selection after a cold open while locked and an unlock", async () => {
+      fakeBackend([a, b], "b");
+      await mountProvider();
+
+      expect(latest().isLocked).toBe(true);
+      expect(latest().hasKeys).toBe(true);
+      expect(latest().selectedKeyInfo).toBeUndefined();
+      expect(latest().keys.map((k) => k.id)).toEqual(["a", "b"]);
+      expect(latest().keys.every((k) => !k.isUnreadable && k.label === "")).toBe(true);
+
+      await act(async () => {
+        await latest().unlock("pw");
+      });
+
+      const selected = latest().selectedKeyInfo;
+      expect(selected).toMatchObject({
+        id: "b",
+        label: "Bob",
+        publicKeyHex: "b-hex",
+        publicKeyBech32: "npub1b",
+        isUnreadable: false,
+        isSelected: true,
+      });
+      expect(latest().keys.map((k) => k.label)).toEqual(["Alice", "Bob"]);
+      expect(latest().lockAt).toBe(90_000);
+    });
+
+    it.each([
+      ["a generated key", [entry({ id: "g", label: "Generated" })], "g"],
+      ["an imported key without a label", [entry({ id: "i", label: "" })], "i"],
+      [
+        "several keys, the last selected",
+        [entry({ id: "a" }), entry({ id: "b" }), entry({ id: "c", label: "Third" })],
+        "c",
+      ],
+    ])("restores %s", async (_name, vault, selected) => {
+      fakeBackend(vault, selected);
+      await mountProvider();
+
+      await act(async () => {
+        await latest().unlock("pw");
+      });
+
+      expect(latest().keys.map((k) => k.id)).toEqual(vault.map((k) => k.id));
+      expect(latest().selectedKeyInfo?.id).toBe(selected);
+      expect(latest().selectedKeyInfo?.isUnreadable).toBe(false);
+      expect(latest().selectedKeyInfo?.publicKeyBech32).toBe(`npub1${selected}`);
+    });
+
+    it("rehydrates when another surface unlocks, noticed on the next poll", async () => {
+      const backend = fakeBackend([a, b], "a");
+      await mountProvider();
+      expect(latest().isLocked).toBe(true);
+
+      backend.locked = false;
+      await advancePoll();
+
+      expect(latest().isLocked).toBe(false);
+      expect(latest().selectedKeyInfo).toMatchObject({ id: "a", label: "Alice", isUnreadable: false });
+      expect(latest().lockAt).toBe(90_000);
+      expect(rpc.unlockVault).not.toHaveBeenCalled();
+    });
+
+    it("follows a key switch made on another surface", async () => {
+      const backend = fakeBackend([a, b], "a");
+      backend.locked = false;
+      await mountProvider();
+      expect(latest().selectedKeyInfo?.id).toBe("a");
+
+      backend.selectedKeyId = "b";
+      await advancePoll();
+
+      expect(latest().selectedKeyInfo?.id).toBe("b");
+      expect(latest().selectedKeyInfo?.isSelected).toBe(true);
+    });
+
+    it("drops names and public keys from memory when the vault locks, keeping only identifiers", async () => {
+      fakeBackend([a, b], "b");
+      await mountProvider();
+      await act(async () => {
+        await latest().unlock("pw");
+      });
+      expect(latest().keys[1].publicKeyBech32).toBe("npub1b");
+
+      await act(async () => {
+        await latest().lock();
+      });
+
+      expect(latest().isLocked).toBe(true);
+      expect(latest().selectedKeyInfo).toBeUndefined();
+      expect(latest().keys).toEqual([
+        expect.objectContaining({ id: "a", label: "", publicKeyHex: "", publicKeyBech32: "" }),
+        expect.objectContaining({ id: "b", label: "", publicKeyHex: "", publicKeyBech32: "" }),
+      ]);
+    });
+
+    it("keeps the identity across repeated lock and unlock", async () => {
+      fakeBackend([a, b], "b");
+      await mountProvider();
+
+      for (let round = 0; round < 3; round += 1) {
+        await act(async () => {
+          await latest().unlock("pw");
+        });
+        expect(latest().selectedKeyInfo).toMatchObject({ id: "b", label: "Bob" });
+        await act(async () => {
+          await latest().lock();
+        });
+        expect(latest().isLocked).toBe(true);
+      }
+
+      expect(latest().keys.map((k) => k.id)).toEqual(["a", "b"]);
+      expect(rpc.generateKey).not.toHaveBeenCalled();
+      expect(rpc.importKey).not.toHaveBeenCalled();
+    });
+
+    it("does not let an unlocked read that was overtaken by a lock repopulate the locked view", async () => {
+      const backend = fakeBackend([a, b], "b");
+      await mountProvider();
+      const stale = deferred<LockStatePayload>();
+      rpc.getLockState.mockReturnValueOnce(stale.promise);
+
+      let result: unknown;
+      await act(async () => {
+        void latest().unlock("pw").then((r) => {
+          result = r;
+        });
+      });
+      expect(backend.locked).toBe(false);
+
+      // The vault locks again while the unlock's read is still in flight.
+      backend.locked = true;
+      broadcast({ __event: BROADCAST_EVENTS.VAULT_LOCKED });
+      await settle();
+      stale.resolve({ isLocked: false, selectedKeyId: "b", lockAt: 90_000 });
+      await settle();
+
+      expect(result).toEqual({ ok: true });
+      expect(latest().isLocked).toBe(true);
+      expect(latest().lockAt).toBeUndefined();
+      expect(latest().selectedKeyInfo).toBeUndefined();
+      expect(latest().keys.every((k) => k.label === "")).toBe(true);
+    });
+
+    it("does not let a locked poll that was overtaken by an unlock overwrite the unlocked data", async () => {
+      fakeBackend([a, b], "b");
+      await mountProvider();
+      const stale = deferred<LockStatePayload>();
+      rpc.getLockState.mockReturnValueOnce(stale.promise);
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+
+      await act(async () => {
+        await latest().unlock("pw");
+      });
+      expect(latest().isLocked).toBe(false);
+      stale.resolve({ isLocked: true, selectedKeyId: "b", lockReason: "manual" });
+      await settle();
+
+      expect(latest().isLocked).toBe(false);
+      expect(latest().lockReason).toBeUndefined();
+      expect(latest().selectedKeyInfo).toMatchObject({ id: "b", label: "Bob" });
+    });
+
+    it("keeps a choice made while an earlier read was still loading", async () => {
+      const backend = fakeBackend([a, b], "a");
+      backend.locked = false;
+      await mountProvider();
+      const stale = deferred<LockStatePayload>();
+      rpc.getLockState.mockReturnValueOnce(stale.promise);
+      act(() => latest().retryLockCheck());
+
+      await act(async () => {
+        await latest().selectKey("b");
+      });
+      stale.resolve({ isLocked: false, selectedKeyId: "a", lockAt: 90_000 });
+      await settle();
+
+      expect(latest().selectedKeyInfo?.id).toBe("b");
+      expect(latest().isLoading).toBe(false);
+    });
+
+    it("reads again when the list was fetched just before an unlock, and never shows an unlocked session over identifiers", async () => {
+      const backend = fakeBackend([a], "a");
+      backend.locked = false;
+      const redacted = [{ id: "a" }];
+      rpc.listKeys.mockResolvedValueOnce(redacted);
+
+      await mountProvider();
+
+      expect(rpc.listKeys).toHaveBeenCalledTimes(2);
+      expect(latest().selectedKeyInfo).toMatchObject({ id: "a", label: "Alice", isUnreadable: false });
+    });
+
+    it("reports a failed check, not an identity, when the list stays redacted over an unlocked session", async () => {
+      fakeBackend([a], "a").locked = false;
+      rpc.listKeys.mockResolvedValue([{ id: "a" }]);
+
+      await mountProvider();
+
+      expect(latest().lockCheckFailed).toBe(true);
+      expect(latest().isInitialising).toBe(false);
+      expect(latest().selectedKeyInfo).toBeUndefined();
+    });
+
+    it("marks only the damaged record as unreadable, keeps its ID, and leaves the others usable", async () => {
+      const backend = fakeBackend([a, entry({ id: "bad", npub: undefined })], "a");
+      backend.locked = false;
+
+      await mountProvider();
+
+      expect(latest().keys.find((k) => k.id === "bad")).toMatchObject({ isUnreadable: true });
+      expect(latest().selectedKeyInfo).toMatchObject({ id: "a", isUnreadable: false });
+    });
+
+    it("selects nothing when the background's selected key is not in the list, and creates nothing", async () => {
+      fakeBackend([a, b], "gone").locked = false;
+
+      await mountProvider();
+
+      expect(latest().selectedKeyInfo).toBeUndefined();
+      expect(latest().hasKeys).toBe(true);
+      expect(rpc.generateKey).not.toHaveBeenCalled();
+      expect(rpc.importKey).not.toHaveBeenCalled();
+    });
+
+    it("keeps the selection on a key that could not be opened, names it, and lets the user switch", async () => {
+      const bad = entry({ id: "bad", label: "Damaged", unreadable: true });
+      fakeBackend([bad, a], "bad");
+      await mountProvider();
+
+      await act(async () => {
+        await latest().unlock("pw");
+      });
+
+      expect(latest().selectedKeyInfo).toMatchObject({ id: "bad", isUnreadable: true });
+      expect(latest().keys.find((k) => k.id === "a")?.isUnreadable).toBe(false);
+
+      await act(async () => {
+        await latest().selectKey("a");
+      });
+
+      expect(latest().selectedKeyInfo).toMatchObject({ id: "a", isUnreadable: false });
     });
   });
 });

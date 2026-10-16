@@ -7,7 +7,7 @@ import {
   createKeyBackup,
   serializeKeyBackup,
   type KeyBackupPayload,
-} from "@/ui/features/onboarding/backup/key-backup-envelope";
+} from "@/ui/features/backup/key-backup-envelope";
 
 /**
  * The import-key onboarding journey, end to end in a real extension document.
@@ -35,7 +35,7 @@ import {
 
 /**
  * NIP-19's published example private key, the same vector
- * `tests/unit/ui/features/onboarding/key-backup-envelope.test.ts` uses.
+ * `tests/unit/ui/features/backup/key-backup-envelope.test.ts` uses.
  *
  * The public key was derived from it OUTSIDE this repository's code, with
  * `@noble/curves` schnorr.getPublicKey over the raw 32 bytes, and the npub is

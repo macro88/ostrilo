@@ -86,11 +86,6 @@ interface PasswordInputProps {
    * the single field is for, a second line saying it again is noise.
    */
   labelHidden?: boolean;
-  /**
-   * Marks the field invalid without rendering a message, for callers that
-   * announce the failure themselves (the lock screen owns its `role="alert"`).
-   */
-  invalid?: boolean;
 }
 
 function getStrengthColor(score: number) {
@@ -144,12 +139,18 @@ function useDebouncedStrength(
   enabled: boolean
 ): PasswordStrength | null {
   const [strength, setStrength] = useState<PasswordStrength | null>(null);
+  const [wasEnabled, setWasEnabled] = useState(enabled);
+
+  // Switching the meter off drops the verdict, so a password typed after the
+  // field was emptied is not shown the previous one's. Adjusted while
+  // rendering, from the change in `enabled`, rather than in the effect below.
+  if (wasEnabled !== enabled) {
+    setWasEnabled(enabled);
+    if (!enabled) setStrength(null);
+  }
 
   useEffect(() => {
-    if (!enabled) {
-      setStrength(null);
-      return;
-    }
+    if (!enabled) return;
 
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -251,10 +252,30 @@ function PasswordStrengthMeter({ strength }: { strength: PasswordStrength }) {
   );
 }
 
-function ErrorLine({ message }: { message: string }) {
+/**
+ * A field message that assistive technology hears when it appears.
+ *
+ * `alert` is for a refusal the user caused by submitting, and interrupts. The
+ * confirmation mismatch is `status` instead: it is true from the first
+ * keystroke of the confirmation until the last, and an assertive announcement
+ * on every one of those would talk over the typing.
+ */
+function ErrorLine({
+  id,
+  message,
+  live,
+}: {
+  id: string;
+  message: string;
+  live: "alert" | "status";
+}) {
   return (
-    <p className="flex items-start gap-1.5 text-xs font-medium text-destructive">
-      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+    <p
+      id={id}
+      role={live}
+      className="flex items-start gap-1.5 text-xs font-medium text-destructive"
+    >
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <span>{message}</span>
     </p>
   );
@@ -269,6 +290,8 @@ interface PasswordFieldProps {
   onChange: (value: string) => void;
   disabled: boolean;
   invalid: boolean;
+  /** The id of the message that explains `invalid`, when one is on screen. */
+  errorId?: string;
   autoFocus?: boolean;
   inputRef?: Ref<HTMLInputElement>;
   /** What the reveal toggle names: "password" or "confirmation password". */
@@ -289,6 +312,7 @@ function PasswordField({
   onChange,
   disabled,
   invalid,
+  errorId,
   autoFocus = false,
   inputRef,
   toggleLabel,
@@ -312,8 +336,11 @@ function PasswordField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
+          // aislop-ignore-next-line jsx-a11y/no-autofocus -- opt-in prop, off by default; only the lock screen sets it, where this field is the one thing on the page to use
           autoFocus={autoFocus}
           aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? errorId : undefined}
+          aria-errormessage={invalid ? errorId : undefined}
           className={FIELD_INPUT_CLASS}
           {...NO_AUTOFILL_PROPS}
         />
@@ -344,13 +371,14 @@ export function PasswordInput({
   autoFocus = false,
   inputRef,
   labelHidden = false,
-  invalid = false,
 }: PasswordInputProps) {
   const shouldShowStrength = showStrengthMeter && value.length > 0;
   const strength = useDebouncedStrength(value, shouldShowStrength);
 
   const passwordId = idPrefix ? `${idPrefix}-password` : "password";
   const confirmId = idPrefix ? `${idPrefix}-confirm-password` : "confirm-password";
+  const errorId = `${passwordId}-error`;
+  const confirmErrorId = `${confirmId}-error`;
 
   const confirmError = useMemo(() => {
     if (confirmValue === undefined) return "";
@@ -371,7 +399,9 @@ export function PasswordInput({
           value={value}
           onChange={onChange}
           disabled={disabled}
-          invalid={Boolean(error) || invalid}
+          invalid={Boolean(error)}
+          errorId={error ? errorId : undefined}
+          // aislop-ignore-next-line jsx-a11y/no-autofocus -- forwards the same opt-in prop, off by default
           autoFocus={autoFocus}
           inputRef={inputRef}
           toggleLabel="password"
@@ -392,12 +422,15 @@ export function PasswordInput({
           onChange={onConfirmChange}
           disabled={disabled}
           invalid={Boolean(confirmError)}
+          errorId={confirmError ? confirmErrorId : undefined}
           toggleLabel="confirmation password"
         />
       )}
 
-      {error && <ErrorLine message={error} />}
-      {confirmError && <ErrorLine message={confirmError} />}
+      {error && <ErrorLine id={errorId} message={error} live="alert" />}
+      {confirmError && (
+        <ErrorLine id={confirmErrorId} message={confirmError} live="status" />
+      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ can restore it for you. The copy you keep is the only recovery path there is.
 
 ## Saving an encrypted backup
 
-While you create your first key, onboarding offers **Save encrypted backup**. It
+While you create your first key with **Create New Key**, onboarding offers **Save encrypted backup**. It
 writes a versioned `ostrilo-key-backup` file sealed with the same Argon2id key
 derivation and AES-GCM encryption the vault itself uses. There is no plaintext
 option.
@@ -22,9 +22,55 @@ without it.
 Changing the master password (Settings → Security) does not touch backup files.
 Each one keeps the passphrase it was saved with, before and after the change.
 
-The encrypted backup is offered only during first-key onboarding. There is no
-export on the settings page, so a key you add later cannot be backed up from
-within Ostrilo. If you import a key, keep your own copy of the `nsec`.
+## Quick start: a password now, a backup later
+
+On a fresh install, **Quick start** makes one key from a master password alone.
+There is no backup step, no key shown, no file and no quiz. Ostrilo says so
+plainly: "This creates a new identity on this browser. You can back it up later.
+If you lose access to this browser before making a backup, you may lose access to
+this identity." It does not offer a server recovery, because there is none.
+
+A Quick start key is `pending`, and Home shows a quiet **This key has no backup**
+banner with a **Back up** action. It opens Settings on that key's backup, below.
+Dismissing the banner hides it for the current browser session only; it returns
+in the next one until the key is backed up, and goes the moment a backup is
+verified. Quick start is offered only when no vault exists, and never changes an
+existing one.
+
+## Backing up a key you added later
+
+In Settings, Keys & Identities, every key has a **Back up** action. It asks for
+your master password, which is checked against the vault before the key is
+released, and then offers the same **Save encrypted backup** panel: its own
+passphrase, the same file format, no plaintext option. The key itself is never
+shown, copied or put in a URL by this flow.
+
+Saving the file is not the end. You then select the saved file and enter its
+passphrase, and Ostrilo opens it and checks that it holds this key. Only then is
+the key marked backed up. The re-enter-the-last-characters check from onboarding
+is not offered here, because you were never shown the key to copy it from.
+
+If the vault locks while the backup is open, the flow stops, drops the key, says
+so, and records nothing. A key whose stored record cannot be read cannot be
+backed up; its Back up button is disabled and says why.
+
+### The "No backup" marker
+
+Each key has a backup status, kept apart from the vault in its own record that
+holds only the key's id, `pending` or `verified`, and a time.
+
+- A key Ostrilo generates starts `pending`, and the keys list marks it **No
+  backup**. Onboarding sets it `verified` once its verification passes; a
+  Settings backup does the same once its file checks out.
+- An imported key has no record. You already hold its `nsec`, so it is not
+  marked.
+- A key that existed before this status was tracked has no record either. It is
+  not marked, so nobody is nagged about a backup they made in onboarding, but
+  Back up is available. The cost is that a key added from Settings before this
+  change is not marked either.
+- Deleting a key removes its record.
+
+If you import a key, keep your own copy of the `nsec`.
 
 ## Copying the key instead
 
@@ -49,7 +95,7 @@ to.
 
 Import an encrypted backup from the onboarding import step: choose the file,
 enter its passphrase, and the key is re-encrypted under the master password you
-set. Older plaintext export files still import, so you can move one into an
+set. A file made from Settings is the same format and restores the same way. Older plaintext export files still import, so you can move one into an
 encrypted backup and then delete it.
 
 ## If you used an earlier development build

@@ -122,6 +122,19 @@ export function EventDetailView({
           sentence={describeSigningConsequence(request.event.kind)}
         />
 
+        {request.exceededAutoSignBudget && (
+          // Without this a site shown as Trusted that suddenly needs approval
+          // reads as a fault, and the user cannot tell a busy site from a
+          // flooding one.
+          <output
+            className="block rounded-[10px] bg-[var(--ink-amber-soft)] px-3 py-2 text-xs font-semibold leading-[1.45] text-[var(--ink-amber)]"
+            data-testid="auto-sign-budget-notice"
+          >
+            This site went over its automatic-signing limit for the past
+            minute. Requests beyond it need your approval.
+          </output>
+        )}
+
         <section className="ink-card" aria-label="Request facts">
           <SigningAsRow
             pubkey={signingPubkey}
@@ -494,6 +507,8 @@ export function useCopyFeedback(): CopyFeedback {
   return { copied, write };
 }
 
+const byteUnit = (count: number) => (count === 1 ? "byte" : "bytes");
+
 function ContentSection({
   content,
   safeText,
@@ -511,7 +526,7 @@ function ContentSection({
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <h3 className="section-label">
-          Content · <span className="font-mono">{bytes}</span> bytes
+          Content · <span className="font-mono">{bytes}</span> {byteUnit(bytes)}
         </h3>
         <CopyButton text={content} copy={copy} />
       </div>
@@ -565,7 +580,7 @@ function TagsSection({
       <div className="flex items-center justify-between">
         <h3 className="section-label">
           Tags · <span className="font-mono">{tags.length}</span> ·{" "}
-          <span className="font-mono">{bytes}</span> bytes
+          <span className="font-mono">{bytes}</span> {byteUnit(bytes)}
         </h3>
         <CopyButton text={json} copy={copy} />
       </div>

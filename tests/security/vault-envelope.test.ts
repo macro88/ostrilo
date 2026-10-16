@@ -261,9 +261,8 @@ describe("vault envelope: AAD binds ciphertext to its record", () => {
       { ...records[0], pubkey: "cd".repeat(32) },
     ]);
 
-    const result = await vault.unlock(PASSWORD);
-    expect(result.damagedKeyIds).toContain(records[0].id);
-    expect(result.unlockedKeyIds).toHaveLength(0);
+    await expect(vault.unlock(PASSWORD)).rejects.toThrow("vault_keys_unreadable");
+    expect((await vault.getLockState()).isLocked).toBe(true);
   });
 });
 

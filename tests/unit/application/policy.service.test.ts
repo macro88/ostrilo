@@ -156,7 +156,7 @@ describe("PolicyService", () => {
       await storage.local.set("appSettings", {
         __version: "settings.v1",
         origins: [],
-        __consentMigrations: 1,
+        __consentMigrations: 2,
       });
     }
 
@@ -270,7 +270,7 @@ describe("PolicyService", () => {
       // Live grant state lives in session storage; the persisted flag is stale.
       expect(record.sessionGrantAll).toBeUndefined();
       expect(stored.sessionTTLMinutes).toBe(DEFAULT_SESSION_TTL_MINUTES);
-      expect(stored.__consentMigrations).toBe(1);
+      expect(stored.__consentMigrations).toBe(2);
 
       const out = await service.evaluate({
         origin: "https://example.com",

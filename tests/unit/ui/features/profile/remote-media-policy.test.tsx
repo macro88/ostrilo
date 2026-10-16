@@ -7,6 +7,8 @@ import { createRoot, type Root } from "react-dom/client";
 import type { ReactNode } from "react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { collectSources } from "../../../../helpers/source-scan";
+import { OwnAvatarImage } from "@/ui/components/common/OwnAvatarImage";
 import { ProfileSummary } from "@/ui/features/profile/components/ProfileSummary";
 import { ImageUploadField } from "@/ui/features/profile/components/ImageUploadField";
 import { RemoteUrlField } from "@/ui/features/profile/components/RemoteUrlField";
@@ -66,6 +68,8 @@ describe("privileged pages do not load relay-chosen media", () => {
         npub="npub1aliceaaaaaaaaaaaaaaaaaaaaaaa"
         onEdit={vi.fn()}
         onRefresh={vi.fn()}
+        pictureStatus={{ kind: "idle" }}
+        onRefreshPicture={vi.fn()}
       />
     );
 
@@ -86,6 +90,8 @@ describe("privileged pages do not load relay-chosen media", () => {
         npub="npub1alice"
         onEdit={vi.fn()}
         onRefresh={vi.fn()}
+        pictureStatus={{ kind: "idle" }}
+        onRefreshPicture={vi.fn()}
       />
     );
 
@@ -308,6 +314,138 @@ describe("identity surfaces carry no remote image sources", () => {
       expect(code).not.toMatch(/backgroundImage/);
     }
   );
+});
+
+/**
+ * The one exception to "no remote image in an extension page": the Profile page
+ * loads the user's own picture once, when they save the profile or press
+ * Refresh picture, and keeps a small local copy. Everything else renders only
+ * that copy, as a `data:` URL, or the seal. These checks pin the exception to
+ * the place that is allowed to make it.
+ */
+describe("the only remote image load is the Profile page's explicit save or refresh", () => {
+  const sources = collectSources(path.join(process.cwd(), "src"));
+  const filesMatching = (pattern: RegExp) =>
+    sources.filter((file) => pattern.test(file.code)).map((file) => file.path);
+
+  it("constructs an image from a URL in exactly one place", () => {
+    expect(filesMatching(/new Image\(/)).toEqual(["src/ui/lib/avatar-capture.ts"]);
+  });
+
+  it("sets no image source from a variable anywhere else, and renders <img> only for the logo and the local copy", () => {
+    expect(filesMatching(/<img\b/).sort()).toEqual([
+      "src/ui/components/common/OwnAvatarImage.tsx",
+      "src/ui/components/logo/Logo.tsx",
+    ]);
+    expect(filesMatching(/<AvatarImage\b/)).toEqual([]);
+  });
+
+  it("imports the capture helper only from the Profile page's picture hook", () => {
+    expect(filesMatching(/avatar-capture/).sort()).toEqual([
+      "src/ui/features/profile/hooks/useProfilePicture.ts",
+    ]);
+  });
+
+  it("starts a capture only from the Profile view's save and its Refresh picture control", () => {
+    expect(filesMatching(/useProfilePicture\(/).sort()).toEqual([
+      "src/ui/features/profile/components/ProfileView.tsx",
+      "src/ui/features/profile/hooks/useProfilePicture.ts",
+    ]);
+    const view = sources.find((file) =>
+      file.path.endsWith("features/profile/components/ProfileView.tsx")
+    );
+    expect(view?.code.match(/picture\.cache\(/g)).toHaveLength(2);
+
+    // Never from an effect: a capture must follow a user action.
+    const hook = sources.find((file) =>
+      file.path.endsWith("features/profile/hooks/useProfilePicture.ts")
+    );
+    expect(hook?.code).not.toMatch(/useEffect/);
+  });
+
+  it("keeps the header's picture source a stored data URL", () => {
+    const element = sources.find((file) =>
+      file.path.endsWith("components/common/OwnAvatarImage.tsx")
+    );
+    expect(element?.code).toContain("isAvatarDataUrl(");
+    const header = sources.find((file) => file.path.endsWith("layout/KeySelector.tsx"));
+    expect(header?.code).not.toMatch(/\.picture\b/);
+    expect(header?.code).not.toMatch(/sourceUrl/);
+  });
+});
+
+describe("OwnAvatarImage", () => {
+  const PNG =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const SEAL = <span data-testid="seal">A</span>;
+  const row = (dataUrl: string, at = 1) => ({
+    pubkey: "a".repeat(64),
+    dataUrl,
+    sourceUrl: "https://images.example/a.png",
+    at,
+  });
+
+  it("renders a data: URL at a fixed size, named for the identity", () => {
+    const container = render(<OwnAvatarImage avatar={row(PNG)} alt="Alice" size={28} fallback={SEAL} />);
+    const img = container.querySelector("img");
+    expect(img?.getAttribute("src")).toBe(PNG);
+    expect(img?.getAttribute("alt")).toBe("Alice");
+    expect(img?.getAttribute("width")).toBe("28");
+    expect(img?.getAttribute("height")).toBe("28");
+  });
+
+  it.each([
+    ["an https URL", "https://relay-chosen-host.example/a.png"],
+    ["an http URL", "http://relay-chosen-host.example/a.png"],
+    ["an svg data URL", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4="],
+    ["a javascript: URL", "javascript:alert(1)"],
+  ])("renders nothing for %s", (_name, value) => {
+    const container = render(<OwnAvatarImage avatar={row(value)} alt="Alice" size={28} fallback={SEAL} />);
+    expect(container.querySelector("img")).toBeNull();
+    expect(remoteSources(container)).toEqual([]);
+  });
+
+  it("renders nothing, leaving the seal, when there is no copy", () => {
+    const container = render(<OwnAvatarImage avatar={null} alt="Alice" size={28} fallback={SEAL} />);
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("shows the seal until the copy has loaded, then only the picture", () => {
+    const container = render(<OwnAvatarImage avatar={row(PNG)} alt="Alice" size={28} fallback={SEAL} />);
+    expect(container.querySelector('[data-testid="seal"]')).not.toBeNull();
+
+    act(() => {
+      container.querySelector("img")!.dispatchEvent(new Event("load"));
+    });
+    // A transparent picture must not have the initial showing through it.
+    expect(container.querySelector('[data-testid="seal"]')).toBeNull();
+    expect(container.querySelector("img")).not.toBeNull();
+  });
+
+  it("steps aside for the seal when the copy fails to decode", () => {
+    const container = render(<OwnAvatarImage avatar={row(PNG)} alt="Alice" size={28} fallback={SEAL} />);
+    act(() => {
+      container.querySelector("img")!.dispatchEvent(new Event("error"));
+    });
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector('[data-testid="seal"]')).not.toBeNull();
+  });
+
+  it("shows a refreshed copy for the same key after an earlier copy failed to decode", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mounted.push({ root, container });
+
+    act(() => root.render(<OwnAvatarImage avatar={row(PNG, 1)} alt="Alice" size={28} fallback={SEAL} />));
+    act(() => {
+      container.querySelector("img")!.dispatchEvent(new Event("error"));
+    });
+    expect(container.querySelector("img")).toBeNull();
+
+    act(() => root.render(<OwnAvatarImage avatar={row(PNG, 2)} alt="Alice" size={28} fallback={SEAL} />));
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(PNG);
+  });
 });
 
 /**

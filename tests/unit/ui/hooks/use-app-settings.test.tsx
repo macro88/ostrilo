@@ -15,6 +15,7 @@ const rpc = vi.hoisted(() => ({
   policySetKindRule: vi.fn(),
   policyClearSession: vi.fn(),
   policyRemoveOrigin: vi.fn(),
+  policyRevokeDisclosure: vi.fn(),
   policySetSession: vi.fn(),
   activityClear: vi.fn(),
   reportActivity: vi.fn(),
@@ -277,6 +278,16 @@ describe("useAppSettings", () => {
         { identityDisclosure: "ask" },
         undefined
       );
+    });
+
+    it("revokes one key's disclosure grant for a site, without a password", async () => {
+      await hook().revokeIdentityDisclosureKey("https://a.example", "key-a");
+
+      expect(rpc.policyRevokeDisclosure).toHaveBeenCalledWith(
+        "https://a.example",
+        "key-a"
+      );
+      expect(rpc.policySetOrigin).not.toHaveBeenCalled();
     });
 
     it("clears a session grant without a password", async () => {

@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   describeActivityAction,
   describeActivityEntry,
+  describeDenialReason,
   getKindName,
+  parseActivityReason,
+  ACTIVITY_REASONS,
 } from "@/domain/types";
 
 describe("getKindName", () => {
@@ -87,5 +90,46 @@ describe("describeActivityAction", () => {
     expect(
       describeActivityAction({ operation: "sign_event", decision: "deny" })
     ).toBe("Denied unknown request");
+  });
+});
+
+describe("activity denial reasons", () => {
+  it.each(ACTIVITY_REASONS)("recognises %s and gives it copy on a denial", (reason) => {
+    expect(parseActivityReason(reason)).toBe(reason);
+    expect(describeDenialReason({ decision: "deny", reason })).toEqual(
+      expect.any(String)
+    );
+  });
+
+  it.each([undefined, null, "", "policy", "USER", 3, {}, "__proto__"])(
+    "treats %s as no reason",
+    (value) => {
+      expect(parseActivityReason(value)).toBeUndefined();
+      expect(
+        describeDenialReason({ decision: "deny", reason: value })
+      ).toBeUndefined();
+    }
+  );
+
+  it("says nothing about an allowed entry, whatever reason it carries", () => {
+    expect(
+      describeDenialReason({ decision: "allow", reason: "remembered" })
+    ).toBeUndefined();
+  });
+});
+
+describe("parseInactivityMinutes", () => {
+  it("accepts whole minutes inside the auto-lock range", async () => {
+    const { parseInactivityMinutes, AUTO_LOCK_BOUNDS } = await import("@/domain/types");
+    expect(parseInactivityMinutes(AUTO_LOCK_BOUNDS.min)).toBe(AUTO_LOCK_BOUNDS.min);
+    expect(parseInactivityMinutes(35)).toBe(35);
+    expect(parseInactivityMinutes(AUTO_LOCK_BOUNDS.max)).toBe(AUTO_LOCK_BOUNDS.max);
+  });
+
+  it("drops everything else", async () => {
+    const { parseInactivityMinutes } = await import("@/domain/types");
+    for (const bad of [1.5, Infinity, -Infinity, NaN, 0, -1, 61, "35", null, undefined, {}]) {
+      expect(parseInactivityMinutes(bad), String(bad)).toBeUndefined();
+    }
   });
 });

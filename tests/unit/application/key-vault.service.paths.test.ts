@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { KeyVaultService } from "@/application/services/key-vault.service";
-import { SETTINGS_CHANGED_EVENT, defaultSettings } from "@/application/services/settings.service";
+import { SETTINGS_CHANGED_EVENT, defaultSettings, freshInstallSettings } from "@/application/services/settings.service";
 import type { CryptoAead, CryptoKdf, SecretBytes } from "@/application/ports/crypto";
 import type { StorageSuite } from "@/application/ports/storage";
 import {
@@ -247,6 +247,26 @@ describe("KeyVaultService failure and edge paths", () => {
     expect(await keys()).toEqual([]);
   });
 
+  describe("unlock", () => {
+    it("tells open surfaces to read the settings again, because they were redacted while locked", async () => {
+      await vault.importKey(SK_A, PASSWORD);
+      broadcasts.length = 0;
+
+      await build(storage).unlock(PASSWORD);
+
+      expect(broadcasts).toEqual([{ __event: SETTINGS_CHANGED_EVENT }]);
+    });
+
+    it("broadcasts nothing when the password is wrong", async () => {
+      await vault.importKey(SK_A, PASSWORD);
+      broadcasts.length = 0;
+
+      await expect(build(storage).unlock("not the password")).rejects.toThrow();
+
+      expect(broadcasts).toEqual([]);
+    });
+  });
+
   describe("unlock with damaged records", () => {
     it("reports a versioned record without a wrapped DEK as damaged and unlocks the rest", async () => {
       const a = await vault.importKey(SK_A, PASSWORD);
@@ -285,25 +305,24 @@ describe("KeyVaultService failure and edge paths", () => {
       ]);
       const retained: Retained[] = [];
 
-      const result = await build(storage, recordingAead(retained)).unlock(PASSWORD);
+      await expect(
+        build(storage, recordingAead(retained)).unlock(PASSWORD)
+      ).rejects.toThrow("vault_keys_unreadable");
 
-      expect(result.unlockedKeyIds).toEqual([]);
-      expect(result.damagedKeyIds).toEqual(["L1"]);
       const recovered = retained.filter((r) => r.hexAtReturn === SK_A);
       expect(recovered.length).toBeGreaterThan(0);
       expect(recovered.every((r) => isZero(r.buf))).toBe(true);
       expect((await keys())[0].salt).toBeDefined();
     });
 
-    it("reports a legacy record that decrypts to an invalid scalar as damaged", async () => {
+    it("refuses to unlock when a legacy record decrypts to an invalid scalar", async () => {
       await storage.local.set("encryptedKeys", [
         await legacyRecord("zero", new Uint8Array(32), pubkeyOf(SK_A)),
       ]);
 
-      const result = await vault.unlock(PASSWORD);
-
-      expect(result.damagedKeyIds).toEqual(["zero"]);
+      await expect(vault.unlock(PASSWORD)).rejects.toThrow("vault_keys_unreadable");
       await expect(vault.sign("ab".repeat(32))).rejects.toThrow("no_unlocked_key");
+      expect((await vault.getLockState()).isLocked).toBe(true);
     });
 
     it("keeps the legacy record when the migrated copy does not read back to the same key", async () => {
@@ -375,7 +394,7 @@ describe("KeyVaultService failure and edge paths", () => {
       await vault.selectKey(record.id);
 
       expect(await settings()).toEqual({
-        ...defaultSettings(),
+        ...freshInstallSettings(),
         selectedKeyId: record.id,
       });
     });
@@ -449,6 +468,25 @@ describe("KeyVaultService failure and edge paths", () => {
       await expect(service.sign("ab".repeat(32), b.id)).resolves.toMatchObject({
         keyId: b.id,
       });
+    });
+
+    it("falls back to the first readable key, not an unreadable one, when the selected key is deleted", async () => {
+      const a = await vault.importKey(SK_A, PASSWORD);
+      const damaged = await vault.importKey(SK_B, PASSWORD);
+      const c = await vault.importKey("33".repeat(32), PASSWORD);
+      await storage.local.set(
+        "encryptedKeys",
+        (await keys()).map((r) =>
+          r.id === damaged.id ? { ...r, pubkey: pubkeyOf(SK_A) } : r
+        )
+      );
+      await vault.unlock(PASSWORD);
+      expect(vault.isKeyUnreadable(damaged.id)).toBe(true);
+
+      const result = await vault.deleteKey(a.id);
+
+      expect(result.newSelectedKeyId).toBe(c.id);
+      expect((await settings())?.selectedKeyId).toBe(c.id);
     });
 
     it("keeps the selection when deleting a key that is not selected", async () => {

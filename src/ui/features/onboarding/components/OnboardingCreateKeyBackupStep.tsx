@@ -4,11 +4,11 @@ import { Label } from "@/components/ui/label";
 import { Check, Copy, Download, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BackupClipboardStatus } from "./backup/BackupClipboardPanel";
-import { BackupEncryptedExport } from "./backup/BackupEncryptedExport";
+import { BackupEncryptedExport } from "@/ui/features/backup/components/BackupEncryptedExport";
 import { BackupKeyDisplay } from "./backup/BackupKeyDisplay";
-import { BackupVerification } from "./backup/BackupVerification";
+import { BackupVerification } from "@/ui/features/backup/components/BackupVerification";
 import type { ClipboardStatus } from "../backup/useExpiringClipboard";
-import type { KeyBackupPayload } from "../backup/key-backup-envelope";
+import type { KeyBackupPayload } from "@/ui/features/backup/key-backup-envelope";
 
 interface OnboardingCreateKeyBackupStepProps {
   /**
@@ -206,6 +206,7 @@ export function OnboardingCreateKeyBackupStep({
 
       {hasRevealedPrivateKey && (
         <BackupVerification
+          mode="key-shown"
           checkSuffix={onVerifySuffix}
           checkNsec={onVerifyNsec}
           verified={verified}

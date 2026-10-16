@@ -211,6 +211,74 @@ describe("ApprovalQueueService", () => {
     });
   });
 
+  describe("why a request was denied", () => {
+    it("reports a lock as the cause to the resolver, and forgets it afterwards", () => {
+      let cause: string | undefined;
+      const request = queue.enqueue("https://first.com", mockEvent, () => {
+        cause = queue.denialCause(request.id);
+      });
+
+      queue.clear();
+
+      expect(cause).toBe("vault_locked");
+      expect(queue.denialCause(request.id)).toBeUndefined();
+    });
+
+    it("reports an expiry as a timeout", () => {
+      let cause: string | undefined;
+      const request = queue.enqueue("https://first.com", mockEvent, () => {
+        cause = queue.denialCause(request.id);
+      });
+
+      vi.advanceTimersByTime(1000);
+
+      expect(cause).toBe("timeout");
+      expect(queue.denialCause(request.id)).toBeUndefined();
+    });
+
+    it("keeps no record of a cause once the resolvers have run, however many requests expire", () => {
+      const causes = (queue as unknown as { denialCauses: Map<string, unknown> })
+        .denialCauses;
+      for (let i = 0; i < 25; i++) {
+        queue.enqueue(`https://site${i}.example`, mockEvent, () => {});
+        vi.advanceTimersByTime(1000);
+      }
+      queue.enqueue("https://locked.example", mockEvent, () => {});
+      queue.clear();
+
+      expect(causes.size).toBe(0);
+    });
+
+    it("reports a page's withdrawal as abandoned, not as a timeout", () => {
+      let cause: string | undefined;
+      const request = queue.enqueue(
+        "https://first.com",
+        mockEvent,
+        () => {
+          cause = queue.denialCause(request.id);
+        },
+        undefined,
+        { clientRequestId: "c1" }
+      );
+
+      expect(queue.cancelByClientRequestId("https://first.com", "c1")).toBe(true);
+
+      expect(cause).toBe("abandoned");
+      expect(queue.denialCause(request.id)).toBeUndefined();
+    });
+
+    it("has no cause for a decision the user made", () => {
+      let cause: string | undefined = "unset";
+      const request = queue.enqueue("https://first.com", mockEvent, () => {
+        cause = queue.denialCause(request.id);
+      });
+
+      queue.resolve(request.id, "deny");
+
+      expect(cause).toBeUndefined();
+    });
+  });
+
   describe("clear", () => {
     it("clears all pending requests", () => {
       const resolver1 = vi.fn();
@@ -391,8 +459,9 @@ describe("ApprovalQueueService", () => {
     });
 
     it("times out every caller attached to a duplicate event ID hash", () => {
-      const resolver1 = vi.fn();
-      const resolver2 = vi.fn();
+      const causes: Array<string | undefined> = [];
+      const resolver1 = vi.fn(() => causes.push(queue.denialCause(request.id)));
+      const resolver2 = vi.fn(() => causes.push(queue.denialCause(request.id)));
       const eventIdHash = "same-event-hash";
 
       const request = queue.enqueue(
@@ -405,7 +474,7 @@ describe("ApprovalQueueService", () => {
 
       vi.advanceTimersByTime(1000);
 
-      expect(queue.wasTimeout(request.id)).toBe(true);
+      expect(causes).toEqual(["timeout", "timeout"]);
       expect(resolver1).toHaveBeenCalledWith("deny", "deny");
       expect(resolver2).toHaveBeenCalledWith("deny", "deny");
     });

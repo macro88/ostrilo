@@ -6,5 +6,7 @@ export { ActivityLogConfig } from "./ActivityLogConfig";
 export { MediumKindToggles } from "./MediumKindToggles";
 export { OriginPolicyTable } from "./OriginPolicyTable";
 export { DisclosureHistory } from "./DisclosureHistory";
+export { DisclosureGrants } from "./DisclosureGrants";
+export type { DisclosureIdentity } from "./DisclosureGrants";
 export { KeySelectorCard } from "./KeySelectorCard";
 export type { KeyRecord, KeyProfile } from "./KeySelectorCard";

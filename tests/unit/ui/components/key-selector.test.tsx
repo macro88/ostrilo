@@ -5,6 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ProfileMetadata } from "@/domain/profile/types";
+import type { AvatarRow } from "@/domain/profile/avatar";
 import type { UIKeyInfo } from "@/ui/state/KeyManagerContext";
 
 const keyManager = vi.hoisted(() => ({
@@ -16,6 +17,18 @@ const keyManager = vi.hoisted(() => ({
 const profileState = vi.hoisted(() => ({
   profiles: new Map<string, ProfileMetadata>(),
   requested: [] as string[][],
+}));
+
+const avatarState = vi.hoisted(() => ({
+  rows: new Map<string, AvatarRow>(),
+  requested: [] as Array<string | null>,
+}));
+
+vi.mock("@/ui/hooks/useOwnAvatar", () => ({
+  useOwnAvatar: (pubkey: string | null) => {
+    avatarState.requested.push(pubkey);
+    return pubkey ? (avatarState.rows.get(pubkey) ?? null) : null;
+  },
 }));
 
 vi.mock("@/ui/features/authentication/hooks/useKeyManager", () => ({
@@ -81,12 +94,12 @@ function trigger(): HTMLButtonElement {
   return button;
 }
 
-function listbox(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('[role="listbox"]');
+function menu(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[role="menu"]');
 }
 
 function options(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));
+  return Array.from(document.querySelectorAll<HTMLElement>('[role="menuitemradio"]'));
 }
 
 function key(target: Element, keyName: string) {
@@ -121,6 +134,8 @@ beforeEach(() => {
   keyManager.selectKey.mockReset().mockResolvedValue(undefined);
   profileState.profiles = new Map();
   profileState.requested = [];
+  avatarState.rows = new Map();
+  avatarState.requested = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -139,11 +154,10 @@ describe("KeySelector trigger", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("names the active key and exposes the listbox relationship", () => {
+  it("names the active key and announces a menu", () => {
     mount();
     const button = trigger();
-    expect(button.getAttribute("aria-haspopup")).toBe("listbox");
-    expect(button.getAttribute("aria-controls")).toBe("key-selector-listbox");
+    expect(button.getAttribute("aria-haspopup")).toBe("menu");
     expect(button.getAttribute("aria-expanded")).toBe("false");
 
     const heading = container.querySelector("h2");
@@ -167,6 +181,19 @@ describe("KeySelector trigger", () => {
     expect(labels[2]).toMatch(/^Unnamed Key - npub1ccccccc\.\.\.cccc$/);
   });
 
+  it("names a key whose public key cannot be read, with its ID, instead of calling it Unnamed", () => {
+    keyManager.selectedUnlockedKey = { ...MAIN, label: "Unnamed", publicKeyBech32: "", isUnreadable: true };
+    keyManager.keys = [keyManager.selectedUnlockedKey, ALT];
+    mount();
+
+    expect(trigger().textContent).toContain("Unreadable key");
+    expect(trigger().textContent).not.toContain("Unnamed");
+    open();
+    const first = options()[0].getAttribute("aria-label");
+    expect(first).toContain(`ID ${MAIN.id.slice(0, 8)}`);
+    expect(first).toContain("(currently selected)");
+  });
+
   it("asks for the profile of every key in the vault", () => {
     mount();
     expect(profileState.requested.at(-1)).toEqual([
@@ -187,27 +214,120 @@ describe("KeySelector trigger", () => {
   });
 });
 
-describe("KeySelector listbox on the rendered DOM", () => {
+// A real 1x1 PNG, so the stored-copy policy accepts it.
+const PNG_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+function copyFor(key: UIKeyInfo): AvatarRow {
+  return {
+    pubkey: key.publicKeyHex,
+    dataUrl: PNG_DATA_URL,
+    sourceUrl: "https://images.example/a.png",
+    at: 1,
+  };
+}
+
+describe("KeySelector header avatar", () => {
+  it("shows the selected key's own local copy, named for the identity", () => {
+    avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
+    mount();
+
+    const img = trigger().querySelector("img");
+    expect(img?.getAttribute("src")).toBe(PNG_DATA_URL);
+    expect(img?.getAttribute("alt")).toBe("Main");
+    expect(img?.getAttribute("width")).toBe("28");
+    expect(img?.getAttribute("height")).toBe("28");
+  });
+
+  it("keeps the seal initial until the picture loads, then hides it so a transparent picture is shown as made", () => {
+    avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
+    mount();
+    expect(trigger().textContent?.startsWith("M")).toBe(true);
+
+    act(() => {
+      trigger().querySelector("img")!.dispatchEvent(new Event("load"));
+    });
+    expect(trigger().querySelector("img")).not.toBeNull();
+    expect(trigger().querySelector(".seal")?.textContent ?? "").not.toContain("M");
+  });
+
+  it("keeps the seal initial when the copy fails to decode", () => {
+    avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
+    mount();
+    act(() => {
+      trigger().querySelector("img")!.dispatchEvent(new Event("error"));
+    });
+    expect(trigger().querySelector("img")).toBeNull();
+    expect(trigger().querySelector(".seal")?.textContent).toBe("M");
+  });
+
+  it("looks up only the selected key's public key", () => {
+    mount();
+    expect(avatarState.requested.at(-1)).toBe(MAIN.publicKeyHex);
+  });
+
+  it("falls back to the seal initial when there is no copy", () => {
+    mount();
+    expect(trigger().querySelector("img")).toBeNull();
+    expect(trigger().textContent?.startsWith("M")).toBe(true);
+  });
+
+  it("shows no image for an unreadable key and asks for no copy", () => {
+    keyManager.selectedUnlockedKey = { ...MAIN, isUnreadable: true };
+    keyManager.keys = [keyManager.selectedUnlockedKey];
+    avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
+    mount();
+    expect(avatarState.requested.at(-1)).toBeNull();
+    expect(trigger().querySelector("img")).toBeNull();
+  });
+
+  it("refuses a copy whose source is not a data URL", () => {
+    avatarState.rows = new Map([
+      [MAIN.publicKeyHex, { ...copyFor(MAIN), dataUrl: "https://relay.example/a.png" }],
+    ]);
+    mount();
+    expect(trigger().querySelector("img")).toBeNull();
+    expect(document.querySelector('img[src^="http"]')).toBeNull();
+  });
+
+  it("keeps the list rows as seals even when the selected key has a copy", () => {
+    avatarState.rows = new Map([[MAIN.publicKeyHex, copyFor(MAIN)]]);
+    mount();
+    open();
+    expect(document.querySelector('[role="menu"] img')).toBeNull();
+  });
+});
+
+describe("KeySelector menu on the rendered DOM", () => {
   it("toggles aria-expanded as the list opens and closes", () => {
     mount();
-    expect(listbox()).toBeNull();
+    expect(menu()).toBeNull();
 
     open();
     expect(trigger().getAttribute("aria-expanded")).toBe("true");
-    const list = listbox();
-    expect(list?.id).toBe("key-selector-listbox");
+    const list = menu();
     expect(list?.getAttribute("aria-label")).toBe("Available keys");
 
     key(document.activeElement ?? list!, "Escape");
-    expect(listbox()).toBeNull();
+    expect(menu()).toBeNull();
     expect(trigger().getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("marks exactly the active key as the selected option", () => {
+  it("marks exactly the active key as the checked item", () => {
     mount();
     open();
-    const selected = options().map((option) => option.getAttribute("aria-selected"));
+    const selected = options().map((option) => option.getAttribute("aria-checked"));
     expect(selected).toEqual(["true", "false", "false"]);
+  });
+
+  it("keeps every row a menu item, so the Add Key action is a legal child", () => {
+    mount(vi.fn());
+    open();
+    const list = menu()!;
+    expect(document.querySelector('[role="listbox"], [role="option"]')).toBeNull();
+    const add = list.querySelector('[aria-label="Add new key"]');
+    expect(add?.getAttribute("role")).toBe("menuitem");
+    expect(list.querySelectorAll('[role="menuitemradio"]')).toHaveLength(3);
   });
 
   it("moves focus between options with the arrow keys", async () => {
@@ -230,7 +350,7 @@ describe("KeySelector listbox on the rendered DOM", () => {
     mount();
     trigger().focus();
     key(trigger(), "ArrowDown");
-    expect(listbox()).not.toBeNull();
+    expect(menu()).not.toBeNull();
     expect(trigger().getAttribute("aria-expanded")).toBe("true");
   });
 
@@ -244,7 +364,7 @@ describe("KeySelector listbox on the rendered DOM", () => {
     await flush();
 
     expect(keyManager.selectKey).toHaveBeenCalledWith("key-alt");
-    expect(listbox()).toBeNull();
+    expect(menu()).toBeNull();
   });
 
   it("does not ask to switch to the key that is already active", async () => {

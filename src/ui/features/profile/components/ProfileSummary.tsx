@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Pubkey } from "@/components/common/pubkey";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isAllowedRemoteUrl } from "@/domain/profile/types";
+import type { ProfilePictureStatus } from "../hooks/useProfilePicture";
 import { ProfileField, ProfileTextField } from "./ProfileField";
 import { RemoteUrlField } from "./RemoteUrlField";
 
@@ -16,6 +18,10 @@ interface ProfileSummaryProps {
   npub: string;
   onEdit: (field?: ProfileEditField) => void;
   onRefresh: () => void;
+  /** Where the local copy of the picture stands; see `useProfilePicture`. */
+  pictureStatus: ProfilePictureStatus;
+  /** Loads the picture once and keeps a small copy for the header. */
+  onRefreshPicture: () => void;
 }
 
 /**
@@ -27,6 +33,68 @@ interface ProfileSummaryProps {
 function distinctUsername(profile: ProfileMetadata | null): string | undefined {
   const name = profile?.name;
   return profile?.display_name && name && name !== profile.display_name ? name : undefined;
+}
+
+function pictureStatusText(status: ProfilePictureStatus): string {
+  switch (status.kind) {
+    case "working":
+      return "Loading the picture to keep a copy...";
+    case "saved":
+      return "The header now shows this picture.";
+    case "failed":
+      return status.note;
+    case "idle":
+      return "";
+  }
+}
+
+/**
+ * The privacy statement for the picture, and the one control that loads it.
+ *
+ * This is the only place Ostrilo loads a remote image, so it says so: the load
+ * happens on a save or on this button, once, and what stays is a small local
+ * copy. A failure keeps the seal in the header and says why here, where the
+ * user acted, not in the header.
+ */
+function PictureCopyBlock({
+  canRefresh,
+  status,
+  onRefresh,
+}: {
+  canRefresh: boolean;
+  status: ProfilePictureStatus;
+  onRefresh: () => void;
+}) {
+  const working = status.kind === "working";
+  return (
+    <div className="flex items-start justify-between gap-3 px-1">
+      <div className="min-w-0 space-y-1 text-[11.5px] text-muted-foreground">
+        <p>
+          Ostrilo loads your picture once, when you save or refresh it, and
+          keeps a small copy for the header.
+        </p>
+        <output
+          className={cn(
+            "block break-words empty:hidden",
+            status.kind === "failed" && "text-[var(--ink-amber)]"
+          )}
+        >
+          {pictureStatusText(status)}
+        </output>
+      </div>
+      {canRefresh && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRefresh}
+          disabled={working}
+          className="shrink-0"
+        >
+          Refresh picture
+        </Button>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -84,6 +152,61 @@ function ProfileError({
   );
 }
 
+function PublicProfileCard({
+  profile,
+  profileName,
+  username,
+  loading,
+  onEdit,
+}: {
+  profile: ProfileMetadata | null;
+  profileName: string;
+  username: string | undefined;
+  loading: boolean;
+  onEdit: (field?: ProfileEditField) => void;
+}) {
+  return (
+    <div className="ink-card overflow-hidden" aria-busy={loading}>
+      <ProfileTextField
+        label="Display Name"
+        loading={loading}
+        value={profileName}
+        onAdd={() => onEdit("display_name")}
+      />
+      {username && <ProfileField label="Username" loading={false} value={username} />}
+      <ProfileTextField
+        label="About"
+        loading={loading}
+        value={profile?.about}
+        multiline
+        onAdd={() => onEdit("about")}
+      />
+
+      <RemoteUrlField
+        label="Website"
+        loading={loading}
+        value={profile?.website}
+        onAdd={() => onEdit("website")}
+        openLabel="Open website in a new tab"
+      />
+      <RemoteUrlField
+        label="Picture URL"
+        loading={loading}
+        value={profile?.picture}
+        onAdd={() => onEdit("picture")}
+        openLabel="Open picture in a new tab"
+      />
+
+      {profile?.nip05 && (
+        <ProfileField label="NIP-05" loading={false} value={profile.nip05} />
+      )}
+      {profile?.lud16 && (
+        <ProfileField label="Lightning Address" loading={false} value={profile.lud16} />
+      )}
+    </div>
+  );
+}
+
 export function ProfileSummary({
   profile,
   loading,
@@ -91,6 +214,8 @@ export function ProfileSummary({
   npub,
   onEdit,
   onRefresh,
+  pictureStatus,
+  onRefreshPicture,
 }: ProfileSummaryProps) {
   // Only the first fetch has nothing to show. A refresh over a cached profile
   // keeps the values on screen and spins the refresh control instead. While it
@@ -144,60 +269,18 @@ export function ProfileSummary({
 
           <section className="space-y-2">
             <p className="section-label">Public profile</p>
-            <div
-              className="ink-card overflow-hidden"
-              aria-busy={showLoadingField}
-            >
-              <ProfileTextField
-                label="Display Name"
-                loading={showLoadingField}
-                value={profileName}
-                onAdd={() => onEdit("display_name")}
-              />
-              {username && (
-                <ProfileField label="Username" loading={false} value={username} />
-              )}
-              <ProfileTextField
-                label="About"
-                loading={showLoadingField}
-                value={profile?.about}
-                multiline
-                onAdd={() => onEdit("about")}
-              />
-
-              <RemoteUrlField
-                label="Website"
-                loading={showLoadingField}
-                value={profile?.website}
-                onAdd={() => onEdit("website")}
-                openLabel="Open website in a new tab"
-              />
-              <RemoteUrlField
-                label="Picture URL"
-                loading={showLoadingField}
-                value={profile?.picture}
-                onAdd={() => onEdit("picture")}
-                openLabel="Open picture in a new tab"
-              />
-
-              {profile?.nip05 && (
-                <ProfileField
-                  label="NIP-05"
-                  loading={false}
-                  value={profile.nip05}
-                />
-              )}
-              {profile?.lud16 && (
-                <ProfileField
-                  label="Lightning Address"
-                  loading={false}
-                  value={profile.lud16}
-                />
-              )}
-            </div>
-            <p className="px-1 text-[11.5px] text-muted-foreground">
-              Images are never loaded in this window.
-            </p>
+            <PublicProfileCard
+              profile={profile}
+              profileName={profileName}
+              username={username}
+              loading={showLoadingField}
+              onEdit={onEdit}
+            />
+            <PictureCopyBlock
+              canRefresh={!showLoadingField && isAllowedRemoteUrl(profile?.picture)}
+              status={pictureStatus}
+              onRefresh={onRefreshPicture}
+            />
           </section>
         </div>
 

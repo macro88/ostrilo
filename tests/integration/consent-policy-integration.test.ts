@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
 import { ApprovalRpcHandler } from "@/infrastructure/messaging/handlers/approval-rpc";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
@@ -72,6 +73,7 @@ describe("consent policy integration", () => {
     context = {
       vault: {
         getLockState: vi.fn().mockResolvedValue({ isLocked: false }),
+        isKeyUnreadable: vi.fn().mockReturnValue(false),
         listKeys: vi
           .fn()
           .mockResolvedValue([{ id: "key-1", pubkey: PUBKEY, isSelected: true }]),
@@ -79,6 +81,7 @@ describe("consent policy integration", () => {
       },
       policy,
       activityLog: { addEntry: vi.fn().mockResolvedValue(undefined) },
+      autoSignBudget: new AutoSignBudgetService(),
       settings: { get: vi.fn(), update: vi.fn() },
     } as unknown as ServiceContext;
   });

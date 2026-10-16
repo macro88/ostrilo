@@ -302,7 +302,7 @@ describe("security invariant: policy-consent-scope", () => {
     await storage.local.set("appSettings", {
       __version: "settings.v1",
       origins: [],
-      __consentMigrations: 1,
+      __consentMigrations: 2,
     });
   });
 

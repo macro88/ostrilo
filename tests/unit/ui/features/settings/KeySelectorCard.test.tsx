@@ -92,8 +92,9 @@ describe("KeySelectorCard", () => {
     );
 
     expect(container.textContent).toContain(
-      "Unreadable record: stored public key is not valid"
+      "Unreadable record: this key could not be read"
     );
+    expect(container.textContent).toContain(`key ID ${MAIN.id}`);
     expect(container.textContent).not.toContain("npub1");
     expect(
       container.querySelector('[aria-label="Copy public key for Main"]')
@@ -247,5 +248,54 @@ describe("KeySelectorCard", () => {
       "Copy public key for Main",
       "Copy public key for Spare",
     ]);
+  });
+
+  describe("backup", () => {
+    it("marks only a pending key as having no backup", () => {
+      const statuses = { "key-main": "pending", "key-spare": "verified" } as const;
+      const container = render(
+        <KeySelectorCard
+          keys={[MAIN, SPARE, { ...SPARE, id: "key-old" }]}
+          profiles={new Map()}
+          backupStatusOf={(id) => statuses[id as keyof typeof statuses] ?? "unknown"}
+        />
+      );
+
+      const rows = container.querySelectorAll("li");
+      expect(rows[0].textContent).toContain("No backup");
+      expect(rows[1].textContent).not.toContain("No backup");
+      expect(rows[2].textContent).not.toContain("No backup");
+    });
+
+    it("offers Back up on every key and reports which one was pressed", async () => {
+      const onBackup = vi.fn();
+      const container = render(
+        <KeySelectorCard keys={[MAIN, SPARE]} profiles={new Map()} onBackup={onBackup} />
+      );
+
+      await click(byLabel(container, "Back up Spare"));
+
+      expect(onBackup).toHaveBeenCalledExactlyOnceWith("key-spare");
+      expect(byLabel(container, "Back up Main")).toBeTruthy();
+    });
+
+    it("disables Back up for a key that could not be read, and says why", async () => {
+      const onBackup = vi.fn();
+      const container = render(
+        <KeySelectorCard
+          keys={[{ ...MAIN, isUnreadable: true }]}
+          profiles={new Map()}
+          onBackup={onBackup}
+        />
+      );
+
+      const button = byLabel<HTMLButtonElement>(container, "Back up Main");
+      expect(button.disabled).toBe(true);
+      expect(button.title).toBe(
+        "This key's record could not be read, so there is nothing to back up."
+      );
+      await click(button);
+      expect(onBackup).not.toHaveBeenCalled();
+    });
   });
 });

@@ -10,6 +10,9 @@ export function useKeyManager() {
     isLocked: context.isLocked,
     isLoading: context.isLoading,
     lockAt: context.lockAt,
+    lockReason: context.lockReason,
+    inactivityMinutes: context.inactivityMinutes,
+    lockCheckFailed: context.lockCheckFailed,
     selectedUnlockedKey: context.selectedKeyInfo, // Renamed but same concept (public info only)
     keys: context.keys, // All available keys
     hasKeys: context.hasKeys,
@@ -21,5 +24,6 @@ export function useKeyManager() {
     importKey: context.importKey,
     selectKey: context.selectKey,
     refreshKeys: context.refreshKeys,
+    retryLockCheck: context.retryLockCheck,
   };
 }

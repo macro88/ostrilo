@@ -416,7 +416,8 @@ describe("ProfileService Unit Tests", () => {
           pubkey: "pubkey1",
           kind: 0,
           content: JSON.stringify(metadata),
-        })
+        }),
+        "key1"
       );
       expect(relay.publish).toHaveBeenCalledWith(signedEvent);
 

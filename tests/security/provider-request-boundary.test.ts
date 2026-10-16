@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
 import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
 import {
@@ -49,6 +50,7 @@ function makeContext(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     vault: {
       getLockState: async () => ({ isLocked: false }),
+      isKeyUnreadable: () => false,
       listKeys: async () => [
         { id: "k1", pubkey: PUBKEY, isSelected: true, label: "k1" },
       ],
@@ -56,6 +58,7 @@ function makeContext(overrides: Partial<Record<string, unknown>> = {}) {
     },
     policy: { evaluate: async () => ({ mode: "ask" as const }) },
     disclosureRateLimit: new DisclosureRateLimitService(),
+    autoSignBudget: new AutoSignBudgetService(),
     activityLog: { addEntry: async () => {} },
     ...overrides,
   } as unknown as ServiceContext;

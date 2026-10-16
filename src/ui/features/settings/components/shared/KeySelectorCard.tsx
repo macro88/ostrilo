@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/ui/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { Check, Copy, Pencil, Trash2, X } from "lucide-react";
+import { Check, Copy, Download, Pencil, Trash2, X } from "lucide-react";
+import type { KeyBackupStatus } from "@/domain/backup/status";
 
 export interface KeyRecord {
   id: string;
@@ -35,7 +36,13 @@ interface KeySelectorCardProps {
   onSelectKey?: (keyId: string) => void;
   onRename?: (keyId: string, newLabel: string) => void;
   onDelete?: (keyId: string) => void;
+  /** Marks a key whose backup is `pending`. Absent: no marker is drawn. */
+  backupStatusOf?: (keyId: string) => KeyBackupStatus;
+  onBackup?: (keyId: string) => void;
 }
+
+const UNREADABLE_BACKUP_HINT =
+  "This key's record could not be read, so there is nothing to back up.";
 
 /** `npub1ppgfek6a…772ha9`: mono, middle-truncated, copyable (DESIGN_RULES §7). */
 function truncateNpub(npub: string): string {
@@ -59,6 +66,8 @@ export function KeySelectorCard({
   onSelectKey,
   onRename,
   onDelete,
+  backupStatusOf,
+  onBackup,
 }: KeySelectorCardProps) {
   const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
@@ -126,7 +135,10 @@ export function KeySelectorCard({
         const copied = copiedKeyId === key.id;
 
         return (
-          <li key={key.id} className="ink-row">
+          // Wraps: Set Active, Back up, Rename and Delete do not fit beside the
+          // name on a narrow settings page, and a row that cannot wrap lets
+          // its chips ride over the buttons.
+          <li key={key.id} className="ink-row flex-wrap">
             {/*
               Local seal avatar only. The picture URL comes from a relay, and this
               list is where the user picks which identity signs; loading it would
@@ -145,7 +157,7 @@ export function KeySelectorCard({
               </AvatarFallback>
             </Avatar>
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-44">
               {isEditing ? (
                 <div className="flex items-center gap-2">
                   <Input
@@ -184,7 +196,12 @@ export function KeySelectorCard({
                       {displayName}
                     </span>
                     {isActive && (
-                      <span className="seal-chip seal-chip-success">Active</span>
+                      <span className="seal-chip seal-chip-success shrink-0">Active</span>
+                    )}
+                    {backupStatusOf?.(key.id) === "pending" && (
+                      <span className="seal-chip seal-chip-warning shrink-0">
+                        No backup
+                      </span>
                     )}
                   </div>
                   {key.isUnreadable ? (
@@ -197,7 +214,8 @@ export function KeySelectorCard({
                       the user would read as their own identity.
                     */
                     <p className="mt-0.5 text-[13px] text-destructive">
-                      Unreadable record: stored public key is not valid
+                      Unreadable record: this key could not be read
+                      (key ID {key.id})
                     </p>
                   ) : (
                     <div className="mt-0.5 flex items-center gap-1">
@@ -226,7 +244,7 @@ export function KeySelectorCard({
             </div>
 
             {!isEditing && (
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="ml-auto flex shrink-0 items-center gap-1">
                 {!isActive && onSelectKey && (
                   <Button
                     size="sm"
@@ -235,6 +253,20 @@ export function KeySelectorCard({
                     className="h-8 px-3 text-xs"
                   >
                     Set Active
+                  </Button>
+                )}
+                {onBackup && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onBackup(key.id)}
+                    disabled={key.isUnreadable}
+                    title={key.isUnreadable ? UNREADABLE_BACKUP_HINT : undefined}
+                    className="h-8 px-3 text-xs"
+                    aria-label={`Back up ${displayName}`}
+                  >
+                    <Download aria-hidden="true" />
+                    Back up
                   </Button>
                 )}
                 {onRename && (

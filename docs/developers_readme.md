@@ -157,6 +157,22 @@ const signedEvent = await window.nostr.signEvent({
 // Returns: { id, pubkey, created_at, kind, tags, content, sig }
 ```
 
+### Feature detection
+
+`window.nostr.capabilities` is a frozen `{ methods: string[] }` listing the methods the provider implements. It carries no extension version, deliberately. A page should treat a missing `capabilities` as "unknown", since another signer may own `window.nostr`:
+
+```typescript
+const methods = window.nostr?.capabilities?.methods;
+
+if (methods?.includes("signEvent")) {
+  enableSigning();
+} else if (window.nostr && methods === undefined) {
+  tryAndHandleErrors(); // a provider that does not report capabilities
+}
+```
+
+`PROVIDER_METHODS` (`src/domain/nostr/provider-methods.ts`) is the source for the provider's methods, `capabilities.methods` and the content script's relay allowlist, so the first two cannot drift apart. A new method also needs its relay case in `buildRpcRequest` (`content.ts`, exhaustive over the list, so the compiler flags a missing one) and its RPC type and handler; without those the relay fails closed with `unknown_method`. What counts as public API, and how it is versioned and deprecated, is in [API versioning and deprecation](api-versioning.md).
+
 ### Policy Evaluation
 
 Before signing events, the `NostrRpcHandler` evaluates the requesting origin's policy:

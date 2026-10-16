@@ -1,6 +1,6 @@
 import { browser } from "wxt/browser";
 import { sanitizeRelayUrls } from "@/domain/relay/url";
-import { normalizeAutoLockMinutes } from "@/domain/types";
+import { normalizeAutoLockMinutes, type LockReason } from "@/domain/types";
 import { createStorageSuite } from "@/infrastructure/storage/adapters";
 import {
   WebCryptoAesGcm,
@@ -19,9 +19,11 @@ import {
 import { ActivityLogService } from "@/application/services/activity-log.service";
 import { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
 import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
+import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import { UserPresenceService } from "@/application/services/user-presence.service";
 import { ProfileService } from "@/application/services/profile.service";
 import { RelayManager } from "@/infrastructure/relay";
+import { SessionKeepAlive } from "@/infrastructure/lifecycle/session-keepalive";
 import {
   RpcRouter,
   createRpcMessageListener,
@@ -38,6 +40,8 @@ import {
   ApprovalRpcHandler,
   ActivityRpcHandler,
   ProfileRpcHandler,
+  BackupRpcHandler,
+  AvatarRpcHandler,
 } from "@/infrastructure/messaging/handlers";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 
@@ -227,7 +231,7 @@ export default defineBackground(() => {
     settingsStore
       .migrate()
       .catch((err) => console.warn("[Background] settings migration failed", err));
-  void migrateSettings();
+  const settingsMigrated = migrateSettings();
   browser.runtime.onStartup.addListener(() => void migrateSettings());
   browser.runtime.onInstalled.addListener(() => void migrateSettings());
   const vault = new KeyVaultService(
@@ -240,6 +244,12 @@ export default defineBackground(() => {
     settingsStore
   );
   const policy = new PolicyService(storage, settingsStore);
+  // Reshapes stored consent once settings are in local storage. At worker start
+  // rather than on first use: it binds an old disclosure grant to the key
+  // selected NOW, and the user must not be able to switch keys first.
+  void settingsMigrated
+    .then(() => policy.migrate())
+    .catch((err) => console.warn("[Background] consent migration failed", err));
   const settings = new SettingsService(storage, settingsStore);
   const activityLog = new ActivityLogService(storage.local);
 
@@ -279,10 +289,14 @@ export default defineBackground(() => {
   // service-worker termination, so a timer-based lockout would evaporate.
   const unlockThrottle = new UnlockThrottleService(storage.local);
 
-  // In memory, unlike the unlock throttle: the attack it bounds is a fast
-  // polling loop, and a page polling fast enough to matter keeps this worker
-  // alive. See the module comment.
-  const disclosureRateLimit = new DisclosureRateLimitService();
+  // Windows persist in storage.session so an evicted worker does not hand
+  // every origin a fresh allowance. Session storage rather than local: a
+  // counter should not outlive the browser session it meters.
+  const disclosureRateLimit = new DisclosureRateLimitService(
+    undefined,
+    storage.session
+  );
+  const autoSignBudget = new AutoSignBudgetService(undefined, storage.session);
 
   // Separates "a person is here" from "a page is doing things" when a
   // silently-signed request asks to postpone the auto-lock deadline. The idle
@@ -301,6 +315,7 @@ export default defineBackground(() => {
     profile,
     unlockThrottle,
     disclosureRateLimit,
+    autoSignBudget,
     presence,
     onLockedPageRequest: () => {
       void setLockedRequestPending(true, approvalQueue.count());
@@ -308,7 +323,16 @@ export default defineBackground(() => {
   };
 
   // Create approval queue service
-  const approvalQueue = new ApprovalQueueService();
+  const approvalQueue = new ApprovalQueueService(undefined, storage.session);
+
+  // Keeps this worker alive while the vault is unlocked. See "Auto-lock" below.
+  // `getPlatformInfo` is the cheapest extension API call there is: it reads a
+  // constant and touches no storage, network or user data.
+  const keepAlive = new SessionKeepAlive({
+    ping: () => browser.runtime.getPlatformInfo(),
+    getLockState: () => vault.getLockState(),
+  });
+  vault.onUnlock(() => keepAlive.start());
 
   // Locking denies whatever is waiting for approval.
   //
@@ -324,6 +348,7 @@ export default defineBackground(() => {
   });
 
   vault.onLock(() => {
+    keepAlive.stop();
     approvalQueue.clear();
     void updateApprovalBadge(0);
     // Tell every open surface. Best-effort: with no listener this rejects,
@@ -378,6 +403,8 @@ export default defineBackground(() => {
   ); // Approval queue operations
   router.registerModule("activity", new ActivityRpcHandler()); // Activity log operations
   router.registerModule("profile", new ProfileRpcHandler()); // Profile metadata operations
+  router.registerModule("backup", new BackupRpcHandler()); // Per-key backup status
+  router.registerModule("avatar", new AvatarRpcHandler()); // Local copy of a key's profile picture
 
   // Register the RPC message listener
   browser.runtime.onMessage.addListener(
@@ -435,7 +462,17 @@ export default defineBackground(() => {
   //      timer firing is a lock that can silently never happen.
   //
   // No key material, password or derived key is persisted to survive worker
-  // termination. Eviction drops the keys, which is the desired outcome.
+  // termination. If the browser ends the worker anyway, the keys are gone, the
+  // vault fails closed, and the lock screen says the background restarted.
+  //
+  // What stops that from being routine is a keepalive, and only while unlocked.
+  // Chrome ends an idle MV3 service worker about 30 seconds after its last
+  // event or extension API call, and the keys live in that worker's memory, so
+  // with every extension page closed a 35 minute setting used to last about as
+  // long as the idle window. `SessionKeepAlive` makes one cheap API call every
+  // 20 seconds from unlock until the vault locks by any path, and it checks the
+  // vault's deadline on every tick, so it cannot outlast the auto-lock. See
+  // openspec/changes/archive/2026-10-09-keep-unlocked-session-alive/design.md.
   // ==========================================================================
   const AUTO_LOCK_ALARM = 'ostrilo.autoLock';
 
@@ -466,16 +503,16 @@ export default defineBackground(() => {
 
   // A fresh browser session starts locked. Session storage is normally cleared
   // by the browser, but do not rely on that for a security property.
-  const startLocked = async () => {
+  const startLocked = async (reason: LockReason) => {
     try {
-      await vault.lock();
+      await vault.lock(reason);
       await browser.alarms.clear(AUTO_LOCK_ALARM);
     } catch (err) {
       console.warn('[Background] failed to force locked state at startup', err);
     }
   };
-  browser.runtime.onStartup.addListener(() => void startLocked());
-  browser.runtime.onInstalled.addListener(() => void startLocked());
+  browser.runtime.onStartup.addListener(() => void startLocked('browser_restarted'));
+  browser.runtime.onInstalled.addListener(() => void startLocked('extension_updated'));
 
   // Re-arm whenever the timeout changes or activity is recorded.
   void armAutoLock();
@@ -486,8 +523,10 @@ export default defineBackground(() => {
     const nextSettings = localSettingsChange(changes, areaName);
     if (nextSettings) {
       syncRelayManager(nextSettings as RelaySettings);
-      // The timeout may have changed; re-arm against the new deadline.
+      // The timeout may have changed; re-arm against the new deadline, and
+      // let the keepalive check it now rather than at its next tick.
       void armAutoLock();
+      keepAlive.refresh();
     }
 
     if (DOCKED_STORAGE_KEY in changes) {

@@ -12,7 +12,7 @@ import {
   createKeyBackup,
   serializeKeyBackup,
   type KeyBackupPayload,
-} from "@/ui/features/onboarding/backup/key-backup-envelope";
+} from "@/ui/features/backup/key-backup-envelope";
 import { render, unmountAll } from "./dom";
 
 const PAYLOAD: KeyBackupPayload = {

@@ -79,7 +79,7 @@
 
   /* ── Inkline palette ───────────────────────────────────── */
   --ink: #2a2238;            /* primary text, primary buttons  */
-  --ink-2: #736b89;          /* secondary text                 */
+  --ink-2: #6c6483;          /* secondary text; 4.5:1 on muted and soft fills */
   --ink-3: #867e9e;          /* tertiary text, placeholders    */
   --ink-violet: #5f50a0;     /* the single accent              */
   --ink-violet-soft: #efecf7;
@@ -88,7 +88,7 @@
   --ink-mint-soft: #e3f2ec;
   --ink-amber: #7a5320;      /* warnings                       */
   --ink-amber-soft: #f6eedf;
-  --ink-red: #bd4a55;        /* danger / deny                  */
+  --ink-red: #b3434e;        /* danger / deny; 4.5:1 on its soft fill */
   --ink-red-soft: #f7e7e8;
 
   /* ── shadcn mapping ────────────────────────────────────── */

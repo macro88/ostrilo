@@ -393,7 +393,7 @@ describe("unpaired surrogates are rejected before an event id exists", () => {
     const listKeys = vi.fn();
     const evaluate = vi.fn();
     const context = {
-      vault: { getLockState, listKeys },
+      vault: { getLockState, listKeys, isKeyUnreadable: () => false },
       policy: { evaluate },
     } as unknown as ServiceContext;
 
@@ -436,7 +436,7 @@ describe("unpaired surrogates are rejected before an event id exists", () => {
 describe("keys.list encodes the npub in the background, or not at all", () => {
   function contextWithKeys(records: unknown[]): ServiceContext {
     return {
-      vault: { listKeys: async () => records },
+      vault: { listKeys: async () => records, isKeyUnreadable: () => false },
     } as unknown as ServiceContext;
   }
 

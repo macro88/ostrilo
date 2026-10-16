@@ -167,7 +167,10 @@ describe("key lifecycle through the client and the real background", () => {
     const created = await client.importKey(SECRET_ONE, STRONG_PASSWORD, "labelled");
     await client.lockVault();
 
-    expect(await client.getLockState()).toEqual({ isLocked: true, selectedKeyId: undefined });
+    expect(await client.getLockState()).toEqual({
+      isLocked: true,
+      lockReason: "manual",
+    });
     expect(await client.listKeys()).toEqual([{ id: created.id }]);
     const refused = await rejection(client.renameKey(created.id, "while locked"));
     expect(refused).toMatchObject({ errorCode: RPC_ERROR_CODES.LOCKED });
@@ -189,6 +192,18 @@ describe("policy through the client", () => {
     expect((await client.evaluatePolicy(SITE, 7)).mode).toBe("allow");
   });
 
+  it("revokes one key's disclosure grant and leaves the site's other grants", async () => {
+    await client.importKey(SECRET_TWO, STRONG_PASSWORD);
+    const [a, b] = await vault.listKeys();
+    await policy.grantIdentityDisclosure(SITE, a.id);
+    await policy.grantIdentityDisclosure(SITE, b.id);
+
+    await client.policyRevokeDisclosure(SITE, a.id);
+
+    expect(await policy.getIdentityDisclosure(SITE, a.id)).toBeUndefined();
+    expect(await policy.getIdentityDisclosure(SITE, b.id)).toBe("allow");
+  });
+
   it("writes kind rules, session grants and removal", async () => {
     await client.policySetKindRule(SITE, 7, "deny");
     expect((await client.evaluatePolicy(SITE, 7)).mode).toBe("deny");
@@ -199,7 +214,9 @@ describe("policy through the client", () => {
     expect(await client.policyGetSessionGrants()).toEqual([]);
 
     await client.policyRemoveOrigin(SITE);
-    expect(await policy.getIdentityDisclosure(SITE)).toBeUndefined();
+    expect(
+      await policy.getIdentityDisclosure(SITE, (await vault.listKeys())[0].id)
+    ).toBeUndefined();
     expect((await client.evaluatePolicy(SITE, 7)).mode).toBe("ask");
   });
 });
@@ -252,6 +269,25 @@ describe("approvals and activity through the client", () => {
 
     await client.activityClear();
     expect(await activityLog.count()).toBe(0);
+  });
+
+  it("lists every origin in the stored log, past what one page holds", async () => {
+    for (let i = 0; i < 25; i++) {
+      await activityLog.addEntry({ origin: `https://site${i}.example`, kind: 1, decision: "allow" });
+    }
+    await activityLog.addEntry({ origin: "extension://profile", kind: 0, decision: "allow" });
+
+    const origins = await client.activityGetOrigins();
+
+    expect(origins).toHaveLength(25);
+    expect(origins).toContain("https://site0.example");
+    expect(origins).not.toContain("extension://profile");
+  });
+
+  it("refuses an origin list that does not validate", async () => {
+    bus.override = async () => ({ ok: true, data: { origins: ["javascript:alert(1)"] } });
+
+    await expect(client.activityGetOrigins()).rejects.toThrow();
   });
 });
 

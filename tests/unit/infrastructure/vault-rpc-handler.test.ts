@@ -113,6 +113,18 @@ describe("vault.unlock", () => {
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
   });
 
+  it("reports a right password over records that all fail to open as unreadable, and stays locked", async () => {
+    await vault.importKey(SECRET_ONE, STRONG_PASSWORD);
+    await vault.lock();
+    const records = (await storage.local.get("encryptedKeys")) as Array<Record<string, unknown>>;
+    await storage.local.set("encryptedKeys", [{ ...records[0], pubkey: "cd".repeat(32) }]);
+
+    const res = await send({ type: "vault.unlock", password: STRONG_PASSWORD });
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.VAULT_UNREADABLE);
+    expect((await vault.getLockState()).isLocked).toBe(true);
+  });
+
   it("reports KDF parameters weakened below the floor as unreadable", async () => {
     await vault.importKey(SECRET_ONE, STRONG_PASSWORD);
     await vault.lock();
@@ -219,6 +231,53 @@ describe("vault.generate", () => {
 
     expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
     expect(await storedKeys()).toHaveLength(1);
+  });
+
+  it("with onlyIfEmpty, creates the first key like any other", async () => {
+    const res = await send({
+      type: "vault.generate",
+      password: STRONG_PASSWORD,
+      label: "main",
+      onlyIfEmpty: true,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(await storedKeys()).toHaveLength(1);
+  });
+
+  it("with onlyIfEmpty, refuses with key_already_exists and creates nothing when a key is there", async () => {
+    await vault.generateKey(STRONG_PASSWORD, "first");
+
+    const res = await send({
+      type: "vault.generate",
+      password: STRONG_PASSWORD,
+      onlyIfEmpty: true,
+    });
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.KEY_ALREADY_EXISTS);
+    expect(await storedKeys()).toHaveLength(1);
+  });
+
+  it("with onlyIfEmpty, makes one key from two concurrent requests", async () => {
+    const [a, b] = await Promise.all([
+      send({ type: "vault.generate", password: STRONG_PASSWORD, onlyIfEmpty: true }),
+      send({ type: "vault.generate", password: STRONG_PASSWORD, onlyIfEmpty: true }),
+    ]);
+
+    expect([a.ok, b.ok].sort()).toEqual([false, true]);
+    expect(errorCodeOf(a.ok ? b : a)).toBe(RPC_ERROR_CODES.KEY_ALREADY_EXISTS);
+    expect(await storedKeys()).toHaveLength(1);
+  });
+
+  it("rejects an onlyIfEmpty that is not a boolean and stores nothing", async () => {
+    const res = await send({
+      type: "vault.generate",
+      password: STRONG_PASSWORD,
+      onlyIfEmpty: "yes",
+    } as unknown as Parameters<typeof send>[0]);
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.INVALID_PARAMS);
+    expect(await storedKeys()).toHaveLength(0);
   });
 
   it("propagates a vault it cannot read rather than masking it as a password error", async () => {

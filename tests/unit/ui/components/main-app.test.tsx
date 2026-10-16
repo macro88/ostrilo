@@ -13,6 +13,8 @@ const state = vi.hoisted(() => ({
   needsOnboarding: false,
   isLocked: false,
   isLoading: false,
+  lockCheckFailed: false,
+  retryLockCheck: vi.fn(),
   lock: vi.fn(),
   refreshKeys: vi.fn(),
   selectKey: vi.fn(),
@@ -46,6 +48,8 @@ vi.mock("@/ui/features/authentication/hooks/useKeyManager", () => ({
   useKeyManager: () => ({
     isLocked: state.isLocked,
     isLoading: state.isLoading,
+    lockCheckFailed: state.lockCheckFailed,
+    retryLockCheck: state.retryLockCheck,
     lockAt: undefined,
     lock: state.lock,
     refreshKeys: state.refreshKeys,
@@ -162,6 +166,8 @@ beforeEach(() => {
   state.needsOnboarding = false;
   state.isLocked = false;
   state.isLoading = false;
+  state.lockCheckFailed = false;
+  state.retryLockCheck.mockReset();
   state.lock.mockReset();
   state.refreshKeys.mockReset();
   state.keys = [MAIN];
@@ -193,6 +199,38 @@ describe("MainApp gates", () => {
     mount();
     expect(screen()).toBe("lock");
     expect(container.querySelector("header")).toBeNull();
+  });
+
+  it("shows a retry, not the lock screen, when the background does not answer", () => {
+    state.lockCheckFailed = true;
+    state.isLocked = true;
+    mount();
+
+    expect(screen()).toBeNull();
+    expect(container.textContent).toContain("Can't reach Ostrilo");
+    expect(container.textContent).not.toMatch(/locked/i);
+    expect(container.querySelector("nav")).toBeNull();
+  });
+
+  it("does not send a user to onboarding because the background is silent", () => {
+    state.lockCheckFailed = true;
+    state.needsOnboarding = true;
+    mount();
+
+    expect(screen()).toBeNull();
+    expect(container.textContent).toContain("Can't reach Ostrilo");
+  });
+
+  it("asks the background again when Try again is pressed", () => {
+    state.lockCheckFailed = true;
+    mount();
+
+    const button = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Try again")
+    );
+    click(button as HTMLElement);
+
+    expect(state.retryLockCheck).toHaveBeenCalledTimes(1);
   });
 
   it("shows a loading line while keys are being read", () => {

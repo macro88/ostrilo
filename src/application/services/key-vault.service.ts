@@ -21,6 +21,9 @@ import {
   AES_GCM_IV_LENGTH,
   DEK_LENGTH,
   normalizeAutoLockMinutes,
+  isLockReason,
+  parseInactivityMinutes,
+  type LockReason,
 } from "@/domain/types";
 import { verifierAad, dekAad, skAad } from "@/domain/crypto/aad";
 import { deriveLegacyKeyReadOnly } from "@/infrastructure/crypto/adapters";
@@ -30,13 +33,19 @@ import { CRYPTO_CONSTANTS } from "@/domain/crypto/constants";
 import { bytesToHex, hexToBytes, isValidHex } from "@/domain/utils/hex";
 import { zeroize } from "@/domain/utils/memory";
 import { SerialLock } from "@/domain/utils/serial-lock";
-import { SETTINGS_CHANGED_EVENT, defaultSettings } from "./settings.service";
+import {
+  SETTINGS_CHANGED_EVENT,
+  defaultSettings,
+  freshInstallSettings,
+} from "./settings.service";
 import {
   ROTATION_JOURNAL_STORAGE,
   isRotationJournal,
   type RotationJournal,
 } from "./vault-rotation-journal";
 import { SettingsStore } from "./settings-store";
+import { KeyBackupStatusService } from "./key-backup-status.service";
+import { ProfileAvatarService } from "./profile-avatar.service";
 
 const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
 const VAULT_ENVELOPE_STORAGE = "vaultEnvelope";
@@ -61,7 +70,29 @@ type LockState = {
   isLocked: boolean;
   selectedKeyId?: string;
   lastActivity: number;
+  /** Present only on a locked record. A label, never key material. */
+  lockReason?: LockReason;
+  /** The timeout that elapsed, on an `inactivity` lock, so the lock screen can name it. */
+  inactivityMinutes?: number;
 };
+
+/** What `getLockState()` reports. `lockAt` is set only while unlocked; the rest only while locked. */
+export type VaultLockState = {
+  isLocked: boolean;
+  selectedKeyId?: string;
+  lockAt?: number;
+  lockReason?: LockReason;
+  inactivityMinutes?: number;
+};
+
+/** The outcome of checking an unlocked record against the clock and the timeout. */
+type SessionDeadline =
+  | { expired: false; lockAt: number }
+  | {
+      expired: true;
+      reason: Extract<LockReason, "inactivity" | "clock_rollback" | "state_unreadable">;
+      minutes: number;
+    };
 
 /** A password change refused because these records do not open. */
 export class VaultDamagedRecordsError extends Error {
@@ -73,6 +104,20 @@ export class VaultDamagedRecordsError extends Error {
 
 export class KeyVaultService {
   private unlocked: Map<string, Uint8Array> = new Map();
+
+  /**
+   * Records the last unlock could not open. Held so that a request for one of
+   * them is refused for what it is, rather than reported as a locked vault or
+   * answered with another key.
+   */
+  private unreadable: Set<string> = new Set();
+
+  /**
+   * Incremented by every lock and unlock. A read of the lock state that awaits
+   * storage compares it before correcting the record, so a correction computed
+   * from a session that has since ended cannot overwrite the newer record.
+   */
+  private sessionEpoch = 0;
 
   /**
    * One vault write at a time. A password change replaces the KEK every record
@@ -89,7 +134,23 @@ export class KeyVaultService {
     private schnorr: Schnorr,
     private hash: CryptoHash,
     private bech32: Bech32Codec,
-    private settingsStore: SettingsStore = new SettingsStore(storage)
+    private settingsStore: SettingsStore = new SettingsStore(storage),
+    /**
+     * Per-key backup status. The vault is the one place a key is created or
+     * deleted, so it is also the one place that sets a new key `pending` and
+     * drops a deleted key's record: a key cannot exist without its status.
+     */
+    readonly backupStatus: KeyBackupStatusService = new KeyBackupStatusService(
+      storage.local
+    ),
+    /**
+     * The local copy of each key's profile picture. Held here for the same
+     * reason as the backup status: the vault is where a key stops existing, so
+     * it is where the copy for that public key is dropped.
+     */
+    readonly profileAvatar: ProfileAvatarService = new ProfileAvatarService(
+      storage.local
+    )
   ) {}
 
   async getSettings(): Promise<AppSettingsV1 | undefined> {
@@ -386,16 +447,33 @@ export class KeyVaultService {
     return { kek, kdf: envelope.kdf, created: true };
   }
 
-  async generateKey(password: string, label?: string): Promise<KeyRecord> {
-    return this.writeLock.run(() => this.generateKeyNow(password, label));
+  /**
+   * With `onlyIfEmpty`, creates nothing and throws `vault_not_empty` when the
+   * vault already holds a key. The check runs inside the write lock, before the
+   * envelope is touched, so two callers racing to make the first key cannot both
+   * pass it: the second sees the first's key. A UI that only looked at the key
+   * list first could not promise that.
+   */
+  async generateKey(
+    password: string,
+    label?: string,
+    options: { onlyIfEmpty?: boolean } = {}
+  ): Promise<KeyRecord> {
+    return this.writeLock.run(() =>
+      this.generateKeyNow(password, label, options.onlyIfEmpty === true)
+    );
   }
 
   private async generateKeyNow(
     password: string,
-    label?: string
+    label: string | undefined,
+    onlyIfEmpty: boolean
   ): Promise<KeyRecord> {
     if (!password) {
       throw new Error("password_required");
+    }
+    if (onlyIfEmpty && (await this.listKeys()).length > 0) {
+      throw new Error("vault_not_empty");
     }
 
     const { kek, kdf } = await this.kekForWrite(password);
@@ -417,13 +495,18 @@ export class KeyVaultService {
         isSelected: false,
       } as KeyRecord;
       const records = await this.listKeys();
+      // Before any write that names this key, so a failure here leaves neither
+      // a stored key nor a selection pointing at one. A saveKeys failure after
+      // it can leave an orphan pending record, which is inert: the id is random
+      // and never reused.
+      await this.backupStatus.markPending(id);
       const hasSelected =
         (await this.getSettings())?.selectedKeyId ??
         records.find((r) => r.isSelected)?.id;
       if (!hasSelected && records.length === 0) {
         record.isSelected = true;
         // also set selectedKeyId in settings
-        const settings = (await this.getSettings()) ?? defaultSettings();
+        const settings = (await this.getSettings()) ?? freshInstallSettings();
         await this.settingsStore.write<AppSettingsV1>({
           ...defaultSettings(),
           ...settings,
@@ -485,7 +568,7 @@ export class KeyVaultService {
         records.find((r) => r.isSelected)?.id;
       if (!hasSelected && records.length === 0) {
         record.isSelected = true;
-        const settings = (await this.getSettings()) ?? defaultSettings();
+        const settings = (await this.getSettings()) ?? freshInstallSettings();
         await this.settingsStore.write<AppSettingsV1>({
           ...defaultSettings(),
           ...settings,
@@ -508,7 +591,7 @@ export class KeyVaultService {
 
   private async selectKeyNow(id: string): Promise<void> {
     // Update selectedKeyId in settings
-    const settings = (await this.getSettings()) ?? defaultSettings();
+    const settings = (await this.getSettings()) ?? freshInstallSettings();
     await this.settingsStore.write<AppSettingsV1>({
       ...defaultSettings(),
       ...settings,
@@ -582,9 +665,29 @@ export class KeyVaultService {
     let newSelectedKeyId: string | undefined;
 
     if (settings?.selectedKeyId === id) {
-      // A key always remains: deleting the last one is refused above.
-      newSelectedKeyId = updatedRecords[0].id;
+      // A key always remains: deleting the last one is refused above. One the
+      // last unlock could open is preferred, so the user is not left selecting
+      // a key that cannot sign; the first record stands in when none opened.
+      newSelectedKeyId = (
+        updatedRecords.find((r) => !this.unreadable.has(r.id)) ?? updatedRecords[0]
+      ).id;
       await this.selectKeyNow(newSelectedKeyId);
+    }
+
+    // Last, and best effort: the secret is already zeroized and the selection
+    // repaired, and an orphan status record for a deleted id is inert. A failed
+    // write here must not abort that cleanup.
+    try {
+      await this.backupStatus.remove(id);
+    } catch (error) {
+      console.warn("[Vault] could not drop a deleted key's backup status:", error);
+    }
+    // The picture copy is keyed by public key. A copy left behind is dropped by
+    // the next save, which keeps only keys the vault still holds.
+    try {
+      await this.profileAvatar.remove(records[keyIndex].pubkey);
+    } catch (error) {
+      console.warn("[Vault] could not drop a deleted key's picture copy:", error);
     }
 
     return { newSelectedKeyId };
@@ -738,15 +841,45 @@ export class KeyVaultService {
         }
       }
 
+      // The password was right but not one key opened. Reporting the vault
+      // unlocked would hand every surface an open session with nothing in it,
+      // and the next read would blame the browser for it
+      // (`background_restarted`). The record is left locked, with no reason
+      // rather than a false one, and the caller is told the keys are damaged.
+      if (unlockedKeyIds.length === 0) {
+        await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
+          isLocked: true,
+          selectedKeyId: undefined,
+          lastActivity: Date.now(),
+        });
+        await this.revokeSessionGrants();
+        throw new Error("vault_keys_unreadable");
+      }
+
       if (migrated.length > 0) {
         const byId = new Map(migrated.map((r) => [r.id, r]));
         await this.saveKeys(records.map((r) => byId.get(r.id) ?? r));
       }
 
+      this.unreadable = new Set(damagedKeyIds);
+
+      // The stored selection is kept while its record exists, even when that
+      // record could not be opened: signing with it is then refused, and the
+      // user chooses another key. Falling back to a different key here would
+      // sign as an identity they did not pick. Only a selection that no longer
+      // exists in the records falls back to the first key that opened.
+      const stored = settings?.selectedKeyId;
       const selectedKeyId =
-        settings?.selectedKeyId && unlockedKeyIds.includes(settings.selectedKeyId)
-          ? settings.selectedKeyId
+        stored !== undefined && records.some((rec) => rec.id === stored)
+          ? stored
           : unlockedKeyIds[0];
+      if (selectedKeyId !== stored) {
+        // Written through the path `vault.select` uses, so the settings and the
+        // records' `isSelected` flags - which `nostr-rpc` resolves the signing
+        // key from - agree with the session. Only the selection moves; no key
+        // material or other field of a record is rewritten.
+        await this.selectKeyNow(selectedKeyId);
+      }
 
       await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
         isLocked: false,
@@ -755,6 +888,10 @@ export class KeyVaultService {
       });
 
       await this.notifyUnlocked();
+      // A surface that opened while locked read the settings redacted - no
+      // relays, no origins, no selected key - and keeps them until told
+      // otherwise. This is what tells it the real ones are now readable.
+      await this.broadcastSettingsChanged();
 
       return { selectedKeyId, unlockedKeyIds, damagedKeyIds };
     } finally {
@@ -855,11 +992,25 @@ export class KeyVaultService {
 
   /** Zeroizes every held private key, then forgets it. */
   private discardUnlockedKeys(): void {
+    this.sessionEpoch++;
     this.unlocked.forEach((sk) => zeroize(sk));
     this.unlocked.clear();
+    this.unreadable.clear();
   }
 
-  async lock(): Promise<void> {
+  /** True when the last unlock could not open this key's record. */
+  isKeyUnreadable(id: string): boolean {
+    return this.unreadable.has(id);
+  }
+
+  /**
+   * `reason` is recorded for the lock screen; it defaults to `manual` because
+   * the lock button is the one caller that names nothing.
+   */
+  async lock(
+    reason: LockReason = "manual",
+    inactivityMinutes?: number
+  ): Promise<void> {
     // The security-critical steps come first and do not depend on settings
     // storage: the keys are gone, the state says locked, and the grants are
     // revoked before anything else can fail.
@@ -868,6 +1019,10 @@ export class KeyVaultService {
       isLocked: true,
       selectedKeyId: undefined,
       lastActivity: Date.now(),
+      lockReason: reason,
+      ...(parseInactivityMinutes(inactivityMinutes) === undefined
+        ? {}
+        : { inactivityMinutes }),
     });
     await this.storage.session.remove("sessionGrants");
 
@@ -883,6 +1038,22 @@ export class KeyVaultService {
     }
   }
 
+  /**
+   * Ends every grant that lasts "until lock" for a lock `lock()` did not run.
+   *
+   * The grants go first and must succeed. The display flags only mirror them
+   * for the settings page, so a failure to clear those is logged, not thrown:
+   * it must not turn a lock-state read into an error.
+   */
+  private async revokeSessionGrants(): Promise<void> {
+    await this.storage.session.remove("sessionGrants");
+    try {
+      await this.clearSessionDisplayFlags();
+    } catch (error) {
+      console.warn("[Vault] could not clear the session grant display flags:", error);
+    }
+  }
+
   /** Clears the `sessionGrantAll` display flags that mirror the revoked grants. */
   private async clearSessionDisplayFlags(): Promise<void> {
     const settings = (await this.getSettings()) ?? ({} as AppSettingsV1);
@@ -895,12 +1066,21 @@ export class KeyVaultService {
       })),
     } satisfies AppSettingsV1;
     await this.settingsStore.write<AppSettingsV1>(next);
+    await this.broadcastSettingsChanged();
+  }
+
+  /**
+   * Tells every open surface to read the settings again.
+   *
+   * Best-effort: no listener is the normal case (no extension page open), and
+   * a failed broadcast changes nothing that was stored.
+   */
+  private async broadcastSettingsChanged(): Promise<void> {
     try {
       const { browser } = await import("wxt/browser");
       browser.runtime.sendMessage({ __event: SETTINGS_CHANGED_EVENT });
     } catch {
-      // No listener is the normal case (no extension page open); the
-      // broadcast is best-effort and its failure changes nothing here.
+      // Nothing to deliver to.
     }
   }
 
@@ -938,52 +1118,85 @@ export class KeyVaultService {
    *   1. No stored state, malformed state, or a read that throws.
    *   2. The stored state says unlocked but the deadline has passed.
    *   3. The stored state says unlocked but the background holds no key
-   *      material - which happens on every MV3 worker eviction. The record is
-   *      corrected on the way out so the two do not keep disagreeing.
+   *      material - which happens when the browser ends the MV3 service
+   *      worker. The record is corrected on the way out so the two do not
+   *      keep disagreeing.
+   *
+   * Each reports a `lockReason` except a state that was never written, which
+   * is the ordinary first state of a browser session. The reason is recorded
+   * at the moment of locking, so a surface opened later reads the same answer.
    */
-  async getLockState(): Promise<{
-    isLocked: boolean;
-    selectedKeyId?: string;
-    lockAt?: number;
-  }> {
+  async getLockState(): Promise<VaultLockState> {
+    const epoch = this.sessionEpoch;
     let state: LockState | undefined;
     try {
       state = await this.storage.session.get<LockState>(LOCK_STATE_STORAGE);
     } catch {
-      return { isLocked: true };
+      return { isLocked: true, lockReason: "state_unreadable" };
     }
 
-    // Absent or malformed: locked.
-    if (!state || typeof state !== "object" || state.isLocked !== false) {
-      return { isLocked: true, selectedKeyId: state?.selectedKeyId };
+    // Absent: nothing has been unlocked in this browser session. That is the
+    // normal first state, not a fault, so it carries no reason.
+    if (state === undefined) return { isLocked: true };
+
+    // Malformed: locked, and said so. `isLocked` must be a boolean; anything
+    // else is a record this code did not write.
+    if (!state || typeof state !== "object" || typeof state.isLocked !== "boolean") {
+      return { isLocked: true, lockReason: "state_unreadable" };
     }
 
-    // Deadline passed: locked. A future timestamp is treated as expired rather
-    // than trusted, so a clock change cannot extend a session indefinitely.
-    const deadline = await this.autoLockDeadline(state);
-    if (this.isPastAutoLockDeadline(deadline)) {
-      await this.lock();
-      return { isLocked: true };
+    if (state.isLocked) {
+      return {
+        isLocked: true,
+        selectedKeyId: state.selectedKeyId,
+        ...(isLockReason(state.lockReason) ? { lockReason: state.lockReason } : {}),
+        ...(parseInactivityMinutes(state.inactivityMinutes) === undefined
+          ? {}
+          : { inactivityMinutes: state.inactivityMinutes }),
+      };
+    }
+
+    const deadline = await this.sessionDeadline(state);
+    if (deadline.expired) {
+      const minutes = deadline.reason === "inactivity" ? deadline.minutes : undefined;
+      await this.lock(deadline.reason, minutes);
+      return {
+        isLocked: true,
+        lockReason: deadline.reason,
+        ...(minutes === undefined ? {} : { inactivityMinutes: minutes }),
+      };
     }
 
     // Says unlocked, but there is nothing in memory: the worker was evicted.
     // Correct the record rather than reporting an unlocked vault with no keys,
     // which surfaced to the user as a confusing "denied" on the next signature.
     if (this.unlocked.size === 0) {
+      // A lock or unlock that ran while this read was awaiting storage already
+      // wrote a newer record, with its own reason. Read again instead of
+      // overwriting it with a conclusion drawn from the old one.
+      if (epoch !== this.sessionEpoch) return this.getLockState();
       await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
         isLocked: true,
         selectedKeyId: undefined,
         lastActivity: Date.now(),
-      } as LockState);
-      return { isLocked: true };
+        lockReason: "background_restarted",
+      });
+      // `storage.session` outlives the worker, so a grant made before the
+      // eviction would be live again after the next unlock. A grant lasts until
+      // the vault locks, and this is a lock.
+      await this.revokeSessionGrants();
+      return { isLocked: true, lockReason: "background_restarted" };
     }
 
-    return { isLocked: false, selectedKeyId: state.selectedKeyId, lockAt: deadline };
+    return {
+      isLocked: false,
+      selectedKeyId: state.selectedKeyId,
+      lockAt: deadline.lockAt,
+    };
   }
 
   /**
-   * The absolute epoch-ms instant the vault auto-locks, from the stored
-   * last-activity timestamp and the normalized `autoLockMinutes`.
+   * Checks an unlocked record against the clock and the normalized timeout.
    *
    * Derived from a stored timestamp checked on access rather than from a timer
    * firing, because a `setTimeout` in an MV3 service worker does not survive
@@ -991,29 +1204,30 @@ export class KeyVaultService {
    *
    * The one formula behind both enforcement and what `getLockState()` reports,
    * so the deadline shown to the user cannot drift from the deadline applied.
-   * Unusable timestamps collapse to `0` - a deadline already past - so every
-   * fail-closed case stays closed when read as an instant.
+   * Every unusable timestamp is `expired`, so every fail-closed case stays
+   * closed - including `NaN`, which compares false against everything and
+   * would otherwise read as a deadline that never arrives.
    */
-  private async autoLockDeadline(state: LockState): Promise<number> {
+  private async sessionDeadline(state: LockState): Promise<SessionDeadline> {
     const settings = await this.getSettings();
     // Normalized, not read raw: a stored 0 used to mean "never lock", and
     // that reading is exactly the fail-open this change removes. It is now
     // the shipped default, as it is everywhere else settings are read.
     const minutes = normalizeAutoLockMinutes(settings?.autoLockMinutes);
 
-    const last = typeof state.lastActivity === "number" ? state.lastActivity : 0;
-    if (last <= 0) return 0;
+    const last = state.lastActivity;
+    if (typeof last !== "number" || !Number.isFinite(last) || last <= 0) {
+      return { expired: true, reason: "state_unreadable", minutes };
+    }
 
     // A timestamp in the future means the clock moved or the record was
     // tampered with. Treat it as expired rather than as a long lease.
-    if (last > Date.now()) return 0;
+    const now = Date.now();
+    if (last > now) return { expired: true, reason: "clock_rollback", minutes };
 
-    return last + minutes * 60 * 1000;
-  }
-
-  /** True when `autoLockMinutes` has elapsed since the last recorded activity. */
-  private isPastAutoLockDeadline(deadline: number): boolean {
-    return Date.now() >= deadline;
+    const lockAt = last + minutes * 60 * 1000;
+    if (now >= lockAt) return { expired: true, reason: "inactivity", minutes };
+    return { expired: false, lockAt };
   }
 
   /** Records user activity and pushes the auto-lock deadline out. */
@@ -1027,19 +1241,35 @@ export class KeyVaultService {
     // the surfaces report activity, an expired session reached by a late
     // report would be silently extended past a deadline that had already run
     // out. Locked means the same thing here as it does in `getLockState()`.
-    if (this.isPastAutoLockDeadline(await this.autoLockDeadline(state))) return;
+    if ((await this.sessionDeadline(state)).expired) return;
     await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
       ...state,
       lastActivity: Date.now(),
-    } as LockState);
+    });
   }
 
-  private ensureUnlockedKey(keyId?: string): { keyId: string; sk: Uint8Array } {
-    const id = keyId ?? [...this.unlocked.keys()][0];
-    if (!id) throw new Error("no_unlocked_key");
+  /**
+   * The key a call without an explicit ID means: the stored selection.
+   *
+   * Never another key: the first entry of the unlocked map is not "the" key,
+   * and a caller that omits the ID must not sign as whichever opened first.
+   */
+  private async resolveKeyId(keyId?: string): Promise<string> {
+    if (keyId) return keyId;
+    if (this.unlocked.size === 0) throw new Error("no_unlocked_key");
+    const selected = (await this.getSettings())?.selectedKeyId;
+    if (!selected) throw new Error("no_unlocked_key");
+    return selected;
+  }
+
+  private ensureUnlockedKey(id: string): { keyId: string; sk: Uint8Array } {
     const sk = this.unlocked.get(id);
-    // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract, not a deployment identifier or credential: vault-rpc matches this exact string and maps it to RPC_ERROR_CODES. Moving it to an environment variable would break the mapping.
-    if (!sk) throw new Error("key_locked_or_missing");
+    if (!sk) {
+      // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract, not a deployment identifier or credential: nostr-rpc matches this exact string and maps it to RPC_ERROR_CODES. Moving it to an environment variable would break the mapping.
+      if (this.unreadable.has(id)) throw new Error("key_unreadable");
+      // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract, not a deployment identifier or credential: nostr-rpc matches this exact string and maps it to RPC_ERROR_CODES. Moving it to an environment variable would break the mapping.
+      throw new Error("key_locked_or_missing");
+    }
     return { keyId: id, sk };
   }
 
@@ -1059,7 +1289,7 @@ export class KeyVaultService {
   ): Promise<{ sigHex: string; keyId: string }> {
     if (!isValidHex(hashHex, 32)) throw new Error("hash_must_be_32_bytes");
     const bytes = hexToBytes(hashHex);
-    const { keyId: id, sk } = this.ensureUnlockedKey(keyId);
+    const { keyId: id, sk } = this.ensureUnlockedKey(await this.resolveKeyId(keyId));
     const sig = await this.schnorr.sign(bytes, sk);
     return { sigHex: bytesToHex(sig), keyId: id };
   }
@@ -1069,7 +1299,8 @@ export class KeyVaultService {
    * Computes event ID and signature for an unsigned event.
    *
    * @param unsignedEvent - Event without id and sig fields
-   * @param keyId - Optional key ID (uses selected key if omitted)
+   * @param keyId - Optional key ID (the stored selected key if omitted, never
+   *   another key; a selected key that is not open fails rather than falling back)
    * @returns Signed event with id and sig
    */
   async signEvent(

@@ -8,7 +8,7 @@ import {
   BACKUP_DECRYPT_FAILURE_MESSAGE,
   openKeyBackup,
   parseKeyBackupEnvelope,
-} from "../../backup/key-backup-envelope";
+} from "../key-backup-envelope";
 
 /**
  * How much of the nsec the user re-enters.
@@ -19,16 +19,36 @@ import {
  */
 export const VERIFICATION_SUFFIX_LENGTH = 8;
 
-interface BackupVerificationProps {
-  /** `true` when a suffix matches the nsec the flow holds. Never gets the key. */
-  checkSuffix: (value: string) => boolean;
+/**
+ * Which proofs the flow offers. Explicit rather than inferred from a missing
+ * callback, so a caller that forgets the re-entry check is a type error and not
+ * a silently weaker verification.
+ */
+type VerificationModes =
+  | {
+      /** The user was shown the key, so re-entering its end is evidence. */
+      mode: "key-shown";
+      /** `true` when a suffix matches the nsec the flow holds. Never gets the key. */
+      checkSuffix: (value: string) => boolean;
+    }
+  | {
+      /**
+       * The key was never shown, as when backing up from Settings:
+       * re-entering characters nobody saw proves nothing, so only the saved
+       * file is offered.
+       */
+      mode: "file-only";
+      checkSuffix?: never;
+    };
+
+type BackupVerificationProps = VerificationModes & {
   /** `true` when a decrypted backup is the key this flow just created. */
   checkNsec: (nsec: string) => boolean;
   verified: boolean;
   onVerified: () => void;
   /** Offered only once a file has actually been written in this flow. */
   fileRouteAvailable: boolean;
-}
+};
 
 type Route = "transcription" | "file";
 
@@ -48,13 +68,17 @@ const FIELD_LABEL_CLASS = "mb-1.5 text-[13px]";
  * is exactly what recovery needs.
  */
 export function BackupVerification({
+  mode,
   checkSuffix,
   checkNsec,
   verified,
   onVerified,
   fileRouteAvailable,
 }: BackupVerificationProps) {
-  const [route, setRoute] = useState<Route>("transcription");
+  const transcriptionAvailable = mode === "key-shown";
+  const [route, setRoute] = useState<Route>(
+    transcriptionAvailable ? "transcription" : "file"
+  );
   const [suffix, setSuffix] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState("");
@@ -73,7 +97,7 @@ export function BackupVerification({
   }, []);
 
   const handleCheckSuffix = useCallback(() => {
-    if (checkSuffix(suffix.trim())) {
+    if (checkSuffix?.(suffix.trim())) {
       setError("");
       setSuffix("");
       setPassphrase("");
@@ -152,7 +176,7 @@ export function BackupVerification({
     <div className="ink-card mt-3 p-4">
       <div className="section-label">Check your backup</div>
 
-      {fileRouteAvailable && (
+      {transcriptionAvailable && fileRouteAvailable && (
         <div
           className="mt-2 flex gap-2"
           role="tablist"
@@ -187,7 +211,7 @@ export function BackupVerification({
         </div>
       )}
 
-      {route === "transcription" || !fileRouteAvailable ? (
+      {transcriptionAvailable && (route === "transcription" || !fileRouteAvailable) ? (
         <div className="mt-3">
           <Label htmlFor="backupVerification" className={FIELD_LABEL_CLASS}>
             Last {VERIFICATION_SUFFIX_LENGTH} characters of your nsec

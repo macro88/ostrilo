@@ -274,13 +274,15 @@ describe("high-risk actions require a verified password", () => {
           expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.INVALID_PASSWORD);
         }
       }
-      expect(await policy.getIdentityDisclosure(ORIGIN)).toBeUndefined();
+      expect(await policy.getIdentityDisclosure(ORIGIN, keyIds[0])).toBeUndefined();
     });
 
     it("grants disclosure consent under the password", async () => {
       const res = await patchOrigin({ identityDisclosure: "allow" }, PASSWORD);
       expect(res.ok, JSON.stringify(res)).toBe(true);
-      expect(await policy.getIdentityDisclosure(ORIGIN)).toBe("allow");
+      // The patch names no key, so it grants the selected one and no other.
+      expect(await policy.getIdentityDisclosure(ORIGIN, keyIds[0])).toBe("allow");
+      expect(await policy.getIdentityDisclosure(ORIGIN, keyIds[1])).toBeUndefined();
     });
 
     it("does not gate tightening disclosure consent", async () => {
@@ -288,7 +290,10 @@ describe("high-risk actions require a verified password", () => {
       for (const decision of ["ask", "deny"] as const) {
         const res = await patchOrigin({ identityDisclosure: decision });
         expect(res.ok, `${decision} must not require a password`).toBe(true);
-        expect(await policy.getIdentityDisclosure(ORIGIN)).toBe(decision);
+        // `ask` is the prompting state, which reads back as no decision.
+        expect(await policy.getIdentityDisclosure(ORIGIN, keyIds[0])).toBe(
+          decision === "deny" ? "deny" : undefined
+        );
       }
     });
 

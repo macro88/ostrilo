@@ -16,6 +16,7 @@ code is the final authority where the two disagree.
 
 | Document | What it covers |
 | --- | --- |
+| [API versioning and deprecation](api-versioning.md) | What is public API, how versions map to it, how a change is announced, and `window.nostr.capabilities` |
 | [RPC error codes](rpc-error-codes.md) | Every error code a page can receive, and when |
 | [Testing against a local dApp](local-https-development.md) | Why the provider needs `https://`, and a local HTTPS setup |
 

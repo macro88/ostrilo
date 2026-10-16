@@ -147,10 +147,15 @@ export class ApprovalRpcHandler implements RpcModule {
       // the allow branch and writes a `rules[undefined]` key through
       // `policy.service.ts:140`.
       if (isDisclosureRequest(request)) {
-        // A remembered disclosure decision is per ORIGIN, not per kind: there
-        // is no kind. No per-kind rule is written here, ever.
-        if (validation.data.action === "allow") {
-          await context.policy.setIdentityDisclosure(request.origin, "allow");
+        // A remembered refusal is per ORIGIN, not per kind: there is no kind.
+        // A remembered allow is per KEY - the one the prompt named, captured
+        // when it was queued, not whichever key is selected now. No per-kind
+        // rule is written here, ever.
+        if (validation.data.action === "allow" && request.signingKeyId) {
+          await context.policy.grantIdentityDisclosure(
+            request.origin,
+            request.signingKeyId
+          );
         }
         if (validation.data.action === "deny_remember") {
           await context.policy.setIdentityDisclosure(request.origin, "deny");
@@ -182,11 +187,19 @@ export class ApprovalRpcHandler implements RpcModule {
         // Settings from displaying a decision the product does not enforce,
         // and stops the user being asked twice for something they have
         // already granted in the stronger direction.
+        //
+        // It discloses the key that signed, so that is the key recorded. A
+        // request that does not name one records nothing: the grant is never
+        // guessed from the current selection.
         if (
-          validation.data.action === "allow" ||
-          validation.data.action === "allow_once"
+          (validation.data.action === "allow" ||
+            validation.data.action === "allow_once") &&
+          request.signingKeyId
         ) {
-          await context.policy.setIdentityDisclosure(request.origin, "allow");
+          await context.policy.grantIdentityDisclosure(
+            request.origin,
+            request.signingKeyId
+          );
         }
       }
 
