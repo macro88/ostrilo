@@ -125,7 +125,7 @@ Defects in shipped code. Each belongs to the row named.
 | UX-003 | Smart event preview | M | 🔄 | A consequence sentence for 13 kinds, trust and non-HTTPS chips, raw content, tags and JSON. Left: summaries parsed from the event (reply and zap targets, DM recipient, list diffs). |
 | UX-004 | One-click common actions | S | 🔄 | Copy public key and QR on Home, links to Keys, Relays, Permissions, Profile and Activity, Add Key in the header. Left: external profile link, export, keyboard shortcuts. |
 | UX-005 | Contextual help | S | 🔄 | Inline copy for trust levels, protected kinds and remember scope. Left: tooltips, help for event kinds, learn-more links. |
-| UX-006 | Activity search and filters | S | 🔄 | Combinable origin and kind filters. Left: full-text search, date and result filters, saved presets. |
+| UX-006 | Activity search and filters | S | 🔄 | Combinable origin and kind filters; the origin list is read from the whole stored log. Left: a kind list read from the log the same way (the kind filter offers common and protected kinds, so a kind such as 30023 that appears only in the log cannot be chosen), full-text search, date and result filters, saved presets. |
 | UX-007 | Theme customization | S | 🔄 | Light, dark and system. Left: more themes (including high-contrast), colour picker, font size. |
 | UX-008 | Onboarding tutorial | S | 🔄 | Setup wizard: create or import, password, verified backup; or Quick start, which takes a password and one key and leaves the backup for a Home reminder. Left: a concepts tutorial and dismissible tips. |
 | UX-009 | Bulk permission management | S | ⬜ | |
