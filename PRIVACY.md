@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective:** 6 October 2026 · **Applies to:** Ostrilo 0.9.0 and later
+**Effective:** 16 October 2026 · **Applies to:** Ostrilo 0.10.0 and later
 
 Ostrilo is a browser extension that stores Nostr keys and signs Nostr events on
 your device. This policy covers what the extension stores, what it sends and
@@ -119,7 +119,7 @@ request, and nothing refreshes the copy in the background. If the picture cannot
 be loaded or kept, the header keeps the local seal and the Profile screen says so.
 Saving a profile with no picture removes that key's copy. Deleting a key removes its copy too, as the last step of the deletion; if that step fails, the leftover copy is removed the next time any copy is saved.
 
-Ostrilo 0.9.0 has no image upload: you paste an image URL instead.
+Ostrilo 0.10.0 has no image upload: you paste an image URL instead.
 
 ## Permissions
 

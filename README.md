@@ -143,7 +143,7 @@ needed.
 
 ## Roadmap
 
-Current version: [0.9.0](CHANGELOG.md).
+Current version: [0.10.0](CHANGELOG.md).
 
 | Feature | Status |
 | --- | --- |
