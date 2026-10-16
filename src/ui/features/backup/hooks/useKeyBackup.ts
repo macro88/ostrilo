@@ -19,11 +19,14 @@ export interface BackupTarget {
  * the ref.
  *
  * The ref is emptied on every way out: close, a finished backup, the vault
- * locking, and unmount.
+ * locking, and unmount. Each of those also retires the attempt in flight, so a
+ * reveal that resolves after any of them is dropped rather than stored.
  */
 export function useKeyBackup(reauth: ReturnType<typeof useReauth>) {
   const { isLocked } = useKeyManager();
   const keyRef = useRef<KeyBackupPayload | null>(null);
+  const attemptRef = useRef(0);
+  const lockedRef = useRef(isLocked);
   const [target, setTarget] = useState<BackupTarget | null>(null);
   // Latched for the attempt: an unlock after the lock does not bring the
   // dropped key back, so the dialog must keep saying the flow was stopped.
@@ -31,6 +34,7 @@ export function useKeyBackup(reauth: ReturnType<typeof useReauth>) {
   if (target !== null && isLocked && !lockedAttempt) setLockedAttempt(true);
 
   const release = useCallback(() => {
+    attemptRef.current += 1;
     keyRef.current = null;
   }, []);
 
@@ -39,12 +43,15 @@ export function useKeyBackup(reauth: ReturnType<typeof useReauth>) {
   // A locked vault must not leave a revealed key behind. The dialog reads
   // `lockedMidBackup` to say why the flow stopped.
   useEffect(() => {
+    lockedRef.current = isLocked;
     if (isLocked) release();
   }, [isLocked, release]);
 
   const start = useCallback(
     async (next: BackupTarget) => {
       release();
+      const attempt = attemptRef.current;
+      const isCurrent = () => attempt === attemptRef.current && !lockedRef.current;
       setLockedAttempt(false);
       try {
         await reauth.request(
@@ -57,6 +64,7 @@ export function useKeyBackup(reauth: ReturnType<typeof useReauth>) {
             // Re-verified against the vault record; an unlocked session alone
             // is not enough to release a key.
             const revealed = await revealKey(password, next.id);
+            if (!isCurrent()) return;
             keyRef.current = { ...revealed, name: next.label };
           }
         );
@@ -64,7 +72,7 @@ export function useKeyBackup(reauth: ReturnType<typeof useReauth>) {
         // Cancelled. Nothing was revealed.
         return;
       }
-      setTarget(next);
+      if (isCurrent()) setTarget(next);
     },
     [reauth, release]
   );

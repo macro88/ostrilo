@@ -167,4 +167,97 @@ describe("useKeyBackup", () => {
 
     expect(latest.getPayload()).toBeNull();
   });
+  describe("a reveal that is still pending", () => {
+    function deferredReveal() {
+      let resolve!: (value: { nsec: string; hex: string }) => void;
+      const promise = new Promise<{ nsec: string; hex: string }>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    }
+
+    it("keeps nothing and opens nothing when it resolves after the vault locked", async () => {
+      const pending = deferredReveal();
+      revealKey.mockReturnValueOnce(pending.promise);
+      mount(reauthWith("master"));
+
+      let started!: Promise<void>;
+      act(() => {
+        started = latest.start(KEY);
+      });
+      manager.isLocked = true;
+      rerender();
+      await act(async () => {
+        pending.resolve({ nsec: NSEC, hex: HEX });
+        await started;
+      });
+
+      expect(latest.getPayload()).toBeNull();
+      expect(latest.target).toBeNull();
+    });
+
+    it("keeps nothing when it resolves after the page went away", async () => {
+      const pending = deferredReveal();
+      revealKey.mockReturnValueOnce(pending.promise);
+      mount(reauthWith("master"));
+      const read = latest.getPayload;
+
+      let started!: Promise<void>;
+      act(() => {
+        started = latest.start(KEY);
+      });
+      unmount();
+      await act(async () => {
+        pending.resolve({ nsec: NSEC, hex: HEX });
+        await started;
+      });
+
+      expect(read()).toBeNull();
+    });
+
+    it("keeps nothing when it resolves after the dialog was closed", async () => {
+      const pending = deferredReveal();
+      revealKey.mockReturnValueOnce(pending.promise);
+      mount(reauthWith("master"));
+
+      let started!: Promise<void>;
+      act(() => {
+        started = latest.start(KEY);
+      });
+      act(() => latest.close());
+      await act(async () => {
+        pending.resolve({ nsec: NSEC, hex: HEX });
+        await started;
+      });
+
+      expect(latest.getPayload()).toBeNull();
+      expect(latest.target).toBeNull();
+    });
+
+    it("does not overwrite a newer attempt when it resolves late", async () => {
+      const older = deferredReveal();
+      const OTHER: BackupTarget = { id: "22222222-2222-4222-8222-222222222222", label: "Savings" };
+      const NEWER_NSEC = "nsec1newer";
+      revealKey.mockReturnValueOnce(older.promise);
+      revealKey.mockResolvedValueOnce({ nsec: NEWER_NSEC, hex: "newer" });
+      mount(reauthWith("master"));
+
+      let first!: Promise<void>;
+      act(() => {
+        first = latest.start(KEY);
+      });
+      await act(() => latest.start(OTHER));
+      await act(async () => {
+        older.resolve({ nsec: NSEC, hex: HEX });
+        await first;
+      });
+
+      expect(latest.target).toEqual(OTHER);
+      expect(latest.getPayload()).toEqual<KeyBackupPayload>({
+        nsec: NEWER_NSEC,
+        hex: "newer",
+        name: "Savings",
+      });
+    });
+  });
 });
