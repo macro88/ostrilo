@@ -99,7 +99,6 @@ gate. High and critical are rare enough to be worth stopping for.
 |---|---|---|---|
 | esbuild dev-server arbitrary file read on Windows | `esbuild` | low | Accepted. Below threshold. Affects `wxt dev` on Windows only; no release path. |
 | GHSA-vfj7-8cjw-p6xm, stack exhaustion on deeply nested brace patterns | `braces` | high | Accepted 2026-10-06 via `auditConfig.ignoreGhsas` in `pnpm-workspace.yaml`. No patched release exists: the advisory names `>=3.0.4` and npm's latest is `3.0.3`. Reached only through `aislop` and `shadcn > micromatch`, which glob paths this repository supplies; no untrusted pattern reaches it. Remove the ignore the day a patched version is published. |
-| GHSA-86w9-cpqp-85rv, PKCS#1 v1.5 verification accepts extra nested DigestAlgorithm elements | `node-forge` | high | Accepted 2026-10-06 via `auditConfig.ignoreGhsas`. No patched release exists: the advisory names `>=1.4.1` and npm's latest is `1.4.0`. Reached only through `wxt > web-ext-run > @devicefarmer/adbkit`, the Android debugging path, which nothing in this repository invokes. Remove the ignore the day a patched version is published. |
 
 An ignored advisory is a hole in the gate with a name on it. Each entry in
 `ignoreGhsas` has a row here, and a row here says why the finding cannot reach
@@ -124,6 +123,17 @@ advisories under the MCP SDK and aislop (`fast-uri`, `ip-address`, `smol-toml`)
 were fixed in the same change because patched releases existed and the bumps
 were in range, not because the gate required it. Every bump is inside the
 range its consumer declares.
+
+On 2026-11-03 eighteen more high advisories arrived, and the `node-forge` row
+above was retired the same day: `1.4.1` is the first patched release, so
+`GHSA-86w9-cpqp-85rv` is overridden with the other five `node-forge`
+advisories and its `ignoreGhsas` entry is gone. The rest were fixed without an
+exception: `zod` (GHSA-mrhx-c7xc-m3w5) by upgrading the production dependency in
+`package.json`, with an override for the 4.x copies dev tooling pulls in and a
+`shadcn` bump so its `zod@3` copy left the tree; `@modelcontextprotocol/sdk`
+(moved from `1.31.0` to `1.32.0`), `body-parser`, `follow-redirects`,
+`systeminformation`, `undici` and `vite` (per major, 7.x and 8.x) by
+`overrides`. Only the `braces` row remains.
 
 A gate that was green yesterday and red today on an unchanged tree is this
 mechanism working, not flaking: `pnpm audit` reads npm's live advisory feed, so
