@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.0 — 2026-10-16
+## 0.10.0 — 2026-11-03
 
 This release fixes the two problems reported against 0.9.0:
 
@@ -149,6 +149,11 @@ site asks again after you switch keys.
 
 ### Security
 
+- **`zod` is updated to 4.6.7** for GHSA-mrhx-c7xc-m3w5. Ostrilo uses `zod` to
+  check every message that reaches its background, including requests from web
+  pages, and the earlier version could be made to use excessive memory while
+  checking an oversized value. Build and test tools with high-severity
+  advisories are updated too; none of them ships in the extension.
 - **BREAKING (API): `getPublicKey()` consent now belongs to one key.** Allowing a
   site to read your public key applied to every identity in the vault, so a
   site you let see key A also saw key B the moment you switched. Consent is now
