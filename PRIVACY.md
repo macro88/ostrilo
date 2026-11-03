@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective:** 16 October 2026 · **Applies to:** Ostrilo 0.10.0 and later
+**Effective:** 3 November 2026 · **Applies to:** Ostrilo 0.10.0 and later
 
 Ostrilo is a browser extension that stores Nostr keys and signs Nostr events on
 your device. This policy covers what the extension stores, what it sends and

@@ -3,7 +3,7 @@
 What Ostrilo is working toward, and how far the code has got. For what the current
 release ships, the README and `CHANGELOG.md` are the authority.
 
-**Status as of 2026-10-16 (0.10.0).** ✅ means the row's purpose is met and verified in
+**Status as of 2026-11-03 (0.10.0).** ✅ means the row's purpose is met and verified in
 the code. 🔄 means a real slice ships and something specific is missing. Both say what.
 
 | Symbol | Meaning |
