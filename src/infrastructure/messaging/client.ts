@@ -6,9 +6,14 @@ import type {
   RpcErrorObject,
   LockStatePayload,
 } from "./rpc";
-import type {
-  AppSettingsPatch,
-  OriginPolicyPatch,
+import type { KeyBackupStatusRow } from "@/domain/backup/status";
+import type { AvatarRow } from "@/domain/profile/avatar";
+import {
+  ActivityOriginsResponseSchema,
+  AvatarGetResponseSchema,
+  BackupListResponseSchema,
+  type AppSettingsPatch,
+  type OriginPolicyPatch,
 } from "@/infrastructure/validation/schemas";
 import { BROADCAST_EVENTS } from "@/infrastructure/messaging/events";
 // webextension-polyfill already imported above
@@ -192,11 +197,20 @@ export async function listKeys() {
   >({ type: "keys.list" });
 }
 
-export async function generateKey(password: string, label?: string) {
+/**
+ * `onlyIfEmpty` makes the background refuse with `key_already_exists`, creating
+ * nothing, when the vault already holds a key.
+ */
+export async function generateKey(
+  password: string,
+  label?: string,
+  options: { onlyIfEmpty?: boolean } = {}
+) {
   return rpc<import("@/domain/types").KeyRecord>({
     type: "vault.generate",
     password,
     label,
+    ...(options.onlyIfEmpty ? { onlyIfEmpty: true } : {}),
   });
 }
 
@@ -295,6 +309,68 @@ export function reportActivity(): void {
 
 
 
+/** Every key that has a backup record. A key absent from the result is unknown. */
+export async function listBackupStatuses(): Promise<KeyBackupStatusRow[]> {
+  const data = await rpc<unknown>({ type: "backup.list" });
+  return BackupListResponseSchema.parse(data).statuses;
+}
+
+/** Calls `cb` when another surface verified a backup. Returns the unsubscribe. */
+export function subscribeKeyBackupChanged(cb: () => void) {
+  const handler = (msg: unknown) => {
+    if (
+      typeof msg === "object" &&
+      msg !== null &&
+      (msg as { __event?: unknown }).__event === BROADCAST_EVENTS.KEY_BACKUP_CHANGED
+    ) {
+      cb();
+    }
+  };
+  browser.runtime.onMessage.addListener(handler);
+  return () => browser.runtime.onMessage.removeListener(handler);
+}
+
+/** Records that a backup of this key was made and checked. */
+export async function markKeyBackupVerified(keyId: string) {
+  return rpc<null>({ type: "backup.markVerified", keyId });
+}
+
+/** The local copy of this public key's picture, or null when there is none. */
+export async function getOwnAvatar(pubkey: string): Promise<AvatarRow | null> {
+  const data = await rpc<unknown>({ type: "avatar.get", pubkey });
+  return AvatarGetResponseSchema.parse(data).avatar;
+}
+
+/** Stores the shrunken picture the Profile page made from `sourceUrl`. */
+export async function saveOwnAvatar(copy: {
+  pubkey: string;
+  sourceUrl: string;
+  dataUrl: string;
+}) {
+  return rpc<null>({ type: "avatar.save", ...copy });
+}
+
+/** Drops the local copy of this public key's picture. */
+export async function removeOwnAvatar(pubkey: string) {
+  return rpc<null>({ type: "avatar.remove", pubkey });
+}
+
+/** Calls `cb` when a picture copy was saved or removed. Returns the unsubscribe. */
+export function subscribeAvatarChanged(cb: () => void) {
+  const handler = (msg: unknown) => {
+    if (
+      typeof msg === "object" &&
+      msg !== null &&
+      (msg as { __event?: unknown }).__event ===
+        BROADCAST_EVENTS.PROFILE_AVATAR_CHANGED
+    ) {
+      cb();
+    }
+  };
+  browser.runtime.onMessage.addListener(handler);
+  return () => browser.runtime.onMessage.removeListener(handler);
+}
+
 export async function revealKey(password: string, keyId?: string) {
   return rpc<{ nsec: string; hex: string }>({
     type: "vault.reveal",
@@ -372,8 +448,9 @@ export function subscribeSettingsChanged(cb: () => void) {
 
 /**
  * `password` is required only when the patch raises trust to `high` or sets
- * `identityDisclosure` to `allow`. Per-kind rules go through
- * `policySetKindRule`, and session grants through `policySetSession`.
+ * `identityDisclosure` to `allow`, which grants the key selected at the time.
+ * Per-kind rules go through `policySetKindRule`, and session grants through
+ * `policySetSession`.
  */
 export async function policySetOrigin(
   origin: string,
@@ -419,6 +496,11 @@ export async function policySetSession(
 
 export async function policyRemoveOrigin(origin: string) {
   return rpc<null>({ type: "policy.removeOrigin", origin });
+}
+
+/** Withdraws one key's public-key grant for a site. Not password-gated. */
+export async function policyRevokeDisclosure(origin: string, keyId: string) {
+  return rpc<null>({ type: "policy.revokeDisclosure", origin, keyId });
 }
 
 /**
@@ -508,6 +590,12 @@ export async function activityFilterBy(filters: {
     limit: filters.limit,
     offset: filters.offset,
   });
+}
+
+/** Every origin present in the stored log, not only those on a loaded page. */
+export async function activityGetOrigins(): Promise<string[]> {
+  const data = await rpc<unknown>({ type: "activity.origins" });
+  return ActivityOriginsResponseSchema.parse(data).origins;
 }
 
 export async function activityClear() {

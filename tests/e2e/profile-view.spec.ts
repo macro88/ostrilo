@@ -200,7 +200,9 @@ test.describe("profile view", () => {
     // The privacy statement sits under the card rather than inside the row,
     // because it holds whether or not a URL is set.
     await expect(
-      popup.getByText("Images are never loaded in this window.")
+      popup.getByText(
+        "Ostrilo loads your picture once, when you save or refresh it, and keeps a small copy for the header."
+      )
     ).toBeVisible();
 
     // NIP-05 and Lightning cards are rendered only when the profile carries
@@ -382,7 +384,7 @@ test.describe("profile view", () => {
     ).toBeVisible();
 
     await popup.getByRole("button", { name: "Select active key" }).click();
-    await popup.getByRole("option", { name: /Bruno Marsh/ }).click();
+    await popup.getByRole("menuitemradio", { name: /Bruno Marsh/ }).click();
 
     // Both halves matter. A surface that swapped the name but kept the npub -
     // or the reverse - would tell the user they are signing as an identity

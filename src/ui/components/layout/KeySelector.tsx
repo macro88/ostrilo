@@ -10,6 +10,8 @@ import {
 import { Avatar, AvatarFallback } from "@/ui/components/ui/avatar";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
 import { useProfileMetadata } from "@/ui/hooks/useProfileMetadata";
+import { useOwnAvatar } from "@/ui/hooks/useOwnAvatar";
+import { OwnAvatarImage } from "@/ui/components/common/OwnAvatarImage";
 import { cn } from "@/lib/utils";
 import type { UIKeyInfo } from "@/ui/state/KeyManagerContext";
 
@@ -38,14 +40,20 @@ const ACTIVE_KEY_NAME_ID = "active-key-name";
  * "Select active key" label.
  *
  * @remarks
- * Uses Radix UI DropdownMenu for accessible dropdown behavior. Profile
- * metadata is fetched via useProfileMetadata and cached for 5 minutes. All
- * keys share the same vault password and are encrypted at rest.
+ * Uses Radix UI DropdownMenu for accessible dropdown behavior. It is a menu,
+ * not a listbox: the list ends in an "Add Key" action, and a listbox may hold
+ * only options. The keys are `menuitemradio` rows, so the active one is
+ * announced as checked. Profile metadata is fetched via useProfileMetadata and
+ * cached for 5 minutes. All keys share the same vault password and are
+ * encrypted at rest.
  *
- * Avatars are always the local seal with the key's initial. A relay chooses the
- * profile picture URL, and this is the surface on which the user confirms which
- * identity is about to sign, so no request is ever made to a relay-supplied host
- * from here.
+ * The header avatar is the selected key's own picture when the user has a local
+ * copy of it, and the seal with the key's initial otherwise. The copy is a
+ * `data:` image made on the Profile page when the user saved or refreshed their
+ * profile. A relay chooses the profile picture URL, and this is the surface on
+ * which the user confirms which identity is about to sign, so no request is
+ * ever made to that host from here: nothing on this surface loads a remote
+ * image. The list rows below are always the seal.
  */
 export const KeySelector = memo(function KeySelector({
   onAddKey,
@@ -57,6 +65,12 @@ export const KeySelector = memo(function KeySelector({
   // Fetch profile metadata for all keys
   const pubkeys = keys.map((key: UIKeyInfo) => key.publicKeyHex);
   const { profiles } = useProfileMetadata(pubkeys);
+
+  const ownAvatar = useOwnAvatar(
+    selectedUnlockedKey && !selectedUnlockedKey.isUnreadable
+      ? selectedUnlockedKey.publicKeyHex
+      : null
+  );
 
   const handleSelectKey = async (keyId: string) => {
     if (keyId === selectedUnlockedKey?.id || isSwitching) return;
@@ -74,6 +88,15 @@ export const KeySelector = memo(function KeySelector({
 
   // Get display info for a key
   const getKeyDisplay = (key: UIKeyInfo) => {
+    // A key whose public key cannot be read has no profile to look up and no
+    // npub to show. It is named for what it is, with its ID: "Unnamed" here
+    // read as an empty vault and was never the truth about this record.
+    if (key.isUnreadable) {
+      return {
+        displayName: "Unreadable key",
+        truncatedNpub: `ID ${key.id.slice(0, 8)}`,
+      };
+    }
     const profile = profiles.get(key.publicKeyHex);
     const displayName =
       profile?.display_name || profile?.name || key.label || "Unnamed Key";
@@ -105,14 +128,18 @@ export const KeySelector = memo(function KeySelector({
           )}
           disabled={isSwitching}
           aria-label="Select active key"
-          aria-haspopup="listbox"
-          aria-expanded={isOpen}
-          aria-controls="key-selector-listbox"
         >
           <Avatar shape="seal" className="size-7">
-            <AvatarFallback className="bg-secondary text-xs font-bold text-secondary-foreground">
-              {currentKeyDisplay.displayName.charAt(0).toUpperCase()}
-            </AvatarFallback>
+            <OwnAvatarImage
+              avatar={ownAvatar}
+              alt={currentKeyDisplay.displayName}
+              size={28}
+              fallback={
+                <AvatarFallback className="bg-secondary text-xs font-bold text-secondary-foreground">
+                  {currentKeyDisplay.displayName.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              }
+            />
           </Avatar>
           <span id={ACTIVE_KEY_NAME_ID} className="truncate">
             {currentKeyDisplay.displayName}
@@ -131,8 +158,6 @@ export const KeySelector = memo(function KeySelector({
         align="start"
         sideOffset={6}
         className="w-[288px] max-w-[calc(100vw-1rem)] p-1.5"
-        role="listbox"
-        id="key-selector-listbox"
         aria-label="Available keys"
       >
         {keys.map((key: UIKeyInfo) => {
@@ -148,8 +173,8 @@ export const KeySelector = memo(function KeySelector({
                 "hover:bg-muted focus:bg-muted focus:outline-none",
                 isSelected && "bg-muted"
               )}
-              role="option"
-              aria-selected={isSelected}
+              role="menuitemradio"
+              aria-checked={isSelected}
               aria-label={`${keyDisplay.displayName} - ${
                 keyDisplay.truncatedNpub
               }${isSelected ? " (currently selected)" : ""}`}

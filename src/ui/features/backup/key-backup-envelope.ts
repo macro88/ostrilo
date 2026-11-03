@@ -20,7 +20,7 @@ import type { SecretBytes } from "@/application/ports/crypto";
  * rotated, so that outcome is permanent and total.
  *
  * Three properties this format is built for, each asserted by
- * `tests/unit/ui/features/onboarding/key-backup-envelope.test.ts`:
+ * `tests/unit/ui/features/backup/key-backup-envelope.test.ts`:
  *
  *  1. **Nothing readable.** The nsec, the hex key and the user's key name all
  *     live inside the ciphertext. The header carries only the parameters needed

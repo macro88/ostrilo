@@ -204,6 +204,52 @@ test.describe("NIP-07 Provider", () => {
     expect(nostrStructure.hasNip44).toBe(false);
   });
 
+  test("a page can read window.nostr.capabilities and cannot change it", async ({
+    extensionContext,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Extension tests only run on Chromium");
+
+    const page = await extensionContext.newPage();
+    await page.goto("https://localhost:8765/test-page.html");
+    await waitForNostrInjection(page);
+
+    const seen = await page.evaluate(() => {
+      const capabilities = window.nostr!.capabilities!;
+      const advertised = [...capabilities.methods];
+      const implemented = Object.keys(window.nostr!).filter(
+        (name) => typeof (window.nostr as unknown as Record<string, unknown>)[name] === "function"
+      );
+
+      // A page that tries to widen or hide what the signer supports. Reflect
+      // reports refusal as `false` instead of throwing, whatever the page's
+      // strictness.
+      const accepted = [
+        Reflect.set(window.nostr!, "capabilities", { methods: ["nip44"] }),
+        Reflect.set(capabilities, "methods", ["nip44"]),
+        Reflect.set(capabilities.methods, "length", 0),
+        Reflect.set(capabilities.methods, "2", "nip44"),
+        Reflect.deleteProperty(window.nostr!, "capabilities"),
+      ];
+
+      return {
+        advertised,
+        implemented,
+        after: [...window.nostr!.capabilities!.methods],
+        keys: Object.keys(window.nostr!.capabilities!),
+        frozen: Object.isFrozen(window.nostr!.capabilities) && Object.isFrozen(capabilities.methods),
+        accepted,
+      };
+    });
+
+    expect(seen.advertised).toEqual(["getPublicKey", "signEvent"]);
+    expect([...seen.advertised].sort()).toEqual([...seen.implemented].sort());
+    expect(seen.keys).toEqual(["methods"]);
+    expect(seen.frozen).toBe(true);
+    expect(seen.after).toEqual(seen.advertised);
+    expect(seen.accepted).toEqual([false, false, false, false, false]);
+  });
+
   test("window.nostr is injected early before DOMContentLoaded", async ({
     extensionContext,
     extensionId,

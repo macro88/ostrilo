@@ -372,12 +372,8 @@ test.describe("an unanswered approval", () => {
       contentPreview: UNANSWERED_CONTENT,
     });
     expect(entries[0].keyId).toBeUndefined();
-    // NOT asserted: `reason === "timeout"`. The signing path writes no reason
-    // at all (nostr-rpc.ts, the `decision === "timeout"` branch), even though
-    // the field exists on ActivityLogEntry and the identity-disclosure path
-    // does populate it. So today a timed-out signature is indistinguishable
-    // from a user's deliberate refusal in the log. Pinning the current
-    // behaviour here would cement it; see the findings note for this file.
+    // A timed-out signature says so, so it can be told apart from a refusal.
+    expect(entries[0].reason).toBe("timeout");
 
     // Nothing was learned. An unanswered question is not consent, and it is
     // not a refusal either: no per-kind rule, no session grant, and the
@@ -422,7 +418,7 @@ test.describe("an unanswered approval", () => {
  *   the part that protects the user, and it is covered.
  *
  * - Timeout of an identity-disclosure prompt. Same deadline, same
- *   `handleTimeout`, and it is the path that DOES record `reason: "timeout"`.
+ *   `handleTimeout`, and it records `reason: "timeout"` the same way.
  *   A second sixty-second test for the same queue timer would double this
  *   file's runtime to re-exercise one branch of a handler.
  */

@@ -49,8 +49,11 @@ export function ProfileField({
         <p
           className={cn(
             "text-sm text-muted-foreground",
+            // wrap-anywhere, not break-words: only `anywhere` lowers the
+            // min-content width, so an unbroken string wraps inside the row
+            // instead of overhanging it and being clipped by the card.
             multiline
-              ? "whitespace-pre-wrap break-words"
+              ? "max-w-full min-w-0 whitespace-pre-wrap wrap-anywhere"
               : "min-w-0 truncate text-right"
           )}
         >

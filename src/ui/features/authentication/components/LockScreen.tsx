@@ -6,9 +6,10 @@ import { UNLOCK_FAILED, type UnlockResult } from "@/ui/state/KeyManagerContext";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import { countdownDetail } from "@/ui/lib/password-failure";
 import { useEphemeralInputTeardown } from "../hooks/useEphemeralInputTeardown";
-import { AlertTriangle, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { Logo } from "@/ui/components/logo/Logo";
 import { SealMark } from "@/components/common/SealMark";
+import { describeLockReason } from "@/ui/lib/lock-reason";
 
 interface LockScreenProps {
   onUnlock?: () => void;
@@ -38,7 +39,7 @@ const UNLOCK_FAILURE_COPY: Record<string, string> = {
   [RPC_ERROR_CODES.NO_KEY_SELECTED]:
     "No vault exists yet. Create or import a key before unlocking.",
   [RPC_ERROR_CODES.VAULT_UNREADABLE]:
-    "This vault could not be opened. It was written by a different version of Ostrilo, or its stored encryption parameters are not acceptable. Update the extension; do not re-create your vault.",
+    "This vault could not be opened. It was written by a different version of Ostrilo, its stored encryption parameters are not acceptable, or its key records are damaged. Update the extension; do not re-create your vault.",
   [UNLOCK_FAILED]: "Could not reach the vault. Try again.",
 };
 
@@ -64,7 +65,7 @@ export function LockScreen({
   onUnlock,
   title = "Ostrilo is Locked",
 }: LockScreenProps) {
-  const { unlock, isLoading } = useKeyManager();
+  const { unlock, isLoading, lockReason, inactivityMinutes } = useKeyManager();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const passwordFieldRef = useRef<HTMLInputElement>(null);
@@ -121,6 +122,14 @@ export function LockScreen({
         </div>
 
         <h1 className="screen-title mt-6 text-center text-[20px]">{title}</h1>
+        {lockReason && (
+          <p
+            className="mt-1.5 text-center text-[13px] leading-snug text-muted-foreground"
+            data-testid="lock-reason"
+          >
+            {describeLockReason(lockReason, inactivityMinutes)}
+          </p>
+        )}
 
         <div className="mt-4 w-full">
           <PasswordInput
@@ -131,19 +140,11 @@ export function LockScreen({
             onChange={setPassword}
             disabled={isLoading}
             idPrefix="unlock"
+            // aislop-ignore-next-line jsx-a11y/no-autofocus -- the lock screen has one control worth touching, and the user opened it to type this password
             autoFocus
             inputRef={passwordFieldRef}
-            invalid={Boolean(error)}
+            error={error}
           />
-          {error && (
-            <p
-              className="mt-2 flex items-start gap-1.5 text-xs font-medium text-destructive"
-              role="alert"
-            >
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{error}</span>
-            </p>
-          )}
         </div>
 
         <Button type="submit" disabled={isLoading} className="mt-4 h-12 w-full">

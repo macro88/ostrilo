@@ -6,7 +6,7 @@ import {
   parseKeyBackupEnvelope,
   type KeyBackupEnvelopeV1,
   type KeyBackupPayload,
-} from "./key-backup-envelope";
+} from "@/ui/features/backup/key-backup-envelope";
 
 export interface EncryptedBackupImport {
   /** Name of the pending backup file, or "" when none is selected. */

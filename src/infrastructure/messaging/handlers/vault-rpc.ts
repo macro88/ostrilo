@@ -31,6 +31,11 @@ import { ScureBech32 } from "@/infrastructure/crypto/adapters";
  */
 export interface KeyListEntry extends KeyRecord {
   npub?: string;
+  /**
+   * The last unlock could not open this key's record. Set only while unlocked;
+   * a locked listing is reduced to identifiers before it leaves the router.
+   */
+  unreadable?: true;
 }
 
 /**
@@ -174,6 +179,13 @@ export class VaultRpcHandler implements RpcModule {
             method: message.type,
           });
         }
+        if (error.message === "vault_keys_unreadable") {
+          return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
+            details:
+              "The password is right, but none of this vault's keys could be opened. Their records may be damaged. Do not re-create your vault.",
+            method: message.type,
+          });
+        }
         if (
           error.message === "vault_version_unsupported" ||
           error.message === "kdf_below_floor" ||
@@ -220,6 +232,16 @@ export class VaultRpcHandler implements RpcModule {
       }
     }
 
+    if (
+      message.onlyIfEmpty !== undefined &&
+      typeof message.onlyIfEmpty !== "boolean"
+    ) {
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, {
+        details: "onlyIfEmpty must be a boolean",
+        method: message.type,
+      });
+    }
+
     const policyError = await this.enforceNewPasswordPolicy(
       message.password,
       message.type,
@@ -230,9 +252,18 @@ export class VaultRpcHandler implements RpcModule {
 
     try {
       return await this.writeUnderThrottle(context, message.type, () =>
-        context.vault.generateKey(message.password, message.label)
+        context.vault.generateKey(message.password, message.label, {
+          onlyIfEmpty: message.onlyIfEmpty,
+        })
       );
     } catch (error) {
+      // aislop-ignore-next-line ai-slop/hardcoded-id -- internal error contract: the service error string this branch maps to RPC_ERROR_CODES.KEY_ALREADY_EXISTS. Not a deployment identifier or credential.
+      if (error instanceof Error && error.message === "vault_not_empty") {
+        return createRpcErrorResponse(RPC_ERROR_CODES.KEY_ALREADY_EXISTS, {
+          details: "The vault already holds a key",
+          method: message.type,
+        });
+      }
       if (error instanceof Error && error.message === "password_required") {
         return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PASSWORD, {
           details: "Password is required",
@@ -391,6 +422,7 @@ export class VaultRpcHandler implements RpcModule {
             hexToBytes(record.pubkey)
           )
         : undefined,
+      ...(context.vault.isKeyUnreadable(record.id) ? { unreadable: true as const } : {}),
     }));
     return { ok: true, data };
   }

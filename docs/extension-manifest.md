@@ -93,7 +93,7 @@ On MV3 this governs the background context as well as the extension pages, so
 | `script-src 'self'` | Bundled code only. No `'unsafe-eval'`, no `'unsafe-inline'`, no remote origin. Nothing in `src/` calls `eval` or `new Function`, and there is no WebAssembly, so `'wasm-unsafe-eval'` — which Chrome's own default policy includes — is deliberately omitted. |
 | `object-src 'self'` | No plugin content. Both Chrome and the AMO validator expect the directive present and restrictive. |
 | `style-src 'self' 'unsafe-inline'` | **Load-bearing.** `react-style-singleton`, reached through `react-remove-scroll` and therefore through every Radix dialog, creates a `<style>` element at runtime. Without `'unsafe-inline'` dialogs lose scroll-lock styling — with no error. Injected CSS is not a script-execution vector and the extension pages have no untrusted CSS source, so the cost is bounded. |
-| `img-src 'self' data: https:` | Extension pages render relay-supplied `profile.picture` URLs, which are arbitrary and cannot be enumerated. `https:` is broad but excludes plaintext `http:`, so a relay cannot cause a cleartext request that tells a network observer which npub is being viewed. `data:` covers small inlined images and QR rendering. `validate-relay-and-remote-data` narrows this at the application layer; the directive is the backstop. |
+| `img-src 'self' data: https:` | The Profile page loads the user's own `profile.picture` once, on a save or Refresh picture, to make the local copy the header shows (`cache-own-profile-picture`). That address is arbitrary and cannot be enumerated, so `https:` is the narrowest source that fits; it excludes plaintext `http:`, so the load cannot be cleartext. `data:` carries that stored copy, plus small inlined images and QR rendering. No other surface renders a remote image: the application layer enforces that, and this directive is the backstop. |
 | `connect-src wss: https://nostr.build` | No `'self'`: nothing in an extension page fetches a bundled file, so the extension origin is not a network destination. `https://nostr.build` is the hardcoded profile-image upload host. `wss:` is discussed below. `tests/security/manifest-assertions.test.ts` asserts this directive exactly, so any widening fails. |
 | `font-src 'self'` | Archivo and JetBrains Mono are bundled from `@fontsource` and served from the extension itself. No Google Fonts, no remote `@import url(...)`. Fonts are never inlined as `data:` URIs (`assetsInlineLimit` in `wxt.config.ts`), so this directive needs no `data:` source. |
 | `frame-src 'none'` | The extension embeds no iframes. |
@@ -233,7 +233,7 @@ verification for a CSP change is:
 1. Load `.output/chrome-mv3` unpacked.
 2. Open `popup.html`, `options.html`, `sidepanel.html` and `approval.html`.
 3. Confirm a Radix dialog opens with scroll locked (`style-src
-   'unsafe-inline'`), the bundled fonts load (`font-src 'self'`), a relay avatar renders (`img-src https:`), key import and
+   'unsafe-inline'`), the bundled fonts load (`font-src 'self'`), the Profile page's Refresh picture loads your own picture (`img-src https:`) and the header then shows the stored copy, key import and
    key creation submit (`form-action 'none'`), and profile image upload reaches
    nostr.build (`connect-src https://nostr.build`).
 4. Confirm no `securitypolicyviolation` fires beyond the known `eval` pair

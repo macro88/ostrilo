@@ -236,6 +236,58 @@ describe("RelayManager over real relay adapters", () => {
     });
   });
 
+  describe("setRelayUrls", () => {
+    // The background calls this on every local settings write, a theme change
+    // included. Only a different relay list may touch a socket.
+    it("leaves open sockets and subscriptions alone when the relay list is unchanged", async () => {
+      const { manager, received } = await subscribedOnBoth(true);
+      const sockets = [socketFor(RELAY_A), socketFor(RELAY_B)];
+
+      await manager.setRelayUrls([RELAY_A, RELAY_B]);
+
+      expect(sockets.map((socket) => socket.closeCalls)).toEqual([0, 0]);
+      expect(FakeWebSocket.instances).toHaveLength(2);
+      expect(manager.getRelayUrls()).toEqual([RELAY_A, RELAY_B]);
+
+      socketFor(RELAY_A).deliverMessage([
+        "EVENT",
+        reqId(RELAY_A),
+        signedNote("still subscribed"),
+      ]);
+      expect(received.map((event) => event.content)).toEqual([
+        "still subscribed",
+      ]);
+    });
+
+    it("treats a list that sanitizes to the current one as unchanged", async () => {
+      const { manager } = await subscribedOnBoth(true);
+
+      await manager.setRelayUrls([RELAY_A, ` ${RELAY_B} `, RELAY_A]);
+
+      expect(socketFor(RELAY_A).closeCalls).toBe(0);
+      expect(socketFor(RELAY_B).closeCalls).toBe(0);
+    });
+
+    it("closes the old sockets and adopts the new list when a relay is removed", async () => {
+      const { manager } = await subscribedOnBoth(true);
+      const [oldA, oldB] = [socketFor(RELAY_A), socketFor(RELAY_B)];
+
+      await manager.setRelayUrls([RELAY_A]);
+
+      expect(oldA.closeCalls).toBe(1);
+      expect(oldB.closeCalls).toBe(1);
+      expect(manager.getRelayUrls()).toEqual([RELAY_A]);
+    });
+
+    it("rebuilds when a relay is added", async () => {
+      const manager = new RelayManager([RELAY_A]);
+
+      await manager.setRelayUrls([RELAY_A, RELAY_B]);
+
+      expect(manager.getRelayUrls()).toEqual([RELAY_A, RELAY_B]);
+    });
+  });
+
   it("reports how many relays it manages", () => {
     expect(new RelayManager([RELAY_A, RELAY_B]).getRelayCount()).toBe(2);
   });

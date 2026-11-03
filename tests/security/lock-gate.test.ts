@@ -103,6 +103,7 @@ describe("locked behaviour at the message boundary", () => {
     message: unknown,
     opts: {
       isLocked: boolean;
+      lockStateFails?: boolean;
       data?: unknown;
       namespace: string;
       onCall?: (m: unknown) => void;
@@ -117,7 +118,12 @@ describe("locked behaviour at the message boundary", () => {
       },
     });
     const listener = mod.createRpcMessageListener(router, {
-      vault: { getLockState: async () => ({ isLocked: opts.isLocked }) },
+      vault: {
+        getLockState: async () => {
+          if (opts.lockStateFails) throw new Error("storage unavailable");
+          return { isLocked: opts.isLocked };
+        },
+      },
     } as never);
 
     return await new Promise<any>((res) => {
@@ -149,6 +155,38 @@ describe("locked behaviour at the message boundary", () => {
     ).toBe(false);
   });
 
+  it.each([
+    ["a gated method", "settings.update", "settings"],
+    ["a lock-aware read", "keys.list", "keys"],
+  ])(
+    "answers locked, and does not dispatch, when the lock state cannot be read for %s",
+    async (_label, type, namespace) => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      let reached = false;
+      const res = await Promise.race([
+        send(
+          { type, patch: {} },
+          {
+            isLocked: false,
+            lockStateFails: true,
+            namespace,
+            onCall: () => {
+              reached = true;
+            },
+          }
+        ),
+        new Promise<"no response">((r) => setTimeout(() => r("no response"), 500)),
+      ]);
+
+      expect(res, "the caller was left waiting for its own deadline").not.toBe(
+        "no response"
+      );
+      expect(res.ok).toBe(false);
+      expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.LOCKED);
+      expect(reached).toBe(false);
+    }
+  );
+
   it("refuses every policy mutation while locked", async () => {
     for (const type of [
       "policy.setOrigin",
@@ -156,6 +194,7 @@ describe("locked behaviour at the message boundary", () => {
       "policy.setSession",
       "policy.clearSession",
       "policy.removeOrigin",
+      "policy.revokeDisclosure",
       "policy.evaluate",
     ]) {
       let reached = false;
@@ -219,6 +258,29 @@ describe("locked behaviour at the message boundary", () => {
       ).not.toContain(secret);
     }
     expect(res.data).toEqual([{ id: "a" }, { id: "b" }]);
+  });
+
+  it("passes the lock reason through state.getLock, and nothing else, while locked", async () => {
+    const res = await send({ type: "state.getLock" }, {
+      isLocked: true,
+      namespace: "state",
+      data: {
+        isLocked: true,
+        lockReason: "inactivity",
+        inactivityMinutes: 35,
+        lockAt: 1_800_000_000_000,
+        privateKeyHex: "ee".repeat(32),
+      },
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.data).toEqual({
+      isLocked: true,
+      selectedKeyId: undefined,
+      lockReason: "inactivity",
+      inactivityMinutes: 35,
+    });
+    expect(JSON.stringify(res.data)).not.toContain("ee".repeat(32));
   });
 
   it("returns keys.list unredacted once unlocked", async () => {

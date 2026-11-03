@@ -7,6 +7,7 @@ import {
   policySetKindRule,
   policyClearSession,
   policyRemoveOrigin,
+  policyRevokeDisclosure,
   activityClear,
   reportActivity,
 } from "@/infrastructure/messaging/client";
@@ -234,6 +235,12 @@ export function useAppSettings() {
     [updateOriginPolicy]
   );
 
+  // One key's grant, leaving the site's others. Free, like the revoke above.
+  const revokeIdentityDisclosureKey = useCallback(
+    (origin: string, keyId: string) => policyRevokeDisclosure(origin, keyId),
+    []
+  );
+
   // Per-kind rule helper
   const setPerKindRule = useCallback(
     (
@@ -316,6 +323,7 @@ export function useAppSettings() {
     setPerKindRule,
     setSessionGrant,
     revokeIdentityDisclosure,
+    revokeIdentityDisclosureKey,
 
     // Reset
     resetSettings,

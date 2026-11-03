@@ -71,7 +71,7 @@ settings tab imports them directly from
 - **No props on MainApp**: components access state via context, not props
 - **Memoization**: `KeySelector` is wrapped in `React.memo` to prevent unnecessary re-renders
 - **Profile caching**: `ProfileService` caches metadata for one hour (`DEFAULT_TTL_SECONDS = 3600`) to reduce relay queries
-- **Local avatars only**: neither key surface loads the relay-supplied `picture` URL. Both render the local seal avatar with the key's initial. These are the surfaces on which a user confirms which identity is about to sign, so they make no request to a host a relay chose
+- **Local avatars only**: neither key surface loads the relay-supplied `picture` URL. The dropdown and the settings list render the local seal avatar with the key's initial; the header trigger renders the selected key's stored `data:` copy (`useOwnAvatar` and `OwnAvatarImage`) or the seal. These are the surfaces on which a user confirms which identity is about to sign, so they make no request to a host a relay chose. The only remote image load is the Profile page's explicit save or Refresh picture (`src/ui/lib/avatar-capture.ts`), which makes that copy
 - **Accessibility**: WCAG 2.1 AA target, with full keyboard navigation
 
 ## Components
@@ -162,27 +162,22 @@ No `avatarUrl` is returned. `profile.picture` is deliberately not read here; see
 
 **ARIA Attributes:**
 ```typescript
-// Trigger
+// Trigger (Radix adds aria-haspopup="menu" and aria-expanded)
 aria-label="Select active key"
-aria-haspopup="listbox"
-aria-expanded={isOpen}
-aria-controls="key-selector-listbox"
 
-// Listbox
-role="listbox"
-id="key-selector-listbox"
+// Menu (Radix's own role; a listbox cannot hold the Add Key action)
 aria-label="Available keys"
 
-// Option
-role="option"
-aria-selected={isSelected}
+// Key row
+role="menuitemradio"
+aria-checked={isSelected}
 aria-label={`${displayName} - ${truncatedNpub}${isSelected ? " (currently selected)" : ""}`}
 ```
 
 **Performance Optimization:**
 - Component is wrapped with `React.memo()` to prevent re-renders
 - Profile metadata for every key is requested in parallel from one `useProfileMetadata(pubkeys)` call (`Promise.allSettled` over one `profile.get` RPC per pubkey — parallel, not a single batched request)
-- No avatar images are fetched, so there is nothing to lazy-load: the seal fallback renders synchronously
+- No avatar image is fetched here, so there is nothing to lazy-load: the header reads a stored `data:` copy from the background and shows the seal until it arrives
 
 ### KeySelectorCard
 
@@ -326,7 +321,7 @@ calls the service directly; it calls the typed wrappers in
 |---|---|---|
 | `listKeys()` | `keys.list` | yes (projected to ids only) |
 | `selectKey(id)` | `vault.select` | no |
-| `generateKey(password, label?)` | `vault.generate` | yes — verifies the password itself |
+| `generateKey(password, label?, { onlyIfEmpty? })` | `vault.generate` | yes — verifies the password itself; `onlyIfEmpty` refuses with `key_already_exists` when the vault holds a key, checked inside the write lock |
 | `importKey(keyInput, password, label?)` | `vault.import` | yes — verifies the password itself |
 | `renameKey(id, label)` | `vault.renameKey` | no |
 | `deleteKey(id, password)` | `vault.deleteKey` | no |

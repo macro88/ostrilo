@@ -203,7 +203,7 @@ test.describe("Settings - per-origin policy", () => {
     await expect(options.getByText(DAPP_ORIGIN).first()).toBeVisible();
     await expect(
       options.getByTestId(`origin-disclosure-${DAPP_ORIGIN}`)
-    ).toContainText("This site can read your public key");
+    ).toContainText("This site can read the public keys below");
 
     // Baseline. This is also the first `policy.evaluate` of the run, which
     // is what forces the one-shot consent migration to persist its marker
@@ -717,7 +717,7 @@ test.describe("Settings - per-origin policy", () => {
     expect(beforeRevoke.value).toMatch(/^[0-9a-f]{64}$/);
     expect(await pendingRequests(popup)).toHaveLength(0);
 
-    await expect(disclosure).toContainText("This site can read your public key");
+    await expect(disclosure).toContainText("This site can read the public keys below");
     await expect(revoke).toBeVisible();
     await revoke.click();
 
@@ -772,7 +772,7 @@ test.describe("Settings - per-origin policy", () => {
     const regranted = await storedOrigin(popup);
     expect(regranted?.trustLevel).toBe("medium");
     expect(regranted?.rules?.["0"]).toBe("deny");
-    await expect(disclosure).toContainText("This site can read your public key");
+    await expect(disclosure).toContainText("This site can read the public keys below");
   });
   test("an upgrade carries a synced high-trust grant into local storage and clears the synced copy", async ({
     openPopup,

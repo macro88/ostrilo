@@ -210,6 +210,67 @@ test.describe("identity disclosure consent", () => {
     expect(approvalWindows).toHaveLength(0);
   });
 
+  /**
+   * SEC-026. The grant is for one key. Driven through a real page and the real
+   * approval window: switching keys must put the prompt back, and switching
+   * back must take it away again.
+   */
+  test("a grant for one key is not answered for another, and returns with the first", async ({
+    openPopup,
+    extensionContext,
+    extensionId,
+  }) => {
+    const popup = await openPopup();
+    await createAndUnlock(popup);
+    const [keyA] = await rpcOk<Array<{ id: string; pubkey: string }>>(popup, {
+      type: "keys.list",
+    });
+    await rpcOk(popup, {
+      type: "policy.setOrigin",
+      origin: DAPP_ORIGIN,
+      patch: { identityDisclosure: "allow" },
+      password: PASSWORD,
+    });
+    await rpcOk(popup, {
+      type: "vault.generate",
+      password: PASSWORD,
+      label: "Second Identity",
+    });
+    const keys = await rpcOk<Array<{ id: string; pubkey: string }>>(popup, {
+      type: "keys.list",
+    });
+    const keyB = keys.find((key) => key.id !== keyA.id)!;
+
+    const dapp = await extensionContext.newPage();
+    await openDapp(dapp);
+    expect(await dapp.evaluate(() => window.nostr!.getPublicKey())).toBe(
+      keyA.pubkey
+    );
+
+    await rpcOk(popup, { type: "vault.select", id: keyB.id });
+    await askForPublicKey(dapp);
+    const approvalPage = await waitForApprovalPage(
+      extensionContext,
+      extensionId
+    );
+    await approvalPage.getByTestId("approval-request-item").first().click();
+    const detail = approvalPage.getByTestId("disclosure-detail");
+    await expect(detail).toBeVisible({ timeout: 10_000 });
+    await expect(detail).toContainText("Second Identity");
+    await detail.getByRole("button", { name: "Deny" }).click();
+    const refused = (await readDisclosureResult(dapp)) as {
+      ok: boolean;
+      error?: string;
+    };
+    expect(refused.ok).toBe(false);
+    expect(refused.error).toContain("disclosure_refused");
+
+    await rpcOk(popup, { type: "vault.select", id: keyA.id });
+    expect(await dapp.evaluate(() => window.nostr!.getPublicKey())).toBe(
+      keyA.pubkey
+    );
+  });
+
   test("a denied origin cannot re-summon the prompt by reloading", async ({
     openPopup,
     extensionContext,

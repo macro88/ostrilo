@@ -3,9 +3,7 @@
 ## Purpose
 
 Define how per-origin, per-kind signing decisions are remembered, applied, surfaced, and revoked, so that a user can safely auto-approve routine event kinds for a site while protected kinds always require explicit approval.
-
 ## Requirements
-
 ### Requirement: Remembered Allow Persists Site Kind Rule
 
 The extension SHALL persist a per-origin, per-kind `allow` rule when a user approves an unprotected signing request with the remember option enabled.
@@ -29,15 +27,25 @@ The extension SHALL persist a per-origin, per-kind `allow` rule when a user appr
 
 ### Requirement: Remembered Allow Skips Future Prompts
 
-The extension SHALL auto-sign future matching requests after a remembered `allow` rule is saved for the requesting origin and unprotected event kind.
+The extension SHALL auto-sign future matching requests after a remembered `allow` rule is saved for the requesting origin and unprotected event kind, up to the origin's automatic-signing budget. A matching request beyond the budget SHALL be routed to approval as an unremembered request is, and SHALL NOT be refused.
 
 #### Scenario: Matching second request auto-signs
 
 - **GIVEN** an `allow` rule exists for origin `https://primal.net` and kind `10002`
 - **AND** the vault is unlocked
+- **AND** `https://primal.net` is within its automatic-signing budget
 - **WHEN** `https://primal.net` requests signing for kind `10002`
 - **THEN** the extension signs the request without opening an approval prompt
 - **AND** the signing activity is recorded as an allow decision
+
+#### Scenario: A matching request over the budget prompts
+
+- **GIVEN** an `allow` rule exists for origin `https://primal.net` and kind `10002`
+- **AND** the vault is unlocked
+- **AND** `https://primal.net` has had 60 requests signed without a prompt in the last 60 seconds
+- **WHEN** `https://primal.net` requests signing for kind `10002`
+- **THEN** the request is routed to approval, as it would be with no remembered rule
+- **AND** the remembered `allow` rule is unchanged
 
 #### Scenario: Different kind still prompts
 
@@ -136,3 +144,4 @@ The extension SHALL label common Nostr client event kinds used for profile, sett
 - **WHEN** the user views per-origin policy controls in Settings
 - **THEN** quick controls include common unprotected policy kinds for profile, contacts, lists, relay list, and application data
 - **AND** protected kinds are not presented as auto-allow candidates
+

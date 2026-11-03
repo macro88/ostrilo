@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import { NostrRpcHandler } from "@/infrastructure/messaging/handlers/nostr-rpc";
 import { ActivityLogService } from "@/application/services/activity-log.service";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
@@ -40,6 +41,7 @@ describe("Activity Log Integration", () => {
 
     mockVault = {
       getLockState: vi.fn().mockResolvedValue({ isLocked: false }),
+      isKeyUnreadable: vi.fn().mockReturnValue(false),
       listKeys: vi
         .fn()
         .mockResolvedValue([
@@ -56,6 +58,7 @@ describe("Activity Log Integration", () => {
       activityLog,
       vault: mockVault as KeyVaultService,
       policy: mockPolicy as PolicyService,
+      autoSignBudget: new AutoSignBudgetService(),
     } as any;
   });
 

@@ -162,6 +162,82 @@ describe("RPC Error Code Coverage", () => {
     });
   });
 
+  describe("Page boundary", () => {
+    const contentScript = fs.readFileSync(
+      path.join(__dirname, "../../../src/extension/content.ts"),
+      "utf-8"
+    );
+
+    /**
+     * Literal text passed as the `error` argument of `sendResponse(id, result,
+     * error)`. Whatever lands there becomes the message of the Error a page
+     * sees, so it must be a canonical code, never prose.
+     */
+    function findLiteralPageErrors(source: string): string[] {
+      const pattern =
+        /sendResponse\(\s*[^,()]+,\s*[^,()]+,\s*(["'`][^"'`]*["'`])/g;
+      return [...source.matchAll(pattern)].map((match) => match[1]);
+    }
+
+    it("sends the page only canonical codes from content.ts", () => {
+      expect(findLiteralPageErrors(contentScript)).toEqual([]);
+    });
+
+    it("recognises the strings content.ts used to send", () => {
+      const legacy = `
+        sendResponse(data.id, undefined, "Invalid event parameter");
+        sendResponse(data.id, undefined, 'Unknown method');
+        sendResponse(data.id, undefined, \`oops\`);
+      `;
+
+      expect(findLiteralPageErrors(legacy)).toHaveLength(3);
+    });
+
+    it("never forwards an exception message to the page", () => {
+      expect(contentScript).not.toMatch(/\.message\b/);
+    });
+  });
+
+  describe("docs/rpc-error-codes.md", () => {
+    const doc = fs.readFileSync(
+      path.join(__dirname, "../../../docs/rpc-error-codes.md"),
+      "utf-8"
+    );
+    const rows = [
+      ...doc.matchAll(
+        /^\| `([a-z_]+)` \| (-\d+) \| ([^|]+?) \| (yes|no) \|$/gm
+      ),
+    ].map(([, code, numeric, message]) => ({
+      code,
+      numeric: Number(numeric),
+      message,
+    }));
+
+    it("lists every error code once, with its numeric code and default message", () => {
+      const expected = Object.values(RPC_ERROR_CODES).map((code) => ({
+        code,
+        numeric: RPC_NUMERIC_ERROR_CODES[code],
+        message: RPC_ERROR_MESSAGES[code],
+      }));
+
+      expect(rows).toHaveLength(expected.length);
+      expect(rows).toEqual(expect.arrayContaining(expected));
+    });
+
+    it("marks as page-visible every code the content script can send", () => {
+      const pageVisible = [...doc.matchAll(/^\| `([a-z_]+)` \|.*\| yes \|$/gm)]
+        .map((match) => match[1]);
+
+      for (const code of [
+        RPC_ERROR_CODES.INVALID_EVENT,
+        RPC_ERROR_CODES.UNKNOWN_METHOD,
+        RPC_ERROR_CODES.APPROVAL_FAILED,
+      ]) {
+        expect(pageVisible).toContain(code);
+      }
+    });
+  });
+
   describe("Error Code Completeness", () => {
     it("should have JSDoc comments for all error codes", () => {
       const errorCodesFile = path.join(

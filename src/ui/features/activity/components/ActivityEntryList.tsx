@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { SealMark } from "@/components/common/SealMark";
 import { formatOrigin } from "@/domain/display/origin";
-import { describeActivityEntry } from "@/domain/types";
+import { describeActivityEntry, describeDenialReason } from "@/domain/types";
+import { escapeInvisible } from "@/domain/display/safe-text";
 import type { ActivityLogEntry } from "@/domain/types";
 import { Activity, Check, Loader2, X } from "lucide-react";
 
@@ -124,6 +125,7 @@ export function ActivityEntryList({
           {entries.map((entry) => {
             const approved = entry.decision === "allow";
             const when = new Date(entry.timestamp * 1000);
+            const reason = describeDenialReason(entry);
 
             // `relative` on the row: the visually hidden "Approved" below is
             // absolutely positioned, and with no positioned ancestor a row
@@ -162,9 +164,18 @@ export function ActivityEntryList({
                   <p className="mt-0.5 truncate font-mono text-[11.5px] text-muted-foreground">
                     {formatOrigin(entry.origin).display}
                   </p>
+                  {reason && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {reason}
+                    </p>
+                  )}
                   {entry.contentPreview && (
+                    // Content is whatever the site sent. Hidden and
+                    // direction-control characters are shown as escapes, as in
+                    // the approval prompt, so a row cannot read as something
+                    // other than what was signed.
                     <p className="mt-1.5 line-clamp-2 break-words text-xs text-muted-foreground">
-                      {entry.contentPreview}
+                      {escapeInvisible(entry.contentPreview).text}
                     </p>
                   )}
                 </div>

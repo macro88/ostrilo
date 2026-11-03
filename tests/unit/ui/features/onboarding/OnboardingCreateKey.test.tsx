@@ -7,7 +7,7 @@ import { KeyManagerProvider } from "@/ui/state/KeyManagerContext";
 import {
   createKeyBackup,
   serializeKeyBackup,
-} from "@/ui/features/onboarding/backup/key-backup-envelope";
+} from "@/ui/features/backup/key-backup-envelope";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import { background } from "./fake-background";
 import {

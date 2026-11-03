@@ -69,6 +69,24 @@ describe("ActivityRpcHandler", () => {
     });
   });
 
+  it("lists every stored origin for the site filter, leaving out ones it could not filter by", async () => {
+    mockActivityLogService.getUniqueOrigins = vi
+      .fn()
+      .mockResolvedValue([
+        "extension://profile",
+        "https://a.example",
+        "javascript:alert(1)",
+        "http://b.example",
+      ]);
+
+    const response = await handler.handleRequest({ type: "activity.origins" } as any, context);
+
+    expect(response).toEqual({
+      ok: true,
+      data: { origins: ["https://a.example", "http://b.example"] },
+    });
+  });
+
   it("should handle activity.clear", async () => {
     const request = {
       type: "activity.clear",

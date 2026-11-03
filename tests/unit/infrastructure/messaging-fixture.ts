@@ -6,6 +6,7 @@
  */
 import type { StorageSuite } from "@/application/ports/storage";
 import type { INostrRelay, NostrEvent, NostrFilter } from "@/application/ports/relay";
+import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import { ActivityLogService } from "@/application/services/activity-log.service";
 import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
 import { PolicyService } from "@/application/services/policy.service";
@@ -67,6 +68,7 @@ export function realContext(storage: StorageSuite = memoryStorage()) {
   const profile = new ProfileService(storage, relay, vault);
   const unlockThrottle = new UnlockThrottleService(storage.local);
   const disclosureRateLimit = new DisclosureRateLimitService();
+  const autoSignBudget = new AutoSignBudgetService();
   const presence = new UserPresenceService(settings, async () => "active");
   const context: ServiceContext = {
     vault,
@@ -76,6 +78,7 @@ export function realContext(storage: StorageSuite = memoryStorage()) {
     profile,
     unlockThrottle,
     disclosureRateLimit,
+    autoSignBudget,
     presence,
   };
   return { context, storage, vault, relay, activityLog, policy, settings };

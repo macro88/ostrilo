@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PolicyRpcHandler } from "@/infrastructure/messaging/handlers/policy-rpc";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
 import type { RpcRequest } from "@/infrastructure/messaging/rpc";
@@ -8,6 +8,7 @@ import type { OriginPolicy } from "@/domain/types";
 import type { StorageSuite } from "@/application/ports/storage";
 import {
   SECRET_ONE,
+  SECRET_TWO,
   STRONG_PASSWORD,
   dataOf,
   errorCodeOf,
@@ -44,6 +45,7 @@ describe("origin validation", () => {
     { type: "policy.clearSession", origin: "" },
     { type: "policy.setSession", origin: "chrome://settings", enabled: false },
     { type: "policy.removeOrigin", origin: "file:///etc/passwd" },
+    { type: "policy.revokeDisclosure", origin: "file:///etc/passwd", keyId: "x" },
   ] as RpcRequest[])("refuses $type for a non-web origin", async (req) => {
     expect(errorCodeOf(await send(req))).toBe(RPC_ERROR_CODES.INVALID_ORIGIN);
   });
@@ -192,6 +194,88 @@ describe("policy.removeOrigin", () => {
     await policy.setPerKindRule(SITE, 1, "deny");
 
     expect(await send({ type: "policy.removeOrigin", origin: SITE })).toEqual({ ok: true, data: null });
+    expect(await storedPolicy(SITE)).toBeUndefined();
+  });
+});
+
+describe("per-key disclosure grants over RPC", () => {
+  const selectedId = async () =>
+    (await context.vault.listKeys()).find((k) => k.isSelected)!.id;
+
+  it("binds a password-gated allow patch to the selected key only", async () => {
+    await context.vault.importKey(SECRET_TWO, STRONG_PASSWORD, "second");
+    const first = await selectedId();
+
+    const res = await send({
+      type: "policy.setOrigin",
+      origin: SITE,
+      patch: { identityDisclosure: "allow" },
+      password: STRONG_PASSWORD,
+    });
+
+    expect(res.ok).toBe(true);
+    expect((await storedPolicy(SITE))?.identityDisclosureKeyIds).toEqual([first]);
+    const [, second] = await context.vault.listKeys();
+    expect(await policy.getIdentityDisclosure(SITE, second.id)).toBeUndefined();
+  });
+
+  it("refuses an allow patch when no key is selected, and writes nothing", async () => {
+    const keys = await context.vault.listKeys();
+    vi.spyOn(context.vault, "listKeys").mockResolvedValue(
+      keys.map((k) => ({ ...k, isSelected: false }))
+    );
+
+    const res = await send({
+      type: "policy.setOrigin",
+      origin: SITE,
+      patch: { identityDisclosure: "allow" },
+      password: STRONG_PASSWORD,
+    });
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.NO_KEY_SELECTED);
+    expect(await storedPolicy(SITE)).toBeUndefined();
+  });
+
+  it("revokes one key's grant and leaves the other", async () => {
+    await context.vault.importKey(SECRET_TWO, STRONG_PASSWORD, "second");
+    const [a, b] = await context.vault.listKeys();
+    await policy.grantIdentityDisclosure(SITE, a.id);
+    await policy.grantIdentityDisclosure(SITE, b.id);
+
+    const res = await send({ type: "policy.revokeDisclosure", origin: SITE, keyId: a.id });
+
+    expect(res.ok).toBe(true);
+    expect(await policy.getIdentityDisclosure(SITE, a.id)).toBeUndefined();
+    expect(await policy.getIdentityDisclosure(SITE, b.id)).toBe("allow");
+  });
+
+  it("needs no password to revoke", async () => {
+    const id = await selectedId();
+    await policy.grantIdentityDisclosure(SITE, id);
+
+    const res = await send({ type: "policy.revokeDisclosure", origin: SITE, keyId: id });
+
+    expect(res.ok).toBe(true);
+  });
+
+  it("refuses a key id that is not a key id", async () => {
+    const res = await send({
+      type: "policy.revokeDisclosure",
+      origin: SITE,
+      keyId: "../../etc",
+    });
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.INVALID_PARAMS);
+  });
+
+  it("refuses a patch that tries to write the key list", async () => {
+    const res = await send({
+      type: "policy.setOrigin",
+      origin: SITE,
+      patch: { identityDisclosureKeyIds: ["anything"] },
+    } as unknown as RpcRequest);
+
+    expect(errorCodeOf(res)).toBe(RPC_ERROR_CODES.INVALID_PARAMS);
     expect(await storedPolicy(SITE)).toBeUndefined();
   });
 });

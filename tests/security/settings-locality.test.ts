@@ -179,7 +179,9 @@ describe("runtime boundary", () => {
       "identity_disclosure",
       "sign_event",
     ]);
-    expect(await context.policy.getIdentityDisclosure(EVIL)).toBeUndefined();
+    expect(
+      await context.policy.getIdentityDisclosure(EVIL, (await vault.listKeys())[0].id)
+    ).toBeUndefined();
 
     queue.clear();
     const signed = await signing;

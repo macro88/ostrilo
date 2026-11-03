@@ -4,7 +4,10 @@ import {
   useKeyManagerContext,
 } from "@/ui/state/KeyManagerContext";
 import { LockScreen } from "@/ui/features/authentication/components/LockScreen";
+import { BackgroundUnreachable } from "@/ui/features/authentication/components/BackgroundUnreachable";
 import { useTheme } from "@/ui/hooks/useTheme";
+import { BACKUP_HASH_PARAM } from "@/ui/lib/open-options";
+import { KeyIdSchema } from "@/infrastructure/validation/schemas";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GeneralSettingsTab } from "@/ui/features/settings/components/GeneralSettingsTab";
 import { KeysIdentitiesTab } from "@/ui/features/settings/components/KeysIdentitiesTab";
@@ -42,9 +45,27 @@ function isTabKey(value: string): value is TabKey {
   return (TAB_KEYS as readonly string[]).includes(value);
 }
 
+/** The hash is `#tab`, optionally `#tab?param=value`. */
+function splitHash(): { tab: string; params: URLSearchParams } {
+  const [tab, query = ""] = window.location.hash.slice(1).split("?");
+  return { tab, params: new URLSearchParams(query) };
+}
+
 function getHashTab(): TabKey {
-  const hash = window.location.hash.slice(1);
-  return isTabKey(hash) ? hash : "general";
+  const { tab } = splitHash();
+  return isTabKey(tab) ? tab : "general";
+}
+
+/**
+ * The key the Home banner asked to back up, when the page was opened for it.
+ * The address is input like any other: a value that is not a key id is dropped
+ * before it is looked up.
+ */
+function getHashBackupKeyId(): string | null {
+  const { tab, params } = splitHash();
+  if (tab !== "keys") return null;
+  const parsed = KeyIdSchema.safeParse(params.get(BACKUP_HASH_PARAM));
+  return parsed.success ? parsed.data : null;
 }
 
 /**
@@ -63,7 +84,14 @@ function getHashTab(): TabKey {
  * message directly.
  */
 function OptionsGate({ children }: { children: React.ReactNode }) {
-  const { isLocked, isInitialising, hasKeys } = useKeyManagerContext();
+  const {
+    isLocked,
+    isInitialising,
+    hasKeys,
+    lockCheckFailed,
+    retryLockCheck,
+    isLoading,
+  } = useKeyManagerContext();
 
   // `isInitialising`, NOT `isLoading`. `isLoading` is also true for the
   // duration of an unlock attempt, so gating on it unmounted the lock screen
@@ -72,6 +100,16 @@ function OptionsGate({ children }: { children: React.ReactNode }) {
   // This gate only exists to avoid flashing the wrong branch before the first
   // lock-state read resolves.
   if (isInitialising) return null;
+
+  // Ahead of the no-keys notice: a silent background also yields no keys.
+  if (lockCheckFailed) {
+    return (
+      <BackgroundUnreachable
+        onRetry={retryLockCheck}
+        isRetrying={isLoading}
+      />
+    );
+  }
 
   // No vault yet: nothing to lock, and nothing to show.
   if (!hasKeys) {
@@ -96,6 +134,14 @@ export function OptionsApp() {
   useTheme();
 
   const [activeTab, setActiveTab] = useState<TabKey>(getHashTab);
+  // Read once, at load. Cleared from the address once Keys & Identities has
+  // acted on it, so reloading the page does not open the backup a second time.
+  const [backupKeyId, setBackupKeyId] = useState(getHashBackupKeyId);
+
+  const handleBackupRequestHandled = useCallback(() => {
+    setBackupKeyId(null);
+    window.history.replaceState(null, "", "#keys");
+  }, []);
 
   // Handle URL hash navigation
   useEffect(() => {
@@ -193,7 +239,10 @@ export function OptionsApp() {
                 </TabsContent>
 
                 <TabsContent value="keys">
-                  <KeysIdentitiesTab />
+                  <KeysIdentitiesTab
+                    backupRequestKeyId={backupKeyId}
+                    onBackupRequestHandled={handleBackupRequestHandled}
+                  />
                 </TabsContent>
 
                 <TabsContent value="security">

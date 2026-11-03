@@ -7,7 +7,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { COMMON_EVENT_KINDS } from "@/domain/types";
+import { COMMON_EVENT_KINDS, getKindName } from "@/domain/types";
+import { PROTECTED_KINDS } from "@/domain/policy/trust-definitions";
+
+/**
+ * The kinds the filter offers: the common set plus every protected kind. A
+ * protected kind always prompts, so it is the one most likely to be in the log
+ * and the one a user goes looking for; leaving it out of the list made those
+ * entries unfilterable.
+ */
+const FILTER_KINDS: ReadonlyArray<{ kind: number; name: string }> = [
+  ...new Set<number>([
+    ...Object.keys(COMMON_EVENT_KINDS).map(Number),
+    ...PROTECTED_KINDS,
+  ]),
+]
+  .sort((a, b) => a - b)
+  .map((kind) => ({
+    kind,
+    name:
+      (COMMON_EVENT_KINDS as Record<number, string>)[kind] ?? getKindName(kind),
+  }));
 
 interface ActivityFiltersProps {
   visible: boolean;
@@ -67,8 +87,8 @@ export function ActivityFilters({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Kinds</SelectItem>
-          {Object.entries(COMMON_EVENT_KINDS).map(([kind, name]) => (
-            <SelectItem key={kind} value={kind}>
+          {FILTER_KINDS.map(({ kind, name }) => (
+            <SelectItem key={kind} value={String(kind)}>
               {name} ({kind})
             </SelectItem>
           ))}

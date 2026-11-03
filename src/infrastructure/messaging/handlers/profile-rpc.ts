@@ -123,6 +123,14 @@ export class ProfileRpcHandler implements RpcModule {
     } catch (error) {
       // Validation has passed by here, so the failure is the key, a locked
       // vault, signing, or every relay refusing the publish.
+      // A key the last unlock could not open is its own answer, with fixed text:
+      // the service's error string is an internal identifier.
+      if (error instanceof Error && error.message === "key_unreadable") {
+        return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
+          details: "The selected key could not be read. Choose another key in Ostrilo.",
+          method: message.type,
+        });
+      }
       const code =
         error instanceof ProfilePublishError
           ? RPC_ERROR_CODES.NETWORK_ERROR
