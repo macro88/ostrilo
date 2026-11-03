@@ -72,8 +72,8 @@ overrides:
   # @modelcontextprotocol/sdk <1.31.0: GHSA-6qxp-vccf-f47h, OAuth client could
   # send credentials to an authorization server chosen by the MCP server.
   # Reached through aislop (^1.30.0) and shadcn (^1.26.0); neither tool's MCP
-  # mode is used here, but the gate blocks on high regardless.
-  "@modelcontextprotocol/sdk": "1.31.0"
+  # mode is used here, but the gate blocks on high regardless. Moved again on
+  # 2026-11-03, see the block below.
   # sharp <0.35.5: GHSA-wq5f-xc86-pv6w, a vulnerability in its bundled librsvg.
   # Reached through @wxt-dev/auto-icons (^0.35.3), which rasterises the
   # extension icons at build time - this one does touch a shipped asset, so it
@@ -90,6 +90,57 @@ overrides:
   # smol-toml <=1.8.0: GHSA-r4xh-jqrq-34v2, quadratic-time parse().
   smol-toml: "1.9.0"
   #
+  # --- Audit overrides, 2026-11-03. Eighteen high advisories reached npm's
+  # --- feed after the 2026-10-07 round. All of them sit in dev tooling and none
+  # --- ships in the extension bundle; the one production dependency affected,
+  # --- zod, was upgraded directly in package.json rather than overridden. Each
+  # --- bump is the lowest patched release, at least 24 hours old, and inside
+  # --- the range its consumer declares.
+  #
+  # @modelcontextprotocol/sdk <1.32.0: GHSA-22jm-h49p-29qw and
+  # GHSA-46jr-4wx8-v453. Same chain as the 2026-10-07 entry (aislop, shadcn);
+  # the override moves from 1.31.0 to 1.32.0.
+  "@modelcontextprotocol/sdk": "1.32.0"
+  # body-parser >=2.0.0 <2.4.0: GHSA-27r3-jxmh-p828. Reached through aislop >
+  # MCP SDK > express (^2.2.x). Nothing here runs an HTTP server.
+  body-parser: "2.4.0"
+  # follow-redirects <=1.16.1: GHSA-q3jh-wrc6-jgq8, GHSA-8r9p-f939-6h3c and
+  # GHSA-mrwp-f3q8-3g9p, sensitive headers and credentials surviving
+  # redirects. Reached through http-server > http-proxy (^1.0.0), the static
+  # server the e2e harness uses on localhost.
+  follow-redirects: "1.16.2"
+  # node-forge <=1.4.0: GHSA-7wch-p9px-956x, GHSA-jc66-7q78-782g,
+  # GHSA-8hrf-8g6f-7xwp, GHSA-hqq3-7jhf-c5jx, GHSA-5x38-2vff-x55p, and the
+  # previously ignored GHSA-86w9-cpqp-85rv. Reached through wxt > web-ext-run >
+  # @devicefarmer/adbkit, the Android debugging path nothing here invokes. 1.4.1
+  # is the first patched release, so the ignore entry for GHSA-86w9-cpqp-85rv is
+  # removed along with its row in docs/ci-verification.md.
+  node-forge: "1.4.1"
+  # systeminformation <5.33.16: GHSA-3f7j-7jwc-fxfj, Windows command injection
+  # in services(). Reached through shadcn > @dotenvx/dotenvx, which never calls
+  # it here.
+  systeminformation: "5.33.16"
+  # undici >=7.0.0 <7.30.1: GHSA-xjj6-f33q-929c, GHSA-4w7w-5xrc-9h26,
+  # GHSA-2m5v-pch6-74hx and GHSA-qrxm-fqhp-jwvm. Reached through jsdom (vitest
+  # test environment) and shadcn > @dotenvx/dotenvx. Stays on the 7.x line both
+  # declare.
+  undici: "7.30.1"
+  # vite GHSA-587h-7wmj-h5pm (7.x <=7.3.6, 8.x 8.3.0 to 8.3.2). Two majors are
+  # in the tree: 7.x is the direct devDependency and @tailwindcss/vite's peer,
+  # 8.x comes from wxt > vite-node. Each is moved within its own major rather
+  # than forcing one onto the other.
+  "vite@7": "7.3.7"
+  # zod <4.6.6: GHSA-mrhx-c7xc-m3w5, memory exhaustion validating a large
+  # array. The direct dependency in package.json moved to ^4.6.6 and is not
+  # governed by this entry. This pins the 4.x copies that dev tooling pulls in
+  # (wxt > publish-browser-extension, aislop, knip, react-doctor's eslint
+  # plugin, the MCP SDK) onto the same release. shadcn declared zod ^3.24.1 and
+  # the advisory has no 3.x fix; forcing it onto 4.x breaks the CLI at load
+  # (z.record with one argument), so the devDependency moved to ^4.22.0 instead,
+  # the first release that declares zod ^4.
+  "zod@4": "4.6.7"
+  "vite@8": "8.3.3"
+  #
   # Not overridden: esbuild GHSA-g7r4-m6w7-qqqr (low, dev-server file read on
   # Windows). The fix is 0.28.x; wxt declares ^0.27.1 and esbuild treats minor
   # versions as breaking. Accepted in docs/ci-verification.md instead.
@@ -103,7 +154,3 @@ auditConfig:
     # braces <=3.0.3: stack exhaustion on deeply nested patterns. Dev-only,
     # through aislop and shadcn > micromatch. No 3.0.4 has been published.
     - GHSA-vfj7-8cjw-p6xm
-    # node-forge <=1.4.0: PKCS#1 v1.5 verification accepts extra nested
-    # DigestAlgorithm elements. Dev-only, through wxt > web-ext-run > adbkit,
-    # which drives Android debugging and is never invoked here. No 1.4.1 exists.
-    - GHSA-86w9-cpqp-85rv
