@@ -32,7 +32,7 @@ export default defineConfig({
 
   /* Configure web server for E2E tests */
   webServer: {
-    command: `pnpm exec http-server tests/e2e/fixtures -a 127.0.0.1 -p 8765 -S -C "${cert}" -K "${key}"`,
+    command: `node tests/e2e/fixtures/static-server.mjs --root tests/e2e/fixtures --host 127.0.0.1 --port 8765 --cert "${cert}" --key "${key}"`,
     url: "https://localhost:8765/test-page.html",
     ignoreHTTPSErrors: true,
     reuseExistingServer: !process.env.CI,

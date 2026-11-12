@@ -173,7 +173,7 @@ rm -rf test-results/e2e-tls/
 ```
 
 **An orphaned fixture server is silently adopted.** `reuseExistingServer` is on
-outside CI, so a stray `http-server` on port 8765 — holding the old certificate in
+outside CI, so a stray fixture server on port 8765 — holding the old certificate in
 memory, or serving the wrong directory — is used as-is, and `ignoreHTTPSErrors`
 makes the health check pass anyway. If the page misbehaves after a certificate
 regeneration, kill the listener and rerun.
