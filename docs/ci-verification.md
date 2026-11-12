@@ -98,7 +98,7 @@ gate. High and critical are rare enough to be worth stopping for.
 | Advisory | Package | Severity | Status |
 |---|---|---|---|
 | esbuild dev-server arbitrary file read on Windows | `esbuild` | low | Accepted. Below threshold. Affects `wxt dev` on Windows only; no release path. |
-| GHSA-vfj7-8cjw-p6xm, stack exhaustion on deeply nested brace patterns | `braces` | high | Accepted 2026-10-06 via `auditConfig.ignoreGhsas` in `pnpm-workspace.yaml`. No patched release exists: the advisory names `>=3.0.4` and npm's latest is `3.0.3`. Reached only through `aislop` and `shadcn > micromatch`, which glob paths this repository supplies; no untrusted pattern reaches it. Remove the ignore the day a patched version is published. |
+| GHSA-vfj7-8cjw-p6xm, stack exhaustion on deeply nested brace patterns | `braces` | high | Accepted 2026-10-06 via `auditConfig.ignoreGhsas` in `pnpm-workspace.yaml`. No patched release exists: the advisory names `>=3.0.4` and npm's latest is `3.0.3`. Reached only through `aislop > micromatch`, which globs paths this repository supplies; no untrusted pattern reaches it. Remove the ignore the day a patched version is published. |
 
 An ignored advisory is a hole in the gate with a name on it. Each entry in
 `ignoreGhsas` has a row here, and a row here says why the finding cannot reach
@@ -135,6 +135,18 @@ exception: `zod` (GHSA-mrhx-c7xc-m3w5) by upgrading the production dependency in
 `systeminformation`, `undici` and `vite` (per major, 7.x and 8.x) by
 `overrides`. Only the `braces` row remains.
 
+On 2026-11-12 two devDependencies left the tree, and 129 packages with them.
+The `shadcn` CLI scaffolds components that are already copied into
+`src/ui/components/ui/`, and brought 111 packages no other tool needed, among
+them an MCP server, `dotenvx` and `ts-morph`. `http-server` served one
+fixture page to the e2e suite and is replaced by
+`tests/e2e/fixtures/static-server.mjs`, which imports only `node:` modules. The
+`follow-redirects` and `systeminformation` overrides went with them, because
+nothing left in the tree reaches either package. `tailwindcss` and
+`@tailwindcss/vite` moved to `devDependencies`: they run at build time and
+never ship, and as production dependencies they put 118 build packages in the
+production tree, which made it 185 packages when what ships is 67.
+
 A gate that was green yesterday and red today on an unchanged tree is this
 mechanism working, not flaking: `pnpm audit` reads npm's live advisory feed, so
 the audit job on an untouched branch can start failing the day an advisory is
@@ -162,8 +174,12 @@ is a valuable target in its own right.
   delays adoption of a compromised release long enough for it to be pulled.
 - `trustPolicy: no-downgrade` — a package cannot be installed if an earlier
   version carried provenance attestation and this one does not.
+- `allowBuilds` — the packages whose install scripts may run: `esbuild` and
+  `sharp`, which set up their platform binaries. No other package's install
+  script runs. `spawn-sync` is listed as `false` deliberately; the comment in
+  the file says why.
 
-**Do not relax either setting to unblock an install.** They are what caught the
+**Do not relax these settings to unblock an install.** They are what caught the
 issues recorded above. When a package is refused, replace the untrusted edge
 with a reviewed `overrides` entry naming an exact provenance-attested version.
 An override is visible, diffable and revocable; a trust exception silently

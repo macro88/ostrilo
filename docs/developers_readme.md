@@ -407,7 +407,7 @@ await rpcClient.send('profile.clearCache', {});
 
 ## UI Components
 
-The UI is built using React and styled with Tailwind CSS. We use `shadcn/ui` for some of the basic UI components.
+The UI is built using React and styled with Tailwind CSS. We use `shadcn/ui` for some of the basic UI components. They are copied into `src/ui/components/ui/` and maintained here; the `shadcn` CLI is not a dependency of this repository, because it brought over a hundred packages onto the machine that runs `pnpm install` to scaffold files that already exist. To add a component, copy its source from the shadcn/ui registry and review it like any other change. `components.json` records the settings the existing components were generated with.
 
 -   **Component Organization:** Components are organized by feature in the `src/ui/features` directory. Common, reusable components are placed in the `src/ui/components/common` directory.
 -   **Styling:** Tailwind CSS v4, configured in CSS rather than a JavaScript config file: `src/assets/tailwind.css` holds the theme tokens. `clsx` and `tailwind-merge` apply classes conditionally. `docs/design/DESIGN_RULES.md` governs what the styles may be.

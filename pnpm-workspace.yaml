@@ -1,8 +1,16 @@
+# Install scripts run on the machine that runs `pnpm install`, so each one is
+# reviewed here rather than allowed by default.
+#
+# spawn-sync is denied. It comes from wxt > web-ext-run > fx-runner, and its
+# postinstall adds a dependency to its own package.json and runs `npm install`
+# inside node_modules - outside this lockfile, minimumReleaseAge and
+# trustPolicy - but only on Node releases without child_process.spawnSync
+# (before 0.12). On any Node this project supports it does nothing, so denying
+# it costs nothing.
 allowBuilds:
   esbuild: true
-  msw: true
   sharp: true
-  spawn-sync: true
+  spawn-sync: false
 minimumReleaseAge: 1440
 overrides:
   "@wxt-dev/module-react>@vitejs/plugin-react": "5.0.4"
@@ -60,8 +68,8 @@ overrides:
   # source-map section offsets. Reached through @tailwindcss/vite and postcss.
   source-map-js: "1.2.2"
   # proxy-addr <2.0.8: GHSA-jqcg-44mw-7w3h, IP spoofing via IPv4-mapped IPv6
-  # trust subnets. Reached through aislop and shadcn > @modelcontextprotocol/sdk
-  # > express. Nothing here runs an HTTP server behind a proxy.
+  # trust subnets. Reached through aislop > @modelcontextprotocol/sdk > express.
+  # Nothing here runs an HTTP server behind a proxy.
   proxy-addr: "2.0.8"
   #
   # --- Audit overrides, 2026-10-07. Three advisories reached npm's feed in
@@ -71,9 +79,9 @@ overrides:
   #
   # @modelcontextprotocol/sdk <1.31.0: GHSA-6qxp-vccf-f47h, OAuth client could
   # send credentials to an authorization server chosen by the MCP server.
-  # Reached through aislop (^1.30.0) and shadcn (^1.26.0); neither tool's MCP
-  # mode is used here, but the gate blocks on high regardless. Moved again on
-  # 2026-11-03, see the block below.
+  # Reached through aislop (^1.30.0), whose MCP mode is not used here, but the
+  # gate blocks on high regardless. Moved again on 2026-11-03, see the block
+  # below.
   # sharp <0.35.5: GHSA-wq5f-xc86-pv6w, a vulnerability in its bundled librsvg.
   # Reached through @wxt-dev/auto-icons (^0.35.3), which rasterises the
   # extension icons at build time - this one does touch a shipped asset, so it
@@ -98,17 +106,12 @@ overrides:
   # --- the range its consumer declares.
   #
   # @modelcontextprotocol/sdk <1.32.0: GHSA-22jm-h49p-29qw and
-  # GHSA-46jr-4wx8-v453. Same chain as the 2026-10-07 entry (aislop, shadcn);
-  # the override moves from 1.31.0 to 1.32.0.
+  # GHSA-46jr-4wx8-v453. Same chain as the 2026-10-07 entry (aislop); the
+  # override moves from 1.31.0 to 1.32.0.
   "@modelcontextprotocol/sdk": "1.32.0"
   # body-parser >=2.0.0 <2.4.0: GHSA-27r3-jxmh-p828. Reached through aislop >
   # MCP SDK > express (^2.2.x). Nothing here runs an HTTP server.
   body-parser: "2.4.0"
-  # follow-redirects <=1.16.1: GHSA-q3jh-wrc6-jgq8, GHSA-8r9p-f939-6h3c and
-  # GHSA-mrwp-f3q8-3g9p, sensitive headers and credentials surviving
-  # redirects. Reached through http-server > http-proxy (^1.0.0), the static
-  # server the e2e harness uses on localhost.
-  follow-redirects: "1.16.2"
   # node-forge <=1.4.0: GHSA-7wch-p9px-956x, GHSA-jc66-7q78-782g,
   # GHSA-8hrf-8g6f-7xwp, GHSA-hqq3-7jhf-c5jx, GHSA-5x38-2vff-x55p, and the
   # previously ignored GHSA-86w9-cpqp-85rv. Reached through wxt > web-ext-run >
@@ -116,14 +119,9 @@ overrides:
   # is the first patched release, so the ignore entry for GHSA-86w9-cpqp-85rv is
   # removed along with its row in docs/ci-verification.md.
   node-forge: "1.4.1"
-  # systeminformation <5.33.16: GHSA-3f7j-7jwc-fxfj, Windows command injection
-  # in services(). Reached through shadcn > @dotenvx/dotenvx, which never calls
-  # it here.
-  systeminformation: "5.33.16"
   # undici >=7.0.0 <7.30.1: GHSA-xjj6-f33q-929c, GHSA-4w7w-5xrc-9h26,
   # GHSA-2m5v-pch6-74hx and GHSA-qrxm-fqhp-jwvm. Reached through jsdom (vitest
-  # test environment) and shadcn > @dotenvx/dotenvx. Stays on the 7.x line both
-  # declare.
+  # test environment). Stays on the 7.x line it declares.
   undici: "7.30.1"
   # vite GHSA-587h-7wmj-h5pm (7.x <=7.3.6, 8.x 8.3.0 to 8.3.2). Two majors are
   # in the tree: 7.x is the direct devDependency and @tailwindcss/vite's peer,
@@ -134,10 +132,7 @@ overrides:
   # array. The direct dependency in package.json moved to ^4.6.6 and is not
   # governed by this entry. This pins the 4.x copies that dev tooling pulls in
   # (wxt > publish-browser-extension, aislop, knip, react-doctor's eslint
-  # plugin, the MCP SDK) onto the same release. shadcn declared zod ^3.24.1 and
-  # the advisory has no 3.x fix; forcing it onto 4.x breaks the CLI at load
-  # (z.record with one argument), so the devDependency moved to ^4.22.0 instead,
-  # the first release that declares zod ^4.
+  # plugin, the MCP SDK) onto the same release.
   "zod@4": "4.6.7"
   "vite@8": "8.3.3"
   #
@@ -152,5 +147,5 @@ trustPolicy: no-downgrade
 auditConfig:
   ignoreGhsas:
     # braces <=3.0.3: stack exhaustion on deeply nested patterns. Dev-only,
-    # through aislop and shadcn > micromatch. No 3.0.4 has been published.
+    # through aislop > micromatch. No 3.0.4 has been published.
     - GHSA-vfj7-8cjw-p6xm
