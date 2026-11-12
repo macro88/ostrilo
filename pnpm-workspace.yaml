@@ -91,10 +91,10 @@ overrides:
   # release exists and the bump is in range. All three sit under the MCP SDK or
   # aislop and never ship.
   # fast-uri <3.1.8: GHSA-hrr3-gc8f-f4qj, inconsistent host case normalisation.
-  fast-uri: "3.1.8"
+  # Moved again on 2026-11-12, see the last block.
   # ip-address <=10.7.0: GHSA-j6r3-76f7-8jcv and GHSA-h3mg-xc3c-68pw, subnet
-  # checks that compare addresses of different families.
-  ip-address: "10.7.1"
+  # checks that compare addresses of different families. Moved again on
+  # 2026-11-12, see the last block.
   # smol-toml <=1.8.0: GHSA-r4xh-jqrq-34v2, quadratic-time parse().
   smol-toml: "1.9.0"
   #
@@ -117,8 +117,8 @@ overrides:
   # previously ignored GHSA-86w9-cpqp-85rv. Reached through wxt > web-ext-run >
   # @devicefarmer/adbkit, the Android debugging path nothing here invokes. 1.4.1
   # is the first patched release, so the ignore entry for GHSA-86w9-cpqp-85rv is
-  # removed along with its row in docs/ci-verification.md.
-  node-forge: "1.4.1"
+  # removed along with its row in docs/ci-verification.md. Moved again on
+  # 2026-11-12, see the next block.
   # undici >=7.0.0 <7.30.1: GHSA-xjj6-f33q-929c, GHSA-4w7w-5xrc-9h26,
   # GHSA-2m5v-pch6-74hx and GHSA-qrxm-fqhp-jwvm. Reached through jsdom (vitest
   # test environment). Stays on the 7.x line it declares.
@@ -136,9 +136,45 @@ overrides:
   "zod@4": "4.6.7"
   "vite@8": "8.3.3"
   #
+  # --- Audit overrides, 2026-11-12. Moderate and low advisories, below the
+  # --- gate's threshold, fixed because a patched release exists and the bump
+  # --- is inside the range every consumer declares. All sit in dev tooling and
+  # --- none ships. The vitest advisories (@vitest/mocker, which vitest pins
+  # --- exactly) are fixed by upgrading vitest in package.json, not here.
+  #
+  # fast-uri <3.1.9: GHSA-w74x-v6f9-j3xg and GHSA-wjr9-j795-jxcr (moderate),
+  # GHSA-xhq7-xmqj-769h and GHSA-333x-w4r6-6crp (low), scheme and host
+  # confusion in URI parsing. Reached through ajv (^3.0.1), under aislop's MCP
+  # SDK and react-doctor's conf.
+  fast-uri: "3.1.9"
+  # hono <4.13.11: GHSA-5r4p-p66f-jhc7, and @hono/node-server <2.1.3:
+  # GHSA-rmxm-3fg6-px4f, serveStatic decoding the request path a second time.
+  # Reached through aislop > MCP SDK (^4.11.4 and ^2.0.5); nothing here serves
+  # static files through either.
+  hono: "4.13.11"
+  "@hono/node-server": "2.1.3"
+  # ip-address <=10.7.3: GHSA-rxp7-6hxx-x8q5, quadratic-time zone identifier
+  # matching. Reached through aislop > MCP SDK > express-rate-limit (^10.2.0).
+  ip-address: "10.7.4"
+  # node-forge <=1.4.2: GHSA-w4xr-hqv8-ch44, GHSA-j8rw-jp99-435v and
+  # GHSA-6cv4-p8m7-4r25 (moderate), GHSA-6889-vf6x-f3g5 (low). Same chain as
+  # the 2026-11-03 entry (^1.3.1).
+  node-forge: "1.4.3"
+  # qs <=6.16.0: GHSA-6pq8-jhm2-2vcw, a TypeError thrown from stringify. express
+  # (^6.14.0) had 6.16.0 while body-parser (^6.16.1) already had 6.17.1. Both
+  # move to 6.17.1, which is in both ranges and already in the tree, rather
+  # than to the lowest patched 6.16.1, which would add a version.
+  qs: "6.17.1"
+  #
   # Not overridden: esbuild GHSA-g7r4-m6w7-qqqr (low, dev-server file read on
   # Windows). The fix is 0.28.x; wxt declares ^0.27.1 and esbuild treats minor
   # versions as breaking. Accepted in docs/ci-verification.md instead.
+  #
+  # Not overridden: minimatch GHSA-g3hv-75wg-m249 (moderate, denial of service
+  # through glob-pattern amplification). The fix is 11.0.1, and every 10.x
+  # consumer - eslint, @eslint/config-array, typescript-eslint - declares
+  # ^10.x, including their latest releases. Accepted in docs/ci-verification.md
+  # instead.
 trustPolicy: no-downgrade
 # Advisories with no patched release on npm. Each one is recorded, with the
 # reason it is accepted, in the "Accepted exceptions" table in
