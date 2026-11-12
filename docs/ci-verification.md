@@ -21,6 +21,7 @@ without anyone noticing.
 | React Doctor | `react-doctor.yml` | pull request, push to `main` | No |
 | aislop | `aislop.yml` | pull request, push to `main` | No |
 | Badges | `badges.yml` | push to `main`, dispatch | No |
+| Release build | `release.yml` | push of a `vX.Y.Z` tag, dispatch with a tag | No |
 
 ### Verify
 
@@ -81,6 +82,35 @@ nothing, and refuses any value from `measure` that is not an integer.
 
 It reports and does not gate: the thresholds live in `verify.yml` and
 `aislop.yml`, and React Doctor is deliberately never a gate.
+
+### Release build
+
+`release.yml` builds the store archives from a release tag on a clean runner,
+so the archive a user installs does not come from a developer machine. That
+machine runs `pnpm install`, the build, the tests and the linters every day -
+about 950 packages of tooling - and an archive built there is only as
+trustworthy as everything that has ever run on it.
+
+It runs when a `vX.Y.Z` tag is pushed, or by dispatch with an existing tag,
+which builds that tag's own source and lockfile. Two jobs, split the way Badges
+is:
+
+- **`build`** holds a read-only token and no OIDC token. It checks that the tag
+  matches the `package.json` version, installs with `--frozen-lockfile` and no
+  dependency cache, runs `pnpm run zip` and `pnpm run zip:firefox`, runs the
+  manifest and key-handling-bundle assertions against that output, and uploads
+  the three archives with a `SHA256SUMS` file as the artifact
+  `ostrilo-<version>`, kept for 90 days.
+- **`attest`** holds `id-token: write` and `attestations: write`. It checks out
+  nothing and installs nothing. It accepts the checksums from `build` only as
+  three lines, each a lowercase SHA-256 and one of that version's archive
+  names, then records a build-provenance attestation for each archive with
+  `actions/attest-build-provenance`. The attestation names the workflow, the
+  commit and the run that produced the archive.
+
+It does not upload to either store and does not write to the repository. No
+store credential is held in CI. [Releasing](#releasing) covers the steps that
+stay manual.
 
 ## Audit threshold
 
@@ -298,23 +328,49 @@ build 2: ee6f591ca2b286da0bd34c0461cf30f247c35349a0f6a41e4490d1d98a79adbf
 (combined SHA-256 over every `.js` file plus the manifest, 2026-09-13, Node
 v24.16.0 / pnpm 11.5.2 / wxt 0.20.26.)
 
-So the bundler output itself is already deterministic. The remaining known
-nondeterministic input is archive metadata: `pnpm zip` records file timestamps.
-Set `SOURCE_DATE_EPOCH` when producing release archives so those are fixed too.
-That is where any remaining verification effort should go, not the bundle.
+So the bundler output itself is deterministic. The archives are not. `wxt zip`
+writes them with JSZip, which stamps every entry with the time it is written
+and does not read `SOURCE_DATE_EPOCH`. Measured 2026-11-12: two builds of the
+same commit a minute apart, both with `SOURCE_DATE_EPOCH` set, produced all
+three archives with different digests and identical contents. Earlier versions
+of this document said setting the variable fixed this; it never did. Compare
+unpacked contents, not archive digests.
 
-### The exact release commands
+### Releasing
+
+1. Set `version` in `package.json`, merge, and push the tag `v<version>` from
+   that commit. `release.yml` builds it; a tag that does not match
+   `package.json` fails the run.
+2. Download the artifact from the run and check it:
+
+   ```bash
+   gh run download <run-id> --name ostrilo-<version>
+   shasum -a 256 -c SHA256SUMS
+   gh attestation verify ostrilo-<version>-chrome.zip --repo macro88/ostrilo
+   gh attestation verify ostrilo-<version>-firefox.zip --repo macro88/ostrilo
+   gh attestation verify ostrilo-<version>-sources.zip --repo macro88/ostrilo
+   ```
+
+3. Upload the Chrome archive to the Chrome Web Store and the Firefox and
+   sources archives to AMO, and attach all three with `SHA256SUMS` to the
+   GitHub Release.
+
+Upload only archives from this workflow, never ones built on a developer
+machine. A tag cut before the workflow existed can be built by dispatching it
+with that tag.
+
+### Reproducing a release
 
 ```bash
 git checkout <release-tag>
 nvm use                                    # reads .nvmrc
 corepack pnpm install --frozen-lockfile    # pnpm 11.5.2, from packageManager
-SOURCE_DATE_EPOCH=<epoch from the release notes> pnpm run zip          # Chrome
-SOURCE_DATE_EPOCH=<epoch from the release notes> pnpm run zip:firefox  # Firefox + sources
+pnpm run zip                               # Chrome
+pnpm run zip:firefox                       # Firefox + sources
 ```
 
 `pnpm run zip` and `pnpm run zip:firefox` build first, so they are the only two
-commands a release needs. They produce, in `.output/`:
+commands needed. They produce, in `.output/`:
 
 | Artifact | Contents |
 |---|---|
@@ -365,13 +421,18 @@ shasum -a 256 .output/chrome-mv3/manifest.json \
 find .output/chrome-mv3 -type f \( -name '*.js' -o -name 'manifest.json' \) \
   | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256
 
-# Digests of the published archives
-shasum -a 256 .output/*.zip
+# A published archive against a local rebuild of the same tag
+mkdir -p /tmp/published /tmp/rebuilt
+unzip -q ostrilo-<version>-chrome.zip -d /tmp/published
+unzip -q .output/ostrilo-<version>-chrome.zip -d /tmp/rebuilt
+diff -r /tmp/published /tmp/rebuilt && echo "identical contents"
 ```
 
-Publish the archive digests with the release tag. A user who wants to check a
-release rebuilds from the tag and compares the per-file digests, or compares the
-whole-build digest.
+The archive digests in `SHA256SUMS` identify the exact files the release
+workflow built and attested; they are what to check a download against. They
+are not what a rebuild reproduces, because the archive timestamps differ. A
+user who wants to check that a release matches its source rebuilds from the tag
+and compares unpacked contents, or the per-file or whole-build digests above.
 
 ### What still blocks a byte-identical comparison
 
@@ -379,7 +440,7 @@ whole-build digest.
 |---|---|
 | No pinned Node version | **Fixed.** `.nvmrc` pins `22`. |
 | No documented build procedure | **Fixed.** The commands above. |
-| No published digests | **Fixed.** The procedure above; publishing them is a release-time step. |
-| Archive timestamps | **Mitigated.** `pnpm zip` records file timestamps; set `SOURCE_DATE_EPOCH` when producing release archives. |
+| No published digests | **Fixed.** `release.yml` writes `SHA256SUMS` and attests each archive; attaching them to the GitHub Release is a release-time step. |
+| Archive timestamps | **Open.** `wxt zip` stamps every entry with the time it is written and ignores `SOURCE_DATE_EPOCH` (measured 2026-11-12), so archive digests differ between builds of the same tag. Contents do not; compare unpacked contents. Closing this needs wxt to accept a fixed entry date, or a post-processing step that rewrites entry timestamps. |
 | Store re-signing | **Deferred, structural.** Both the Chrome Web Store and AMO re-sign uploads, so the installed artifact is never byte-identical to the uploaded one. Comparison has to be against the uploaded archive, or per-file against the unpacked install. |
 | Cross-machine and cross-Node-major determinism | **Deferred, unverified.** Two consecutive builds on one machine are byte-identical (measured above). Nobody has built on two machines, or on two Node majors, and diffed the result. Until someone has, determinism is an assumption. A CI job that builds twice and diffs is the natural next step. |

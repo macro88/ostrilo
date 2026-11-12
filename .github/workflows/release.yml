@@ -1,0 +1,148 @@
+# Release archives, built from a tag on a clean runner.
+#
+# The archives uploaded to the Chrome Web Store and AMO are built here rather
+# than on a developer machine. A developer machine runs `pnpm install`, the
+# build, the tests and the linters every day - about 950 packages of tooling -
+# and an archive built there is only as trustworthy as everything that has ever
+# run on it. Built here, the archive comes from the tagged source and the
+# lockfile on a runner that exists for this one job.
+#
+# Two jobs, split the way badges.yml is split. `build` installs dependencies and
+# so runs third-party code; it holds a read-only token and no OIDC token.
+# `attest` holds the id-token and attestations scopes, checks out nothing,
+# installs nothing, and accepts from `build` only a version string and three
+# lines shaped like `sha256sum` output.
+#
+# Nothing here uploads to a store or writes to the repository. The archives
+# are a workflow artifact; the release procedure in docs/ci-verification.md
+# says what to do with them.
+
+name: Release build
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  # Rebuilds an existing tag, for example one cut before this workflow existed.
+  # The tag's own source and lockfile are built, not the default branch's.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build, for example v0.10.0"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build release archives
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      checksums: ${{ steps.digests.outputs.checksums }}
+    steps:
+      # Passed through env, never interpolated into the script, and checked
+      # before anything uses it: a dispatch input is free text.
+      - id: tag
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a release tag: $TAG"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+
+      # No dependency cache. A release build downloads every package from the
+      # registry and checks it against the lockfile's integrity hashes, rather
+      # than starting from a store another workflow run left behind.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Tag matches package.json
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          actual=$(node -p "require('./package.json').version")
+          [[ "$actual" == "$VERSION" ]] || { echo "tag is $VERSION, package.json is $actual"; exit 1; }
+
+      - run: pnpm install --frozen-lockfile
+
+      # The archives are not byte-reproducible: wxt zip stamps every entry with
+      # the time it is written and ignores SOURCE_DATE_EPOCH. Their contents
+      # are. See "Reproducible builds" in docs/ci-verification.md.
+      - run: pnpm run zip
+      - run: pnpm run zip:firefox
+
+      # The same build-output assertions verify.yml runs, against the exact
+      # output that was just archived.
+      - run: pnpm exec vitest run tests/security/manifest-assertions.test.ts tests/security/key-handling-bundle.test.ts
+        env:
+          OSTRILO_REQUIRE_BUILD_OUTPUT: "1"
+
+      - id: digests
+        working-directory: .output
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          sha256sum "ostrilo-$VERSION-chrome.zip" "ostrilo-$VERSION-firefox.zip" "ostrilo-$VERSION-sources.zip" > SHA256SUMS
+          cat SHA256SUMS
+          {
+            echo "checksums<<SHA256SUMS_END"
+            cat SHA256SUMS
+            echo "SHA256SUMS_END"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ostrilo-${{ steps.tag.outputs.version }}
+          path: |
+            .output/ostrilo-${{ steps.tag.outputs.version }}-chrome.zip
+            .output/ostrilo-${{ steps.tag.outputs.version }}-firefox.zip
+            .output/ostrilo-${{ steps.tag.outputs.version }}-sources.zip
+            .output/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
+
+  attest:
+    name: Attest build provenance
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      # Re-validated here: this job can sign, so it trusts the other job's
+      # outputs no further than their shape. Exactly three lines, in the order
+      # `build` writes them, each a lowercase SHA-256 and one of this version's
+      # three archive names.
+      - name: Check the checksums from the build job
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          CHECKSUMS: ${{ needs.build.outputs.checksums }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a version: $VERSION"; exit 1; }
+          printf '%s\n' "$CHECKSUMS" > SHA256SUMS
+          pattern="^[0-9a-f]{64}  ostrilo-${VERSION//./\\.}-(chrome|firefox|sources)\.zip$"
+          targets=""
+          while IFS= read -r line; do
+            [[ "$line" =~ $pattern ]] || { echo "not a checksum line: $line"; exit 1; }
+            targets+="${BASH_REMATCH[1]} "
+          done < SHA256SUMS
+          [[ "$targets" == "chrome firefox sources " ]] || { echo "expected chrome, firefox and sources once each, got: $targets"; exit 1; }
+          cat SHA256SUMS
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: SHA256SUMS

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- **Release archives are built and attested on GitHub.** From the next release,
+  the archives uploaded to the Chrome Web Store and AMO are built from the
+  release tag by a GitHub Actions workflow instead of on a developer's
+  computer, and each one carries a build-provenance attestation naming the
+  commit and workflow run that produced it. Check an archive downloaded from
+  the GitHub Release with `gh attestation verify <archive> --repo
+  macro88/ostrilo`. Two development
+  tools, and the 129 packages they brought with them, are removed from the
+  development setup; none of them shipped in the extension.
+
 ## 0.10.0 — 2026-11-03
 
 This release fixes the two problems reported against 0.9.0:
