@@ -10,9 +10,17 @@
   computer, and each one carries a build-provenance attestation naming the
   commit and workflow run that produced it. Check an archive downloaded from
   the GitHub Release with `gh attestation verify <archive> --repo
-  macro88/ostrilo`. Two development
-  tools, and the 129 packages they brought with them, are removed from the
-  development setup; none of them shipped in the extension.
+  macro88/ostrilo`. Two development tools, and the 129 packages they brought
+  with them, are removed from the development setup; none of them shipped in
+  the extension.
+- **Release archives are reproducible.** Two builds of the same commit now
+  produce byte-identical archives, so a rebuild from a release tag can be
+  checked against the published SHA-256. Before, every build stamped the
+  archives with the time it ran, and Mozilla's rebuild from the sources archive
+  produced a slightly different stylesheet. That stylesheet lost only rules
+  nothing in Ostrilo used; nothing looks different. Reproduction has been
+  measured on one machine so far, and the first release built on GitHub will
+  show whether a rebuild elsewhere matches too.
 
 ## 0.10.0 — 2026-11-03
 

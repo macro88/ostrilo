@@ -78,9 +78,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # The archives are not byte-reproducible: wxt zip stamps every entry with
-      # the time it is written and ignores SOURCE_DATE_EPOCH. Their contents
-      # are. See "Reproducible builds" in docs/ci-verification.md.
+      # The zip hooks in wxt.config.ts fix entry timestamps and order, so a
+      # rebuild of this tag reproduces SHA256SUMS. See "Reproducible builds" in
+      # docs/ci-verification.md.
       - run: pnpm run zip
       - run: pnpm run zip:firefox
 

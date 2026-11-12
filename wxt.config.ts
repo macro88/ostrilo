@@ -3,6 +3,7 @@ import "@wxt-dev/module-react";
 import "@wxt-dev/auto-icons";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import { normalizeZipFile } from "./scripts/reproducible-zip";
 
 /**
  * Content Security Policy for every extension page, and — on MV3 — for the
@@ -110,6 +111,8 @@ const SOURCES_ALLOWLIST = [
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
   "wxt.config.ts",
+  // Imported by wxt.config.ts, so a reviewer's rebuild needs it.
+  "scripts/reproducible-zip.ts",
   "tsconfig.json",
   "components.json",
   "LICENSE",
@@ -213,9 +216,16 @@ export default defineConfig({
       "**/*.log",
     ],
   },
+  // JSZip stamps each entry with the time it is written and orders entries by
+  // a filesystem walk, so two builds of one commit produced different archives
+  // with identical contents. Fixing both makes a rebuild from the tag match
+  // the published SHA256SUMS. See scripts/reproducible-zip.ts.
+  hooks: {
+    "zip:extension:done": (_wxt, zipPath) => normalizeZipFile(zipPath),
+    "zip:sources:done": (_wxt, zipPath) => normalizeZipFile(zipPath),
+  },
   vite: (env) => ({
-    // Cast because wxt bundles its own vite types; tailwindcss() returns Plugin[] from root Vite
-    plugins: tailwindcss() as unknown as any[],
+    plugins: tailwindcss(),
     // Strip debug logging from production output. Declared once here rather
     // than guarded at 110 call sites in `src/`, and it also covers dependencies
     // that log. Development builds keep console output.

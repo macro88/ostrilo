@@ -339,13 +339,28 @@ build 2: ee6f591ca2b286da0bd34c0461cf30f247c35349a0f6a41e4490d1d98a79adbf
 (combined SHA-256 over every `.js` file plus the manifest, 2026-09-13, Node
 v24.16.0 / pnpm 11.5.2 / wxt 0.20.26.)
 
-So the bundler output itself is deterministic. The archives are not. `wxt zip`
-writes them with JSZip, which stamps every entry with the time it is written
-and does not read `SOURCE_DATE_EPOCH`. Measured 2026-11-12: two builds of the
-same commit a minute apart, both with `SOURCE_DATE_EPOCH` set, produced all
-three archives with different digests and identical contents. Earlier versions
-of this document said setting the variable fixed this; it never did. Compare
-unpacked contents, not archive digests.
+So the bundler output itself is deterministic. Until 2026-11-12 the archives
+were not. `wxt zip` writes them with JSZip, which stamps every entry with the
+time it is written, orders entries by a filesystem walk, and does not read
+`SOURCE_DATE_EPOCH`; two builds of one commit a minute apart produced all three
+archives with different digests and identical contents. Earlier versions of
+this document said setting `SOURCE_DATE_EPOCH` fixed this. It never did.
+
+Now the `zip:extension:done` and `zip:sources:done` hooks in `wxt.config.ts`
+pass each archive through `scripts/reproducible-zip.ts`. That rewrites only the
+zip container: every entry gets the timestamp 1980-02-01 00:00 and entries are
+stored in name order, while compressed bytes, CRCs and sizes are copied
+unchanged. Measured 2026-11-12: two runs of `pnpm run zip` and `pnpm run
+zip:firefox` a minute apart produced byte-identical archives, and `unzip -t`
+passes on all three.
+
+The stylesheet was a second source of difference. Tailwind reads every file in
+the project for class names, so text in `openspec/` and `tests/` put seven
+unused utilities into the shipped CSS. Those directories are not in the sources
+archive, so a rebuild from it produced a different stylesheet and a different
+hash on every chunk importing it. `src/assets/tailwind.css` now limits
+scanning to `src/`. The resulting stylesheet is byte-identical to what the
+sources archive already built, so only the unused rules left.
 
 ### Releasing
 
@@ -381,7 +396,13 @@ pnpm run zip:firefox                       # Firefox + sources
 ```
 
 `pnpm run zip` and `pnpm run zip:firefox` build first, so they are the only two
-commands needed. They produce, in `.output/`:
+commands needed. Check the result against the release's `SHA256SUMS`:
+
+```bash
+cd .output && shasum -a 256 -c /path/to/SHA256SUMS
+```
+
+They produce, in `.output/`:
 
 | Artifact | Contents |
 |---|---|
@@ -399,15 +420,16 @@ included. Neither reads `.gitignore`.
 - **Extension archive.** `zip.exclude` drops `**/*.map` and the unreferenced
   root `icon.png` (659 KB) and `icon.svg` (200 KB), which are copied from
   `public/` and pointed at by no manifest key — the `icons` block references the
-  sized files `@wxt-dev/auto-icons` generates from `src/assets/icon.png`. Result:
-  24 files, 1.2 MB.
+  sized files `@wxt-dev/auto-icons` generates from `src/assets/icon.png`. Result
+  (measured 2026-11-12): 51 files, 1.2 MB, for each target.
 - **Sources archive.** WXT's source filter is `include-match OR NOT
   exclude-match`, so `excludeSources: ["**/*"]` paired with an explicit
   `includeSources` allowlist makes the archive fail closed: a new top-level
-  directory is excluded by default rather than shipped by default. Result: 169
-  files, 1.8 MB, containing only `src/`, `public/`, `package.json`,
-  `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `wxt.config.ts`, `tsconfig.json`,
-  `components.json`, `LICENSE` and `README.md`.
+  directory is excluded by default rather than shipped by default. Result
+  (measured 2026-11-12): 241 files, 1.9 MB, containing only `src/`, `public/`,
+  `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `wxt.config.ts`,
+  `scripts/reproducible-zip.ts` (which `wxt.config.ts` imports),
+  `tsconfig.json`, `components.json`, `LICENSE` and `README.md`.
 
   This one was a real finding, not a tidiness exercise. Under the defaults the
   sources archive was 4,701 files and 277 MB, of which 4,313 files came from
@@ -415,10 +437,12 @@ included. Neither reads `.gitignore`.
   Settings`, the extension's own vault storage captured from end-to-end runs.
   That was the archive that would have been uploaded to Mozilla.
 
-Verified after the change: extracting `ostrilo-<version>-sources.zip` into a
-clean directory and running `pnpm install --frozen-lockfile && pnpm run
-build:firefox` succeeds, and produces a `manifest.json` byte-identical to the
-one built in the repository.
+Verified 2026-11-12: extracting `ostrilo-<version>-sources.zip` into a clean
+directory and running `pnpm install --frozen-lockfile`, `pnpm run
+build:firefox` and `pnpm run build` produces `firefox-mv3` and `chrome-mv3`
+directories identical, file for file, to the ones built in the repository.
+Before the stylesheet change above, only `manifest.json` matched; earlier
+versions of this document checked nothing else.
 
 ### Obtaining and comparing digests
 
@@ -432,18 +456,16 @@ shasum -a 256 .output/chrome-mv3/manifest.json \
 find .output/chrome-mv3 -type f \( -name '*.js' -o -name 'manifest.json' \) \
   | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256
 
-# A published archive against a local rebuild of the same tag
-mkdir -p /tmp/published /tmp/rebuilt
-unzip -q ostrilo-<version>-chrome.zip -d /tmp/published
-unzip -q .output/ostrilo-<version>-chrome.zip -d /tmp/rebuilt
-diff -r /tmp/published /tmp/rebuilt && echo "identical contents"
+# Digests of the archives, to compare with a release's SHA256SUMS
+shasum -a 256 .output/*.zip
 ```
 
 The archive digests in `SHA256SUMS` identify the exact files the release
-workflow built and attested; they are what to check a download against. They
-are not what a rebuild reproduces, because the archive timestamps differ. A
-user who wants to check that a release matches its source rebuilds from the tag
-and compares unpacked contents, or the per-file or whole-build digests above.
+workflow built and attested, and a rebuild from the tag reproduces them -
+measured on one machine; across machines, see the last row of the table below.
+A user who wants to check a release rebuilds from the tag and compares archive
+digests, falling back to unpacked contents if they differ. An archive downloaded from a store has been re-signed, so compare its
+unpacked files with the rebuild's instead.
 
 ### What still blocks a byte-identical comparison
 
@@ -452,6 +474,7 @@ and compares unpacked contents, or the per-file or whole-build digests above.
 | No pinned Node version | **Fixed.** `.nvmrc` pins `22`. |
 | No documented build procedure | **Fixed.** The commands above. |
 | No published digests | **Fixed.** `release.yml` writes `SHA256SUMS` and attests each archive; attaching them to the GitHub Release is a release-time step. |
-| Archive timestamps | **Open.** `wxt zip` stamps every entry with the time it is written and ignores `SOURCE_DATE_EPOCH` (measured 2026-11-12), so archive digests differ between builds of the same tag. Contents do not; compare unpacked contents. Closing this needs wxt to accept a fixed entry date, or a post-processing step that rewrites entry timestamps. |
+| Archive timestamps and entry order | **Fixed 2026-11-12.** `scripts/reproducible-zip.ts` fixes both from the `wxt zip` hooks; two builds a minute apart are byte-identical. |
+| Stylesheet built from files outside the sources archive | **Fixed 2026-11-12.** Tailwind scans `src/` only; a rebuild from the sources archive is identical to the repository build. |
 | Store re-signing | **Deferred, structural.** Both the Chrome Web Store and AMO re-sign uploads, so the installed artifact is never byte-identical to the uploaded one. Comparison has to be against the uploaded archive, or per-file against the unpacked install. |
-| Cross-machine and cross-Node-major determinism | **Deferred, unverified.** Two consecutive builds on one machine are byte-identical (measured above). Nobody has built on two machines, or on two Node majors, and diffed the result. Until someone has, determinism is an assumption. A CI job that builds twice and diffs is the natural next step. |
+| Cross-machine and cross-Node-major determinism | **Deferred, unverified.** Two consecutive builds on one machine are byte-identical (measured above). Nobody has built on two machines, or on two Node majors, and diffed the result. Until someone has, determinism is an assumption. The first `release.yml` run settles the Linux-against-macOS case: rebuild its tag locally and check the run's `SHA256SUMS`. |
