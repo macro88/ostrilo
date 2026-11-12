@@ -1,0 +1,45 @@
+#!/bin/sh
+
+# Tracked so every clone runs the same hook. Enable it once per clone:
+#   git config core.hooksPath .githooks
+#
+# Do not run `react-doctor install`. It writes its own pre-commit block, which
+# falls back to `pnpm dlx react-doctor@latest` and `npx --yes react-doctor@latest`
+# and skips the scan when neither works. tests/security/tooling-hooks.test.ts
+# fails if that block lands here.
+
+react_doctor_scan_staged_files() {
+  # Pinned local binary only. No pnpm dlx / npx --yes fallback: fetching an
+  # unpinned package tree and executing it on a machine that holds signing keys
+  # is an unattended RCE path. See openspec restore-security-test-assurance.
+  if [ -x "./node_modules/.bin/react-doctor" ]; then
+    "./node_modules/.bin/react-doctor" --staged --blocking warning
+    return
+  fi
+
+  printf '%s\n' \
+    "react-doctor: pinned binary not found at ./node_modules/.bin/react-doctor." \
+    "Install it with:  pnpm install --frozen-lockfile" \
+    "Not skipping - a security tool that cannot run is a failure, not a pass." >&2
+  return 1
+}
+
+react_doctor_output=$(mktemp "${TMPDIR:-/tmp}/react-doctor-hook.XXXXXX")
+if react_doctor_scan_staged_files > "$react_doctor_output" 2>&1; then
+  rm -f "$react_doctor_output"
+else
+  # A failed run is not always a finding. React Doctor also refuses to scan
+  # while a config file such as package.json differs between the index and the
+  # worktree, and the pinned binary can be missing. Say which, and show the
+  # tool's own output rather than replacing it with a summary.
+  if grep -q "Cannot scan staged files" "$react_doctor_output"; then
+    printf '%s\n' "React Doctor could not scan this commit. This is not a finding:" >&2
+  elif grep -q "pinned binary not found" "$react_doctor_output"; then
+    printf '%s\n' "React Doctor did not run:" >&2
+  else
+    printf '%s\n' "React Doctor found staged regressions:" >&2
+  fi
+  cat "$react_doctor_output" >&2
+  printf '%s\n' "Rerun with: ./node_modules/.bin/react-doctor --staged --blocking warning" >&2
+  rm -f "$react_doctor_output"
+fi

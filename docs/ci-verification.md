@@ -237,12 +237,18 @@ recorded decision in the pull request that introduces it.
 
 React Doctor is an exact-version `devDependency` invoked through
 `node_modules/.bin/react-doctor` via `pnpm run doctor`. `npx`, `pnpm dlx` and
-`@latest` are not used anywhere in `package.json`, `.git/hooks/pre-commit`, or
-`.claude/hooks/react-doctor.sh`.
+`@latest` are not used anywhere in `package.json`, `.githooks/pre-commit`,
+`.claude/hooks/react-doctor.sh` or `.claude/hooks/aislop.sh`, and
+`tests/security/tooling-hooks.test.ts` fails if one appears in a hook.
+
+The pre-commit hook is tracked, and each clone turns it on with
+`git config core.hooksPath .githooks` (see `CONTRIBUTING.md`). Until 2026-11-12
+it lived only in `.git/hooks/`, where `react-doctor install` could put back its
+`npx --yes react-doctor@latest` fallback without leaving a diff.
 
 The reason is specific: those invocations fetch a full transitive dependency
 tree over the network and execute it after every file edit, on the machine that
-holds this project's signing keys. Both hooks now run the pinned binary or fail
+holds this project's signing keys. All three hooks run the pinned binary or fail
 loudly — a security tool that could not run is a failure to report, never a
 silent pass.
 
@@ -276,16 +282,12 @@ It asserts on **generated output**, not on `wxt.config.ts`. That distinction is
 the whole point: the Firefox `sidebar_action` block shipped for months carrying
 WXT's scaffold placeholders, and none of them appear anywhere in the config.
 
-**Known gap: the suite skips in CI today.** It needs real build output, so it
-skips — with a message naming the required build command — when
-`.output/<target>/manifest.json` is absent. The `verify` job runs `pnpm run test`
-without building, and the `build` job builds without running tests, so in CI
-these assertions currently skip rather than run.
-
-Closing it is one line in `verify.yml`: add `pnpm run test:manifest` to the
-`build` job, after the two build steps. That script builds both targets and then
-runs this suite, so it is correct to run anywhere. Until that lands, the
-assertions are a local and pre-commit gate only.
+It needs real build output, so on its own it skips — with a message naming the
+required build command — when `.output/<target>/manifest.json` is absent. The
+`build` job in `verify.yml` runs it after building both targets, with
+`OSTRILO_REQUIRE_BUILD_OUTPUT=1` so that missing output fails instead of
+skipping; `release.yml` does the same for the archives it publishes. Locally,
+`pnpm run test:build-output` builds and runs it.
 
 ## Making Verify required
 
