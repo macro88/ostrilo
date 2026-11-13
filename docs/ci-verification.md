@@ -21,6 +21,7 @@ without anyone noticing.
 | React Doctor | `react-doctor.yml` | pull request, push to `main` | No |
 | aislop | `aislop.yml` | pull request, push to `main` | No |
 | Badges | `badges.yml` | push to `main`, dispatch | No |
+| Release build | `release.yml` | push of a `vX.Y.Z` tag, dispatch with a tag | No |
 
 ### Verify
 
@@ -82,6 +83,35 @@ nothing, and refuses any value from `measure` that is not an integer.
 It reports and does not gate: the thresholds live in `verify.yml` and
 `aislop.yml`, and React Doctor is deliberately never a gate.
 
+### Release build
+
+`release.yml` builds the store archives from a release tag on a clean runner,
+so the archive a user installs does not come from a developer machine. That
+machine runs `pnpm install`, the build, the tests and the linters every day -
+about 950 packages of tooling - and an archive built there is only as
+trustworthy as everything that has ever run on it.
+
+It runs when a `vX.Y.Z` tag is pushed, or by dispatch with an existing tag,
+which builds that tag's own source and lockfile. Two jobs, split the way Badges
+is:
+
+- **`build`** holds a read-only token and no OIDC token. It checks that the tag
+  matches the `package.json` version, installs with `--frozen-lockfile` and no
+  dependency cache, runs `pnpm run zip` and `pnpm run zip:firefox`, runs the
+  manifest and key-handling-bundle assertions against that output, and uploads
+  the three archives with a `SHA256SUMS` file as the artifact
+  `ostrilo-<version>`, kept for 90 days.
+- **`attest`** holds `id-token: write` and `attestations: write`. It checks out
+  nothing and installs nothing. It accepts the checksums from `build` only as
+  three lines, each a lowercase SHA-256 and one of that version's archive
+  names, then records a build-provenance attestation for each archive with
+  `actions/attest-build-provenance`. The attestation names the workflow, the
+  commit and the run that produced the archive.
+
+It does not upload to either store and does not write to the repository. No
+store credential is held in CI. [Releasing](#releasing) covers the steps that
+stay manual.
+
 ## Audit threshold
 
 `pnpm audit --audit-level high`. High and critical block; moderate and below are
@@ -98,7 +128,8 @@ gate. High and critical are rare enough to be worth stopping for.
 | Advisory | Package | Severity | Status |
 |---|---|---|---|
 | esbuild dev-server arbitrary file read on Windows | `esbuild` | low | Accepted. Below threshold. Affects `wxt dev` on Windows only; no release path. |
-| GHSA-vfj7-8cjw-p6xm, stack exhaustion on deeply nested brace patterns | `braces` | high | Accepted 2026-10-06 via `auditConfig.ignoreGhsas` in `pnpm-workspace.yaml`. No patched release exists: the advisory names `>=3.0.4` and npm's latest is `3.0.3`. Reached only through `aislop` and `shadcn > micromatch`, which glob paths this repository supplies; no untrusted pattern reaches it. Remove the ignore the day a patched version is published. |
+| GHSA-g3hv-75wg-m249, denial of service through glob-pattern amplification | `minimatch` 10.x | moderate | Accepted 2026-11-12. Below threshold, so no `ignoreGhsas` entry. The fix is `11.0.1`, and every 10.x consumer - `eslint`, `@eslint/config-array`, `typescript-eslint` - declares `^10.x`, including their latest releases, so an override would force a major they have not been tested against. Reached only through linting, which matches patterns this repository's own config supplies; no untrusted pattern reaches it. Revisit when those consumers move to `^11`. |
+| GHSA-vfj7-8cjw-p6xm, stack exhaustion on deeply nested brace patterns | `braces` | high | Accepted 2026-10-06 via `auditConfig.ignoreGhsas` in `pnpm-workspace.yaml`. No patched release exists: the advisory names `>=3.0.4` and npm's latest is `3.0.3`. Reached only through `aislop > micromatch`, which globs paths this repository supplies; no untrusted pattern reaches it. Remove the ignore the day a patched version is published. |
 
 An ignored advisory is a hole in the gate with a name on it. Each entry in
 `ignoreGhsas` has a row here, and a row here says why the finding cannot reach
@@ -135,6 +166,28 @@ exception: `zod` (GHSA-mrhx-c7xc-m3w5) by upgrading the production dependency in
 `systeminformation`, `undici` and `vite` (per major, 7.x and 8.x) by
 `overrides`. Only the `braces` row remains.
 
+On 2026-11-12 two devDependencies left the tree, and 129 packages with them.
+The `shadcn` CLI scaffolds components that are already copied into
+`src/ui/components/ui/`, and brought 111 packages no other tool needed, among
+them an MCP server, `dotenvx` and `ts-morph`. `http-server` served one
+fixture page to the e2e suite and is replaced by
+`tests/e2e/fixtures/static-server.mjs`, which imports only `node:` modules. The
+`follow-redirects` and `systeminformation` overrides went with them, because
+nothing left in the tree reaches either package. `tailwindcss` and
+`@tailwindcss/vite` moved to `devDependencies`: they run at build time and
+never ship, and as production dependencies they put 118 build packages in the
+production tree, which made it 185 packages when what ships is 67.
+
+The same day the audit reported sixteen advisories below the gate, all
+published after the 2026-11-03 round and all in dev tooling. Fourteen were
+fixed, following the 2026-10-07 practice of fixing a moderate when a patched
+release exists inside the consumer's range: `vitest` and `@vitest/coverage-v8`
+moved to `^4.1.12` in `package.json` (vitest pins `@vitest/mocker` exactly, so
+an override could not reach it), and `fast-uri`, `hono`, `@hono/node-server`,
+`ip-address`, `node-forge` and `qs` by `overrides`. Two remain and are
+recorded above: `esbuild` (low, already accepted) and `minimatch` (moderate, no
+fix inside the range its consumers declare).
+
 A gate that was green yesterday and red today on an unchanged tree is this
 mechanism working, not flaking: `pnpm audit` reads npm's live advisory feed, so
 the audit job on an untouched branch can start failing the day an advisory is
@@ -162,8 +215,12 @@ is a valuable target in its own right.
   delays adoption of a compromised release long enough for it to be pulled.
 - `trustPolicy: no-downgrade` — a package cannot be installed if an earlier
   version carried provenance attestation and this one does not.
+- `allowBuilds` — the packages whose install scripts may run: `esbuild` and
+  `sharp`, which set up their platform binaries. No other package's install
+  script runs. `spawn-sync` is listed as `false` deliberately; the comment in
+  the file says why.
 
-**Do not relax either setting to unblock an install.** They are what caught the
+**Do not relax these settings to unblock an install.** They are what caught the
 issues recorded above. When a package is refused, replace the untrusted edge
 with a reviewed `overrides` entry naming an exact provenance-attested version.
 An override is visible, diffable and revocable; a trust exception silently
@@ -180,12 +237,18 @@ recorded decision in the pull request that introduces it.
 
 React Doctor is an exact-version `devDependency` invoked through
 `node_modules/.bin/react-doctor` via `pnpm run doctor`. `npx`, `pnpm dlx` and
-`@latest` are not used anywhere in `package.json`, `.git/hooks/pre-commit`, or
-`.claude/hooks/react-doctor.sh`.
+`@latest` are not used anywhere in `package.json`, `.githooks/pre-commit`,
+`.claude/hooks/react-doctor.sh` or `.claude/hooks/aislop.sh`, and
+`tests/security/tooling-hooks.test.ts` fails if one appears in a hook.
+
+The pre-commit hook is tracked, and each clone turns it on with
+`git config core.hooksPath .githooks` (see `CONTRIBUTING.md`). Until 2026-11-12
+it lived only in `.git/hooks/`, where `react-doctor install` could put back its
+`npx --yes react-doctor@latest` fallback without leaving a diff.
 
 The reason is specific: those invocations fetch a full transitive dependency
 tree over the network and execute it after every file edit, on the machine that
-holds this project's signing keys. Both hooks now run the pinned binary or fail
+holds this project's signing keys. All three hooks run the pinned binary or fail
 loudly — a security tool that could not run is a failure to report, never a
 silent pass.
 
@@ -219,16 +282,12 @@ It asserts on **generated output**, not on `wxt.config.ts`. That distinction is
 the whole point: the Firefox `sidebar_action` block shipped for months carrying
 WXT's scaffold placeholders, and none of them appear anywhere in the config.
 
-**Known gap: the suite skips in CI today.** It needs real build output, so it
-skips — with a message naming the required build command — when
-`.output/<target>/manifest.json` is absent. The `verify` job runs `pnpm run test`
-without building, and the `build` job builds without running tests, so in CI
-these assertions currently skip rather than run.
-
-Closing it is one line in `verify.yml`: add `pnpm run test:manifest` to the
-`build` job, after the two build steps. That script builds both targets and then
-runs this suite, so it is correct to run anywhere. Until that lands, the
-assertions are a local and pre-commit gate only.
+It needs real build output, so on its own it skips — with a message naming the
+required build command — when `.output/<target>/manifest.json` is absent. The
+`build` job in `verify.yml` runs it after building both targets, with
+`OSTRILO_REQUIRE_BUILD_OUTPUT=1` so that missing output fails instead of
+skipping; `release.yml` does the same for the archives it publishes. Locally,
+`pnpm run test:build-output` builds and runs it.
 
 ## Making Verify required
 
@@ -282,23 +341,70 @@ build 2: ee6f591ca2b286da0bd34c0461cf30f247c35349a0f6a41e4490d1d98a79adbf
 (combined SHA-256 over every `.js` file plus the manifest, 2026-09-13, Node
 v24.16.0 / pnpm 11.5.2 / wxt 0.20.26.)
 
-So the bundler output itself is already deterministic. The remaining known
-nondeterministic input is archive metadata: `pnpm zip` records file timestamps.
-Set `SOURCE_DATE_EPOCH` when producing release archives so those are fixed too.
-That is where any remaining verification effort should go, not the bundle.
+So the bundler output itself is deterministic. Until 2026-11-12 the archives
+were not. `wxt zip` writes them with JSZip, which stamps every entry with the
+time it is written, orders entries by a filesystem walk, and does not read
+`SOURCE_DATE_EPOCH`; two builds of one commit a minute apart produced all three
+archives with different digests and identical contents. Earlier versions of
+this document said setting `SOURCE_DATE_EPOCH` fixed this. It never did.
 
-### The exact release commands
+Now the `zip:extension:done` and `zip:sources:done` hooks in `wxt.config.ts`
+pass each archive through `scripts/reproducible-zip.ts`. That rewrites only the
+zip container: every entry gets the timestamp 1980-02-01 00:00 and entries are
+stored in name order, while compressed bytes, CRCs and sizes are copied
+unchanged. Measured 2026-11-12: two runs of `pnpm run zip` and `pnpm run
+zip:firefox` a minute apart produced byte-identical archives, and `unzip -t`
+passes on all three.
+
+The stylesheet was a second source of difference. Tailwind reads every file in
+the project for class names, so text in `openspec/` and `tests/` put seven
+unused utilities into the shipped CSS. Those directories are not in the sources
+archive, so a rebuild from it produced a different stylesheet and a different
+hash on every chunk importing it. `src/assets/tailwind.css` now limits
+scanning to `src/`. The resulting stylesheet is byte-identical to what the
+sources archive already built, so only the unused rules left.
+
+### Releasing
+
+1. Set `version` in `package.json`, merge, and push the tag `v<version>` from
+   that commit. `release.yml` builds it; a tag that does not match
+   `package.json` fails the run.
+2. Download the artifact from the run and check it:
+
+   ```bash
+   gh run download <run-id> --name ostrilo-<version>
+   shasum -a 256 -c SHA256SUMS
+   gh attestation verify ostrilo-<version>-chrome.zip --repo macro88/ostrilo
+   gh attestation verify ostrilo-<version>-firefox.zip --repo macro88/ostrilo
+   gh attestation verify ostrilo-<version>-sources.zip --repo macro88/ostrilo
+   ```
+
+3. Upload the Chrome archive to the Chrome Web Store and the Firefox and
+   sources archives to AMO, and attach all three with `SHA256SUMS` to the
+   GitHub Release.
+
+Upload only archives from this workflow, never ones built on a developer
+machine. A tag cut before the workflow existed can be built by dispatching it
+with that tag.
+
+### Reproducing a release
 
 ```bash
 git checkout <release-tag>
 nvm use                                    # reads .nvmrc
 corepack pnpm install --frozen-lockfile    # pnpm 11.5.2, from packageManager
-SOURCE_DATE_EPOCH=<epoch from the release notes> pnpm run zip          # Chrome
-SOURCE_DATE_EPOCH=<epoch from the release notes> pnpm run zip:firefox  # Firefox + sources
+pnpm run zip                               # Chrome
+pnpm run zip:firefox                       # Firefox + sources
 ```
 
 `pnpm run zip` and `pnpm run zip:firefox` build first, so they are the only two
-commands a release needs. They produce, in `.output/`:
+commands needed. Check the result against the release's `SHA256SUMS`:
+
+```bash
+cd .output && shasum -a 256 -c /path/to/SHA256SUMS
+```
+
+They produce, in `.output/`:
 
 | Artifact | Contents |
 |---|---|
@@ -316,15 +422,16 @@ included. Neither reads `.gitignore`.
 - **Extension archive.** `zip.exclude` drops `**/*.map` and the unreferenced
   root `icon.png` (659 KB) and `icon.svg` (200 KB), which are copied from
   `public/` and pointed at by no manifest key — the `icons` block references the
-  sized files `@wxt-dev/auto-icons` generates from `src/assets/icon.png`. Result:
-  24 files, 1.2 MB.
+  sized files `@wxt-dev/auto-icons` generates from `src/assets/icon.png`. Result
+  (measured 2026-11-12): 51 files, 1.2 MB, for each target.
 - **Sources archive.** WXT's source filter is `include-match OR NOT
   exclude-match`, so `excludeSources: ["**/*"]` paired with an explicit
   `includeSources` allowlist makes the archive fail closed: a new top-level
-  directory is excluded by default rather than shipped by default. Result: 169
-  files, 1.8 MB, containing only `src/`, `public/`, `package.json`,
-  `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `wxt.config.ts`, `tsconfig.json`,
-  `components.json`, `LICENSE` and `README.md`.
+  directory is excluded by default rather than shipped by default. Result
+  (measured 2026-11-12): 241 files, 1.9 MB, containing only `src/`, `public/`,
+  `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `wxt.config.ts`,
+  `scripts/reproducible-zip.ts` (which `wxt.config.ts` imports),
+  `tsconfig.json`, `components.json`, `LICENSE` and `README.md`.
 
   This one was a real finding, not a tidiness exercise. Under the defaults the
   sources archive was 4,701 files and 277 MB, of which 4,313 files came from
@@ -332,10 +439,12 @@ included. Neither reads `.gitignore`.
   Settings`, the extension's own vault storage captured from end-to-end runs.
   That was the archive that would have been uploaded to Mozilla.
 
-Verified after the change: extracting `ostrilo-<version>-sources.zip` into a
-clean directory and running `pnpm install --frozen-lockfile && pnpm run
-build:firefox` succeeds, and produces a `manifest.json` byte-identical to the
-one built in the repository.
+Verified 2026-11-12: extracting `ostrilo-<version>-sources.zip` into a clean
+directory and running `pnpm install --frozen-lockfile`, `pnpm run
+build:firefox` and `pnpm run build` produces `firefox-mv3` and `chrome-mv3`
+directories identical, file for file, to the ones built in the repository.
+Before the stylesheet change above, only `manifest.json` matched; earlier
+versions of this document checked nothing else.
 
 ### Obtaining and comparing digests
 
@@ -349,13 +458,16 @@ shasum -a 256 .output/chrome-mv3/manifest.json \
 find .output/chrome-mv3 -type f \( -name '*.js' -o -name 'manifest.json' \) \
   | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256
 
-# Digests of the published archives
+# Digests of the archives, to compare with a release's SHA256SUMS
 shasum -a 256 .output/*.zip
 ```
 
-Publish the archive digests with the release tag. A user who wants to check a
-release rebuilds from the tag and compares the per-file digests, or compares the
-whole-build digest.
+The archive digests in `SHA256SUMS` identify the exact files the release
+workflow built and attested, and a rebuild from the tag reproduces them -
+measured on one machine; across machines, see the last row of the table below.
+A user who wants to check a release rebuilds from the tag and compares archive
+digests, falling back to unpacked contents if they differ. An archive downloaded from a store has been re-signed, so compare its
+unpacked files with the rebuild's instead.
 
 ### What still blocks a byte-identical comparison
 
@@ -363,7 +475,8 @@ whole-build digest.
 |---|---|
 | No pinned Node version | **Fixed.** `.nvmrc` pins `22`. |
 | No documented build procedure | **Fixed.** The commands above. |
-| No published digests | **Fixed.** The procedure above; publishing them is a release-time step. |
-| Archive timestamps | **Mitigated.** `pnpm zip` records file timestamps; set `SOURCE_DATE_EPOCH` when producing release archives. |
+| No published digests | **Fixed.** `release.yml` writes `SHA256SUMS` and attests each archive; attaching them to the GitHub Release is a release-time step. |
+| Archive timestamps and entry order | **Fixed 2026-11-12.** `scripts/reproducible-zip.ts` fixes both from the `wxt zip` hooks; two builds a minute apart are byte-identical. |
+| Stylesheet built from files outside the sources archive | **Fixed 2026-11-12.** Tailwind scans `src/` only; a rebuild from the sources archive is identical to the repository build. |
 | Store re-signing | **Deferred, structural.** Both the Chrome Web Store and AMO re-sign uploads, so the installed artifact is never byte-identical to the uploaded one. Comparison has to be against the uploaded archive, or per-file against the unpacked install. |
-| Cross-machine and cross-Node-major determinism | **Deferred, unverified.** Two consecutive builds on one machine are byte-identical (measured above). Nobody has built on two machines, or on two Node majors, and diffed the result. Until someone has, determinism is an assumption. A CI job that builds twice and diffs is the natural next step. |
+| Cross-machine and cross-Node-major determinism | **Deferred, unverified.** Two consecutive builds on one machine are byte-identical (measured above). Nobody has built on two machines, or on two Node majors, and diffed the result. Until someone has, determinism is an assumption. The first `release.yml` run settles the Linux-against-macOS case: rebuild its tag locally and check the run's `SHA256SUMS`. |

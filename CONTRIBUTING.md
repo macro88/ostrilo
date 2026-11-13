@@ -38,6 +38,7 @@ architecture in [`docs/architecture_primer.md`](docs/architecture_primer.md) and
 ```sh
 git clone https://github.com/macro88/ostrilo.git
 cd ostrilo
+git config core.hooksPath .githooks
 pnpm install --frozen-lockfile
 pnpm run build
 ```
@@ -45,6 +46,13 @@ pnpm run build
 `--frozen-lockfile` is not optional. It also runs the supply-chain policy
 declared in `pnpm-workspace.yaml`, so a lockfile carrying a trust-downgraded
 package fails here rather than in CI.
+
+`core.hooksPath` turns on the pre-commit hook in
+[`.githooks/`](.githooks/pre-commit). It runs the pinned React Doctor over the
+staged files and reports what it finds without blocking the commit. Do not run
+`react-doctor install`: it rewrites that hook with a fallback that downloads the
+latest React Doctor from npm and runs it, and
+`tests/security/tooling-hooks.test.ts` fails when it does.
 
 Load `.output/chrome-mv3` as an unpacked extension in Chromium, or
 `.output/firefox-mv3/manifest.json` as a temporary add-on in Firefox. The README

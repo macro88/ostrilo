@@ -26,8 +26,10 @@ Serve your dapp over TLS with any self-signed certificate and launch the
 browser so it tolerates it:
 
 ```bash
-# Any static server that speaks TLS will do.
-npx http-server ./public -S -C cert.pem -K key.pem -p 8765
+# Any static server that speaks TLS will do. This one is in the repository and
+# uses only Node's standard library, so nothing is fetched to run it.
+node tests/e2e/fixtures/static-server.mjs --root ./public --port 8765 \
+  --cert cert.pem --key key.pem
 
 # Chrome/Chromium, for development only:
 chromium --ignore-certificate-errors --user-data-dir=/tmp/ostrilo-dev
@@ -48,7 +50,8 @@ development artifact with a one-day lifetime.
 ## In this repository
 
 `playwright.config.ts` does exactly the above: `tests/e2e/fixtures/make-dev-cert.ts`
-generates a fresh certificate into `test-results/e2e-tls/` on each run, the
-fixture server is started with `-S`, and the test browser is launched with
+generates a fresh certificate into `test-results/e2e-tls/` on each run,
+`tests/e2e/fixtures/static-server.mjs` serves the fixtures with it, and the test
+browser is launched with
 `--ignore-certificate-errors` and `ignoreHTTPSErrors`. Nothing outside that
 browser instance ever trusts it.

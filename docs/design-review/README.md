@@ -535,3 +535,25 @@ The runner's populated phase now seeds and photographs:
 - `pnpm audit --audit-level high` exits 0.
 - `tests/e2e/accessibility.spec.ts`, `quick-start.spec.ts` and `activity-view.spec.ts`: 15 passed; axe judged 36 surfaces per theme with no finding.
 - Light capture and dark capture: both complete, 64 screenshots each, no skipped step.
+
+# Review: the stylesheet built from `src/` only
+
+Date: 2026-11-12
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §12 (PR checklist)
+Build reviewed: production (`pnpm run build`), both themes, populated vault, once with the old stylesheet import and once with the new one.
+
+## What changed
+
+`src/assets/tailwind.css` imports Tailwind with `source("../")`, so class detection reads `src/` rather than the whole repository. Text in `docs/`, `openspec/` and `tests/` had been generating seven utilities no component uses (`mb-4`, `max-w-4xl`, `space-y-8`, `py-8`, `text-2xl`, `blur`, `transition-none`) and the two theme variables only they referenced. Those directories are not in the sources archive, so Mozilla's rebuild produced a different stylesheet from the submitted one. Only the shared stylesheet (`useTheme-*.css`) changed; the popup and options stylesheets are byte-identical.
+
+## Findings
+
+No visual change.
+
+- **Pixel comparison.** Of the 128 before/after pairs, 24 light and 26 dark are pixel-identical, and every pair keeps its dimensions. In the others the difference is text the runner generates afresh each run: npubs and hex keys, key record ids, the fixture server's port in site origins, and timestamps two minutes apart. The largest (Home, the approval queue and payload, Settings → Keys with an unreadable key, the expanded site in Permissions, the activity reasons) were cropped and compared side by side in both themes, and layout, spacing and colour match.
+- **The removed rules match nothing.** None of the seven class names is applied anywhere in the built extension. Six do not occur at all; `blur` occurs only as the DOM event, `.blur()` calls, a library method and `tailwind-merge`'s class-group table. A rule that matches no element cannot change rendering, so this also covers the surfaces the runner does not reach.
+
+## Verification
+
+- Four runner passes, light and dark on each build: all complete, 64 screenshots each, no skipped step.
+- The two tracked captures (`23-popup-home-populated.png`, light and dark) were restored to their committed versions, since a new run differs from them only in generated data.

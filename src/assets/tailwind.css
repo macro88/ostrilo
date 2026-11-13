@@ -10,7 +10,12 @@
  *   import '@fontsource/jetbrains-mono/600.css';
  */
 
-@import "tailwindcss";
+/* Scan src/ only. Tailwind otherwise reads every file in the repository for
+   class names, so text in docs/, openspec/ and tests/ put unused utilities
+   into the shipped stylesheet. Mozilla rebuilds from the sources archive,
+   which holds none of those directories, and got a different stylesheet -
+   and a different hash on every chunk that imports it. */
+@import "tailwindcss" source("../");
 @import "tw-animate-css";
 
 /* Bundled type (DESIGN_RULES §4). The @font-face rules ship with the
