@@ -150,17 +150,21 @@ CSP `img-src 'self' data:` and the `connect-src` allowlist are declared in
 `wxt.config.ts` by the companion change `harden-manifest-and-build`. This change
 guarantees no rendering path needs a wider policy.
 
-## Avatar upload destination
+## Image upload destination
 
-There is no hardcoded upload host. `ImageUploadField` takes an `uploadEndpoint`
-that is undefined by default, so a fresh install makes no outbound request to
-anyone but the configured relays. With none configured the upload control is not
-shown and the UI explains that a URL can be pasted instead.
+There is no default upload host and no host the user can type. The profile editor
+offers a shipped list of Blossom servers (`src/domain/blossom/servers.ts`), none
+selected on a fresh install, so a fresh install makes no outbound request to anyone
+but the configured relays. Choosing a file opens a confirmation dialog that lists
+the servers and names what the chosen host will see: the image, the user's IP
+address and the user's public key. Nothing is decoded, hashed, signed or sent
+until the user confirms, and the dialog appears for every upload.
 
-When an endpoint is configured it must be `https:`. The host is named on the
-control and again in a confirmation before the image is sent. The URL the service
-returns must pass the same `https:`-only allowlist before it enters profile
-metadata, and the extension never fetches or renders it.
+The manifest's `connect-src` is generated from that same list, so an extension
+page can reach exactly those origins. The reply is a remote party's claim: its
+hash and size must equal what the page sent, and the address must be `https:` and
+contain the hash. The extension never fetches or renders the returned address at
+that point. The reply's `X-Reason` header and body are never shown.
 
 ## Query partitioning
 

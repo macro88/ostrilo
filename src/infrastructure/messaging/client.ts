@@ -8,6 +8,8 @@ import type {
 } from "./rpc";
 import type { KeyBackupStatusRow } from "@/domain/backup/status";
 import type { AvatarRow } from "@/domain/profile/avatar";
+import type { BlossomServerId } from "@/domain/blossom/servers";
+import { BlossomAuthorizeUploadResponseSchema } from "@/infrastructure/validation/blossom-schemas";
 import {
   ActivityOriginsResponseSchema,
   AvatarGetResponseSchema,
@@ -353,6 +355,20 @@ export async function saveOwnAvatar(copy: {
 /** Drops the local copy of this public key's picture. */
 export async function removeOwnAvatar(pubkey: string) {
   return rpc<null>({ type: "avatar.remove", pubkey });
+}
+
+/**
+ * The `Authorization` header for uploading one blob to one listed server. The
+ * background builds and signs the event; the page sends only these fields and
+ * gets back only the header value.
+ */
+export async function authorizeBlossomUpload(params: {
+  pubkey: string;
+  sha256: string;
+  serverId: BlossomServerId;
+}): Promise<string> {
+  const data = await rpc<unknown>({ type: "blossom.authorizeUpload", ...params });
+  return BlossomAuthorizeUploadResponseSchema.parse(data).authorization;
 }
 
 /** Calls `cb` when a picture copy was saved or removed. Returns the unsubscribe. */

@@ -65,6 +65,7 @@ describe("page-reachable namespaces", () => {
       "approval",
       "activity",
       "profile",
+      "blossom",
       "state",
     ]) {
       expect(
@@ -253,6 +254,7 @@ describe("message listener enforces the boundary", () => {
     };
     router.registerModule("vault", spyModule);
     router.registerModule("nostr", spyModule);
+    router.registerModule("blossom", spyModule);
     return {
       listener: mod.createRpcMessageListener(
         router,
@@ -305,6 +307,50 @@ describe("message listener enforces the boundary", () => {
       reached,
       "the handler must never be invoked for a rejected sender"
     ).toHaveLength(0);
+  });
+
+  const UPLOAD_REQUEST = {
+    type: "blossom.authorizeUpload",
+    pubkey: "ab".repeat(32),
+    sha256: "cd".repeat(32),
+    serverId: "primal",
+  };
+
+  it("lets an extension page request an upload authorisation", async () => {
+    const { listener, reached } = await makeListener();
+    const res = await collect(listener, UPLOAD_REQUEST, {
+      id: RUNTIME_ID,
+      url: `${ORIGIN}popup.html`,
+    });
+    expect(res.ok).toBe(true);
+    expect(reached).toContain("blossom.authorizeUpload");
+  });
+
+  it("blocks a tab sender from requesting an upload authorisation, before any handler runs", async () => {
+    const { listener, reached } = await makeListener();
+    const res = await collect(listener, UPLOAD_REQUEST, {
+      id: RUNTIME_ID,
+      tab: { id: 1 },
+      frameId: 0,
+      url: "https://evil.example/page",
+    });
+    expect(res.ok).toBe(false);
+    expect(
+      res.code,
+      "SECURITY REGRESSION: a web page reached the upload-signing method"
+    ).toBe(RPC_ERROR_CODES.UNKNOWN_NAMESPACE);
+    expect(reached, "nothing may be signed for a rejected sender").toHaveLength(0);
+  });
+
+  it("blocks another extension's origin from requesting an upload authorisation", async () => {
+    const { listener, reached } = await makeListener();
+    const res = await collect(listener, UPLOAD_REQUEST, {
+      id: "ponmlkjihgfedcbaponmlkjihgfedcba",
+      url: "chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba/popup.html",
+    });
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe(RPC_ERROR_CODES.UNKNOWN_NAMESPACE);
+    expect(reached).toHaveLength(0);
   });
 
   it("still accepts a page-reachable nostr request from a content script", async () => {
@@ -381,6 +427,7 @@ describe("lock gate on the RPC surface", () => {
       "approval.resolve",
       "vault.deleteKey",
       "vault.select",
+      "blossom.authorizeUpload",
       "nostr.signEvent",
       "some.futureMethod",
     ]) {

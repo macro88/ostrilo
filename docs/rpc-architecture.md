@@ -86,10 +86,23 @@ Namespaces are split in two, and the split is enforced in
 | Class | Namespaces | Reachable from |
 |---|---|---|
 | Page-reachable | `nostr` | a web page, via the content script |
-| UI-only | `vault`, `keys`, `crypto`, `policy`, `settings`, `state`, `approval`, `activity`, `profile` | the extension's own pages only |
+| UI-only | `vault`, `keys`, `crypto`, `policy`, `settings`, `state`, `approval`, `activity`, `profile`, `blossom` | the extension's own pages only |
 
 Unknown namespaces default to **UI-only**. Adding a namespace does not
 accidentally expose it to the web.
+
+### The `blossom` namespace
+
+`blossom.authorizeUpload` signs one kind of event for one purpose: the BUD-11
+token that authorises an image upload to a curated Blossom server. The caller
+sends exactly a public key, a lowercase hex SHA-256 and a server id, and gets back
+exactly an `Authorization` header value. The background builds the kind 24242
+event itself (`t=upload`, `x`, `server`, `created_at` ten seconds in the past, a
+five-minute `expiration`), signs it with the named key, writes an activity entry
+and returns the header. A caller cannot supply a kind, a tag, content or an expiry,
+so the method cannot be used to get any other event signed. It is lock-gated
+like every method that is not in the locked-reachable list, and the background
+makes no network request for it: the page sends the upload itself.
 
 ### The sender rule
 
