@@ -121,6 +121,9 @@ export type RpcRequest =
   | { type: "avatar.get"; pubkey: string }
   | { type: "avatar.save"; pubkey: string; sourceUrl: string; dataUrl: string }
   | { type: "avatar.remove"; pubkey: string }
+  // A signed upload-authorisation header for one blob and one listed server.
+  // The background builds the event; the page supplies only these three fields.
+  | { type: "blossom.authorizeUpload"; pubkey: string; sha256: string; serverId: string }
   // Profile operations
   | { type: "profile.get"; params: { pubkey: string; forceFetch?: boolean } }
   | { type: "profile.getAll" }

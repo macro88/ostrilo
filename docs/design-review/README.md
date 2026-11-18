@@ -557,3 +557,48 @@ No visual change.
 
 - Four runner passes, light and dark on each build: all complete, 64 screenshots each, no skipped step.
 - The two tracked captures (`23-popup-home-populated.png`, light and dark) were restored to their committed versions, since a new run differs from them only in generated data.
+
+# Review: Blossom image upload from the profile editor
+
+Date: 2026-11-13
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §6 (banned patterns), §7 (dialogs, buttons, inputs), §11 (motion, accessibility), §12 (PR checklist)
+Build reviewed: production (`pnpm run build`), both themes, populated vault. The seeded profile already carries a 253-character picture address, which is the stress case for the new field. Popup at 400 px, side panel at 520 px.
+
+## What changed
+
+The Profile Picture field and the Banner field are one component. Beside the address input there is an Upload image action and, when the field has a value, Remove. Choosing a file opens a dialog that lists the three hosts, says what the chosen host will see, and says whether the file is re-encoded or sent unchanged. An upload in flight shows static text and a Cancel action. A refusal or a failure shows one fixed sentence under the controls.
+
+New captures: `25c` (editor, upload row in view), `25d` (dialog, nothing chosen), `25e` (dialog, host chosen), `25f` (upload in flight), `25g` (upload failed), `25h` (the dialog in the side panel).
+
+## Findings
+
+All four defects were fixed before this review closed.
+
+1. **`--ink-2` on the selected row's soft fill fails AA in Deep Ink.** The host line on the chosen option measured 4.12:1 against the required 4.5:1. The axe scan caught it; it was not visible by eye. The selected row now uses the primary text colour for the host. This is the same pairing §11 already warns about.
+2. **The focus ring made an unselected option look half-selected.** Radix focuses the first radio when the dialog opens, and the card drew a ring around it, which read as a selection before the user had chosen. The ring now appears only for keyboard focus (`:focus-visible`).
+3. **A failure message sat below the help text**, away from the controls it described. It now sits directly under them, and the help text follows and is tied to the input with `aria-describedby`.
+4. **`25c` did not show the upload row.** It showed the top of the form. The runner now scrolls the row to the middle.
+
+What holds up:
+
+- **Long address.** The 253-character picture address stays inside its input. The Upload image and Remove row fits at 400 px, and nothing scrolls sideways. A long Blossom address widening the popup was the original bug report for this surface, so this is the check that mattered most.
+- **Banned patterns (§6).** No gradient, rail, pill, emoji or exclamation mark. The dialog has exactly one notched primary (Upload, a disabled plate until a host is chosen) and a ghost Cancel. Dialog radius, backdrop and overlay shadow match §7.
+- **Motion (§11).** Progress is static text and a Cancel action. There is no bar, spinner or loop. A unit test asserts no `progressbar` role, no `<progress>` element and no percentage.
+- **Accent budget (§3).** Violet appears on the selected row's border and fill and on the radio mark, and on the primary in Deep Ink, where `--primary` flips by design.
+- **Deep Ink checked, not inferred.** Every state above was captured and read in dark. The selected row, the violet primary, the red failure line and the dimmed disabled field all hold their hierarchy.
+- **Side panel.** The dialog is wider at 520 px and keeps its proportions.
+
+Two things the screenshots do not settle:
+
+- **The runner broke one of its own steps, and that was fixed in the runner, not the product.** With the new steps placed after the activity seeding, `23b-popup-home-backup-banner` failed in every run: each upload authorisation writes an activity entry, and the new entries displaced the seeded rows that step expects on Home. `main` captured cleanly with no failed step, which ruled out a product regression. The upload steps now run before the activity is seeded, and the capture is back to no failed step (70 screenshots per theme, up from 64).
+- **How an upload authorisation reads in the Activity list** was checked in a separate run. It reads "Blossom authorisation, Approved, `extension://profile`, Upload profile image". The kind table had called 24242 "Blobs stored on mediaservers", which says nothing about what happened; it now says "Blossom authorisation". "Approved" is the word every extension-originated entry uses, including a profile update.
+
+Not judged here: whether the native file chooser keeps a toolbar popup open in Chrome on macOS and in Firefox. Playwright intercepts the chooser, so it cannot show it. That needs a person at a real browser (`openspec/changes/add-blossom-profile-image-upload`, task 1.4).
+
+## Verification
+
+- `tests/e2e/accessibility.spec.ts`: axe judged 40 surfaces per theme, up from 36, with no finding. The four new states are the refused file, the dialog with nothing chosen, the dialog with a host chosen, and an upload in flight.
+- `tests/e2e/blossom-upload.spec.ts`: 14 passed. They cover the request, the token's signature, a clean content security policy, metadata removal, the size cap, and the cancel and key-switch contract.
+- One real upload through the production build to Primal, with a throwaway vault key and a generated image, no interception: the address it returned serves a PNG whose SHA-256 matches the address.
+- Light capture and dark capture: both complete, 70 screenshots each, no failed step.
+- The two tracked captures (`23-popup-home-populated.png`, light and dark) were restored to their committed versions.

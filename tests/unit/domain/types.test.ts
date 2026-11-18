@@ -9,6 +9,10 @@ import {
 } from "@/domain/types";
 
 describe("getKindName", () => {
+  it("names kind 24242 for what it is: an authorisation, not a stored blob", () => {
+    expect(getKindName(24242)).toBe("Blossom authorisation");
+  });
+
   it("returns the mapped name for a kind listed in the table", () => {
     expect(getKindName(0)).toBe("Profile Metadata");
     expect(getKindName(7000)).toBe("Job Feedback");

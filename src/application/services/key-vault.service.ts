@@ -167,7 +167,6 @@ export class KeyVaultService {
     await this.storage.local.set<KeyRecord[]>(ENCRYPTED_KEYS_STORAGE, records);
   }
 
-  // ==========================================================================
   // Vault envelope
   //
   // One password-derived key-encryption key (KEK) per vault wraps a per-key
@@ -175,7 +174,6 @@ export class KeyVaultService {
   // matter how many keys the vault holds. The previous design derived once per
   // record, which is why a memory-hard KDF was unaffordable: a five-key vault
   // would have paid five times the cost.
-  // ==========================================================================
 
   async getEnvelope(): Promise<VaultEnvelope | undefined> {
     return await this.storage.local.get<VaultEnvelope>(VAULT_ENVELOPE_STORAGE);

@@ -77,7 +77,7 @@ script-src 'self';
 object-src 'self';
 style-src 'self' 'unsafe-inline';
 img-src 'self' data: https:;
-connect-src 'self' wss: https://nostr.build;
+connect-src wss: https://blossom.primal.net https://blossom.nostr.build https://cdn.nostrcheck.me;
 font-src 'self';
 frame-src 'none';
 base-uri 'none';
@@ -94,7 +94,7 @@ On MV3 this governs the background context as well as the extension pages, so
 | `object-src 'self'` | No plugin content. Both Chrome and the AMO validator expect the directive present and restrictive. |
 | `style-src 'self' 'unsafe-inline'` | **Load-bearing.** `react-style-singleton`, reached through `react-remove-scroll` and therefore through every Radix dialog, creates a `<style>` element at runtime. Without `'unsafe-inline'` dialogs lose scroll-lock styling — with no error. Injected CSS is not a script-execution vector and the extension pages have no untrusted CSS source, so the cost is bounded. |
 | `img-src 'self' data: https:` | The Profile page loads the user's own `profile.picture` once, on a save or Refresh picture, to make the local copy the header shows (`cache-own-profile-picture`). That address is arbitrary and cannot be enumerated, so `https:` is the narrowest source that fits; it excludes plaintext `http:`, so the load cannot be cleartext. `data:` carries that stored copy, plus small inlined images and QR rendering. No other surface renders a remote image: the application layer enforces that, and this directive is the backstop. |
-| `connect-src wss: https://nostr.build` | No `'self'`: nothing in an extension page fetches a bundled file, so the extension origin is not a network destination. `https://nostr.build` is the hardcoded profile-image upload host. `wss:` is discussed below. `tests/security/manifest-assertions.test.ts` asserts this directive exactly, so any widening fails. |
+| `connect-src wss: https://blossom.primal.net https://blossom.nostr.build https://cdn.nostrcheck.me` | No `'self'`: nothing in an extension page fetches a bundled file, so the extension origin is not a network destination. The three `https:` origins are the curated Blossom servers a profile image can be uploaded to. They are generated from `src/domain/blossom/servers.ts`, the same list the upload dialog offers, so the policy and the interface cannot disagree. None is contacted until the user starts an upload and confirms the host. Adding a server means adding it to that list, and it is a reviewed change. `wss:` is discussed below. `tests/security/manifest-assertions.test.ts` asserts this directive exactly, and that its `https:` origins equal the list, so any widening fails. |
 | `font-src 'self'` | Archivo and JetBrains Mono are bundled from `@fontsource` and served from the extension itself. No Google Fonts, no remote `@import url(...)`. Fonts are never inlined as `data:` URIs (`assetsInlineLimit` in `wxt.config.ts`), so this directive needs no `data:` source. |
 | `frame-src 'none'` | The extension embeds no iframes. |
 | `base-uri 'none'` | No `<base>` element is needed, and closing it removes a class of injection escalation. |
@@ -109,10 +109,11 @@ host the user configures is reachable.**
 
 What that still buys: plaintext `ws:` is forbidden, so a relay entry can never be
 downgraded to an unencrypted socket; `http:` is forbidden; and combined with the
-single `https://nostr.build` entry, the only non-relay HTTPS destination an
-extension page may reach is the one upload host. A compromised dependency cannot
-open an arbitrary HTTPS exfiltration channel. The wildcard is confined to one
-scheme on one directive.
+three Blossom entries, the only non-relay HTTPS destinations an extension page
+may reach are the curated upload servers. A compromised dependency cannot open an
+arbitrary HTTPS exfiltration channel. The wildcard is confined to one scheme on
+one directive. No host permission is declared for the upload servers: Blossom
+servers send CORS headers, so a page `fetch` needs none.
 
 ### A silent failure mode
 
@@ -234,8 +235,9 @@ verification for a CSP change is:
 2. Open `popup.html`, `options.html`, `sidepanel.html` and `approval.html`.
 3. Confirm a Radix dialog opens with scroll locked (`style-src
    'unsafe-inline'`), the bundled fonts load (`font-src 'self'`), the Profile page's Refresh picture loads your own picture (`img-src https:`) and the header then shows the stored copy, key import and
-   key creation submit (`form-action 'none'`), and profile image upload reaches
-   nostr.build (`connect-src https://nostr.build`).
+   key creation submit (`form-action 'none'`), and a profile image upload
+   reaches a curated Blossom server (`connect-src`, one of the three listed
+   above).
 4. Confirm no `securitypolicyviolation` fires beyond the known `eval` pair
    described above.
 

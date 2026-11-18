@@ -14,6 +14,9 @@ where it sends it.
   device. Websites receive your public key and signed events, never a private key.
 - The extension makes network connections to Nostr relays, which you choose. The
   default is `wss://relay.primal.net`.
+- It contacts an image host only when you upload a picture or banner, and only
+  after you choose the host and confirm. The hosts are named under "Images and
+  uploads" below.
 - Your settings, including the list of sites you have given permissions to,
   stay on this device. Browser sync copies only one preference: whether Ostrilo
   opens in the side panel. Your keys never leave the device.
@@ -113,13 +116,44 @@ device, and the header shows only that copy. It will not load images larger than
 4096 by 4096 pixels or addresses that do not start with `https://`, and it gives
 up after 10 seconds.
 
-That is the only time Ostrilo asks an image host for anything. Opening the popup
+Apart from an upload, which only you can start and which is described below,
+that is the only time Ostrilo asks an image host for anything. Opening the popup
 or the side panel, unlocking, switching keys and approval windows make no image
 request, and nothing refreshes the copy in the background. If the picture cannot
 be loaded or kept, the header keeps the local seal and the Profile screen says so.
 Saving a profile with no picture removes that key's copy. Deleting a key removes its copy too, as the last step of the deletion; if that step fails, the leftover copy is removed the next time any copy is saved.
 
-Ostrilo 0.10.0 has no image upload: you paste an image URL instead.
+### Uploading a picture or banner
+
+You can upload an image from **Edit Profile**, or paste an `https://` address
+instead. Nothing is sent until you choose a file, pick one of three hosts, and
+confirm. The hosts are Primal (`blossom.primal.net`), nostr.build
+(`blossom.nostr.build`) and nostrcheck.me (`cdn.nostrcheck.me`). Ostrilo has no
+default host, asks every time, and does not read a list of hosts from the
+network: the three are part of the extension.
+
+Before the confirmation window opens, Ostrilo reads up to 4 KiB from the start
+of the file to check that it is a JPEG, PNG, GIF or WebP. It decodes nothing and
+sends nothing. After you confirm, a still image is re-encoded on your device,
+which removes embedded details such as the place a photo was taken, and its
+longest side is capped at 2048 pixels. An animated image is sent as it is, so
+details embedded in it stay in it, and the window says so. A file over 5 MB is
+refused.
+
+The host you choose sees the image, your IP address and your public key. It also
+receives a signed token: an event your key signs for that one image and that one
+host, valid for five minutes. The request carries no cookies and no referrer,
+and Ostrilo does not follow a redirect. The image becomes public at an address
+anyone can open, and a host may remove files or refuse to delete them, so keep
+the original. Each signed token is recorded in the activity log.
+
+An upload publishes nothing. It fills in the address field, and your profile
+changes only when you save it. Ostrilo checks that the host's reply names the
+same hash and size it sent, and it does not request the address the host
+returns; the one request for it is the picture copy made when you save, described
+above. Those checks show that the reply agrees with what was sent. They do not
+show that the host stored the image or will keep serving it. Nothing is uploaded
+in the background.
 
 ## Permissions
 

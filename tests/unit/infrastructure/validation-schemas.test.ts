@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { BLOSSOM_SERVER_IDS } from "@/domain/blossom/servers";
 import {
   AppSettingsPatchSchema,
   OriginPolicyPatchSchema,
@@ -325,29 +326,42 @@ describe("Validation Schemas", () => {
       ).toBe(true);
     });
 
-    it("refuses an upload endpoint that is not https:", () => {
-      for (const endpoint of [
-        "http://uploads.example",
+    it("accepts only the id of a listed Blossom server", () => {
+      for (const id of BLOSSOM_SERVER_IDS) {
+        expect(AppSettingsPatchSchema.safeParse({ blossomServer: id }).success).toBe(
+          true
+        );
+      }
+      for (const value of [
+        "https://blossom.primal.net",
+        "http://evil.example",
         "javascript:alert(1)",
-        "data:text/plain,x",
-        "not-a-url",
+        "unlisted",
+        "PRIMAL",
+        "",
+        7,
+        null,
       ]) {
         expect(
-          AppSettingsPatchSchema.safeParse({ uploadEndpoint: endpoint })
-            .success,
-          `SECURITY REGRESSION: ${endpoint} was accepted as an upload target`
+          AppSettingsPatchSchema.safeParse({ blossomServer: value }).success,
+          `SECURITY REGRESSION: ${String(value)} was accepted as an upload destination`
         ).toBe(false);
       }
-      expect(
-        AppSettingsPatchSchema.safeParse({
-          uploadEndpoint: "https://uploads.example/api",
-        }).success
-      ).toBe(true);
-      // Empty clears it, which is the shipped default: no destination,
-      // no outbound request.
-      expect(
-        AppSettingsPatchSchema.safeParse({ uploadEndpoint: "" }).success
-      ).toBe(true);
+    });
+
+    it("no longer accepts a free-form upload endpoint", () => {
+      // The destination is one of a shipped list, never a URL a settings
+      // write can supply.
+      for (const endpoint of [
+        "https://uploads.example/api",
+        "http://uploads.example",
+        "",
+      ]) {
+        expect(
+          AppSettingsPatchSchema.safeParse({ uploadEndpoint: endpoint }).success,
+          `SECURITY REGRESSION: uploadEndpoint ${endpoint} was accepted`
+        ).toBe(false);
+      }
     });
 
     it("bounds autoLockMinutes to 1..60", () => {

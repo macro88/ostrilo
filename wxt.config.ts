@@ -4,6 +4,7 @@ import "@wxt-dev/auto-icons";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { normalizeZipFile } from "./scripts/reproducible-zip";
+import { BLOSSOM_SERVERS } from "./src/domain/blossom/servers";
 
 /**
  * Content Security Policy for every extension page, and — on MV3 — for the
@@ -21,6 +22,11 @@ import { normalizeZipFile } from "./scripts/reproducible-zip";
  *
  * `wss:` is a scheme wildcard because relay hosts are user data and cannot be
  * enumerated in a static manifest. It still forbids plaintext `ws:`.
+ *
+ * The `https:` origins in `connect-src` are the curated Blossom upload servers,
+ * read from `src/domain/blossom/servers.ts`: the same list the upload dialog
+ * offers, so the policy and the interface cannot disagree. Adding a host there
+ * is a reviewed change to what an extension page may reach.
  */
 const EXTENSION_PAGES_CSP = [
   "default-src 'self'",
@@ -28,7 +34,7 @@ const EXTENSION_PAGES_CSP = [
   "object-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
-  "connect-src wss: https://nostr.build",
+  `connect-src ${["wss:", ...BLOSSOM_SERVERS.map((server) => server.origin)].join(" ")}`,
   "font-src 'self'",
   "frame-src 'none'",
   "base-uri 'none'",
