@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- **Every Chrome build now has the published extension ID.** A build loaded
+  unpacked used to get an ID derived from its folder, different from the one
+  the Chrome Web Store gives the published extension. Both are now
+  `nhodljdjlljpapclgcjmhajpgodanchk`. Nothing changes for an install from the
+  store. An existing unpacked install is treated by Chrome as a different
+  extension, so export its keys before loading a new build.
+
 ### Security
 
 - **Release archives are built and attested on GitHub.** From the next release,

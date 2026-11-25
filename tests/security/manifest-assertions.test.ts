@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { createHash } from "node:crypto";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { buildOutputPresent } from "./build-output";
@@ -137,6 +138,25 @@ const BOOLEAN_MANIFEST_KEYS = new Set([
   "match_about_blank",
 ]);
 
+/**
+ * The identifier the Chrome Web Store assigned to Ostrilo. Every Chromium
+ * build must resolve to it: a passkey enrolled for unlock is scoped to the
+ * `chrome-extension://<identifier>` origin, and stored data is keyed by it.
+ */
+const PINNED_CHROME_EXTENSION_ID = "nhodljdjlljpapclgcjmhajpgodanchk";
+
+/** Chrome's derivation: the first 16 bytes of SHA-256 over the key, as a-p. */
+function chromeExtensionId(publicKeyBase64: string): string {
+  const digest = createHash("sha256")
+    .update(Buffer.from(publicKeyBase64, "base64"))
+    .digest();
+  return Array.from(digest.subarray(0, 16), (byte) =>
+    [byte >> 4, byte & 0x0f]
+      .map((nibble) => String.fromCharCode(97 + nibble))
+      .join("")
+  ).join("");
+}
+
 interface Target {
   label: string;
   outDir: string;
@@ -145,6 +165,7 @@ interface Target {
   /** Chrome-only manifest keys. */
   expectsSidePanelPermission: boolean;
   expectsDynamicUrl: boolean;
+  expectsPinnedIdentifier: boolean;
 }
 
 const TARGETS: Target[] = [
@@ -155,6 +176,7 @@ const TARGETS: Target[] = [
     manifestVersion: 3,
     expectsSidePanelPermission: true,
     expectsDynamicUrl: true,
+    expectsPinnedIdentifier: true,
   },
   {
     label: "firefox",
@@ -167,6 +189,9 @@ const TARGETS: Target[] = [
     // `use_dynamic_url` is Chrome-only; Firefox randomises the moz-extension://
     // origin per install, so the resource URL is not stable there regardless.
     expectsDynamicUrl: false,
+    // Firefox takes its identifier from `browser_specific_settings`; `key` is
+    // an unknown manifest key there and must not ship to AMO.
+    expectsPinnedIdentifier: false,
   },
 ];
 
@@ -444,6 +469,23 @@ for (const target of TARGETS) {
             ).toBe(true);
           } else {
             expect(entry.use_dynamic_url).toBeUndefined();
+          }
+        }
+      );
+
+      it(
+        target.expectsPinnedIdentifier
+          ? "declares the key that pins the published extension identifier"
+          : "omits the Chrome-only key",
+        () => {
+          if (target.expectsPinnedIdentifier) {
+            expect(typeof manifest.key).toBe("string");
+            expect(
+              chromeExtensionId(manifest.key as string),
+              "The manifest key no longer resolves to the published extension identifier. Every enrolled passkey and all stored data are bound to that identifier."
+            ).toBe(PINNED_CHROME_EXTENSION_ID);
+          } else {
+            expect(manifest.key).toBeUndefined();
           }
         }
       );
