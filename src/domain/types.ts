@@ -1,5 +1,6 @@
 import { DEFAULT_SESSION_TTL_MINUTES } from "@/domain/policy/session-grants";
 // Settings types and defaults based on the requirements document
+import type { BlossomServerId } from "./blossom/servers";
 import { DEFAULT_MEDIUM_ALLOW_KINDS } from "./policy/trust-definitions";
 
 // Re-export profile types
@@ -10,9 +11,7 @@ export type Theme = "dark" | "light" | "system";
 export type Authorisation = "allow" | "deny" | "ask";
 export type TrustLevel = "low" | "medium" | "high";
 
-// ============================================
 // Vault encryption schema
-// ============================================
 
 /**
  * Current vault format version.
@@ -194,14 +193,13 @@ export interface AppSettingsV1 {
   mediumAllowKinds: number[]; // shipped default for medium trust
   /** Session-grant lifetime. Bounded by DEFAULT/MAX_SESSION_TTL_MINUTES. */
   sessionTTLMinutes: number;
-  // aislop-ignore-next-line ai-slop/meta-comment -- not build-plan narration: this records why the upload endpoint is undefined by default - an undefined endpoint means no outbound request. Deleting it invites a hardcoded third-party endpoint back.
   /**
-   * Where profile image uploads are sent. Undefined by default, which is
-   * the point: the field used to be a hardcoded `nostr.build` endpoint, so
-   * editing a profile picture uploaded it to a third party the user had
-   * never been asked about. No destination means no outbound request.
+   * The Blossom server the user last confirmed an upload to, as an id from the
+   * shipped list and never a URL. Undefined by default, and no server selected
+   * means no outbound request. It only preselects the upload dialog, which asks
+   * again every time.
    */
-  uploadEndpoint?: string;
+  blossomServer?: BlossomServerId;
   onboardingCompleted?: boolean; // track if user completed onboarding
   onboardingCompletedAt?: number; // epoch seconds when onboarding was completed
   /** Consent-migration version already applied; absent means none has run. */
@@ -395,7 +393,7 @@ const ALL_EVENT_KINDS = {
   23194: "Wallet Request",
   23195: "Wallet Response",
   24133: "Nostr Connect",
-  24242: "Blobs stored on mediaservers",
+  24242: "Blossom authorisation",
   27235: "HTTP Auth",
   30000: "Follow sets",
   30001: "Generic lists (deprecated)",
@@ -588,9 +586,7 @@ export interface SignatureVerificationResult {
   error?: string;
 }
 
-// ============================================
 // NIP-01 Event Types
-// ============================================
 
 /**
  * NIP-01 Unsigned Event - event data before signing
@@ -630,9 +626,7 @@ export interface SignedEvent {
   sig: string;
 }
 
-// ============================================
 // Approval Queue Types
-// ============================================
 
 /**
  * Result of an approval decision from the user
@@ -752,9 +746,7 @@ export function isDisclosureRequest(
   return request.operation === "identity_disclosure";
 }
 
-// ============================================
 // Activity Log Types
-// ============================================
 
 /**
  * Why a request was refused, or allowed without a prompt.

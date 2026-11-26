@@ -9,3 +9,4 @@ export { ActivityRpcHandler } from "./activity-rpc";
 export { ProfileRpcHandler } from "./profile-rpc";
 export { BackupRpcHandler } from "./backup-rpc";
 export { AvatarRpcHandler } from "./avatar-rpc";
+export { BlossomRpcHandler } from "./blossom-rpc";

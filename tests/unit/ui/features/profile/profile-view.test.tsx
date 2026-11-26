@@ -15,6 +15,7 @@ const client = vi.hoisted(() => ({
   getOwnAvatar: vi.fn<(pubkey: string) => Promise<AvatarRow | null>>(),
   saveOwnAvatar: vi.fn<(copy: { pubkey: string; sourceUrl: string; dataUrl: string }) => Promise<null>>(),
   removeOwnAvatar: vi.fn<(pubkey: string) => Promise<null>>(),
+  authorizeBlossomUpload: vi.fn<() => Promise<string>>(),
 }));
 
 const capture = vi.hoisted(() => ({
@@ -24,6 +25,17 @@ const capture = vi.hoisted(() => ({
 const keys = vi.hoisted(() => ({ selected: null as unknown }));
 
 vi.mock("@/infrastructure/messaging/client", () => client);
+
+const settings = vi.hoisted(() => ({
+  updateSettings: vi.fn<(patch: Record<string, unknown>) => Promise<void>>(),
+}));
+
+vi.mock("@/ui/hooks/useAppSettings", () => ({
+  useAppSettings: () => ({
+    settings: {},
+    updateSettings: settings.updateSettings,
+  }),
+}));
 
 vi.mock("@/ui/lib/avatar-capture", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/ui/lib/avatar-capture")>()),

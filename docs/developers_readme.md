@@ -376,7 +376,7 @@ The ProfileView component (`src/ui/features/profile/components/ProfileView.tsx`)
 
 - **Display Mode:** Shows profile fields with fallbacks for missing data
 - **Edit Mode:** Form with validation for all NIP-01 fields
-- **Image Upload:** Upload profile pictures to nostr.build
+- **Image Upload:** Upload a profile picture or banner to a curated Blossom server (`src/domain/blossom/servers.ts`), after a confirmation that names the host
 - **Loading States:** Spinner during fetch, error states with retry
 - **Multi-Identity:** Displays profile for currently selected key
 

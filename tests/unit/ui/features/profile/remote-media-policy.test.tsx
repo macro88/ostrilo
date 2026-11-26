@@ -10,7 +10,15 @@ import path from "node:path";
 import { collectSources } from "../../../../helpers/source-scan";
 import { OwnAvatarImage } from "@/ui/components/common/OwnAvatarImage";
 import { ProfileSummary } from "@/ui/features/profile/components/ProfileSummary";
-import { ImageUploadField } from "@/ui/features/profile/components/ImageUploadField";
+import { ProfileEditForm } from "@/ui/features/profile/components/ProfileEditForm";
+import type { UploadDeps } from "@/ui/features/profile/blossom-upload.controller";
+import type { BlossomServerId } from "@/domain/blossom/servers";
+import { inspectImageHeader } from "@/domain/blossom/image-sniff";
+import { bytesToHex } from "@/domain/utils/hex";
+import { NobleSha256 } from "@/infrastructure/crypto/adapters";
+import { fileHeaderReader } from "@/ui/lib/prepare-image";
+import { jpeg } from "../../../../helpers/image-bytes";
+import { chooseFile } from "../onboarding/dom";
 import { RemoteUrlField } from "@/ui/features/profile/components/RemoteUrlField";
 import { KeySelectorCard } from "@/ui/features/settings/components/shared/KeySelectorCard";
 
@@ -160,129 +168,205 @@ describe("privileged pages do not load relay-chosen media", () => {
 });
 
 describe("outbound upload destination", () => {
-  it("offers no upload control when no image host is configured", () => {
-    const container = render(
-      <ImageUploadField
-        id="picture"
-        label="Profile Picture URL"
-        value=""
-        onChange={vi.fn()}
-      />
-    );
-
-    expect(container.querySelector('input[type="file"]')).toBeNull();
-    expect(container.textContent).toContain("No image host is configured");
-    expect(container.textContent).toContain("Paste");
-  });
-
-  it("names the configured host on the upload control", () => {
-    const container = render(
-      <ImageUploadField
-        id="picture"
-        label="Profile Picture URL"
-        value=""
-        onChange={vi.fn()}
-        uploadEndpoint="https://images.example.com/api/upload"
-      />
-    );
-
-    expect(container.textContent).toContain("Upload to images.example.com");
-    expect(container.querySelector('input[type="file"]')).not.toBeNull();
-  });
-
-  it("treats a non-https endpoint as no endpoint at all", () => {
-    const container = render(
-      <ImageUploadField
-        id="picture"
-        label="Profile Picture URL"
-        value=""
-        onChange={vi.fn()}
-        uploadEndpoint="http://images.example.com/api/upload"
-      />
-    );
-
-    expect(container.querySelector('input[type="file"]')).toBeNull();
-    expect(container.textContent).toContain("No image host is configured");
-  });
-
-  describe("upload response handling", () => {
-    let onChange: ReturnType<typeof vi.fn<(value: string) => void>>;
-    let container: HTMLDivElement;
-
-    beforeEach(() => {
-      onChange = vi.fn();
-      vi.spyOn(window, "confirm").mockReturnValue(true);
-      container = render(
-        <ImageUploadField
-          id="picture"
-          label="Profile Picture URL"
-          value=""
-          onChange={onChange}
-          uploadEndpoint="https://images.example.com/api/upload"
-        />
-      );
+  const PUBKEY = "ab".repeat(32);
+  const BYTES = jpeg();
+  const HASH = bytesToHex(NobleSha256.sha256(BYTES));
+  const flush = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
+  const reply = (body: unknown, status = 201) =>
+    new Response(JSON.stringify(body), { status });
+  const descriptor = (url = `https://blossom.primal.net/${HASH}.jpg`) => ({
+    url,
+    sha256: HASH,
+    size: BYTES.length,
+  });
 
-    async function upload(responseBody: unknown) {
-      vi.stubGlobal(
-        "fetch",
-        vi.fn().mockResolvedValue({
-          ok: true,
-          statusText: "OK",
-          json: async () => responseBody,
-        })
-      );
+  function renderForm(
+    options: {
+      blossomServer?: BlossomServerId;
+      respond?: () => Promise<Response>;
+    } = {}
+  ) {
+    const fetchSpy = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(
+      options.respond ?? (async () => reply(descriptor()))
+    );
+    const authorize = vi.fn(async () => "Nostr dG9rZW4");
+    const deps: UploadDeps = {
+      inspect: (file) => inspectImageHeader(fileHeaderReader(file)),
+      prepare: async () => ({ bytes: BYTES, mime: "image/jpeg", reencoded: true }),
+      sha256Hex: (bytes) => bytesToHex(NobleSha256.sha256(bytes)),
+      authorize,
+      fetch: fetchSpy,
+      setTimer: (callback, ms) => window.setTimeout(callback, ms),
+      clearTimer: (id) => window.clearTimeout(id as number),
+    };
+    const onChange = vi.fn();
+    const onConfirmed = vi.fn();
+    const container = render(
+      <ProfileEditForm
+        formData={{}}
+        isSaving={false}
+        saveError={null}
+        onChange={onChange}
+        onCancel={vi.fn()}
+        onSave={vi.fn()}
+        pubkey={PUBKEY}
+        blossomServer={options.blossomServer}
+        onBlossomServerConfirmed={onConfirmed}
+        uploadDeps={deps}
+      />
+    );
+    return { container, onChange, onConfirmed, fetchSpy, authorize };
+  }
 
-      const fileInput = container.querySelector(
-        'input[type="file"]'
-      ) as HTMLInputElement;
-      const file = new File([new Uint8Array([1, 2, 3])], "avatar.png", {
-        type: "image/png",
-      });
-      Object.defineProperty(fileInput, "files", {
-        value: [file],
-        configurable: true,
-      });
+  const fileInputs = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll<HTMLInputElement>('input[type="file"]'));
+  const dialog = () => document.querySelector<HTMLElement>("[role='dialog']");
+  const radio = (id: string) =>
+    dialog()?.querySelector<HTMLInputElement>(`input[type="radio"][value="${id}"]`);
+  const uploadButton = () =>
+    Array.from(dialog()?.querySelectorAll("button") ?? []).find(
+      (candidate) => candidate.textContent?.trim() === "Upload"
+    );
 
-      await act(async () => {
-        fileInput.dispatchEvent(new Event("change", { bubbles: true }));
-        await Promise.resolve();
-        await Promise.resolve();
-      });
+  async function chooseImage(container: HTMLElement, index = 0) {
+    await chooseFile(
+      fileInputs(container)[index],
+      new File([BYTES.slice()], "me.jpg", { type: "image/jpeg" })
+    );
+  }
+
+  it("offers upload on the picture and on the banner", () => {
+    const { container } = renderForm();
+
+    expect(fileInputs(container)).toHaveLength(2);
+    expect(container.querySelector("#picture-upload")).not.toBeNull();
+    expect(container.querySelector("#banner-upload")).not.toBeNull();
+  });
+
+  it("selects no host by default, and sends nothing until one is confirmed", async () => {
+    const { container, onChange, fetchSpy, authorize } = renderForm();
+
+    await chooseImage(container);
+
+    expect(dialog()).not.toBeNull();
+    expect(
+      Array.from(dialog()!.querySelectorAll<HTMLInputElement>("input[type='radio']")).some(
+        (candidate) => candidate.checked
+      )
+    ).toBe(false);
+    expect(uploadButton()?.disabled).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("names every host and what it will see before anything is sent", async () => {
+    const { container, fetchSpy } = renderForm();
+
+    await chooseImage(container);
+
+    const text = dialog()?.textContent ?? "";
+    for (const host of [
+      "blossom.primal.net",
+      "blossom.nostr.build",
+      "cdn.nostrcheck.me",
+    ]) {
+      expect(text).toContain(host);
     }
+    expect(text).toContain("IP address");
+    expect(text).toContain("public key");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 
-    afterEach(() => {
-      vi.unstubAllGlobals();
+  it("sends the image to the chosen host after confirmation, and fills the picture field", async () => {
+    const returned = `https://npub1example.blossom.band/${HASH}.jpg`;
+    const { container, onChange, onConfirmed, fetchSpy } = renderForm({
+      respond: async () => reply(descriptor(returned)),
     });
 
-    it("accepts an https URL returned by the upload service", async () => {
-      await upload({
-        status: "success",
-        data: [{ url: "https://images.example.com/abc.png" }],
-      });
+    await chooseImage(container);
+    click(radio("nostr-build")!);
+    click(uploadButton()!);
+    await flush();
 
-      expect(onChange).toHaveBeenCalledWith("https://images.example.com/abc.png");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0][0]).toBe("https://blossom.nostr.build/upload");
+    expect(onConfirmed).toHaveBeenCalledWith("nostr-build");
+    expect(onChange).toHaveBeenCalledWith("picture", returned);
+    expect(container.textContent).toContain(
+      "Uploaded to blossom.nostr.build. Save your profile to use it."
+    );
+    expect(dialog()).toBeNull();
+  });
+
+  it("asks again for the next upload even when a host is remembered", async () => {
+    const { container, fetchSpy } = renderForm({ blossomServer: "primal" });
+
+    await chooseImage(container);
+
+    expect(radio("primal")?.checked).toBe(true);
+    expect(uploadButton()?.disabled).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    click(
+      Array.from(dialog()!.querySelectorAll("button")).find(
+        (candidate) => candidate.textContent?.trim() === "Cancel"
+      )!
+    );
+    await flush();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(dialog()).toBeNull();
+  });
+
+  it("uploads the banner to the banner field", async () => {
+    const { container, onChange } = renderForm();
+
+    await chooseImage(container, 1);
+    click(radio("primal")!);
+    click(uploadButton()!);
+    await flush();
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0]).toBe("banner");
+  });
+
+  it.each([
+    ["an http", `http://blossom.primal.net/${HASH}.jpg`],
+    ["a javascript", `javascript:alert('${HASH}')`],
+    ["a data", `data:image/png;base64,${HASH}`],
+  ])("refuses %s URL returned by a server, and leaves the field alone", async (_name, url) => {
+    const { container, onChange } = renderForm({
+      respond: async () => reply(descriptor(url)),
     });
 
-    it("rejects a non-https URL returned by the upload service", async () => {
-      await upload({
-        status: "success",
-        data: [{ url: "http://images.example.com/abc.png" }],
-      });
+    await chooseImage(container);
+    click(radio("primal")!);
+    click(uploadButton()!);
+    await flush();
 
-      expect(onChange).not.toHaveBeenCalled();
-      expect(container.textContent).toContain("not an https:// address");
-    });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(container.querySelector("[role='alert']")?.textContent).toBe(
+      "The host returned an unexpected reply."
+    );
+  });
 
-    it("rejects a javascript: URL returned by the upload service", async () => {
-      await upload({
-        status: "success",
-        data: [{ url: "javascript:alert(1)" }],
-      });
+  it("never requests the returned address, and renders no image", async () => {
+    const { container, fetchSpy } = renderForm();
 
-      expect(onChange).not.toHaveBeenCalled();
-      expect(container.textContent).toContain("not an https:// address");
-    });
+    await chooseImage(container);
+    click(radio("primal")!);
+    click(uploadButton()!);
+    await flush();
+
+    expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual([
+      "https://blossom.primal.net/upload",
+    ]);
+    expect(remoteSources(container)).toEqual([]);
+    expect(container.querySelectorAll("img")).toHaveLength(0);
   });
 });
 

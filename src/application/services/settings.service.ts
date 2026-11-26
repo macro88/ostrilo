@@ -1,4 +1,5 @@
 import type { StorageSuite } from "@/application/ports/storage";
+import { normalizeBlossomServer } from "@/domain/blossom/servers";
 import { sanitizeRelayUrls } from "@/domain/relay/url";
 import {
   AUTO_LOCK_BOUNDS,
@@ -79,6 +80,24 @@ export class SettingsService {
 
       if (isLegacyDefaultRelaySet(current.relays)) {
         next.relays = [...DEFAULT_RELAY_URLS];
+        changed = true;
+      }
+
+      // The free-form upload endpoint was replaced by a shipped list of
+      // servers. No screen ever set it, so there is nothing to carry over,
+      // and a stored value must never be dialled. An id that has since left
+      // the list reads as unset: the user is asked again.
+      if (Object.hasOwn(next, "uploadEndpoint")) {
+        Reflect.deleteProperty(next, "uploadEndpoint");
+        changed = true;
+      }
+      const blossomServer = normalizeBlossomServer(current.blossomServer);
+      if (blossomServer !== current.blossomServer) {
+        if (blossomServer === undefined) {
+          Reflect.deleteProperty(next, "blossomServer");
+        } else {
+          next.blossomServer = blossomServer;
+        }
         changed = true;
       }
 

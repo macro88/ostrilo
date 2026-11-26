@@ -3,6 +3,7 @@ import { useProfile } from "@/ui/hooks/useProfile";
 import { useProfilePicture } from "../hooks/useProfilePicture";
 import type { ProfileMetadata } from "@/domain/profile/types";
 import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
+import { useAppSettings } from "@/ui/hooks/useAppSettings";
 import { ProfileEditForm } from "./ProfileEditForm";
 import { ProfileSummary, type ProfileEditField } from "./ProfileSummary";
 import { userFacingError } from "@/ui/lib/user-facing-error";
@@ -39,17 +40,14 @@ export function ProfileView() {
     useProfile(selectedPubkey);
 
   const picture = useProfilePicture(selectedPubkey);
+  const { settings, updateSettings } = useAppSettings();
 
   const [formData, setFormData] = useState<ProfileMetadata>({});
   const [focusField, setFocusField] = useState<ProfileEditField | undefined>();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Supplied already encoded by the background. `hexToNpub` used to do this
-  // here: it decoded hex with a non-null assertion, caught every error, and
-  // returned the raw hex string as a 'fallback', so a caller could not tell a
-  // successful encode from a failed one and the page silently showed a hex
-  // key where an npub was requested.
+  // Encoded by the background, so a failed encode cannot pass for an npub.
   const npub = selectedUnlockedKey?.publicKeyBech32 ?? "";
 
   const handleRefresh = async () => {
@@ -161,6 +159,11 @@ export function ProfileView() {
         isSaving={isSaving}
         saveError={saveError}
         focusField={focusField}
+        pubkey={selectedPubkey}
+        blossomServer={settings.blossomServer}
+        onBlossomServerConfirmed={(blossomServer) => {
+          void updateSettings({ blossomServer });
+        }}
         onChange={handleInputChange}
         onCancel={handleCancelEdit}
         onSave={handleSave}

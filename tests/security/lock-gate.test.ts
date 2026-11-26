@@ -155,6 +155,31 @@ describe("locked behaviour at the message boundary", () => {
     ).toBe(false);
   });
 
+  it("refuses blossom.authorizeUpload while locked and never reaches the handler", async () => {
+    let reached = false;
+    const res = await send(
+      {
+        type: "blossom.authorizeUpload",
+        pubkey: "ab".repeat(32),
+        sha256: "cd".repeat(32),
+        serverId: "primal",
+      },
+      {
+        isLocked: true,
+        namespace: "blossom",
+        onCall: () => {
+          reached = true;
+        },
+      }
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error.data.errorCode).toBe(RPC_ERROR_CODES.LOCKED);
+    expect(
+      reached,
+      "SECURITY REGRESSION: a locked vault reached the upload-signing handler"
+    ).toBe(false);
+  });
+
   it.each([
     ["a gated method", "settings.update", "settings"],
     ["a lock-aware read", "keys.list", "keys"],

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
-import type { BrowserContext } from "@playwright/test";
+import type { BrowserContext, Route } from "@playwright/test";
 import { test, expect } from "./fixtures/extension";
 import type { Page } from "./fixtures/extension";
 import { twoToneImage } from "./fixtures/png";
@@ -110,6 +110,10 @@ const REQUIRED_SURFACES = [
   "approval detail, signing request",
   "profile view",
   "profile edit",
+  "profile edit, upload refused",
+  "profile edit, upload dialog open",
+  "profile edit, upload dialog with a host chosen",
+  "profile edit, upload in progress",
   "popup activity",
   "settings keys back up dialog",
   "settings security",
@@ -464,6 +468,50 @@ async function auditApprovalWindow(
   await approval.close().catch(() => undefined);
 }
 
+/**
+ * The profile editor's upload states: a refused file, the consent dialog before
+ * and after a host is chosen, and an upload in flight. The request is held by a
+ * route so nothing reaches the network, then cancelled.
+ */
+async function auditUploadStates(popup: Page, auditor: Auditor): Promise<void> {
+  const picture = popup.locator('input[type="file"]').first();
+
+  await picture.setInputFiles({
+    name: "notes.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("<!doctype html><title>not an image</title>"),
+  });
+  await expect(popup.getByRole("alert")).toContainText(
+    "Choose a JPEG, PNG, GIF or WebP image."
+  );
+  await auditor.audit(popup, "profile edit, upload refused");
+
+  await picture.setInputFiles({
+    name: "me.png",
+    mimeType: "image/png",
+    buffer: twoToneImage(64, 48, [200, 40, 40], [40, 40, 200]),
+  });
+  const dialog = popup.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await auditor.audit(popup, "profile edit, upload dialog open");
+
+  await dialog.getByRole("radio", { name: /Primal/ }).check();
+  await auditor.audit(popup, "profile edit, upload dialog with a host chosen");
+
+  let held: Route | undefined;
+  const host = "https://blossom.primal.net/**";
+  await popup.context().route(host, (route) => {
+    held = route;
+  });
+  await dialog.getByRole("button", { name: "Upload", exact: true }).click();
+  await expect(popup.getByRole("status")).toContainText("Uploading to blossom.primal.net");
+  await auditor.audit(popup, "profile edit, upload in progress");
+
+  await popup.getByRole("status").getByRole("button", { name: "Cancel" }).click();
+  await held?.abort();
+  await popup.context().unroute(host);
+}
+
 async function auditPopupScreens(popup: Page, auditor: Auditor): Promise<void> {
   await popup.reload();
   await expect(popup.getByRole("heading", { level: 2, name: FIRST_KEY })).toBeVisible({
@@ -490,6 +538,7 @@ async function auditPopupScreens(popup: Page, auditor: Auditor): Promise<void> {
   await edit.click();
   await expect(popup.getByRole("button", { name: /Cancel/i })).toBeVisible();
   await auditor.audit(popup, "profile edit");
+  await auditUploadStates(popup, auditor);
   await popup.getByRole("button", { name: /Cancel/i }).click();
 
   await popupNav(popup, /Activity/i).click();

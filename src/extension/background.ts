@@ -42,6 +42,7 @@ import {
   ProfileRpcHandler,
   BackupRpcHandler,
   AvatarRpcHandler,
+  BlossomRpcHandler,
 } from "@/infrastructure/messaging/handlers";
 import { ApprovalQueueService } from "@/application/services/approval-queue.service";
 
@@ -405,6 +406,7 @@ export default defineBackground(() => {
   router.registerModule("profile", new ProfileRpcHandler()); // Profile metadata operations
   router.registerModule("backup", new BackupRpcHandler()); // Per-key backup status
   router.registerModule("avatar", new AvatarRpcHandler()); // Local copy of a key's profile picture
+  router.registerModule("blossom", new BlossomRpcHandler()); // Upload authorisation for the profile editor
 
   // Register the RPC message listener
   browser.runtime.onMessage.addListener(
@@ -445,7 +447,6 @@ export default defineBackground(() => {
     }
   }
 
-  // ==========================================================================
   // Auto-lock
   //
   // `autoLockMinutes` was a purely cosmetic setting: it drove two sliders and a
@@ -473,7 +474,6 @@ export default defineBackground(() => {
   // 20 seconds from unlock until the vault locks by any path, and it checks the
   // vault's deadline on every tick, so it cannot outlast the auto-lock. See
   // openspec/changes/archive/2026-10-09-keep-unlocked-session-alive/design.md.
-  // ==========================================================================
   const AUTO_LOCK_ALARM = 'ostrilo.autoLock';
 
   async function armAutoLock(): Promise<void> {
