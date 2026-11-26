@@ -2,7 +2,7 @@
 
 ### Requirement: Failed Unlock Attempts Are Throttled By The Background Worker
 
-The background worker SHALL count failed vault unlock attempts and SHALL refuse an unlock attempt while a backoff delay is active, before performing any key derivation. Every unlock path SHALL share one global failure counter; there SHALL NOT be a separate counter, a separate schedule or a separate cap per credential type. The biometric unlock path SHALL check the shared counter before minting a challenge, before consuming a challenge and before any key derivation or unwrapping. It SHALL record a failure for every background verification failure, and SHALL record a success only when the vault is genuinely unlocked. A user cancellation of an authenticator ceremony never reaches the background worker and SHALL NOT record a failure.
+The background worker SHALL count failed vault unlock attempts and SHALL refuse an unlock attempt while a backoff delay is active, before performing any key derivation. Every unlock path SHALL share one global failure counter; there SHALL NOT be a separate counter, a separate schedule or a separate cap per credential type. The biometric unlock path SHALL check the shared counter before reading the factor record and before any key derivation or unwrapping. It SHALL record a failure whenever a supplied pseudo-random-function output fails to open the wrapping or the recovered key fails the envelope verifier, and SHALL record a success only when the vault is genuinely unlocked. A request refused because the password is required this time — a due rehearsal, the first unlock of a browser session, a legacy record or an unfinished password change — is refused before any secret is evaluated and SHALL NOT record a failure. A user cancellation of an authenticator ceremony never reaches the background worker and SHALL NOT record a failure.
 
 #### Scenario: Active delay refuses the attempt before key derivation
 
@@ -32,20 +32,19 @@ The background worker SHALL count failed vault unlock attempts and SHALL refuse 
 - **WHEN** a biometric unlock is requested
 - **THEN** the request is refused with machine code `rate_limited`
 - **AND** the error data reports the same remaining wait time the password path reports
-- **AND** no challenge is minted
+- **AND** the factor record is not read and no wrapping key is derived
 
-#### Scenario: The counter is checked before a challenge is consumed
+#### Scenario: A password-required refusal is not a failed attempt
 
-- **GIVEN** a backoff delay is active and a challenge is present in session storage
-- **WHEN** a biometric unlock completion request arrives
-- **THEN** the request is refused before the challenge is read
-- **AND** the challenge remains available for a later attempt made after the delay expires
-- **AND** no wrapping key is derived and no wrapping is opened
+- **GIVEN** no prior failed attempts, and a vault whose password rehearsal is due
+- **WHEN** a biometric unlock request arrives
+- **THEN** the request is refused before the supplied output is evaluated
+- **AND** the persisted failure count is unchanged
 
-#### Scenario: Background verification failures count against the shared counter
+#### Scenario: Failed unwraps count against the shared counter
 
 - **GIVEN** no prior failed attempts
-- **WHEN** biometric unlock attempts fail background verification repeatedly
+- **WHEN** biometric unlock attempts repeatedly supply an output that does not open the wrapping
 - **THEN** each failure increments the shared failure count by one
 - **AND** the same exponential schedule and cap apply as for password failures
 
@@ -60,7 +59,7 @@ The background worker SHALL count failed vault unlock attempts and SHALL refuse 
 
 - **GIVEN** a biometric unlock ceremony in progress
 - **WHEN** the user dismisses the authenticator prompt or closes the ceremony window
-- **THEN** no completion request reaches the background worker
+- **THEN** no unlock request reaches the background worker
 - **AND** the persisted failure count is unchanged
 - **AND** no backoff delay is started
 

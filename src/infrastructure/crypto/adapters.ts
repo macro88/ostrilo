@@ -11,6 +11,7 @@ import type {
   Bech32Codec,
   CryptoAead,
   CryptoHash,
+  CryptoHkdf,
   CryptoKdf,
   Schnorr,
   SecretBytes,
@@ -124,6 +125,32 @@ export const VaultKdf: CryptoKdf = {
       256
     );
     return new Uint8Array(bits);
+  },
+};
+
+/**
+ * HKDF-SHA256 with an empty salt, straight to a non-extractable AES-GCM key.
+ *
+ * Native `crypto.subtle` rather than `@noble/hashes/hkdf`, because only the
+ * native call can hand the result to AES-GCM without it passing through a
+ * script-visible buffer.
+ */
+export const VaultHkdf: CryptoHkdf = {
+  async deriveAeadKey(
+    ikm: SecretBytes,
+    info: Uint8Array<ArrayBuffer>,
+    usages: ("encrypt" | "decrypt")[]
+  ): Promise<CryptoKey> {
+    const material = await crypto.subtle.importKey("raw", ikm, "HKDF", false, [
+      "deriveKey",
+    ]);
+    return await crypto.subtle.deriveKey(
+      { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info },
+      material,
+      { name: "AES-GCM", length: 256 },
+      false,
+      usages
+    );
   },
 };
 

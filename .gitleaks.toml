@@ -21,6 +21,12 @@ useDefault = true
       # (crypto.randomUUID) and identify a record; they grant nothing.
       '''^0b6d6f5e-7a4c-4a52-8d3c-2f1e9a7c4b10$''',
       '''^7c1d3a90-5b2e-4f08-9a63-1d8e4c2b6f77$''',
+      # Vault password used as a fixture in the biometric wrapper tests.
+      '''^Meadow\-Granite\-Willow\-2026$''',
+      # The PUBLIC key of the throwaway PRF spike extension under
+      # openspec/changes/add-biometric-unlock/spike/. It only fixes that
+      # spike's identifier; its private half was never kept.
+      '''^MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu8dkOZLeNZwCPScrTO0EolUWyLkMJsKVo5JN\+BHgqeL5xtWNkIOW5o6Of9vDTytWp2X5He2chadRbh1P\+JEE/tESjMTCvasOyDuYLw5mYIGJfzN8xdJmV8HB7k9Zd0b\+84pyrRhL4M79Xi1oYC081GcHtG7iQKWugrvd8o8KNTXR/dClQpNg7CHLTaGqkbvOfrrPMV0xhdWOCCTTiXcEgT5YKxBC1/ZE0f28\+CiED701YAG4/x0tqZELNCoBT1znTfXLa7grwHbQ68K3k9Oy00R/4r3Ys7Tg6XTD3XHUMzwAObRzFZKfNu24oqGZAePBFKX3OW6LK7Hkm1h8zSX/7wIDAQAB$''',
       # The Chrome Web Store PUBLIC key for Ostrilo, declared as manifest `key`
       # in wxt.config.ts to pin the extension identifier. It is published with
       # every copy of the extension; the store holds the private half.

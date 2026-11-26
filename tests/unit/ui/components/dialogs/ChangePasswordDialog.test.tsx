@@ -18,12 +18,21 @@ import {
 const client = vi.hoisted(() => ({
   changePassword: vi.fn(),
   evaluatePasswordStrength: vi.fn(),
+  biometricStatus: vi.fn(),
+  chromium: false,
+}));
+
+vi.mock("@/domain/platform/build-target", () => ({
+  get IS_CHROMIUM_BUILD() {
+    return client.chromium;
+  },
 }));
 
 vi.mock("@/infrastructure/messaging/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/infrastructure/messaging/client")>()),
   changePassword: client.changePassword,
   evaluatePasswordStrength: client.evaluatePasswordStrength,
+  biometricStatus: () => client.biometricStatus(),
 }));
 
 import { RpcClientError } from "@/infrastructure/messaging/client";
@@ -67,6 +76,8 @@ function fieldsAreEmpty() {
 
 beforeEach(() => {
   client.changePassword.mockReset();
+  client.chromium = false;
+  client.biometricStatus.mockReset().mockResolvedValue({ enrolled: false });
   client.evaluatePasswordStrength.mockResolvedValue(null);
 });
 
@@ -113,6 +124,50 @@ describe("change password dialog", () => {
     expect(success?.textContent).toContain("Master password changed.");
     expect(success?.textContent).toMatch(/backup files keep the passphrase/i);
     expect(document.body.querySelector("#change-current-password")).toBeNull();
+  });
+
+  const removedNote = () =>
+    document.body.querySelector('[data-testid="device-unlock-removed"]');
+
+  it("says device unlock was turned off when a factor was enrolled before the change", async () => {
+    client.chromium = true;
+    client.biometricStatus.mockResolvedValue({ enrolled: true });
+    client.changePassword.mockResolvedValue(null);
+    mount();
+    fill();
+
+    await submit(form());
+
+    expect(removedNote()?.textContent).toContain("Device unlock was turned off");
+  });
+
+  it.each([
+    ["no factor was enrolled", true, { enrolled: false }],
+    ["the build has no device unlock", false, { enrolled: true }],
+  ])("says nothing about device unlock when %s", async (_name, chromium, status) => {
+    client.chromium = chromium;
+    client.biometricStatus.mockResolvedValue(status);
+    client.changePassword.mockResolvedValue(null);
+    mount();
+    fill();
+
+    await submit(form());
+
+    expect(document.body.querySelector('[data-testid="change-password-success"]')).not.toBeNull();
+    expect(removedNote()).toBeNull();
+  });
+
+  it("still changes the password when the device-unlock status cannot be read", async () => {
+    client.chromium = true;
+    client.biometricStatus.mockRejectedValue(new Error("unreachable"));
+    client.changePassword.mockResolvedValue(null);
+    mount();
+    fill();
+
+    await submit(form());
+
+    expect(client.changePassword).toHaveBeenCalledWith(CURRENT, NEXT);
+    expect(removedNote()).toBeNull();
   });
 
   it("reports a wrong current password and clears every field", async () => {

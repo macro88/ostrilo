@@ -60,6 +60,10 @@ describe("every RPC method has a lock disposition", () => {
       "settings.get", // redacted while locked - see the projection tests below
       "crypto.evaluatePassword", // operates on a typed password, reads nothing
       "crypto.parsePrivateKey", // operates on pasted input, reads nothing
+      "vault.biometricStatus", // the lock screen asks whether to offer the factor
+      "vault.biometricUnlockRequest", // credential id and salt; neither is secret
+      "vault.biometricUnlock", // a way out of being locked, proven by the verifier
+      "vault.biometricForget", // can only reduce access
     ]);
 
     const actualReachable = new Set(

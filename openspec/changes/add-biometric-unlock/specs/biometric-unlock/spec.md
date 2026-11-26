@@ -21,71 +21,36 @@ The extension SHALL store biometric unlock material only as an additional authen
 #### Scenario: No plaintext key is stored for release after an assertion
 
 - **WHEN** the stored biometric record is inspected
-- **THEN** it contains no private key, no plaintext key-encryption key, and no value that yields either without the authenticator
+- **THEN** it contains no private key, no plaintext key-encryption key, and no value that yields either without the authenticator's pseudo-random-function output
 
-### Requirement: Biometric Unlock Requires Both A Wrapped-Key Gate And A Verified Assertion
+### Requirement: The Authenticator's Output Is The Only Thing That Opens The Wrapping
 
-The extension SHALL refuse a biometric unlock unless BOTH a key derived from the authenticator's pseudo-random-function output opens the stored wrapping AND a WebAuthn assertion is verified in the background against a single-use challenge. A caller supplying only a pseudo-random-function output SHALL be refused.
+The extension SHALL admit a biometric unlock only when a key derived from the authenticator's pseudo-random-function output opens the stored wrapping and the recovered key then decrypts the vault envelope verifier. The background SHALL NOT accept any statement from a document — that a ceremony took place, that the user was verified, that an assertion was valid — in place of that decryption. The extension SHALL NOT verify a WebAuthn assertion signature as an admission gate, and SHALL NOT claim a replay defence it does not have.
 
-#### Scenario: A captured secret alone is not enough
+The pseudo-random-function output is a static secret: the same credential and salt always produce the same 32 bytes. Anyone who holds that output together with a copy of extension storage can recover the key-encryption key without the background, so no check the background performs can make a captured output worthless. Documentation and user-facing copy SHALL describe the output on those terms: it is equivalent to the key-encryption key for anyone who can read extension storage, and it is revoked only by forgetting the factor or changing the password.
 
-- **GIVEN** an attacker holding a previously captured pseudo-random-function output
-- **WHEN** they call the unlock method with it and no valid assertion
-- **THEN** the unlock is refused
-- **AND** no key material is returned
+#### Scenario: A wrong output unlocks nothing
 
-#### Scenario: A valid assertion with a wrong secret is not enough
+- **GIVEN** a vault with a biometric factor enrolled
+- **WHEN** an unlock is requested with 32 bytes that are not the authenticator's output
+- **THEN** the wrapping fails authenticated decryption
+- **AND** the vault stays locked
 
-- **GIVEN** a valid, freshly signed assertion
-- **WHEN** the supplied pseudo-random-function output does not open the stored wrapping
-- **THEN** the unlock is refused
-- **AND** the failure is reported with the same code every other biometric failure uses
+#### Scenario: A document's claim is not a substitute for the secret
 
-### Requirement: Assertion Verification Happens In The Background
+- **WHEN** the biometric unlock request schema is inspected
+- **THEN** it carries the credential identifier and the pseudo-random-function output
+- **AND** it carries no field by which a document reports that verification succeeded
 
-The background SHALL mint a 32-byte challenge into session storage, SHALL consume it on read before any verification and regardless of outcome, and SHALL refuse a challenge that is absent, of the wrong purpose, or older than 120 seconds. It SHALL verify the assertion signature over the authenticator data concatenated with the hash of the client data against the public key recorded at enrolment, and SHALL independently check the client-data type, the challenge bytes, the origin, the relying-party identifier hash, the user-present bit, the user-verified bit and the backup-eligible bit. A boolean supplied by a document SHALL NOT be accepted as proof of any of these.
+#### Scenario: No surface claims a captured output is harmless
 
-#### Scenario: A challenge cannot be replayed
+- **WHEN** the storage-format documentation and the enable-time disclosure are inspected
+- **THEN** neither states that a captured pseudo-random-function output cannot unlock the vault
+- **AND** the documentation states that forgetting the factor or changing the password is what revokes one
 
-- **GIVEN** a challenge that has been used in one unlock attempt
-- **WHEN** the same challenge is presented again
-- **THEN** the attempt is refused
-- **AND** the refusal does not depend on whether the first attempt succeeded
+### Requirement: The Wrapping Is Bound To The Live Envelope And To Its Own Credential
 
-#### Scenario: A document's claim of user verification is not trusted
-
-- **GIVEN** a document reporting that user verification succeeded
-- **WHEN** the user-verified bit in the signed authenticator data is clear
-- **THEN** the unlock is refused
-
-#### Scenario: An expired challenge is refused
-
-- **GIVEN** a challenge minted more than 120 seconds ago
-- **WHEN** an assertion citing it arrives
-- **THEN** the unlock is refused
-
-#### Scenario: An invalid signature is refused
-
-- **GIVEN** an assertion whose signature does not verify against the recorded public key
-- **WHEN** the background verifies it
-- **THEN** the unlock is refused
-- **AND** no wrapping is opened
-
-### Requirement: Every Field The Verifier Consults Is Bound Into The Wrapping
-
-The additional authenticated data for the wrapped key SHALL bind the live vault envelope version, every key-derivation cost field and the envelope salt, the wrapper version, the credential identifier, the recorded relying-party identifier hash, the recorded origin, the credential public key, the credential algorithm, the backup-eligible bit, the pseudo-random-function salt and the derivation info version. No mutable field SHALL be bound.
-
-#### Scenario: A substituted public key breaks the wrapping
-
-- **GIVEN** an attacker with write access to extension storage
-- **WHEN** they replace the recorded credential public key with one they control
-- **THEN** the wrapping no longer decrypts
-- **AND** no key-encryption key is recovered
-
-#### Scenario: A flipped backup-eligible bit breaks the wrapping
-
-- **WHEN** the recorded backup-eligible bit is altered in storage
-- **THEN** the wrapping no longer decrypts
+The additional authenticated data for the wrapped key SHALL bind the live vault envelope version, every key-derivation cost field and the envelope salt, the wrapper version, the credential identifier, the pseudo-random-function salt, the derivation info version and the backup-eligible flag recorded at enrolment. No mutable field SHALL be bound.
 
 #### Scenario: A rolled-back envelope breaks the wrapping
 
@@ -93,30 +58,28 @@ The additional authenticated data for the wrapped key SHALL bind the live vault 
 - **WHEN** the envelope is replaced with one carrying different parameters or a different salt
 - **THEN** the wrapping no longer decrypts
 
+#### Scenario: A rewritten credential identifier or salt breaks the wrapping
+
+- **GIVEN** an attacker with write access to extension storage
+- **WHEN** they replace the recorded credential identifier or pseudo-random-function salt
+- **THEN** the wrapping no longer decrypts
+- **AND** no key-encryption key is recovered
+
+#### Scenario: A flipped backup-eligible flag breaks the wrapping
+
+- **WHEN** the recorded backup-eligible flag is altered in storage
+- **THEN** the wrapping no longer decrypts
+- **AND** the Security tab therefore cannot be made to show a synced credential as device-bound
+
 #### Scenario: Renaming a factor re-encrypts nothing
 
 - **WHEN** the factor label, transports, or last-use timestamps are written
 - **THEN** the wrapping is unchanged
 - **AND** biometric unlock continues to work
 
-### Requirement: The Relying Party Identity Is Recorded As Observed, Never Computed
-
-Enrolment SHALL read the relying-party identifier hash from the registration authenticator data and the origin from the client data, and SHALL compare later assertions byte-for-byte against those recorded values. The extension SHALL NOT compute an expected relying-party identifier hash from a constructed string.
-
-#### Scenario: The recorded hash is the one the authenticator signed
-
-- **WHEN** a factor is enrolled
-- **THEN** the stored relying-party identifier hash is the value read out of the registration authenticator data
-
-#### Scenario: An assertion for a different relying party is refused
-
-- **GIVEN** an assertion whose authenticator data carries a different relying-party identifier hash
-- **WHEN** the background verifies it
-- **THEN** the unlock is refused
-
 ### Requirement: Enrolment Proves A Full Round Trip Before Anything Is Persisted
 
-Enrolment SHALL perform credential creation followed by an immediate assertion, SHALL require exactly 32 bytes of pseudo-random-function output from that assertion, and SHALL wrap the live key-encryption key and unwrap it back to the identical bytes before writing any record. A reported extension-enabled value SHALL NOT be treated as proof that output is available. If any step fails, nothing SHALL be persisted.
+Enrolment SHALL perform credential creation followed by an immediate assertion, SHALL require exactly 32 bytes of pseudo-random-function output from that assertion, and SHALL wrap the live key-encryption key and unwrap it back to the identical bytes before writing any record. A reported extension-enabled value SHALL NOT be treated as proof that output is available. If any step fails, nothing SHALL be persisted, and the surface SHALL say that a passkey entry may have been left in the platform's credential manager.
 
 #### Scenario: An authenticator that reports support but returns no output enrols nothing
 
@@ -131,15 +94,38 @@ Enrolment SHALL perform credential creation followed by an immediate assertion, 
 - **THEN** enrolment fails
 - **AND** no factor record is written
 
-### Requirement: The Ceremony Runs In A Visible Dedicated Extension Document
+#### Scenario: A stray credential is reported, not hidden
 
-Both ceremonies SHALL run in a dedicated extension document opened as a window. The extension SHALL NOT run a ceremony in the toolbar action popup, an offscreen document, or a hidden frame.
+- **GIVEN** an enrolment that created a credential and then failed
+- **WHEN** the failure is shown
+- **THEN** the extension asks the platform to drop the credential where the platform offers a way to
+- **AND** the surface states that an entry may remain in the platform's credential manager
 
-#### Scenario: The ceremony document is the only host
+### Requirement: Enrolment Runs In The Document That Holds The Password
+
+The enrolment ceremony SHALL run in the options page, in the same document whose re-authentication dialog collected the password. The password and the pseudo-random-function output SHALL be sent to the background in one enrolment request. Neither SHALL be passed to another document, staged in storage, or held by the background between requests, and the background SHALL NOT hold a key-encryption key while waiting for a ceremony.
+
+#### Scenario: One request carries both secrets
+
+- **WHEN** the enrolment request schema is inspected
+- **THEN** it carries the password, the pseudo-random-function output, the credential identifier, the pseudo-random-function salt, the transports and the backup-eligible flag
+- **AND** no earlier request has handed the background the password or a key derived from it
+
+#### Scenario: The background holds nothing between requests
+
+- **GIVEN** an enrolment the user abandons at the authenticator prompt
+- **WHEN** background state is inspected
+- **THEN** it holds no password, no key-encryption key and no pending enrolment
+
+### Requirement: The Unlock Ceremony Runs In A Visible Dedicated Extension Document
+
+The unlock ceremony SHALL run in a dedicated extension document opened as a window. The extension SHALL NOT run a ceremony in the toolbar action popup, the side panel, an offscreen document, or a hidden frame. Credential-management API usage SHALL appear in exactly one adapter module, imported only by the ceremony document and the options page.
+
+#### Scenario: Two documents reach the adapter and no others
 
 - **WHEN** the codebase is searched for credential-management API usage
 - **THEN** it appears only in the ceremony adapter
-- **AND** the adapter is reachable only from the ceremony document
+- **AND** the adapter is imported only by the ceremony document and the options page
 
 ### Requirement: The Relying Party Identifier Is The Extension Origin
 
@@ -155,17 +141,22 @@ Credential creation SHALL omit the relying-party identifier member of its relyin
 
 - **WHEN** an assertion is requested
 - **THEN** the request carries no relying-party identifier
-- **AND** the recorded relying-party identifier hash is used only to verify what comes back
 
-### Requirement: User Verification Is Required And Independently Confirmed
+### Requirement: User Verification Is Required And Its Enforcement Is Stated Honestly
 
-Both ceremonies SHALL request user verification as required, and the background SHALL refuse any assertion whose signed user-verified bit is clear.
+Both ceremonies SHALL request user verification as required. The background cannot observe whether verification happened, so the property SHALL rest on the authenticator binding its pseudo-random-function output to user verification, and SHALL be measured rather than assumed: the platform matrix SHALL record, for every authenticator class the feature is offered on, whether a presence-only ceremony can return the enrolled output. An authenticator class that returns the enrolled output without user verification SHALL NOT be offered.
 
-#### Scenario: A presence-only assertion is refused
+#### Scenario: Both ceremonies ask for verification
 
-- **GIVEN** an authenticator that signs with user presence but not user verification
-- **WHEN** the background verifies the assertion
-- **THEN** the unlock is refused
+- **WHEN** credential creation or an assertion is requested
+- **THEN** user verification is requested as required
+
+#### Scenario: A class that leaks the output without verification is excluded
+
+- **GIVEN** the platform matrix records an authenticator class that returns the enrolled output to a presence-only ceremony
+- **WHEN** the feature's supported classes are decided
+- **THEN** that class is not offered
+- **AND** the matrix records why
 
 ### Requirement: The Pseudo-Random-Function Output Is Input Keying Material, Not A Key
 
@@ -195,23 +186,23 @@ A key recovered from the biometric wrapping SHALL decrypt the vault envelope ver
 - **AND** the vault stays locked
 - **AND** no per-record decryption is attempted
 
-### Requirement: A Biometric Session Holds Reduced Authority
+### Requirement: A Biometric Unlock Never Stands In For The Password
 
-A session opened biometrically SHALL NOT authorize revealing or backing up a key, generating or importing a key, deleting a key, changing the auto-lock or session-timeout settings, raising an origin to high trust, setting an allow kind rule, enabling a session grant, or enrolling another biometric factor. The session record SHALL name the factor that opened it.
+A biometric unlock SHALL open the vault and nothing more. It SHALL NOT satisfy any operation that asks for the password: revealing a key, generating or importing a key, deleting a key, changing the password, changing the auto-lock or session-timeout settings, raising an origin to high trust, setting an allow kind rule, enabling a session grant, or enrolling a biometric factor. The session record SHALL name the factor that opened it.
 
-This list is exactly the set of operations that already require the password, so the property holds without new enforcement code. Policy mutations that are not password-gated today — lowering a trust level, setting a deny or ask kind rule, disabling a session grant, and removing an origin — remain reachable in a biometric session exactly as they are in a password session. Widening the password gate over them is a separate change and SHALL NOT be claimed by this one.
+This is not a reduced tier of authority. Every one of those operations asks for the password in a password-opened session too, so the two sessions can do exactly the same things; the property is that no path accepts a biometric ceremony where the password is asked for, and it holds without new enforcement code. Policy mutations that are not password-gated today — lowering a trust level, setting a deny or ask kind rule, disabling a session grant, and removing an origin — remain reachable in either session. Widening the password gate over them is a separate change and SHALL NOT be claimed by this one.
 
-#### Scenario: Reveal is refused in a biometric session
+#### Scenario: Reveal still asks for the password
 
 - **GIVEN** a vault unlocked biometrically
-- **WHEN** a key reveal is requested
+- **WHEN** a key reveal is requested without the password
 - **THEN** it is refused
-- **AND** the refusal is the existing password re-authentication requirement, not a new check
+- **AND** the refusal is the existing password requirement, not a new check
 
-#### Scenario: Enrolling a factor is refused in a biometric session
+#### Scenario: Enrolling a factor still asks for the password
 
 - **GIVEN** a vault unlocked biometrically
-- **WHEN** biometric enrolment is requested
+- **WHEN** biometric enrolment is requested without the password
 - **THEN** it is refused
 
 #### Scenario: A policy mutation that is not password-gated is not claimed to be blocked
@@ -267,9 +258,9 @@ Enrolment SHALL require the vault password and an unlocked vault. Forgetting a f
 - **WHEN** a factor is forgotten
 - **THEN** the envelope, every key record and the password are unchanged
 
-### Requirement: A Legacy Vault Refuses Biometric Enrolment And Unlock
+### Requirement: A Vault That Needs The Password Once Refuses Biometric Unlock
 
-When any stored key record carries no format version field, the extension SHALL refuse both biometric enrolment and biometric unlock, and SHALL state that the vault must be opened once with the password first.
+The extension SHALL refuse biometric enrolment and biometric unlock when any stored key record carries no format version field, and SHALL refuse biometric unlock while a password-change journal is present. Both conditions are resolved only by a password unlock: a legacy record is migrated under the password, and an interrupted password change is recovered by trying the password against both journalled states, which a factor cannot do. The status method SHALL report this as a named state so the surface can say that the password is needed this time.
 
 #### Scenario: A legacy record blocks enrolment
 
@@ -277,9 +268,19 @@ When any stored key record carries no format version field, the extension SHALL 
 - **WHEN** biometric enrolment is attempted
 - **THEN** it is refused with an explanation naming the password unlock as the next step
 
+#### Scenario: An interrupted password change blocks biometric unlock
+
+- **GIVEN** a stored password-change journal
+- **WHEN** a biometric unlock is attempted
+- **THEN** it is refused before the supplied output is evaluated
+- **AND** the journal, the envelope and every key record are left exactly as they were
+- **AND** the status method reports that the password is needed this time
+
 ### Requirement: The Password Is Rehearsed And The First Unlock Of A Session Uses It
 
 The extension SHALL refuse biometric unlock when no password unlock has occurred within the rehearsal interval, and SHALL refuse biometric unlock for the first unlock after a browser restart or extension update. Both states SHALL be reported as distinct, named states by the status method, so a surface can withdraw the affordance rather than offer one that fails. How each state is rendered is owned by the unlock-feedback capability.
+
+Both rules are availability and coercion controls, not cryptographic ones: the rehearsal timestamp and the session marker are ordinary stored values, and a party that can write extension storage can move them. They SHALL NOT be described as a defence against such a party.
 
 #### Scenario: Rehearsal-due is refused and reported
 
@@ -298,47 +299,61 @@ The extension SHALL refuse biometric unlock when no password unlock has occurred
 
 ### Requirement: An Envelope Write Deletes The Biometric Wrapping
 
-Any write of the vault envelope SHALL delete the biometric factor record in the same operation.
+Any write of the vault envelope SHALL delete the biometric factor record as part of the same operation, and SHALL delete it before the envelope is written, so an interruption between the two leaves a vault with no factor rather than a factor bound to an envelope that is gone. This covers the first creation of an envelope, a completed password change, and both recovery branches of an interrupted one.
 
-#### Scenario: A future password change cannot strand a wrapping
+#### Scenario: A password change cannot strand a wrapping
 
 - **GIVEN** a vault with a biometric factor enrolled
-- **WHEN** the envelope is written for any reason
-- **THEN** the factor record is deleted in the same operation
-- **AND** a subsequent biometric unlock is refused as not enrolled
+- **WHEN** the password is changed
+- **THEN** the factor record is deleted before the new envelope is written
+- **AND** a subsequent biometric unlock is refused
+- **AND** the password-change surface says the factor must be enrolled again
+
+#### Scenario: A recovered password change deletes it too
+
+- **GIVEN** a vault with a biometric factor enrolled and an interrupted password change
+- **WHEN** a password unlock recovers either journalled state
+- **THEN** no factor record remains
 
 ### Requirement: The Feature Is Absent From Non-Chromium Builds
 
-Builds for targets other than Chromium SHALL contain no biometric ceremony document, no biometric remote-procedure methods and no biometric control. The feature SHALL NOT be shipped as a disabled control.
+Builds for targets other than Chromium SHALL contain no biometric ceremony document, no reference to the credential-management API, no code that reads or writes the biometric wrapping, and no biometric control. The feature SHALL NOT be shipped as a disabled control. The biometric remote-procedure methods remain defined in every build so that the error-code capability can answer them uniformly: on such a build the status method reports the feature unavailable and every other biometric method refuses.
 
 #### Scenario: The Firefox build contains none of it
 
 - **WHEN** the Firefox build output is inspected
 - **THEN** it contains no ceremony document
 - **AND** it contains no credential-management API reference
+- **AND** it contains no reference to the biometric wrapping's storage key
 - **AND** the Security settings surface renders no biometric section
 
-### Requirement: A Biometric Refusal Is Not An Oracle
+#### Scenario: A build without the feature refuses the methods
 
-A refused biometric unlock or enrolment SHALL NOT let a caller learn whether a factor is enrolled, which credential is enrolled, or which verification step failed. The classification of refusals onto error codes is owned by the remote-procedure error-code capability; this requirement states only the caller-visible consequence. A user cancellation SHALL NOT reach the background and SHALL NOT record a throttle failure.
+- **GIVEN** a build for a target other than Chromium
+- **WHEN** a biometric method is invoked
+- **THEN** the status method reports the feature unavailable
+- **AND** every other biometric method is refused without reading or writing anything
+
+### Requirement: A Biometric Refusal Does Not Say Which Step Failed
+
+A refused biometric unlock or enrolment SHALL NOT let a caller learn which credential is enrolled or which step failed. The classification of refusals onto error codes is owned by the remote-procedure error-code capability; this requirement states only the caller-visible consequence. Whether a factor is enrolled is not hidden from an extension page — the status method reports it on purpose — and a refusal SHALL NOT be a second source of it. A user cancellation SHALL NOT reach the background and SHALL NOT record a throttle failure.
 
 #### Scenario: Failures are indistinguishable to the caller
 
-- **WHEN** any biometric verification step fails
+- **WHEN** a biometric unlock fails at the factor lookup, the unwrap, or the envelope verifier
 - **THEN** the caller cannot determine which step failed
-- **AND** the caller cannot determine whether a factor is enrolled
 
 #### Scenario: A cancellation is not a failure
 
 - **GIVEN** a user who dismisses the authenticator prompt
 - **WHEN** the ceremony is abandoned
-- **THEN** no request reaches the background
+- **THEN** no unlock request reaches the background
 - **AND** no throttle failure is recorded
 - **AND** the lock screen shows no error text
 
 ### Requirement: Enrolment Is Disclosed To The User
 
-Enrolment SHALL be discoverable without any credential: the status method SHALL report that a usable factor exists, and SHALL report the date it was enrolled, so that a factor enrolled without the user's knowledge is surfaced on the next unlock. There is no cryptographic defence against a surface that has observed the password enrolling a factor, so visibility is the mitigation and it SHALL NOT be omitted. Which surfaces render this, and how, is owned by the unlock-feedback and options-page capabilities.
+Enrolment SHALL be discoverable without any credential: the status method SHALL report that a usable factor exists, and SHALL report the date it was enrolled, so that a factor enrolled without the user's knowledge is surfaced on the next unlock. There is no cryptographic defence against a surface that has observed the password enrolling a factor, so visibility is the mitigation and it SHALL NOT be omitted. The Security tab SHALL also state whether the enrolled credential is one that syncs between devices. Which surfaces render this, and how, is owned by the unlock-feedback and options-page capabilities.
 
 #### Scenario: An enrolled factor is reported to a locked vault
 
@@ -347,3 +362,10 @@ Enrolment SHALL be discoverable without any credential: the status method SHALL 
 - **THEN** it reports that a usable factor exists
 - **AND** it reports the date the factor was enrolled
 - **AND** it reports no credential identifier and no credential label
+
+#### Scenario: A synced credential is shown as one
+
+- **GIVEN** a factor whose backup-eligible flag was set at enrolment
+- **WHEN** the Security tab lists the factor
+- **THEN** it states that this credential syncs through the user's passkey provider
+- **AND** it states that the factor is as strong as that account

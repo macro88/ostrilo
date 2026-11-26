@@ -24,7 +24,7 @@ When the user moves between the key-handling document and other extension docume
 
 #### Scenario: A pseudo-random-function output travels only inward
 
-- **GIVEN** the ceremony document has obtained a pseudo-random-function output from the authenticator
+- **GIVEN** the ceremony document, or the options page during enrolment, has obtained a pseudo-random-function output from the authenticator
 - **WHEN** it sends the unlock or enrolment request
 - **THEN** the output SHALL be carried only in that request to the background
 - **AND** it SHALL NOT be sent to any other document
@@ -51,20 +51,20 @@ A document that obtains a WebAuthn pseudo-random-function output SHALL hold it o
 
 #### Scenario: The output never enters component state
 
-- **WHEN** the ceremony document holds a pseudo-random-function output
+- **WHEN** a document holds a pseudo-random-function output
 - **THEN** it SHALL be stored in a ref
 - **AND** it SHALL NOT be placed in component state or any value that participates in rendering
 
 #### Scenario: The output is zeroized when the request settles
 
-- **GIVEN** a ceremony document that has sent an unlock or enrolment request carrying the output
+- **GIVEN** a document that has sent an unlock or enrolment request carrying the output
 - **WHEN** the request resolves or rejects
 - **THEN** the document SHALL fill the buffer with zeros
 - **AND** SHALL drop its reference to it
 
 #### Scenario: The output is zeroized on unmount
 
-- **GIVEN** a ceremony document holding a pseudo-random-function output while a request is still in flight
+- **GIVEN** a document holding a pseudo-random-function output while a request is still in flight
 - **WHEN** the document unmounts or the window is closed
 - **THEN** the document SHALL fill the buffer with zeros before it unloads
 
@@ -72,6 +72,14 @@ A document that obtains a WebAuthn pseudo-random-function output SHALL hold it o
 
 - **WHEN** the ceremony runs to success or to any failure
 - **THEN** no pseudo-random-function output SHALL be written to `chrome.storage`, `localStorage`, `sessionStorage`, or session storage
+
+#### Scenario: Enrolment keeps the password and the output in one document
+
+- **GIVEN** the options page has collected the password through its re-authentication dialog
+- **WHEN** the enrolment ceremony runs
+- **THEN** it SHALL run in that same document
+- **AND** the password and the pseudo-random-function output SHALL reach the background together in a single enrolment request
+- **AND** neither SHALL be passed to another document or held by the background between requests
 
 #### Scenario: The output is never logged
 

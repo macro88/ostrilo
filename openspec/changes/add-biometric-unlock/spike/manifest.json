@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Ostrilo PRF spike",
+  "description": "Throwaway. Measures WebAuthn PRF at an extension origin for add-biometric-unlock task group 1.",
+  "version": "0.0.1",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu8dkOZLeNZwCPScrTO0EolUWyLkMJsKVo5JN+BHgqeL5xtWNkIOW5o6Of9vDTytWp2X5He2chadRbh1P+JEE/tESjMTCvasOyDuYLw5mYIGJfzN8xdJmV8HB7k9Zd0b+84pyrRhL4M79Xi1oYC081GcHtG7iQKWugrvd8o8KNTXR/dClQpNg7CHLTaGqkbvOfrrPMV0xhdWOCCTTiXcEgT5YKxBC1/ZE0f28+CiED701YAG4/x0tqZELNCoBT1znTfXLa7grwHbQ68K3k9Oy00R/4r3Ys7Tg6XTD3XHUMzwAObRzFZKfNu24oqGZAePBFKX3OW6LK7Hkm1h8zSX/7wIDAQAB",
+  "permissions": ["sidePanel", "storage"],
+  "action": {
+    "default_title": "Ostrilo PRF spike",
+    "default_popup": "spike.html?host=popup"
+  },
+  "side_panel": {
+    "default_path": "spike.html?host=sidepanel"
+  },
+  "options_ui": {
+    "page": "spike.html?host=options",
+    "open_in_tab": true
+  }
+}

@@ -8,7 +8,7 @@ Every input that accepts a password or private key MUST be excluded from the bro
 
 JavaScript strings are immutable and cannot be zeroized, so the requirement is to hold sensitive input for the shortest possible time and drop every reference to it promptly. It is not a claim that the value is erased from memory, and it is not a claim about what a script already running in the same realm can read.
 
-The biometric ceremony document is a key-handling document and SHALL be listed as one. It SHALL hold the authenticator's pseudo-random-function output only as a byte buffer in a ref, never in component state and never as a string; it SHALL zeroize that buffer when the unlock or enrolment request settles, whether it succeeds, fails, or is cancelled, and again on unmount; it SHALL close itself once the request resolves; and it SHALL render no key list and load no three-dimensional rendering library.
+The biometric ceremony document is a key-handling document and SHALL be listed as one. It SHALL hold the authenticator's pseudo-random-function output only as a byte buffer in a ref, never in component state and never as a string; it SHALL zeroize that buffer when the unlock request settles, whether it succeeds, fails, or is cancelled, and again on unmount; it SHALL close itself once the request resolves; and it SHALL render no key list and load no three-dimensional rendering library. The options page, which runs the enrolment ceremony because it is the document that holds the password, SHALL hold the output it obtains on the same terms: a byte buffer in a ref, zeroized when the enrolment request settles and on unmount.
 
 This requirement previously carried the clause "MUST NOT trigger re-renders that expose the value to dev tools". It is deleted, and MUST NOT be reinstated: the stated mechanism is wrong. React DevTools reads component state whether or not a render occurs, and `document.getElementById('password').value` reads an uncontrolled input identically — so a `useRef` rewrite satisfied the letter of the clause while changing nothing about what a script in the realm can read. The realm-isolation concern it gestured at is addressed by splitting key handling into its own document, not by changing how a value is stored within one realm.
 
@@ -99,10 +99,18 @@ This requirement previously carried the clause "MUST NOT trigger re-renders that
 
 #### Scenario: The ceremony document closes itself when the request resolves
 
-- **GIVEN** a biometric unlock or enrolment request in flight from the ceremony document
+- **GIVEN** a biometric unlock request in flight from the ceremony document
 - **WHEN** that request resolves
 - **THEN** the document MUST close its own window
 - **AND** MUST NOT remain open holding the outcome
+
+#### Scenario: The options page holds the enrolment output on the same terms
+
+- **GIVEN** the options page has obtained a pseudo-random-function output during enrolment
+- **WHEN** the enrolment request resolves, rejects, or is cancelled
+- **THEN** the output MUST have been held only as a byte buffer in a ref
+- **AND** that buffer MUST be filled with zeros, and again on unmount if it is still held
+- **AND** the password collected by the re-authentication dialog MUST be cleared at the same time
 
 #### Scenario: The ceremony document carries no key list and no decorative renderer
 
@@ -147,14 +155,14 @@ The lock screen SHALL present password unlock as its single notched primary acti
 
 ### Requirement: Enable-Time Disclosure Of The Biometric Factor
 
-Before any biometric factor is enrolled, the enabling surface SHALL state, in its own copy and not behind a link or a disclosure toggle: that the password remains required and cannot be removed; that a biometric session cannot reveal or export a key; that deleting the credential in the platform's own credential manager loses only the shortcut and no key material; that a credential which syncs between devices makes this factor as strong as the account it syncs through; and that biometric unlock may be compelled in jurisdictions where disclosing a password may not. The copy SHALL NOT name a specific biometric modality — it SHALL NOT use "Touch ID", "Face ID", "Windows Hello", "fingerprint" or "face" — because which authenticator answers is not knowable at build time.
+Before any biometric factor is enrolled, the enabling surface SHALL state, in its own copy and not behind a link or a disclosure toggle: that the password remains required and cannot be removed; that unlocking this way never stands in for the password where the password is asked for, so it cannot reveal or export a key; that deleting the credential in the platform's own credential manager loses only the shortcut and no key material; that a credential which syncs between devices makes this factor as strong as the account it syncs through; and that biometric unlock may be compelled in jurisdictions where disclosing a password may not. The copy SHALL NOT name a specific biometric modality — it SHALL NOT use "Touch ID", "Face ID", "Windows Hello", "fingerprint" or "face" — because which authenticator answers is not knowable at build time.
 
 #### Scenario: All five statements are present before enrolment
 
 - **GIVEN** a vault with no biometric factor enrolled
 - **WHEN** the surface that enables the factor is rendered
 - **THEN** it MUST state that the password remains required and cannot be removed
-- **AND** it MUST state that a biometric session cannot reveal or export a key
+- **AND** it MUST state that unlocking this way cannot reveal or export a key, because those still ask for the password
 - **AND** it MUST state that deleting the credential in the platform's credential manager loses only the shortcut
 - **AND** it MUST state that a credential which syncs between devices makes this factor as strong as that account
 - **AND** it MUST state that biometric unlock may be compelled where disclosing a password may not

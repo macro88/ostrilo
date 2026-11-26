@@ -68,7 +68,7 @@ The lock screen SHALL surface the reason the background gave for a failed unlock
 
 ### Requirement: Every Biometric Unlock Outcome Has A Designed Lock-Screen State
 
-The lock screen SHALL render a distinct designed state for each biometric outcome: no usable factor, a cancelled ceremony, a refused unlock, a throttled attempt, a due password rehearsal, a first unlock after a browser restart or extension update, and a permanently unusable factor. Every one of these states SHALL name the master password as the way to unlock now. States that are not failures SHALL be presented as an explanation, not as an error: they SHALL NOT use error styling, SHALL NOT be announced as an alert, and SHALL NOT reuse the failure line.
+The lock screen SHALL render a distinct designed state for each biometric outcome: no usable factor, a cancelled ceremony, a refused unlock, a throttled attempt, a due password rehearsal, a first unlock after a browser restart or extension update, a vault that needs the password once before the factor can be used, and a permanently unusable factor. Every one of these states SHALL name the master password as the way to unlock now. States that are not failures SHALL be presented as an explanation, not as an error: they SHALL NOT use error styling, SHALL NOT be announced as an alert, and SHALL NOT reuse the failure line.
 
 #### Scenario: No usable factor shows no affordance at all
 
@@ -87,6 +87,14 @@ The lock screen SHALL render a distinct designed state for each biometric outcom
 - **AND** the biometric affordance is still offered
 - **AND** no failure is recorded against the unlock throttle
 
+#### Scenario: A second ceremony without a result offers to forget the factor
+
+- **GIVEN** a ceremony window in which two consecutive ceremonies ended without the authenticator returning an output
+- **WHEN** the window renders after the second
+- **THEN** it offers to forget the factor, with one line saying the passkey may have been deleted and that the password still opens the vault
+- **AND** it is not styled as an error
+- **AND** trying again is still offered
+
 #### Scenario: A due rehearsal is explained, not reported as an error
 
 - **GIVEN** no password unlock has occurred within the rehearsal interval
@@ -104,6 +112,14 @@ The lock screen SHALL render a distinct designed state for each biometric outcom
 - **AND** that line is not styled or announced as an error
 - **AND** a later unlock in the same browser session offers the affordance again
 
+#### Scenario: A vault that needs the password once is explained the same way
+
+- **GIVEN** a vault holding an unversioned key record, or an unfinished password change
+- **WHEN** the lock screen renders
+- **THEN** no biometric affordance is shown
+- **AND** one line states that the password is needed this time
+- **AND** that line is not styled or announced as an error
+
 #### Scenario: A permanently unusable factor offers to forget it
 
 - **GIVEN** an enrolled factor the background reports as permanently unusable
@@ -115,7 +131,7 @@ The lock screen SHALL render a distinct designed state for each biometric outcom
 
 #### Scenario: Every state names the password
 
-- **WHEN** any of the seven biometric states is rendered
+- **WHEN** any of the eight biometric states is rendered
 - **THEN** the master password is named as the way to unlock now
 - **AND** no state offers a recovery, reset or account-recovery path
 

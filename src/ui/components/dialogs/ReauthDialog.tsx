@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -8,6 +8,40 @@ import {
   DialogTitle,
 } from "@/ui/components/ui/dialog";
 import { PasswordInput } from "@/ui/components/ui/password-input";
+import { getLockState } from "@/infrastructure/messaging/client";
+
+async function sessionOpenedWithDevice(): Promise<boolean> {
+  return (await getLockState()).authFactor === "biometric";
+}
+
+/**
+ * Whether the open session was unlocked with the device. Asked when the dialog
+ * opens, and only so the dialog can explain itself: the background asks for
+ * the password in either kind of session and does not consult this. A
+ * background that cannot answer reads as a password session, which only costs
+ * the explanation.
+ */
+function useUnlockedWithDevice(open: boolean): boolean {
+  const [withDevice, setWithDevice] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    sessionOpenedWithDevice().then(
+      (opened) => {
+        if (live) setWithDevice(opened);
+      },
+      () => {
+        if (live) setWithDevice(false);
+      }
+    );
+    return () => {
+      live = false;
+    };
+  }, [open]);
+
+  return open && withDevice;
+}
 
 /**
  * Collects the password for a high-risk action.
@@ -43,6 +77,7 @@ export function ReauthDialog({
   onCancel,
 }: ReauthDialogProps) {
   const [password, setPassword] = useState("");
+  const unlockedWithDevice = useUnlockedWithDevice(open);
 
   const close = () => {
     // Dropped as soon as the dialog closes. A JS string cannot be wiped, but it
@@ -68,6 +103,12 @@ export function ReauthDialog({
           <DialogDescription className="text-[13px]">
             {action}
             {consequence ? ` ${consequence}` : ""}
+            {unlockedWithDevice && (
+              <span className="mt-1.5 block" data-testid="reauth-device-note">
+                You unlocked with your device. This needs your master password,
+                which the device cannot stand in for.
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 

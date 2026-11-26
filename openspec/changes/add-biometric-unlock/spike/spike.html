@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ostrilo PRF spike</title>
+    <style>
+      body {
+        font: 14px/1.4 system-ui, sans-serif;
+        margin: 16px;
+        min-width: 340px;
+        max-width: 760px;
+      }
+      h1 {
+        font-size: 16px;
+      }
+      h2 {
+        font-size: 13px;
+        margin: 16px 0 6px;
+      }
+      button {
+        font: inherit;
+        margin: 0 6px 6px 0;
+        padding: 6px 10px;
+      }
+      pre {
+        background: #f3f3f3;
+        color: #111;
+        padding: 8px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-size: 12px;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+      }
+      input[type="text"] {
+        font: inherit;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Ostrilo PRF spike</h1>
+    <pre id="env"></pre>
+
+    <label>
+      Row label, written into every log line (e.g. "macOS 15 / iCloud Keychain")
+      <input type="text" id="row" />
+    </label>
+    <label>
+      <input type="checkbox" id="es256-only" />
+      Offer ES256 only at create (unticked offers ES256 and RS256)
+    </label>
+
+    <h2>Credential</h2>
+    <button id="create">create()</button>
+    <button id="forget">Forget stored credential</button>
+    <pre id="credential"></pre>
+
+    <h2>Assertion</h2>
+    <button id="get-required">get() — UV required</button>
+    <button id="get-discouraged">get() — UV discouraged</button>
+    <button id="get-delayed">get() — UV required, in 5 s</button>
+
+    <h2>Hosts</h2>
+    <button id="open-window">Open in a created window</button>
+    <button id="open-options">Open as options tab</button>
+    <button id="open-sidepanel">Open side panel</button>
+
+    <h2>Log</h2>
+    <button id="copy">Copy log</button>
+    <button id="clear">Clear log</button>
+    <pre id="log"></pre>
+
+    <script src="spike.js"></script>
+  </body>
+</html>

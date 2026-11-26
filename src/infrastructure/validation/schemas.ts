@@ -4,6 +4,10 @@ import { RelayUrlListSchema } from "@/domain/relay/url";
 import { isAvatarDataUrl } from "@/domain/profile/avatar";
 import { isAllowedRemoteUrl } from "@/domain/profile/types";
 import {
+  BIOMETRIC_CREDENTIAL_ID_MAX_LENGTH,
+  BIOMETRIC_PRF_LENGTH,
+} from "@/domain/types";
+import {
   PASSWORD_POLICY,
   checkPassword,
   describeViolation,
@@ -420,3 +424,26 @@ export type ApprovalResolveRequest = z.infer<
 >;
 
 // Export validation functions
+
+// Biometric unlock
+
+const ByteSchema = z.number().int().min(0).max(255);
+
+/** A WebAuthn PRF evaluation, or the salt it was evaluated for: exactly 32 bytes. */
+export const PrfBytesSchema = z.array(ByteSchema).length(BIOMETRIC_PRF_LENGTH);
+
+export const CredentialIdSchema = z
+  .array(ByteSchema)
+  .min(1)
+  .max(BIOMETRIC_CREDENTIAL_ID_MAX_LENGTH);
+
+/**
+ * What an enrolling document reports about its credential. Strict, so there is
+ * no field by which a document could assert that the user was verified.
+ */
+export const BiometricFactorSchema = z.strictObject({
+  credentialId: CredentialIdSchema,
+  prfSalt: PrfBytesSchema,
+  transports: z.array(z.string().min(1).max(32)).max(8),
+  backupEligible: z.boolean(),
+});

@@ -602,3 +602,51 @@ Not judged here: whether the native file chooser keeps a toolbar popup open in C
 - One real upload through the production build to Primal, with a throwaway vault key and a generated image, no interception: the address it returned serves a PNG whose SHA-256 matches the address.
 - Light capture and dark capture: both complete, 70 screenshots each, no failed step.
 - The two tracked captures (`23-popup-home-populated.png`, light and dark) were restored to their committed versions.
+
+# Review: device unlock
+
+Date: 2026-11-25
+Rubric: [`docs/design/DESIGN_RULES.md`](../design/DESIGN_RULES.md) §6 (banned patterns) and §12 (PR checklist)
+Build reviewed: production (`pnpm run build`), both themes, populated vault.
+
+## What changed
+
+Device unlock (`openspec/changes/add-biometric-unlock`) adds one section to Settings → Security, one outline button and one explanatory line to the lock screen, one sentence each to the password dialog and the change-password success panel, and a new document, `unlock.html`, that a device unlock runs in.
+
+## What the runner gained
+
+A `41-device-unlock` step, 13 captures per theme:
+
+- `41`, `41b`, `41c`, `41d`: the Security section off, with no provider, after an authenticator that returned no output, and on.
+- `42`, `42b`, `42c`: the lock screen offering the device, and withholding it after a restart and when the password is due.
+- `43`, `43b`, `43c`, `43d`, `43e`: the unlock window cancelled, offering to forget after a second miss, asking, refused, and needing the password.
+- `44`: the password dialog in a session the device opened.
+
+A headless browser has no authenticator, so each state is produced with a virtual one. That exercises the extension's screens. It says nothing about how a real passkey provider's own prompt looks beside them; on macOS that prompt is the system's and was seen by hand (`prf-platform-matrix.md`).
+
+## Findings
+
+### Fixed
+
+- **The refused state gave the deleted-passkey explanation.** The unlock window showed "If you deleted the passkey, this can no longer work" under "That did not unlock the vault", where the passkey exists and no longer matches. The refused state now says device unlock can be turned off there and set up again in Settings.
+
+### Judged, not changed
+
+- **One notched primary per screen (§5).** On the lock screen `Unlock` stays the only notched button; `Unlock with your device` is the hairline ghost beneath it. In the unlock window `Try again` is the one notched button and appears only when trying again can work.
+- **No disabled control.** Where the device cannot be used, the lock screen shows a line of secondary text and no button, and the Security section shows a row with no control. Neither theme renders a greyed switch.
+- **Explanations are not errors.** The restart, 30-day and no-provider lines use `--ink-2` on the canvas and carry no alert role. The no-output and refused-provider notices are the soft amber panel with a seal mark, no border or rail (§7), and read clearly on both the light and Deep Ink surfaces.
+- **Accent budget (§2).** The new surfaces add no violet beyond the existing primary in Deep Ink.
+- **The disclosure list.** Five bullets under the row, 13px secondary text, at the options page's width. It is the one place the section is long; it disappears once device unlock is on.
+- **Voice (§10).** No biometric modality is named anywhere; the feature is "device unlock" and the credential a "passkey".
+
+### Not covered
+
+- The real authenticator prompt, on any platform, in a capture.
+- The unlock window as the operating system frames it. The captures are the document at 400×560; the window's title bar is the platform's.
+- Windows, where nothing has been run.
+
+## Verification
+
+- Light capture and dark capture: both complete, 77 screenshots each, no skipped step. Rerun on 2026-11-26 after rebasing onto the Blossom upload change: 83 each, no skipped step.
+- The two tracked captures (`23-popup-home-populated.png`, light and dark) were restored to their committed versions.
+- `tests/e2e/biometric-unlock.spec.ts` and `tests/e2e/accessibility.spec.ts`: passed.

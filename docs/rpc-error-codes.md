@@ -78,6 +78,8 @@ A retry after `approval_failed` reports whether the vault is locked. The page-si
 | `denied` | -32003 | Operation denied | yes |
 | `timeout` | -32004 | Request timed out | yes |
 | `disclosure_refused` | -32006 | Identity disclosure refused for this site | yes |
+| `biometric_unavailable` | -32007 | Biometric unlock is unavailable | no |
+| `biometric_rejected` | -32008 | Biometric unlock was refused | no |
 | `no_key_selected` | -32011 | No key selected | yes |
 | `key_already_exists` | -32012 | Key already exists | no |
 | `key_not_found` | -32013 | Key not found | no |
@@ -96,6 +98,8 @@ A retry after `approval_failed` reports whether the vault is locked. The page-si
 - `denied`: policy or the user refused this operation. Distinct from `disclosure_refused`: a refused signature is about one event, so a different event is a reasonable retry.
 - `disclosure_refused`: the user refused to disclose the public key to this origin, or a refusal is remembered for it and no prompt is shown. Retrying only burns the origin's rate allowance.
 - `needs_approval`: the request needs the user's approval and no approval queue is available.
+- `biometric_unavailable`: this build does not carry biometric unlock. Only `vault.biometricStatus` returns it, and it says nothing about the device, an authenticator or a credential. An unlock or enrolment attempt never returns it.
+- `biometric_rejected`: a biometric unlock or enrolment was refused. Every cause gives this code with the same fixed `details`: no factor enrolled, a credential that does not match, a wrapping or verifier that did not open, or a rule that needs the password this time. The response does not say which. Whether a factor is enrolled, and why the password is needed, come from `vault.biometricStatus` alone. A wrong password given to `vault.biometricEnroll` is `invalid_password`, as for every other password check.
 - `rate_limited`: a method or origin exceeded its rate limit. `getPublicKey` is limited per origin, so a caller that polls sees this rather than a key.
 
 ### Validation

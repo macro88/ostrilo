@@ -15,13 +15,14 @@ import { AutoLockCountdown } from "@/components/common/AutoLockCountdown";
 import { ReauthDialog } from "@/ui/components/dialogs/ReauthDialog";
 import { ChangePasswordDialog } from "@/ui/components/dialogs/ChangePasswordDialog";
 import { useReauth } from "@/ui/hooks/useReauth";
+import { BiometricUnlockSection } from "./BiometricUnlockSection";
 
 /**
  * Only what works. This tab used to carry a biometric-unlock checkbox bound
- * to local state (the lock screen's handler says the feature is not
- * implemented) and a disabled "Export Private Key" button with no handler
+ * to local state and a disabled "Export Private Key" button with no handler
  * behind it. A control that cannot do anything is a promise the surface
- * cannot keep, so neither is rendered.
+ * cannot keep, so neither is rendered. Device unlock is back as
+ * `BiometricUnlockSection`, which renders only where it can do what it says.
  */
 export function SecuritySettingsTab() {
   const {
@@ -130,6 +131,8 @@ export function SecuritySettingsTab() {
           />
         </div>
       </SettingsSection>
+
+      <BiometricUnlockSection />
 
       <SettingsSection label="Defaults">
         <div className="ink-card">

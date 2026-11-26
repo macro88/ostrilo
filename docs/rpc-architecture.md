@@ -172,6 +172,36 @@ an existing vault - runs the check through `withPasswordThrottle`
 wrong password is charged to one shared counter, and a verified password resets
 it on any path. Creating the first vault verifies nothing and is not charged.
 
+### Biometric unlock methods
+
+Chromium builds only. All five are UI-only: a page can reach none of them.
+
+| Method | While locked | What it takes | What it returns |
+|---|---|---|---|
+| `vault.biometricStatus` | reachable | nothing | whether a factor is enrolled, when it was added, and why the password is needed if it is; whether the passkey syncs only once unlocked; never the credential id |
+| `vault.biometricUnlockRequest` | reachable | nothing | the credential id, PRF salt and transports the ceremony needs; none is secret |
+| `vault.biometricUnlock` | reachable | credential id and the 32-byte PRF output | the same verdict `vault.unlock` returns, never key material |
+| `vault.biometricForget` | reachable | nothing | nothing; it can only reduce access |
+| `vault.biometricEnroll` | refused | the master password, the credential's description and the PRF output, in one request | nothing |
+
+`vault.biometricUnlock` carries no field by which a document can report that
+the user was verified. The only evidence of a ceremony is that its output opens
+the wrapping and the result opens the envelope verifier.
+
+It shares the password's throttle counter. The counter is checked before the
+factor is read; an output that was tried and failed is charged; a refusal that
+tested nothing (no factor, a mismatched credential id, a rule that needs the
+password this time) is not; a successful unlock resets it. A wrong password
+given to `vault.biometricEnroll` is charged like any other password check.
+
+Every biometric refusal is `biometric_rejected` with one fixed `details`, so a
+response does not reveal which step failed. `vault.biometricStatus` is the one
+place enrolment state is disclosed.
+
+A session opened this way records `authFactor: "biometric"` in the lock state.
+It gates nothing: every method that asks for the password asks in either kind
+of session (`tests/security/biometric-password-boundary.test.ts`).
+
 ### Methods that deliberately do not exist
 
 - **`vault.export`** - returned the raw nsec whenever the vault was unlocked,

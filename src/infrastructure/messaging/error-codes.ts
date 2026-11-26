@@ -32,6 +32,23 @@ export const RPC_ERROR_CODES = {
    */
   DISCLOSURE_REFUSED: "disclosure_refused",
 
+  /**
+   * Biometric unlock cannot be offered: this build does not carry it. Returned
+   * only by the status method, and it says nothing about the device, an
+   * authenticator or a credential. Distinct from BIOMETRIC_REJECTED, which is
+   * the answer to an attempt; this is the answer to "is it here at all".
+   */
+  BIOMETRIC_UNAVAILABLE: "biometric_unavailable",
+
+  /**
+   * A biometric unlock or enrolment was refused. One code and one fixed detail
+   * for every cause - no factor enrolled, a credential mismatch, a wrapping or
+   * verifier failure, or a rule that needs the password this time - so the
+   * response cannot tell a caller which step failed. Distinct from
+   * INVALID_PASSWORD: no password was tested.
+   */
+  BIOMETRIC_REJECTED: "biometric_rejected",
+
   /** User approval required but approval queue not configured */
   NEEDS_APPROVAL: "needs_approval",
 
@@ -145,6 +162,8 @@ export const RPC_NUMERIC_ERROR_CODES: Record<RpcErrorCode, number> = {
   [RPC_ERROR_CODES.NEEDS_APPROVAL]: -32002,
   [RPC_ERROR_CODES.DENIED]: -32003,
   [RPC_ERROR_CODES.DISCLOSURE_REFUSED]: -32006,
+  [RPC_ERROR_CODES.BIOMETRIC_UNAVAILABLE]: -32007,
+  [RPC_ERROR_CODES.BIOMETRIC_REJECTED]: -32008,
   [RPC_ERROR_CODES.TIMEOUT]: -32004,
   [RPC_ERROR_CODES.NO_KEY_SELECTED]: -32011,
   [RPC_ERROR_CODES.KEY_ALREADY_EXISTS]: -32012,
@@ -162,6 +181,8 @@ export const RPC_ERROR_MESSAGES: Record<RpcErrorCode, string> = {
   [RPC_ERROR_CODES.DENIED]: "Operation denied",
   [RPC_ERROR_CODES.DISCLOSURE_REFUSED]:
     "Identity disclosure refused for this site",
+  [RPC_ERROR_CODES.BIOMETRIC_UNAVAILABLE]: "Biometric unlock is unavailable",
+  [RPC_ERROR_CODES.BIOMETRIC_REJECTED]: "Biometric unlock was refused",
   [RPC_ERROR_CODES.NEEDS_APPROVAL]: "Approval required",
   [RPC_ERROR_CODES.INVALID_EVENT]: "Invalid event",
   [RPC_ERROR_CODES.INVALID_ORIGIN]: "Invalid origin",

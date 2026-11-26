@@ -10,6 +10,9 @@ import { Lock } from "lucide-react";
 import { Logo } from "@/ui/components/logo/Logo";
 import { SealMark } from "@/components/common/SealMark";
 import { describeLockReason } from "@/ui/lib/lock-reason";
+import { useBiometricStatus } from "@/ui/hooks/useBiometricStatus";
+import { openUnlockWindow } from "@/ui/lib/open-unlock-window";
+import type { PasswordNeededReason } from "@/application/services/biometric-factor.service";
 
 interface LockScreenProps {
   onUnlock?: () => void;
@@ -45,6 +48,21 @@ const UNLOCK_FAILURE_COPY: Record<string, string> = {
 
 const GENERIC_UNLOCK_FAILURE = "Could not unlock the vault. Try again.";
 
+/**
+ * Why the device cannot open the vault this time. An explanation, not an
+ * error: nothing went wrong, and the password field above is the way in.
+ */
+const PASSWORD_NEEDED_COPY: Record<PasswordNeededReason, string> = {
+  restart_pending:
+    "Unlock with your password once. Device unlock is available after that.",
+  rehearsal_due:
+    "It has been 30 days since you typed your password. Unlock with it once to keep device unlock on.",
+  rotation_pending:
+    "Your password is needed this time. Device unlock returns afterwards.",
+  legacy_records:
+    "Your password is needed this time. Device unlock returns afterwards.",
+};
+
 export function describeUnlockFailure(
   result: Extract<UnlockResult, { ok: false }>
 ): string {
@@ -69,6 +87,8 @@ export function LockScreen({
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const passwordFieldRef = useRef<HTMLInputElement>(null);
+  const { status: biometric } = useBiometricStatus();
+  const deviceUnlock = biometric?.enrolled ? biometric : null;
 
   useEphemeralInputTeardown(passwordFieldRef);
 
@@ -150,6 +170,26 @@ export function LockScreen({
         <Button type="submit" disabled={isLoading} className="mt-4 h-12 w-full">
           {isLoading ? "Unlocking..." : "Unlock"}
         </Button>
+
+        {/* Offered only when it would work. A factor that needs the password
+            first gets a line saying so, never a button that fails. */}
+        {deviceUnlock && !deviceUnlock.passwordNeeded && (
+          <Button
+            variant="outline"
+            className="mt-2 h-11 w-full"
+            onClick={openUnlockWindow}
+          >
+            Unlock with your device
+          </Button>
+        )}
+        {deviceUnlock?.passwordNeeded && (
+          <p
+            className="mt-3 text-center text-xs leading-snug text-muted-foreground"
+            data-testid="device-unlock-note"
+          >
+            {PASSWORD_NEEDED_COPY[deviceUnlock.passwordNeeded]}
+          </p>
+        )}
 
         {/* There is deliberately no attempt counter here. One used to live in
             component state, which meant closing and reopening the popup reset it

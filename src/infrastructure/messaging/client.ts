@@ -189,6 +189,40 @@ export async function unlockVault(password: string) {
   return rpc<{ selectedKeyId?: string }>({ type: "vault.unlock", password });
 }
 
+/** Whether a factor is enrolled and whether it can be used right now. */
+export async function biometricStatus() {
+  return rpc<
+    import("@/application/services/biometric-factor.service").BiometricStatus
+  >({ type: "vault.biometricStatus" });
+}
+
+/** What the ceremony needs in order to ask the authenticator. */
+export async function biometricUnlockRequest() {
+  return rpc<
+    import("@/application/services/biometric-factor.service").BiometricUnlockRequest
+  >({ type: "vault.biometricUnlockRequest" });
+}
+
+export async function biometricUnlock(credentialId: number[], prfOutput: number[]) {
+  return rpc<{ selectedKeyId?: string }>({
+    type: "vault.biometricUnlock",
+    credentialId,
+    prfOutput,
+  });
+}
+
+export async function biometricForget() {
+  return rpc<null>({ type: "vault.biometricForget" });
+}
+
+export async function biometricEnroll(
+  password: string,
+  factor: import("@/domain/types").BiometricFactor,
+  prfOutput: number[]
+) {
+  return rpc<null>({ type: "vault.biometricEnroll", password, factor, prfOutput });
+}
+
 export async function lockVault() {
   return rpc<null>({ type: "vault.lock" });
 }
