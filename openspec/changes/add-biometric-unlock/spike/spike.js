@@ -1,7 +1,7 @@
 // Throwaway measurement harness for add-biometric-unlock task group 1.
 // Nothing here is product code. The stored credential and the log live in
-// localStorage so that every host (popup, side panel, options tab, created
-// window) of this extension origin sees the same ones.
+// extension storage, where the product keeps its own record, so that every
+// host (popup, side panel, options tab, created window) sees the same ones.
 
 const CREDENTIAL_KEY = "prf-spike-credential";
 const LOG_KEY = "prf-spike-log";
@@ -15,8 +15,9 @@ const toBase64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 const fromBase64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
 const randomBytes = (length) => crypto.getRandomValues(new Uint8Array(length));
 
-const readJson = (key, fallback) => JSON.parse(localStorage.getItem(key) ?? "null") ?? fallback;
-const writeJson = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+const store = chrome.storage.local;
+const readJson = async (key, fallback) => (await store.get(key))[key] ?? fallback;
+const writeJson = (key, value) => store.set({ [key]: value });
 
 // The harness never prints PRF output. A truncated SHA-256 is enough to tell
 // whether two assertions returned the same bytes.
@@ -37,17 +38,17 @@ function readFlags(authenticatorData) {
   };
 }
 
-function render() {
-  const credential = readJson(CREDENTIAL_KEY, null);
+async function render() {
+  const credential = await readJson(CREDENTIAL_KEY, null);
   byId("credential").textContent = credential
     ? JSON.stringify({ ...credential, salt: "(32 bytes)" }, null, 2)
     : "none stored";
-  byId("log").textContent = readJson(LOG_KEY, [])
+  byId("log").textContent = (await readJson(LOG_KEY, []))
     .map((entry) => JSON.stringify(entry))
     .join("\n");
 }
 
-function record(step, result) {
+async function record(step, result) {
   const entry = {
     at: new Date().toISOString(),
     row: byId("row").value,
@@ -57,8 +58,7 @@ function record(step, result) {
     step,
     ...result,
   };
-  writeJson(LOG_KEY, [...readJson(LOG_KEY, []), entry]);
-  render();
+  await writeJson(LOG_KEY, [...(await readJson(LOG_KEY, [])), entry]);
 }
 
 // Runs one ceremony and logs its outcome either way. The elapsed time is what
@@ -68,9 +68,9 @@ async function measure(step, ceremony) {
   const started = performance.now();
   try {
     const result = await ceremony();
-    record(step, { ok: true, ms: Math.round(performance.now() - started), startedVisibility, ...result });
+    await record(step, { ok: true, ms: Math.round(performance.now() - started), startedVisibility, ...result });
   } catch (error) {
-    record(step, {
+    await record(step, {
       ok: false,
       ms: Math.round(performance.now() - started),
       startedVisibility,
@@ -96,7 +96,7 @@ async function create() {
   });
   const extensions = credential.getClientExtensionResults();
   const transports = credential.response.getTransports();
-  writeJson(CREDENTIAL_KEY, {
+  await writeJson(CREDENTIAL_KEY, {
     id: toBase64(credential.rawId),
     transports,
     salt: toBase64(salt),
@@ -115,7 +115,7 @@ async function create() {
 }
 
 async function assert(userVerification) {
-  const stored = readJson(CREDENTIAL_KEY, null);
+  const stored = await readJson(CREDENTIAL_KEY, null);
   if (!stored) throw new Error("no stored credential — run create() first");
   const assertion = await navigator.credentials.get({
     publicKey: {
@@ -139,7 +139,7 @@ async function assert(userVerification) {
     ...flags,
   };
   if (userVerification === "required" && stored.fingerprintWithUv === null) {
-    writeJson(CREDENTIAL_KEY, { ...stored, fingerprintWithUv: print });
+    await writeJson(CREDENTIAL_KEY, { ...stored, fingerprintWithUv: print });
   }
   return result;
 }
@@ -167,8 +167,10 @@ async function describeEnvironment() {
   return lines;
 }
 
-byId("row").value = localStorage.getItem(ROW_KEY) ?? "";
-byId("row").addEventListener("input", () => localStorage.setItem(ROW_KEY, byId("row").value));
+readJson(ROW_KEY, "").then((row) => {
+  byId("row").value = row;
+});
+byId("row").addEventListener("input", () => writeJson(ROW_KEY, byId("row").value));
 
 byId("create").addEventListener("click", () => measure("create", create));
 byId("get-required").addEventListener("click", () =>
@@ -183,8 +185,7 @@ byId("get-delayed").addEventListener("click", () => {
   setTimeout(() => measure("get uv=required delayed", () => assert("required")), DELAY_MS);
 });
 byId("forget").addEventListener("click", () => {
-  localStorage.removeItem(CREDENTIAL_KEY);
-  render();
+  store.remove(CREDENTIAL_KEY);
 });
 
 byId("open-window").addEventListener("click", () =>
@@ -206,10 +207,11 @@ byId("copy").addEventListener("click", async () => {
   await navigator.clipboard.writeText(`${environment.join("\n")}\n\n${byId("log").textContent}`);
 });
 byId("clear").addEventListener("click", () => {
-  localStorage.removeItem(LOG_KEY);
-  render();
+  store.remove(LOG_KEY);
 });
 
-window.addEventListener("storage", render);
+chrome.storage.onChanged.addListener((_changes, area) => {
+  if (area === "local") render();
+});
 describeEnvironment();
 render();

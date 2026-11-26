@@ -328,10 +328,11 @@ export class BiometricFactorService {
     const aad = this.aadFor(envelope, factor);
     const iv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_LENGTH));
 
-    const sealKey = await this.hkdf.deriveAeadKey(prfOutput, info, ["encrypt"]);
+    const [sealKey, openKey] = await Promise.all([
+      this.hkdf.deriveAeadKey(prfOutput, info, ["encrypt"]),
+      this.hkdf.deriveAeadKey(prfOutput, info, ["decrypt"]),
+    ]);
     const ct = await this.aead.encrypt(sealKey, iv, kek, aad);
-
-    const openKey = await this.hkdf.deriveAeadKey(prfOutput, info, ["decrypt"]);
     const roundTripped = await this.aead.decrypt(openKey, iv, ct, aad);
     try {
       if (!constantTimeEqual(roundTripped, kek)) {
