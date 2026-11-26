@@ -647,6 +647,6 @@ A headless browser has no authenticator, so each state is produced with a virtua
 
 ## Verification
 
-- Light capture and dark capture: both complete, 77 screenshots each, no skipped step.
+- Light capture and dark capture: both complete, 77 screenshots each, no skipped step. Rerun on 2026-11-26 after rebasing onto the Blossom upload change: 83 each, no skipped step.
 - The two tracked captures (`23-popup-home-populated.png`, light and dark) were restored to their committed versions.
 - `tests/e2e/biometric-unlock.spec.ts` and `tests/e2e/accessibility.spec.ts`: passed.
