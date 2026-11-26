@@ -60,3 +60,10 @@ export function twoToneImage(
     chunk("IEND", Buffer.alloc(0)),
   ]);
 }
+
+/** The same PNG with a `tEXt` chunk (keyword, then text) placed before its image data. */
+export function withTextChunk(png: Buffer, keyword: string, text: string): Buffer {
+  const afterIhdr = 8 + 4 + 4 + 13 + 4;
+  const body = Buffer.concat([Buffer.from(keyword, "latin1"), Buffer.from([0]), Buffer.from(text, "latin1")]);
+  return Buffer.concat([png.subarray(0, afterIhdr), chunk("tEXt", body), png.subarray(afterIhdr)]);
+}

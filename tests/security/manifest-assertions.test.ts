@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { BLOSSOM_SERVERS } from "@/domain/blossom/servers";
 import { buildOutputPresent } from "./build-output";
 
 /**
@@ -53,8 +54,9 @@ const REQUIRED_CSP_DIRECTIVES: Record<string, string[]> = {
   "img-src": ["'self'", "data:", "https:"],
   // No 'self': nothing in an extension page fetches a bundled file, so the
   // extension origin is not a network destination. Relays need wss:, and
-  // profile image upload needs the one declared host.
-  "connect-src": ["wss:", "https://nostr.build"],
+  // profile image upload needs exactly the curated Blossom servers, read from
+  // the same list the manifest is generated from so the two cannot drift.
+  "connect-src": ["wss:", ...BLOSSOM_SERVERS.map((server) => server.origin)],
   "font-src": ["'self'"],
   "frame-src": ["'none'"],
   "base-uri": ["'none'"],
@@ -306,6 +308,35 @@ for (const target of TARGETS) {
           [...(parseCsp(policy).get("connect-src") ?? [])].sort(),
           `SECURITY REGRESSION: \`connect-src\` in the ${target.label} manifest was widened. Every network destination is reviewed in wxt.config.ts.`
         ).toEqual([...REQUIRED_CSP_DIRECTIVES["connect-src"]].sort());
+      });
+
+      it("names the curated upload hosts and nothing broader in connect-src", () => {
+        const csp = manifest.content_security_policy as Record<string, string> | string;
+        const policy = typeof csp === "string" ? csp : csp.extension_pages;
+        const connectSrc = parseCsp(policy).get("connect-src") ?? [];
+
+        expect(connectSrc).toContain("wss:");
+        expect(
+          connectSrc.filter((source) => source.startsWith("https:")).sort(),
+          `SECURITY REGRESSION: the https origins in the ${target.label} \`connect-src\` differ from the curated Blossom server list.`
+        ).toEqual(BLOSSOM_SERVERS.map((server) => server.origin).sort());
+
+        expect(
+          connectSrc,
+          "SECURITY REGRESSION: the retired hardcoded upload host is back in connect-src."
+        ).not.toContain("https://nostr.build");
+        for (const source of ["https:", "*", "https://*", "*.nostr.build"]) {
+          expect(
+            connectSrc,
+            `SECURITY REGRESSION: \`${source}\` in connect-src would let an extension page reach hosts nobody reviewed.`
+          ).not.toContain(source);
+        }
+        for (const source of connectSrc) {
+          expect(
+            source.includes("*") && source !== "wss:",
+            `SECURITY REGRESSION: wildcard source \`${source}\` appeared in connect-src.`
+          ).toBe(false);
+        }
       });
 
       it("never carries a dev-server source into a shipped policy", () => {

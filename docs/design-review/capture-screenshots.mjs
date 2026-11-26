@@ -596,6 +596,96 @@ try {
     });
   });
 
+  // The upload path of the profile editor, judged against the populated
+  // profile: its long picture address stays in the field, and the host is
+  // answered by a route so nothing reaches the network.
+  //
+  // Before the activity is seeded, on purpose. Each upload authorisation writes
+  // an activity entry, and these steps must not displace the seeded rows that
+  // Home and the Activity tab are photographed against.
+  async function pickImage(page, index = 0) {
+    const bytes = await page.evaluate(async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 160;
+      canvas.height = 120;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#5F50A0";
+      context.fillRect(0, 0, 160, 120);
+      context.fillStyle = "#EFECF7";
+      context.fillRect(20, 20, 60, 60);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      return Array.from(new Uint8Array(await blob.arrayBuffer()));
+    });
+    await page.locator('input[type="file"]').nth(index).setInputFiles({
+      name: "avatar.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(bytes),
+    });
+  }
+
+  const uploadHost = "https://blossom.primal.net/**";
+
+  await step("25c-popup-profile-edit-uploads", async () => {
+    await popup.reload();
+    await popup.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 15000 });
+    await safeClick(popup.getByRole("button", { name: /Profile/i }));
+    await popup.getByText("Profile Settings").waitFor({ timeout: 10000 });
+    await popup
+      .locator('button:has-text("Edit Profile"):not([disabled])')
+      .waitFor({ timeout: 15000 })
+      .catch(() => {});
+    await safeClick(popup.getByRole("button", { name: /Edit Profile/i }));
+    await popup.getByLabel("Profile Picture URL").waitFor({ timeout: 10000 });
+    await popup.locator("#picture-upload").evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await screenshot(popup, "25c-popup-profile-edit-uploads");
+  });
+
+  await step("25d-popup-upload-dialog", async () => {
+    await pickImage(popup);
+    await popup.getByRole("dialog").waitFor({ timeout: 10000 });
+    await screenshot(popup, "25d-popup-upload-dialog");
+    await popup.getByRole("dialog").getByRole("radio", { name: /Primal/ }).check();
+    await screenshot(popup, "25e-popup-upload-dialog-chosen");
+  });
+
+  await step("25f-popup-upload-in-progress", async () => {
+    let held;
+    await popup.context().route(uploadHost, (route) => {
+      held = route;
+    });
+    await popup.getByRole("dialog").getByRole("button", { name: "Upload", exact: true }).click();
+    await popup.getByRole("status").getByText(/Uploading to/).waitFor({ timeout: 10000 });
+    await screenshot(popup, "25f-popup-upload-in-progress");
+    await popup.getByRole("status").getByRole("button", { name: "Cancel" }).click();
+    await held?.abort();
+    await popup.context().unroute(uploadHost);
+  });
+
+  await step("25g-popup-upload-failed", async () => {
+    await popup.context().route(uploadHost, (route) => route.abort("failed"));
+    await pickImage(popup);
+    await popup.getByRole("dialog").getByRole("radio", { name: /Primal/ }).check();
+    await popup.getByRole("dialog").getByRole("button", { name: "Upload", exact: true }).click();
+    await popup.getByRole("alert").getByText(/Could not reach/).waitFor({ timeout: 10000 });
+    await screenshot(popup, "25g-popup-upload-failed");
+    await popup.context().unroute(uploadHost);
+    await popup.getByRole("button", { name: "Cancel", exact: true }).last().click();
+  });
+
+  await step("25h-sidepanel-upload-dialog", async () => {
+    await sidepanel.reload();
+    await sidepanel.getByRole("heading", { level: 2, name: KEY_NAME }).waitFor({ timeout: 15000 });
+    await safeClick(sidepanel.getByRole("button", { name: /Profile/i }));
+    await safeClick(sidepanel.getByRole("button", { name: /Edit Profile/i }));
+    await sidepanel.getByLabel("Profile Picture URL").waitFor({ timeout: 10000 });
+    await pickImage(sidepanel);
+    await sidepanel.getByRole("dialog").waitFor({ timeout: 10000 });
+    await sidepanel.getByRole("dialog").getByRole("radio", { name: /nostr.build/ }).check();
+    await screenshot(sidepanel, "25h-sidepanel-upload-dialog");
+    await sidepanel.keyboard.press("Escape");
+    await sidepanel.getByRole("button", { name: "Cancel", exact: true }).last().click();
+  });
+
   await step("seed policies", async () => {
     await rpc(popup, {
       type: "policy.setOrigin",

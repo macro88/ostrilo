@@ -121,7 +121,7 @@ Defects in shipped code. Each belongs to the row named.
 | ID | Title | Pri | Status | Notes |
 |----|-------|-----|--------|-------|
 | UX-001 | Persistent activity log | M | ✅ | Time, origin, kind, 100-character preview, result, key and the reason for a refusal. Retention 10-500 (default 50), pagination. The origin filter lists every stored origin and the kind filter reaches kinds 5, 22242 and 27235. The preview escapes hidden and direction-control characters, and a site that floods the log with rate-limited requests is recorded once per window. More filters are UX-006. |
-| UX-002 | Profile fetch and display | S | ✅ | kind:0 fetch, one-hour cache, name, about and website, edit and publish. The picture shows as a URL and is loaded only once, on an explicit save or Refresh picture, to make the local copy the header shows (SEC-021). |
+| UX-002 | Profile fetch and display | S | ✅ | kind:0 fetch, one-hour cache, name, about and website, edit and publish. The picture shows as a URL and is loaded only once, on an explicit save or Refresh picture, to make the local copy the header shows (SEC-021). The picture and the banner can be uploaded to a Blossom server from the editor: three curated hosts, none selected by default, a confirmation that names what the host sees on every upload, and still images re-encoded on the device to drop embedded metadata. |
 | UX-003 | Smart event preview | M | 🔄 | A consequence sentence for 13 kinds, trust and non-HTTPS chips, raw content, tags and JSON. Left: summaries parsed from the event (reply and zap targets, DM recipient, list diffs). |
 | UX-004 | One-click common actions | S | 🔄 | Copy public key and QR on Home, links to Keys, Relays, Permissions, Profile and Activity, Add Key in the header. Left: external profile link, export, keyboard shortcuts. |
 | UX-005 | Contextual help | S | 🔄 | Inline copy for trust levels, protected kinds and remember scope. Left: tooltips, help for event kinds, learn-more links. |
@@ -130,7 +130,7 @@ Defects in shipped code. Each belongs to the row named.
 | UX-008 | Onboarding tutorial | S | 🔄 | Setup wizard: create or import, password, verified backup; or Quick start, which takes a password and one key and leaves the backup for a Home reminder. Left: a concepts tutorial and dismissible tips. |
 | UX-009 | Bulk permission management | S | ⬜ | |
 | UX-010 | Notifications | S | ⬜ | With a Do Not Disturb mode. |
-| UX-011 | Accessibility (WCAG 2.1 AA) | M | 🔄 | Keyboard and ARIA coverage on key management and Radix controls, AA token contrast, labelled and keyboard-operable sliders, and an axe scan over 36 surfaces in both themes that fails the e2e run (nightly, on main, and on pull requests labelled `run-e2e`) on a serious or critical finding. Left: the side panel layout is not scanned, axe finds only part of WCAG 2.1 AA, and there has been no manual screen-reader pass. |
+| UX-011 | Accessibility (WCAG 2.1 AA) | M | 🔄 | Keyboard and ARIA coverage on key management and Radix controls, AA token contrast, labelled and keyboard-operable sliders, and an axe scan over 40 surfaces in both themes that fails the e2e run (nightly, on main, and on pull requests labelled `run-e2e`) on a serious or critical finding. Left: the side panel layout is not scanned, axe finds only part of WCAG 2.1 AA, and there has been no manual screen-reader pass. |
 | UX-012 | Mobile UI | S | ⬜ | |
 | UX-013 | Activity export | S | 🔄 | JSON export from the Activity Log settings, which reads the whole log in pages of 100. Left: CSV. |
 | UX-014 | Internationalization | C | ⬜ | |

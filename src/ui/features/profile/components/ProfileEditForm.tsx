@@ -1,8 +1,12 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { ProfileMetadata } from "@/domain/profile/types";
 import { PROFILE_FIELD_BOUNDS } from "@/domain/profile/types";
 import { Button } from "@/components/ui/button";
-import { ImageUploadField } from "./ImageUploadField";
+import { ProfileImageField } from "./ProfileImageField";
+import { UploadConsentDialog } from "./UploadConsentDialog";
+import { useBlossomUpload } from "../hooks/useBlossomUpload";
+import type { UploadDeps } from "../blossom-upload.controller";
+import type { BlossomServerId } from "@/domain/blossom/servers";
 import { Input } from "@/ui/components/ui/input";
 import { Label } from "@/ui/components/ui/label";
 import type { ProfileEditField } from "./ProfileSummary";
@@ -14,12 +18,13 @@ interface ProfileEditFormProps {
   onChange: (field: keyof ProfileMetadata, value: string) => void;
   onCancel: () => void;
   onSave: () => void;
-  /**
-   * HTTPS endpoint that receives uploaded images. Undefined means no image host
-   * is configured, which is the default: the upload control is then unavailable
-   * and the user pastes a URL instead.
-   */
-  uploadEndpoint?: string;
+  /** The key being edited. An upload belongs to it and ends if the key changes. */
+  pubkey: string;
+  /** The host confirmed last time, preselected in the upload dialog. Never assumed. */
+  blossomServer?: BlossomServerId;
+  onBlossomServerConfirmed?: (serverId: BlossomServerId) => void;
+  /** Stands in for the browser, crypto and RPC an upload uses. */
+  uploadDeps?: UploadDeps;
   /**
    * Field the editor opens on, when it was reached from one empty row of the
    * summary rather than from the screen's primary action.
@@ -68,9 +73,25 @@ export function ProfileEditForm({
   onChange,
   onCancel,
   onSave,
-  uploadEndpoint,
+  pubkey,
+  blossomServer,
+  onBlossomServerConfirmed,
+  uploadDeps,
   focusField,
 }: ProfileEditFormProps) {
+  // The field ids are the `ProfileEditField` names, so the editor opens on the
+  // row it was reached from.
+  useEffect(() => {
+    if (focusField) document.getElementById(focusField)?.focus();
+  }, [focusField]);
+
+  const upload = useBlossomUpload({
+    pubkey,
+    deps: uploadDeps,
+    onUploaded: (field, url) => onChange(field, url),
+    onServerConfirmed: onBlossomServerConfirmed,
+  });
+
   return (
     <div className="flex h-full flex-col">
       <div className="min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-4 [overscroll-behavior:contain] [scrollbar-gutter:stable]">
@@ -106,7 +127,6 @@ export function ProfileEditForm({
               placeholder="The name apps show first"
               maxLength={PROFILE_FIELD_BOUNDS.DISPLAY_NAME}
               disabled={isSaving}
-              autoFocus={focusField === "display_name"}
             />
           </div>
 
@@ -149,7 +169,6 @@ export function ProfileEditForm({
               maxLength={PROFILE_FIELD_BOUNDS.ABOUT}
               rows={3}
               disabled={isSaving}
-              autoFocus={focusField === "about"}
               className={TEXTAREA_CLASS}
             />
           </div>
@@ -158,28 +177,27 @@ export function ProfileEditForm({
             No preview: loading an entered image URL inside an extension page is
             the same leak the display surface removed.
           */}
-          <ImageUploadField
+          <ProfileImageField
             id="picture"
+            field="picture"
             label="Profile Picture URL"
             value={formData.picture || ""}
             onChange={(value) => onChange("picture", value)}
             disabled={isSaving}
             placeholder="https://example.com/avatar.jpg"
-            uploadEndpoint={uploadEndpoint}
-            autoFocus={focusField === "picture"}
+            upload={upload}
           />
 
-          <div className="space-y-2">
-            <Label htmlFor="banner">Banner Image URL</Label>
-            <Input
-              id="banner"
-              value={formData.banner || ""}
-              onChange={(e) => onChange("banner", e.target.value)}
-              placeholder="https://example.com/banner.jpg"
-              type="url"
-              disabled={isSaving}
-            />
-          </div>
+          <ProfileImageField
+            id="banner"
+            field="banner"
+            label="Banner Image URL"
+            value={formData.banner || ""}
+            onChange={(value) => onChange("banner", value)}
+            disabled={isSaving}
+            placeholder="https://example.com/banner.jpg"
+            upload={upload}
+          />
 
           <div className="space-y-2">
             <Label htmlFor="website">Website</Label>
@@ -190,7 +208,6 @@ export function ProfileEditForm({
               placeholder="https://yourwebsite.com"
               type="url"
               disabled={isSaving}
-              autoFocus={focusField === "website"}
             />
           </div>
 
@@ -239,6 +256,15 @@ export function ProfileEditForm({
           {isSaving ? "Saving..." : "Save Changes"}
         </Button>
       </div>
+
+      {upload.state.stage === "choosing" && (
+        <UploadConsentDialog
+          animated={upload.state.animated}
+          remembered={blossomServer}
+          onConfirm={upload.confirm}
+          onCancel={upload.cancel}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BLOSSOM_SERVER_IDS } from "@/domain/blossom/servers";
 import { RelayUrlListSchema } from "@/domain/relay/url";
 import { isAvatarDataUrl } from "@/domain/profile/avatar";
 import { isAllowedRemoteUrl } from "@/domain/profile/types";
@@ -81,23 +82,9 @@ export const AppSettingsPatchSchema = z
     // disabled is an unbounded grant of the broadest authority the product
     // offers. No settings write may reintroduce one.
     sessionTTLMinutes: z.number().int().min(1).max(60).optional(), // 1 to 60 min
-    // https: only, and an empty string clears it. Anything else - http:,
-    // data:, javascript: - is refused here as well as at use time.
-    uploadEndpoint: z
-      .union([
-        z.literal(""),
-        z
-          .string()
-          .max(512)
-          .refine((value) => {
-            try {
-              return new URL(value).protocol === "https:";
-            } catch {
-              return false;
-            }
-          }, { message: "Upload endpoint must be an https:// URL" }),
-      ])
-      .optional(),
+    // An id from the shipped server list, never a URL: the manifest's
+    // connect-src names exactly those hosts, so nothing else is reachable.
+    blossomServer: z.enum(BLOSSOM_SERVER_IDS).optional(),
     onboardingCompleted: z.boolean().optional(),
     onboardingCompletedAt: z.number().int().nonnegative().optional(),
     // Note: origins array updates should go through policy.setOrigin, not settings.update
@@ -219,12 +206,10 @@ export const KeyIdSchema = z.uuid("Invalid key ID format");
 
 export const ModeSchema = z.string().min(1, "Mode cannot be empty");
 
-// ============================================
 // NIP-01 Event Validation Schemas
-// ============================================
 
 /** 32-byte lowercase hex string (64 chars) */
-const HexString32Schema = z
+export const HexString32Schema = z
   .string()
   .regex(/^[0-9a-f]{64}$/, "Must be 64-character lowercase hex string");
 

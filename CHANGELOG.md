@@ -2,8 +2,25 @@
 
 ## Unreleased
 
+### Added
+
+- **Upload a profile picture or banner from Edit Profile.** Choose a file, pick
+  one of three hosts (Primal, nostr.build or nostrcheck.me) and confirm. Nothing
+  is sent until you do, there is no default host, and the window asks every
+  time. The window says what the host will see: the image, your IP address and
+  your public key. A still image is re-encoded on your device before it leaves,
+  which removes embedded details such as where a photo was taken, and its
+  longest side is capped at 2048 pixels; an animated image is sent as it is. You
+  can still paste an `https://` address instead. An upload only fills in the
+  address: your profile changes when you save it.
+
 ### Changed
 
+- **The image upload path that nothing could switch on is gone.** The old
+  upload field posted to a single configurable address that no screen could set,
+  and the extension's network policy still named nostr.build from when that host
+  was built in. The policy now names exactly the three hosts above, and nothing
+  else over `https://`.
 - **Every Chrome build now has the published extension ID.** A build loaded
   unpacked used to get an ID derived from its folder, different from the one
   the Chrome Web Store gives the published extension. Both are now
