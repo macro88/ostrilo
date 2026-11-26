@@ -50,6 +50,26 @@ export interface CryptoKdf {
   deriveKey(password: string, params: KdfParams): Promise<SecretBytes>;
 }
 
+export interface CryptoHkdf {
+  /**
+   * Stretches input keying material into an AES-GCM key with HKDF-SHA256.
+   *
+   * Returns a non-extractable `CryptoKey` and never the derived bytes. A
+   * `Uint8Array` can be zeroized and a `CryptoKey` cannot, so handing back
+   * bytes would create a secret the zeroization contract in
+   * `src/domain/utils/memory.ts` has no way to honour. This way the derived
+   * key never exists as a buffer in script at all.
+   *
+   * `info` binds the key to its purpose; two different uses must never share
+   * one. Callers still own `ikm` and MUST zeroize it.
+   */
+  deriveAeadKey(
+    ikm: SecretBytes,
+    info: Uint8Array<ArrayBuffer>,
+    usages: ("encrypt" | "decrypt")[]
+  ): Promise<CryptoKey>;
+}
+
 export interface Schnorr {
   getPublicKey(sk: Uint8Array): Promise<Uint8Array> | Uint8Array;
   sign(hash32: Uint8Array, sk: Uint8Array): Promise<Uint8Array> | Uint8Array;

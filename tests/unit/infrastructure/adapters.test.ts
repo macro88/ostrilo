@@ -5,8 +5,10 @@ import {
   NobleSchnorr,
   NobleSha256,
   ScureBech32,
+  VaultHkdf,
 } from "@/infrastructure/crypto/adapters";
 import { bytesToHex, hexToBytes } from "@/domain/utils/hex";
+import type { SecretBytes } from "@/application/ports/crypto";
 
 describe("Crypto adapters", () => {
   it("AES-GCM encrypt/decrypt roundtrip", async () => {
@@ -158,5 +160,58 @@ describe("ScureBech32", () => {
     // of 90, one passed 5000. An npub is 63 characters, so 90 is both the
     // standard bound and comfortably sufficient.
     expect(() => ScureBech32.decode(`npub1${"q".repeat(200)}`)).toThrow();
+  });
+});
+
+describe("VaultHkdf", () => {
+  // RFC 5869 test case 3: SHA-256, empty salt, empty info. HKDF output is a
+  // prefix-stable stream, so the first 32 bytes of the 42-byte vector are the
+  // 32-byte output. The derived key is not extractable, so it is compared by
+  // use: what it encrypts, a key imported from the vector must decrypt.
+  const IKM = "0b".repeat(22);
+  const OKM_32 = "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d";
+  const iv = new Uint8Array(12) as SecretBytes;
+  const aad = new Uint8Array(0) as SecretBytes;
+  const plaintext = new TextEncoder().encode("hkdf vector") as SecretBytes;
+
+  it("derives the RFC 5869 key", async () => {
+    const derived = await VaultHkdf.deriveAeadKey(
+      hexToBytes(IKM) as SecretBytes,
+      new Uint8Array(0),
+      ["encrypt"]
+    );
+    const ct = await WebCryptoAesGcm.encrypt(derived, iv, plaintext, aad);
+
+    const expected = await WebCryptoAesGcm.importKey(
+      hexToBytes(OKM_32) as SecretBytes,
+      ["decrypt"]
+    );
+    const pt = await WebCryptoAesGcm.decrypt(expected, iv, ct, aad);
+    expect(new TextDecoder().decode(pt)).toBe("hkdf vector");
+  });
+
+  it("derives a different key for a different info", async () => {
+    const one = await VaultHkdf.deriveAeadKey(
+      hexToBytes(IKM) as SecretBytes,
+      new TextEncoder().encode("purpose-a"),
+      ["encrypt"]
+    );
+    const two = await VaultHkdf.deriveAeadKey(
+      hexToBytes(IKM) as SecretBytes,
+      new TextEncoder().encode("purpose-b"),
+      ["decrypt"]
+    );
+    const ct = await WebCryptoAesGcm.encrypt(one, iv, plaintext, aad);
+    await expect(WebCryptoAesGcm.decrypt(two, iv, ct, aad)).rejects.toThrow();
+  });
+
+  it("returns a key that cannot be exported", async () => {
+    const key = await VaultHkdf.deriveAeadKey(
+      hexToBytes(IKM) as SecretBytes,
+      new Uint8Array(0),
+      ["encrypt"]
+    );
+    expect(key.extractable).toBe(false);
+    await expect(crypto.subtle.exportKey("raw", key)).rejects.toThrow();
   });
 });

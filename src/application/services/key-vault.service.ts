@@ -20,6 +20,7 @@ import {
   KDF_SALT_LENGTH,
   AES_GCM_IV_LENGTH,
   DEK_LENGTH,
+  type BiometricFactor,
   normalizeAutoLockMinutes,
   isLockReason,
   parseInactivityMinutes,
@@ -43,6 +44,12 @@ import {
   isRotationJournal,
   type RotationJournal,
 } from "./vault-rotation-journal";
+import {
+  BiometricRejectedError,
+  type BiometricFactorService,
+  type BiometricStatus,
+  type BiometricUnlockRequest,
+} from "./biometric-factor.service";
 import { SettingsStore } from "./settings-store";
 import { KeyBackupStatusService } from "./key-backup-status.service";
 import { ProfileAvatarService } from "./profile-avatar.service";
@@ -74,13 +81,27 @@ type LockState = {
   lockReason?: LockReason;
   /** The timeout that elapsed, on an `inactivity` lock, so the lock screen can name it. */
   inactivityMinutes?: number;
+  /**
+   * How an unlocked session was opened. It gates nothing: every operation that
+   * asks for the password asks in either kind of session. It exists so that a
+   * surface can explain why it is asking. Absent on a record written before
+   * this field existed, which was necessarily a password session.
+   */
+  authFactor?: AuthFactor;
 };
 
-/** What `getLockState()` reports. `lockAt` is set only while unlocked; the rest only while locked. */
+export type AuthFactor = "password" | "biometric";
+
+function isAuthFactor(value: unknown): value is AuthFactor {
+  return value === "password" || value === "biometric";
+}
+
+/** What `getLockState()` reports. `lockAt` and `authFactor` are set only while unlocked; the rest only while locked. */
 export type VaultLockState = {
   isLocked: boolean;
   selectedKeyId?: string;
   lockAt?: number;
+  authFactor?: AuthFactor;
   lockReason?: LockReason;
   inactivityMinutes?: number;
 };
@@ -150,7 +171,13 @@ export class KeyVaultService {
      */
     readonly profileAvatar: ProfileAvatarService = new ProfileAvatarService(
       storage.local
-    )
+    ),
+    /**
+     * The biometric wrapping of the KEK. Absent on a build that does not carry
+     * the feature, where every biometric method refuses and nothing reads or
+     * writes the wrapping.
+     */
+    private biometric: BiometricFactorService | null = null
   ) {}
 
   async getSettings(): Promise<AppSettingsV1 | undefined> {
@@ -179,7 +206,13 @@ export class KeyVaultService {
     return await this.storage.local.get<VaultEnvelope>(VAULT_ENVELOPE_STORAGE);
   }
 
+  /**
+   * Deletes the biometric wrapping before writing. A wrapping is bound to the
+   * envelope it was made against and cannot open under any other, so no write
+   * of an envelope may leave one behind.
+   */
   private async saveEnvelope(env: VaultEnvelope): Promise<void> {
+    await this.biometric?.forget();
     await this.storage.local.set<VaultEnvelope>(VAULT_ENVELOPE_STORAGE, env);
   }
 
@@ -285,6 +318,21 @@ export class KeyVaultService {
   ): Promise<SecretBytes> {
     this.assertVersionSupported(envelope.v);
     const kek = await this.deriveKek(password, envelope.kdf);
+    if (!(await this.kekOpensVerifier(kek, envelope))) {
+      zeroize(kek);
+      throw new Error("incorrect_password");
+    }
+    return kek;
+  }
+
+  /**
+   * The one place a candidate KEK is proven, whichever factor produced it.
+   * The caller owns `kek`.
+   */
+  private async kekOpensVerifier(
+    kek: SecretBytes,
+    envelope: VaultEnvelope
+  ): Promise<boolean> {
     try {
       const key = await this.aead.importKey(kek, ["decrypt"]);
       const pt = await this.aead.decrypt(
@@ -295,13 +343,9 @@ export class KeyVaultService {
       );
       const ok = new TextDecoder().decode(pt) === VERIFIER_PLAINTEXT;
       zeroize(pt);
-      if (!ok) throw new Error("incorrect_password");
-      return kek;
+      return ok;
     } catch {
-      // The version and KDF-floor refusals are thrown before the try, so
-      // anything caught here is the verifier failing to open.
-      zeroize(kek);
-      throw new Error("incorrect_password");
+      return false;
     }
   }
 
@@ -799,102 +843,248 @@ export class KeyVaultService {
         await this.saveEnvelope(envelope);
       }
 
-      // A re-unlock over a live session replaces these keys; they are wiped,
-      // not merely dropped.
-      this.discardUnlockedKeys();
-      const unlockedKeyIds: string[] = [];
-      const damagedKeyIds: string[] = [];
-      const migrated: KeyRecord[] = [];
-
-      for (const rec of records) {
-        let sk: SecretBytes | null = null;
-        try {
-          this.assertVersionSupported(rec.v);
-          sk =
-            rec.v === undefined
-              ? await this.openLegacyRecord(password, rec)
-              : await this.openPrivateKey(rec, kek, envelope.kdf);
-
-          if (!(await this.matchesPubkey(sk, rec.pubkey))) {
-            throw new Error("pubkey_mismatch");
-          }
-
-          this.unlocked.set(rec.id, sk);
-          unlockedKeyIds.push(rec.id);
-
-          if (rec.v === undefined) {
-            const upgraded = await this.migrateLegacyRecord(
-              rec,
-              sk,
-              kek,
-              envelope.kdf
-            );
-            if (upgraded) migrated.push(upgraded);
-          }
-          sk = null; // ownership transferred to this.unlocked
-        } catch {
-          damagedKeyIds.push(rec.id);
-        } finally {
-          if (sk) zeroize(sk);
-        }
-      }
-
-      // The password was right but not one key opened. Reporting the vault
-      // unlocked would hand every surface an open session with nothing in it,
-      // and the next read would blame the browser for it
-      // (`background_restarted`). The record is left locked, with no reason
-      // rather than a false one, and the caller is told the keys are damaged.
-      if (unlockedKeyIds.length === 0) {
-        await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
-          isLocked: true,
-          selectedKeyId: undefined,
-          lastActivity: Date.now(),
-        });
-        await this.revokeSessionGrants();
-        throw new Error("vault_keys_unreadable");
-      }
-
-      if (migrated.length > 0) {
-        const byId = new Map(migrated.map((r) => [r.id, r]));
-        await this.saveKeys(records.map((r) => byId.get(r.id) ?? r));
-      }
-
-      this.unreadable = new Set(damagedKeyIds);
-
-      // The stored selection is kept while its record exists, even when that
-      // record could not be opened: signing with it is then refused, and the
-      // user chooses another key. Falling back to a different key here would
-      // sign as an identity they did not pick. Only a selection that no longer
-      // exists in the records falls back to the first key that opened.
-      const stored = settings?.selectedKeyId;
-      const selectedKeyId =
-        stored !== undefined && records.some((rec) => rec.id === stored)
-          ? stored
-          : unlockedKeyIds[0];
-      if (selectedKeyId !== stored) {
-        // Written through the path `vault.select` uses, so the settings and the
-        // records' `isSelected` flags - which `nostr-rpc` resolves the signing
-        // key from - agree with the session. Only the selection moves; no key
-        // material or other field of a record is rewritten.
-        await this.selectKeyNow(selectedKeyId);
-      }
-
-      await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
-        isLocked: false,
-        selectedKeyId,
-        lastActivity: Date.now(),
-      });
-
-      await this.notifyUnlocked();
-      // A surface that opened while locked read the settings redacted - no
-      // relays, no origins, no selected key - and keeps them until told
-      // otherwise. This is what tells it the real ones are now readable.
-      await this.broadcastSettingsChanged();
-
-      return { selectedKeyId, unlockedKeyIds, damagedKeyIds };
+      const result = await this.openVaultWithKek(
+        kek,
+        envelope,
+        records,
+        settings,
+        password
+      );
+      await this.biometric?.notePasswordUnlock();
+      return result;
     } finally {
       if (kek) zeroize(kek);
     }
+  }
+
+  /**
+   * Unlocks with an authenticator's PRF output instead of the password.
+   *
+   * The output is turned into a candidate KEK by the biometric wrapping, and
+   * that candidate is then proven against the envelope verifier exactly as a
+   * password-derived one is. Nothing the caller asserts about the ceremony is
+   * trusted: the only evidence is that the bytes open the vault.
+   *
+   * Takes ownership of `prfOutput` and zeroizes it.
+   */
+  async unlockWithFactor(
+    credentialId: Uint8Array,
+    prfOutput: SecretBytes
+  ): Promise<{
+    selectedKeyId?: string;
+    unlockedKeyIds: string[];
+    damagedKeyIds: string[];
+  }> {
+    return this.writeLock.run(async () => {
+      let kek: SecretBytes | null = null;
+      try {
+        const biometric = this.biometric;
+        const [settings, records, envelope] = await Promise.all([
+          this.getSettings(),
+          this.listKeys(),
+          this.getEnvelope(),
+        ]);
+        if (!biometric || !envelope) throw new BiometricRejectedError();
+        this.assertVersionSupported(envelope.v);
+        this.assertKdfAcceptable(envelope.kdf);
+
+        kek = await biometric.unwrapKek(envelope, records, credentialId, prfOutput);
+        if (!(await this.kekOpensVerifier(kek, envelope))) {
+          throw new BiometricRejectedError(true);
+        }
+        const result = await this.openVaultWithKek(
+          kek,
+          envelope,
+          records,
+          settings,
+          null
+        );
+        await biometric.noteFactorUnlock();
+        return result;
+      } finally {
+        zeroize(prfOutput);
+        if (kek) zeroize(kek);
+      }
+    });
+  }
+
+  /**
+   * Enrols an authenticator as a second way to open the vault. The password is
+   * proven first, and the KEK it yields is what gets wrapped.
+   *
+   * Takes ownership of `prfOutput` and zeroizes it.
+   */
+  async enrollBiometric(
+    password: string,
+    factor: BiometricFactor,
+    prfOutput: SecretBytes
+  ): Promise<void> {
+    return this.writeLock.run(async () => {
+      let kek: SecretBytes | null = null;
+      try {
+        const biometric = this.biometric;
+        if (!biometric) throw new BiometricRejectedError();
+        const opened = await this.kekForWrite(password);
+        kek = opened.kek;
+        const [envelope, records] = await Promise.all([
+          this.getEnvelope(),
+          this.listKeys(),
+        ]);
+        // A legacy record can only be opened with the password, so a factor
+        // enrolled beside one could never unlock the vault.
+        if (!envelope || records.some((rec) => rec.v === undefined)) {
+          throw new BiometricRejectedError();
+        }
+        await biometric.enroll(kek, envelope, factor, prfOutput);
+      } finally {
+        zeroize(prfOutput);
+        if (kek) zeroize(kek);
+      }
+    });
+  }
+
+  /** False on a build that does not carry biometric unlock. */
+  get biometricAvailable(): boolean {
+    return this.biometric !== null;
+  }
+
+  /** Needs no credential: forgetting a factor can only reduce access. */
+  async forgetBiometric(): Promise<void> {
+    return this.writeLock.run(async () => {
+      await this.biometric?.forget();
+    });
+  }
+
+  async biometricStatus(): Promise<BiometricStatus> {
+    if (!this.biometric) return { enrolled: false };
+    const [records, lockState] = await Promise.all([
+      this.listKeys(),
+      this.getLockState(),
+    ]);
+    return this.biometric.status(records, !lockState.isLocked);
+  }
+
+  async biometricUnlockRequest(): Promise<BiometricUnlockRequest> {
+    if (!this.biometric) throw new BiometricRejectedError();
+    return this.biometric.unlockRequest(await this.listKeys());
+  }
+
+  /**
+   * Opens every record under an already-proven KEK and marks the session
+   * unlocked. The caller owns `kek` and zeroizes it.
+   *
+   * `password` is null when the KEK did not come from the password. An
+   * unversioned record can only be opened with the password, so without one it
+   * is reported damaged rather than opened.
+   */
+  private async openVaultWithKek(
+    kek: SecretBytes,
+    envelope: VaultEnvelope,
+    records: KeyRecord[],
+    settings: AppSettingsV1 | undefined,
+    password: string | null
+  ): Promise<{
+    selectedKeyId?: string;
+    unlockedKeyIds: string[];
+    damagedKeyIds: string[];
+  }> {
+    // A re-unlock over a live session replaces these keys; they are wiped,
+    // not merely dropped.
+    this.discardUnlockedKeys();
+    const unlockedKeyIds: string[] = [];
+    const damagedKeyIds: string[] = [];
+    const migrated: KeyRecord[] = [];
+
+    for (const rec of records) {
+      let sk: SecretBytes | null = null;
+      try {
+        this.assertVersionSupported(rec.v);
+        if (rec.v === undefined && password === null) {
+          throw new Error("legacy_record_needs_password");
+        }
+        sk =
+          rec.v === undefined
+            ? await this.openLegacyRecord(password as string, rec)
+            : await this.openPrivateKey(rec, kek, envelope.kdf);
+
+        if (!(await this.matchesPubkey(sk, rec.pubkey))) {
+          throw new Error("pubkey_mismatch");
+        }
+
+        this.unlocked.set(rec.id, sk);
+        unlockedKeyIds.push(rec.id);
+
+        if (rec.v === undefined) {
+          const upgraded = await this.migrateLegacyRecord(
+            rec,
+            sk,
+            kek,
+            envelope.kdf
+          );
+          if (upgraded) migrated.push(upgraded);
+        }
+        sk = null; // ownership transferred to this.unlocked
+      } catch {
+        damagedKeyIds.push(rec.id);
+      } finally {
+        if (sk) zeroize(sk);
+      }
+    }
+
+    // The password was right but not one key opened. Reporting the vault
+    // unlocked would hand every surface an open session with nothing in it,
+    // and the next read would blame the browser for it
+    // (`background_restarted`). The record is left locked, with no reason
+    // rather than a false one, and the caller is told the keys are damaged.
+    if (unlockedKeyIds.length === 0) {
+      await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
+        isLocked: true,
+        selectedKeyId: undefined,
+        lastActivity: Date.now(),
+      });
+      await this.revokeSessionGrants();
+      throw new Error("vault_keys_unreadable");
+    }
+
+    if (migrated.length > 0) {
+      const byId = new Map(migrated.map((r) => [r.id, r]));
+      await this.saveKeys(records.map((r) => byId.get(r.id) ?? r));
+    }
+
+    this.unreadable = new Set(damagedKeyIds);
+
+    // The stored selection is kept while its record exists, even when that
+    // record could not be opened: signing with it is then refused, and the
+    // user chooses another key. Falling back to a different key here would
+    // sign as an identity they did not pick. Only a selection that no longer
+    // exists in the records falls back to the first key that opened.
+    const stored = settings?.selectedKeyId;
+    const selectedKeyId =
+      stored !== undefined && records.some((rec) => rec.id === stored)
+        ? stored
+        : unlockedKeyIds[0];
+    if (selectedKeyId !== stored) {
+      // Written through the path `vault.select` uses, so the settings and the
+      // records' `isSelected` flags - which `nostr-rpc` resolves the signing
+      // key from - agree with the session. Only the selection moves; no key
+      // material or other field of a record is rewritten.
+      await this.selectKeyNow(selectedKeyId);
+    }
+
+    await this.storage.session.set<LockState>(LOCK_STATE_STORAGE, {
+      isLocked: false,
+      selectedKeyId,
+      lastActivity: Date.now(),
+      authFactor: password === null ? "biometric" : "password",
+    });
+
+    await this.notifyUnlocked();
+    // A surface that opened while locked read the settings redacted - no
+    // relays, no origins, no selected key - and keeps them until told
+    // otherwise. This is what tells it the real ones are now readable.
+    await this.broadcastSettingsChanged();
+
+    return { selectedKeyId, unlockedKeyIds, damagedKeyIds };
   }
 
   /** Opens an unversioned record with the read-only legacy derivation. */
@@ -1154,6 +1344,13 @@ export class KeyVaultService {
       };
     }
 
+    // An absent factor is a session the previous build opened, by password. A
+    // value this build did not write is not: the record is not trusted.
+    if (state.authFactor !== undefined && !isAuthFactor(state.authFactor)) {
+      await this.lock("state_unreadable");
+      return { isLocked: true, lockReason: "state_unreadable" };
+    }
+
     const deadline = await this.sessionDeadline(state);
     if (deadline.expired) {
       const minutes = deadline.reason === "inactivity" ? deadline.minutes : undefined;
@@ -1190,6 +1387,7 @@ export class KeyVaultService {
       isLocked: false,
       selectedKeyId: state.selectedKeyId,
       lockAt: deadline.lockAt,
+      authFactor: state.authFactor ?? "password",
     };
   }
 

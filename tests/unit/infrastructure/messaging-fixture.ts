@@ -16,7 +16,7 @@ import { UnlockThrottleService } from "@/application/services/unlock-throttle.se
 import { UserPresenceService } from "@/application/services/user-presence.service";
 import type { ServiceContext } from "@/infrastructure/messaging/rpc-router";
 import type { RpcResponse } from "@/infrastructure/messaging/rpc";
-import { memoryStorage, testVault } from "../../helpers/vault";
+import { memoryStorage, testBiometricVault, testVault } from "../../helpers/vault";
 
 /** Passes the new-vault password policy: long, no product terms, no patterns. */
 export const STRONG_PASSWORD = "Umbral-Pinecone-Drizzle-47";
@@ -59,8 +59,13 @@ export class MemoryRelay implements INostrRelay {
   async disconnect(): Promise<void> {}
 }
 
-export function realContext(storage: StorageSuite = memoryStorage()) {
-  const { vault } = testVault(storage);
+export function realContext(
+  storage: StorageSuite = memoryStorage(),
+  options: { biometric?: boolean } = {}
+) {
+  const { vault } = options.biometric
+    ? testBiometricVault(storage)
+    : testVault(storage);
   const settings = new SettingsService(storage);
   const policy = new PolicyService(storage);
   const activityLog = new ActivityLogService(storage.local);

@@ -2,6 +2,8 @@ import type { RpcRequest, RpcResponse } from "../rpc";
 import { requireReauth } from "@/infrastructure/messaging/reauth";
 import { withPasswordThrottle } from "@/infrastructure/messaging/password-throttle";
 import { handleChangePassword, newPasswordPolicyError } from "./change-password";
+import { handleBiometricRequest } from "./biometric-rpc";
+import { vaultProblemResponse } from "./vault-errors";
 import { RPC_ERROR_CODES, createRpcErrorResponse } from "../error-codes";
 import type { RpcModule, ServiceContext } from "../rpc-router";
 import {
@@ -88,6 +90,13 @@ export class VaultRpcHandler implements RpcModule {
       case "vault.changePassword":
         return handleChangePassword(message, context);
 
+      case "vault.biometricStatus":
+      case "vault.biometricUnlockRequest":
+      case "vault.biometricUnlock":
+      case "vault.biometricForget":
+      case "vault.biometricEnroll":
+        return handleBiometricRequest(message, context);
+
       default:
         return createRpcErrorResponse(RPC_ERROR_CODES.UNKNOWN_METHOD, {
           details: method,
@@ -168,37 +177,11 @@ export class VaultRpcHandler implements RpcModule {
       );
       return result.ok ? { ok: true, data: result.value } : result.response;
     } catch (error) {
-      if (error instanceof Error) {
-        // A wrong password and a damaged vault are different problems and must
-        // not be reported identically. The throttle maps only
-        // `incorrect_password`; everything below is a vault problem.
-        if (error.message === "vault_not_created") {
-          return createRpcErrorResponse(RPC_ERROR_CODES.NO_KEY_SELECTED, {
-            details:
-              "No vault exists yet. Create or import a key before unlocking.",
-            method: message.type,
-          });
-        }
-        if (error.message === "vault_keys_unreadable") {
-          return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
-            details:
-              "The password is right, but none of this vault's keys could be opened. Their records may be damaged. Do not re-create your vault.",
-            method: message.type,
-          });
-        }
-        if (
-          error.message === "vault_version_unsupported" ||
-          error.message === "kdf_below_floor" ||
-          error.message === "kdf_above_ceiling" ||
-          error.message === "kdf_unknown_algorithm"
-        ) {
-          return createRpcErrorResponse(RPC_ERROR_CODES.VAULT_UNREADABLE, {
-            details:
-              "This vault was written by a different version of Ostrilo, or its stored encryption parameters are not acceptable. Update the extension; do not re-create your vault.",
-            method: message.type,
-          });
-        }
-      }
+      // A wrong password and a damaged vault are different problems and must
+      // not be reported identically. The throttle maps only
+      // `incorrect_password`; what is mapped here is a vault problem.
+      const problem = vaultProblemResponse(error, message.type);
+      if (problem) return problem;
       throw error;
     }
   }

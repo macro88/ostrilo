@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { KEY_HANDLING_DOCUMENTS } from "@/infrastructure/messaging/key-handling-documents";
+import {
+  KEY_HANDLING_DOCUMENTS,
+  shipsInTarget,
+  type BuildTargetName,
+} from "@/infrastructure/messaging/key-handling-documents";
 import { buildOutputPresent } from "./build-output";
 
 /**
@@ -32,7 +36,7 @@ import { buildOutputPresent } from "./build-output";
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 
-const TARGETS = [
+const TARGETS: Array<{ name: BuildTargetName; command: string }> = [
   { name: "chrome-mv3", command: "pnpm run build" },
   { name: "firefox-mv3", command: "pnpm run build:firefox" },
 ];
@@ -136,7 +140,36 @@ for (const target of TARGETS) {
   describe(`${target.name}: key-handling documents exclude 3D libraries`, () => {
     if (!buildOutputPresent(built, target.command)) return;
 
-    it.each(KEY_HANDLING_DOCUMENTS)(
+    // Which documents this target ships is read from the shared declaration,
+    // and existence is established before anything is read: a document that
+    // is missing, or present where it should not be, fails as an assertion
+    // rather than as ENOENT.
+    const declared = KEY_HANDLING_DOCUMENTS.filter((name) =>
+      shipsInTarget(name, target.name)
+    );
+    const undeclared = KEY_HANDLING_DOCUMENTS.filter(
+      (name) => !shipsInTarget(name, target.name)
+    );
+
+    it.each(declared)("%s is present in this target", (documentName) => {
+      expect(
+        existsSync(path.join(outputDir, documentName)),
+        `${documentName} is declared for ${target.name} but was not built`
+      ).toBe(true);
+    });
+
+    it.each(undeclared)("%s is absent from this target", (documentName) => {
+      expect(
+        existsSync(path.join(outputDir, documentName)),
+        `${documentName} is not declared for ${target.name} but was built into it`
+      ).toBe(false);
+    });
+
+    const present = declared.filter((name) =>
+      existsSync(path.join(outputDir, name))
+    );
+
+    it.each(present)(
       "%s reaches no chunk containing a 3D engine",
       (documentName) => {
         const chunks = reachableChunks(outputDir, documentName);
@@ -158,7 +191,7 @@ for (const target of TARGETS) {
       }
     );
 
-    it.each(KEY_HANDLING_DOCUMENTS)(
+    it.each(present)(
       "%s stays under the transitive byte ceiling",
       (documentName) => {
         const bytes = reachableChunks(outputDir, documentName).reduce(

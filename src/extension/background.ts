@@ -5,11 +5,14 @@ import { createStorageSuite } from "@/infrastructure/storage/adapters";
 import {
   WebCryptoAesGcm,
   VaultKdf,
+  VaultHkdf,
   NobleSchnorr,
   NobleSha256,
   ScureBech32,
 } from "@/infrastructure/crypto/adapters";
+import { IS_CHROMIUM_BUILD } from "@/domain/platform/build-target";
 import { KeyVaultService } from "@/application/services/key-vault.service";
+import { BiometricFactorService } from "@/application/services/biometric-factor.service";
 import { PolicyService } from "@/application/services/policy.service";
 import { SettingsService } from "@/application/services/settings.service";
 import {
@@ -242,7 +245,12 @@ export default defineBackground(() => {
     NobleSchnorr,
     NobleSha256,
     ScureBech32,
-    settingsStore
+    settingsStore,
+    undefined,
+    undefined,
+    IS_CHROMIUM_BUILD
+      ? new BiometricFactorService(storage, WebCryptoAesGcm, VaultHkdf)
+      : null
   );
   const policy = new PolicyService(storage, settingsStore);
   // Reshapes stored consent once settings are in local storage. At worker start

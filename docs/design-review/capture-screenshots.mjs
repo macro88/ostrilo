@@ -1141,6 +1141,178 @@ try {
     await page.close();
   });
 
+  // Device unlock, in every state it can show. There is no real authenticator
+  // in a headless browser, so each state is produced with a virtual one: none
+  // that returns PRF output, one that does, one that holds no matching
+  // credential. That exercises the extension's own screens and says nothing
+  // about a real passkey provider. The step leaves the factor forgotten and
+  // the vault locked, which is what the next step expects.
+  await step("41-device-unlock", async () => {
+    const authenticator = async (page, overrides = {}) => {
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("WebAuthn.enable");
+      const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
+        options: {
+          protocol: "ctap2",
+          ctap2Version: "ctap2_1",
+          transport: "internal",
+          hasResidentKey: true,
+          hasUserVerification: true,
+          isUserVerified: true,
+          hasPrf: true,
+          automaticPresenceSimulation: true,
+          ...overrides,
+        },
+      });
+      return { cdp, authenticatorId };
+    };
+    const turnOn = async (page) => {
+      await safeClick(page.getByRole("button", { name: "Turn on", exact: true }));
+      await page.getByLabel("Password", { exact: true }).fill(CHANGED_PASSWORD);
+      await safeClick(page.getByRole("button", { name: "Confirm", exact: true }));
+    };
+    // Each of these rewrites one stored value from an extension page, the way
+    // a restart, a month without the password, or a damaged record would.
+    const setSessionMarker = (present) =>
+      popup.evaluate(async (keep) => {
+        // aislop-ignore-next-line eslint/no-undef -- runs in the page's browser context via page.evaluate, not in Node; `chrome` is defined there.
+        const session = chrome.storage.session;
+        if (keep) await session.set({ passwordUnlockedThisSession: true });
+        else await session.remove("passwordUnlockedThisSession");
+      }, present);
+    const setLastPasswordUnlock = (rehearsed) =>
+      popup.evaluate(async (recent) => {
+        // aislop-ignore-next-line eslint/no-undef -- runs in the page's browser context via page.evaluate, not in Node; `chrome` is defined there.
+        const local = chrome.storage.local;
+        const { vaultBiometric } = await local.get("vaultBiometric");
+        await local.set({
+          vaultBiometric: { ...vaultBiometric, lastPasswordUnlockAt: recent ? Date.now() : 1 },
+        });
+      }, rehearsed);
+    const flipWrappedByte = () =>
+      popup.evaluate(async () => {
+        // aislop-ignore-next-line eslint/no-undef -- runs in the page's browser context via page.evaluate, not in Node; `chrome` is defined there.
+        const local = chrome.storage.local;
+        const { vaultBiometric } = await local.get("vaultBiometric");
+        const ct = [...vaultBiometric.wrapped.ct];
+        ct[0] ^= 1;
+        await local.set({
+          vaultBiometric: { ...vaultBiometric, wrapped: { ...vaultBiometric.wrapped, ct } },
+        });
+      });
+    const openSecurity = async (page) => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto(`chrome-extension://${extensionId}/options.html`);
+      await page.getByText("Ostrilo Settings").waitFor({ timeout: 15000 });
+      await safeClick(page.getByRole("tab", { name: "Security" }));
+    };
+    const openUnlockWindow = async (page) => {
+      await page.setViewportSize({ width: 400, height: 560 });
+      await page.goto(`chrome-extension://${extensionId}/unlock.html`);
+    };
+
+    await rpc(popup, { type: "vault.unlock", password: CHANGED_PASSWORD });
+
+    const noProvider = await context.newPage();
+    await noProvider.addInitScript(() => {
+      // aislop-ignore-next-line eslint/no-undef -- runs in the page's browser context, where `PublicKeyCredential` is defined.
+      PublicKeyCredential.getClientCapabilities = async () => ({ "extension:prf": false });
+    });
+    await openSecurity(noProvider);
+    await noProvider.getByText(/no passkey provider/i).waitFor({ timeout: 10000 });
+    await screenshot(noProvider, "41b-device-unlock-no-provider");
+    await noProvider.close();
+
+    const bio = await context.newPage();
+    const withoutPrf = await authenticator(bio, { hasPrf: false });
+    await openSecurity(bio);
+    await bio.getByRole("button", { name: "Turn on", exact: true }).waitFor({ timeout: 10000 });
+    await screenshot(bio, "41-device-unlock-off");
+
+    await turnOn(bio);
+    await bio.getByText(/cannot be used to unlock a vault/i).waitFor({ timeout: 15000 });
+    await screenshot(bio, "41c-device-unlock-no-output");
+    await withoutPrf.cdp.send("WebAuthn.removeVirtualAuthenticator", {
+      authenticatorId: withoutPrf.authenticatorId,
+    });
+
+    const withPrf = await authenticator(bio);
+    await turnOn(bio);
+    await bio.getByText("Device unlock is on").waitFor({ timeout: 15000 });
+    await screenshot(bio, "41d-device-unlock-on", { delay: 600 });
+
+    await rpc(popup, { type: "vault.lock" });
+    await popup.reload();
+    await popup.getByRole("button", { name: "Unlock with your device" }).waitFor({ timeout: 10000 });
+    await screenshot(popup, "42-lock-device-unlock");
+
+    await setSessionMarker(false);
+    await popup.reload();
+    await popup.getByTestId("device-unlock-note").waitFor({ timeout: 10000 });
+    await screenshot(popup, "42b-lock-device-restart-pending");
+
+    const noPassword = await context.newPage();
+    await openUnlockWindow(noPassword);
+    await noPassword.getByRole("heading", { name: /password is needed/i }).waitFor({ timeout: 10000 });
+    await screenshot(noPassword, "43e-unlock-window-password-needed");
+    await noPassword.close();
+
+    await setSessionMarker(true);
+    await setLastPasswordUnlock(false);
+    await popup.reload();
+    await popup.getByTestId("device-unlock-note").waitFor({ timeout: 10000 });
+    await screenshot(popup, "42c-lock-device-rehearsal-due");
+    await setLastPasswordUnlock(true);
+
+    const stranger = await context.newPage();
+    await authenticator(stranger);
+    await openUnlockWindow(stranger);
+    await stranger.getByRole("heading", { name: "Nothing was unlocked" }).waitFor({ timeout: 10000 });
+    await screenshot(stranger, "43-unlock-window-cancelled");
+    await safeClick(stranger.getByRole("button", { name: "Try again" }));
+    await stranger.getByRole("button", { name: "Forget device unlock" }).waitFor({ timeout: 10000 });
+    await screenshot(stranger, "43b-unlock-window-forget-offer");
+    await stranger.close();
+
+    await flipWrappedByte();
+    await openUnlockWindow(bio);
+    await bio.getByRole("heading", { name: "That did not unlock the vault" }).waitFor({ timeout: 10000 });
+    await screenshot(bio, "43d-unlock-window-refused");
+    await flipWrappedByte();
+
+    await withPrf.cdp.send("WebAuthn.setAutomaticPresenceSimulation", {
+      authenticatorId: withPrf.authenticatorId,
+      enabled: false,
+    });
+    await openUnlockWindow(bio);
+    await bio.getByRole("heading", { name: /Confirm it/ }).waitFor({ timeout: 10000 });
+    await screenshot(bio, "43c-unlock-window-asking");
+    // A request left waiting is not resumed by switching presence back on, so
+    // the window is opened afresh. It closes itself once the vault is open.
+    await withPrf.cdp.send("WebAuthn.setAutomaticPresenceSimulation", {
+      authenticatorId: withPrf.authenticatorId,
+      enabled: true,
+    });
+    await openUnlockWindow(bio).catch(() => undefined);
+    for (let waited = 0; waited < 15000; waited += 250) {
+      if (!(await rpc(popup, { type: "state.getLock" })).isLocked) break;
+      await popup.waitForTimeout(250);
+    }
+
+    // The session is now one the device opened, which is what the password
+    // dialog explains.
+    await options.reload();
+    await options.getByText("Ostrilo Settings").waitFor({ timeout: 15000 });
+    await safeClick(options.getByRole("tab", { name: "Security" }));
+    await safeClick(options.getByRole("button", { name: "Reset All Settings" }));
+    await options.getByTestId("reauth-device-note").waitFor({ timeout: 10000 });
+    await screenshot(options, "44-reauth-device-session");
+    await safeClick(options.getByRole("button", { name: "Cancel" }));
+
+    await rpc(popup, { type: "vault.biometricForget" });
+    await rpc(popup, { type: "vault.lock" });
+  });
+
   // A key whose stored record cannot be decrypted. The vault opens with the
   // others, selects nothing it cannot read and says which key is damaged. The
   // record is damaged the way bit rot does it: a flipped bit fails the AEAD tag.

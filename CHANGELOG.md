@@ -14,6 +14,18 @@
   can still paste an `https://` address instead. An upload only fills in the
   address: your profile changes when you save it.
 
+- **Unlock with your device (Chrome).** After the first password unlock of a
+  browser session, you can unlock Ostrilo with a passkey instead of typing the
+  master password after each auto-lock. Turn it on under Settings → Security.
+  The password is never replaced: it is still asked for after a browser
+  restart, every 30 days, and for anything that reveals or changes a key.
+  Changing the password turns device unlock off. The passkey is kept by your
+  passkey provider and may sync to your other devices, so device unlock is as
+  strong as that account. Tested with Apple Passwords and Touch ID on macOS;
+  Windows Hello, Google Password Manager and security keys are untested, and
+  1Password does not save passkeys for browser extensions. Not available in
+  Firefox.
+
 ### Changed
 
 - **The image upload path that nothing could switch on is gone.** The old

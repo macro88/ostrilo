@@ -9,6 +9,7 @@ import type {
   ApprovalAction,
   ActivityLogEntry,
   LockReason,
+  BiometricFactor,
 } from "@/domain/types";
 
 // Re-export error codes for convenience
@@ -44,6 +45,19 @@ export type RpcRequest =
       newPassword: string;
     }
   | { type: "vault.reveal"; keyId?: string; password: string }
+  // Biometric unlock. `prfOutput` is the only evidence either request carries:
+  // there is deliberately no field by which a document reports that the user
+  // was verified.
+  | { type: "vault.biometricStatus" }
+  | { type: "vault.biometricUnlockRequest" }
+  | { type: "vault.biometricUnlock"; credentialId: number[]; prfOutput: number[] }
+  | { type: "vault.biometricForget" }
+  | {
+      type: "vault.biometricEnroll";
+      password: string;
+      factor: BiometricFactor;
+      prfOutput: number[];
+    }
   | { type: "keys.list" }
   // Per-key backup status. `markVerified` is the only write the UI has: a key
   // becomes `pending` when the vault creates it, never by request.
@@ -148,6 +162,8 @@ export type LockStatePayload = {
   lockReason?: LockReason;
   /** The timeout that elapsed, present with `lockReason: "inactivity"`. */
   inactivityMinutes?: number;
+  /** How the session was opened, present only while unlocked. */
+  authFactor?: "password" | "biometric";
 };
 
 // NIP-07 specific response types

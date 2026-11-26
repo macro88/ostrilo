@@ -23,6 +23,31 @@ export const KEY_HANDLING_DOCUMENTS = [
   // about to be signed. A decorative WebGL library in that realm can repaint
   // what the user is reading before they approve it.
   "approval.html",
+  // Receives an authenticator's PRF output, which opens the vault for anyone
+  // who can also read extension storage. Chromium builds only.
+  "unlock.html",
 ] as const;
 
 export type KeyHandlingDocument = (typeof KEY_HANDLING_DOCUMENTS)[number];
+
+/** A build target, named as its directory under `.output/`. */
+export type BuildTargetName = "chrome-mv3" | "firefox-mv3";
+
+/**
+ * Documents that exist in only some build targets. A document not listed here
+ * ships in every target. The build-output guard reads this, so a target-scoped
+ * document is checked where it ships and asserted absent where it does not.
+ */
+const TARGET_SCOPED_DOCUMENTS: Partial<
+  Record<KeyHandlingDocument, readonly BuildTargetName[]>
+> = {
+  "unlock.html": ["chrome-mv3"],
+};
+
+/** True when `document` is declared for `target`. */
+export function shipsInTarget(
+  document: KeyHandlingDocument,
+  target: BuildTargetName
+): boolean {
+  return TARGET_SCOPED_DOCUMENTS[document]?.includes(target) ?? true;
+}

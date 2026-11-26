@@ -3,6 +3,7 @@ import {
   verifierAad,
   dekAad,
   skAad,
+  bioWrapAad,
   AAD_DOMAIN,
 } from "@/domain/crypto/aad";
 import type { KdfParams } from "@/domain/types";
@@ -61,8 +62,8 @@ describe("AAD encoder", () => {
       expect(hex(dekAad(1, argon, KEY_ID, PUBKEY))).not.toBe(
         hex(skAad(1, KEY_ID, PUBKEY))
       );
-      expect(Object.values(AAD_DOMAIN)).toHaveLength(3);
-      expect(new Set(Object.values(AAD_DOMAIN)).size).toBe(3);
+      expect(Object.values(AAD_DOMAIN)).toHaveLength(4);
+      expect(new Set(Object.values(AAD_DOMAIN)).size).toBe(4);
     });
   });
 
@@ -147,6 +148,78 @@ describe("AAD encoder", () => {
       for (const forbidden of ["label", "isSelected", "createdAt", "lastUsedAt"]) {
         expect(encoded).not.toContain(forbidden);
       }
+    });
+  });
+
+  describe("biometric wrapping", () => {
+    const wrapper = {
+      v: 1,
+      credentialId: Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8]),
+      prfSalt: new Uint8Array(32).fill(7),
+      hkdfInfoVersion: 1,
+      backupEligible: true,
+    };
+    const base = hex(bioWrapAad(1, argon, wrapper));
+
+    it("has a fixed encoding", () => {
+      // A change to this string makes every enrolled factor unopenable.
+      expect(base).toBe(
+        "000000166f737472696c6f2f7661756c742d62696f2d77726170" +
+          "000000080000000000000001" +
+          "000000086172676f6e326964" +
+          "000000080000000000004c00" +
+          "000000080000000000000002" +
+          "000000080000000000000001" +
+          "0000000401020304" +
+          "000000080000000000000001" +
+          "000000080102030405060708" +
+          "00000020" +
+          "07".repeat(32) +
+          "000000080000000000000001" +
+          "000000080000000000000001"
+      );
+    });
+
+    it("is not interchangeable with a wrapped DEK's AAD", () => {
+      expect(base).not.toBe(hex(dekAad(1, argon, KEY_ID, PUBKEY)));
+      expect(new TextDecoder().decode(bioWrapAad(1, argon, wrapper))).toContain(
+        AAD_DOMAIN.bio
+      );
+    });
+
+    it.each([
+      ["envelope version", () => bioWrapAad(2, argon, wrapper)],
+      ["algorithm", () => bioWrapAad(1, pbkdf2, wrapper)],
+      ["memory cost m", () => bioWrapAad(1, { ...argon, m: 8 } as KdfParams, wrapper)],
+      ["time cost t", () => bioWrapAad(1, { ...argon, t: 1 } as KdfParams, wrapper)],
+      ["parallelism p", () => bioWrapAad(1, { ...argon, p: 2 } as KdfParams, wrapper)],
+      [
+        "envelope salt",
+        () => bioWrapAad(1, { ...argon, salt: [9, 9, 9, 9] } as KdfParams, wrapper),
+      ],
+      ["wrapper version", () => bioWrapAad(1, argon, { ...wrapper, v: 2 })],
+      [
+        "credential id",
+        () =>
+          bioWrapAad(1, argon, {
+            ...wrapper,
+            credentialId: Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 9]),
+          }),
+      ],
+      [
+        "PRF salt",
+        () => bioWrapAad(1, argon, { ...wrapper, prfSalt: new Uint8Array(32).fill(8) }),
+      ],
+      ["HKDF info version", () => bioWrapAad(1, argon, { ...wrapper, hkdfInfoVersion: 2 })],
+      ["backup-eligible flag", () => bioWrapAad(1, argon, { ...wrapper, backupEligible: false })],
+    ])("changes when the %s changes", (_field, encode) => {
+      expect(hex(encode())).not.toBe(base);
+    });
+
+    it("changes when the pbkdf2 iteration count changes", () => {
+      expect(hex(bioWrapAad(1, pbkdf2, wrapper))).not.toBe(
+        hex(bioWrapAad(1, { ...pbkdf2, c: 1000 } as KdfParams, wrapper))
+      );
     });
   });
 

@@ -12,10 +12,16 @@
  * what bytes get signed or stored is the real adapter. `tests/security/` is
  * where the KDF itself is pinned.
  */
-import type { CryptoKdf, SecretBytes } from "@/application/ports/crypto";
+import type {
+  CryptoAead,
+  CryptoKdf,
+  SecretBytes,
+} from "@/application/ports/crypto";
 import type { StorageSuite } from "@/application/ports/storage";
+import { BiometricFactorService } from "@/application/services/biometric-factor.service";
 import { KeyVaultService } from "@/application/services/key-vault.service";
 import {
+  VaultHkdf,
   NobleSchnorr,
   NobleSha256,
   ScureBech32,
@@ -69,6 +75,44 @@ export function testVault(storage: StorageSuite = memoryStorage()): {
       NobleSha256,
       ScureBech32
     ),
+    storage,
+  };
+}
+
+/**
+ * The same vault with the biometric wrapping composed in, as the Chromium
+ * background does. HKDF and AES-GCM are the real adapters; `aead` and `now`
+ * are injectable so a test can watch buffers and move the clock.
+ */
+export function testBiometricVault(
+  storage: StorageSuite = memoryStorage(),
+  options: { aead?: CryptoAead; now?: () => number } = {}
+): {
+  vault: KeyVaultService;
+  biometric: BiometricFactorService;
+  storage: StorageSuite;
+} {
+  const aead = options.aead ?? WebCryptoAesGcm;
+  const biometric = new BiometricFactorService(
+    storage,
+    aead,
+    VaultHkdf,
+    options.now
+  );
+  return {
+    vault: new KeyVaultService(
+      storage,
+      aead,
+      fastKdf,
+      NobleSchnorr,
+      NobleSha256,
+      ScureBech32,
+      undefined,
+      undefined,
+      undefined,
+      biometric
+    ),
+    biometric,
     storage,
   };
 }

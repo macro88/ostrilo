@@ -113,6 +113,14 @@ const LOCKED_REACHABLE_METHODS: ReadonlySet<string> = new Set([
   // Reveal re-verifies the password itself, which is a stronger check.
   "vault.reveal",
   "settings.get",
+  // The lock screen asks whether to offer the factor, and the ceremony needs
+  // the credential id and salt to ask the authenticator. Neither is secret.
+  "vault.biometricStatus",
+  "vault.biometricUnlockRequest",
+  // The way out of being locked, as `vault.unlock` is.
+  "vault.biometricUnlock",
+  // Forgetting a factor can only reduce access, so it needs no open session.
+  "vault.biometricForget",
 ]);
 
 /**

@@ -28,6 +28,7 @@ export const AAD_DOMAIN = {
   verifier: "ostrilo/vault-verifier",
   dek: "ostrilo/vault-dek",
   sk: "ostrilo/vault-sk",
+  bio: "ostrilo/vault-bio-wrap",
 } as const;
 
 export type AadDomain = (typeof AAD_DOMAIN)[keyof typeof AAD_DOMAIN];
@@ -127,5 +128,37 @@ export function skAad(
   numField(parts, v);
   strField(parts, keyId);
   strField(parts, pubkey);
+  return concat(parts);
+}
+
+/**
+ * AAD for the vault KEK, wrapped under a key derived from an authenticator.
+ *
+ * Binding the envelope's version and KDF fields, salt included, is what makes
+ * a rolled-back or swapped envelope break the wrapping by construction. The
+ * credential fields stop a storage writer pointing the wrapping at a different
+ * credential or salt, and `backupEligible` stops one relabelling a synced
+ * credential as device-bound.
+ */
+export function bioWrapAad(
+  envelopeV: number,
+  kdf: KdfParams,
+  wrapper: {
+    v: number;
+    credentialId: Uint8Array;
+    prfSalt: Uint8Array;
+    hkdfInfoVersion: number;
+    backupEligible: boolean;
+  }
+): Uint8Array<ArrayBuffer> {
+  const parts: Uint8Array[] = [];
+  strField(parts, AAD_DOMAIN.bio);
+  numField(parts, envelopeV);
+  kdfFields(parts, kdf);
+  numField(parts, wrapper.v);
+  field(parts, wrapper.credentialId);
+  field(parts, wrapper.prfSalt);
+  numField(parts, wrapper.hkdfInfoVersion);
+  numField(parts, wrapper.backupEligible ? 1 : 0);
   return concat(parts);
 }

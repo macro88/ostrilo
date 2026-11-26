@@ -114,6 +114,54 @@ export interface VaultEnvelope {
   updatedAt: number;
 }
 
+/** Format version of the biometric wrapping of the vault KEK. */
+export const BIOMETRIC_WRAPPER_VERSION = 1 as const;
+
+/** Version of the HKDF `info` string the wrapping key is derived under. */
+export const BIOMETRIC_HKDF_INFO_VERSION = 1 as const;
+
+/** A WebAuthn PRF evaluation returns exactly this many bytes. */
+export const BIOMETRIC_PRF_LENGTH = 32;
+
+/** WebAuthn bounds a credential id at 1023 bytes. */
+export const BIOMETRIC_CREDENTIAL_ID_MAX_LENGTH = 1023;
+
+/**
+ * A biometric unlock is refused once this long has passed without a password
+ * unlock. The password is the only recovery route, so it must stay remembered.
+ */
+export const PASSWORD_REHEARSAL_DAYS = 30;
+
+/**
+ * What an enrolling document reports about the credential it just created.
+ * None of it is secret, and none of it is verified by the background.
+ */
+export interface BiometricFactor {
+  credentialId: number[];
+  prfSalt: number[];
+  transports: string[];
+  /** Whether the credential may sync through the user's passkey provider. */
+  backupEligible: boolean;
+}
+
+/**
+ * A second wrapping of the vault KEK, opened by a key derived from an
+ * authenticator's PRF output. It adds no key: the envelope verifier still
+ * proves whatever this yields.
+ *
+ * `wrapped` is bound by AAD to the envelope and to `credentialId`, `prfSalt`,
+ * `hkdfInfoVersion` and `backupEligible`; see `bioWrapAad`. The remaining
+ * fields are outside the tag so that touching them re-encrypts nothing.
+ */
+export interface VaultBiometricRecord extends BiometricFactor {
+  v: number;
+  hkdfInfoVersion: number;
+  wrapped: { ct: number[]; iv: number[] };
+  createdAt: number;
+  lastUnlockAt?: number;
+  lastPasswordUnlockAt: number;
+}
+
 // Secret key record (encrypted at rest)
 export interface KeyRecord {
   id: string; // uuid (stable internal id)

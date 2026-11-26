@@ -12,7 +12,9 @@ only while a password change is being committed (see
 [Password change](#password-change)). A fourth, `keyBackupStatus`, sits beside
 the vault and is not part of it (see [below](#keybackupstatus-not-part-of-the-vault)),
 and a fifth, `profileAvatar`, holds the header's local picture copies (see
-[below](#profileavatar-not-part-of-the-vault)).
+[below](#profileavatar-not-part-of-the-vault)). On Chromium builds a sixth,
+`vaultBiometric`, exists while device unlock is turned on (see
+[Device unlock](#device-unlock-a-second-wrapping-of-the-kek)).
 
 ### `vaultEnvelope`
 
@@ -139,7 +141,7 @@ stalls or crashes the worker on every unlock (`kdf_above_ceiling`).
 AES-GCM is used with additional authenticated data on every operation. Encoder:
 `src/domain/crypto/aad.ts`.
 
-Three domain-separated shapes, so a blob sealed for one purpose can never be
+Four domain-separated shapes, so a blob sealed for one purpose can never be
 accepted for another:
 
 | Domain | Covers |
@@ -147,6 +149,7 @@ accepted for another:
 | `ostrilo/vault-verifier` | version, kdf alg, **every cost field**, salt |
 | `ostrilo/vault-dek` | the above, plus key id and pubkey |
 | `ostrilo/vault-sk` | version, key id, pubkey |
+| `ostrilo/vault-bio-wrap` | envelope version, kdf alg, every cost field, envelope salt, wrapper version, credential id, PRF salt, HKDF info version, backup-eligible flag |
 
 Rules the encoder must keep, each enforced by a test in
 `tests/unit/domain/aad.test.ts`:
@@ -240,6 +243,79 @@ lose a key.**
 
 The `v: 1` read path is retained permanently. Removing it would strand any vault
 that has not been opened since.
+
+## Device unlock: a second wrapping of the KEK
+
+Chromium builds only. Established by the OpenSpec change
+`add-biometric-unlock`.
+
+Device unlock adds no key. It stores one more wrapping of the same 32-byte KEK
+the password derives, under a key that an authenticator can reproduce:
+
+```
+authenticator --WebAuthn PRF(prfSalt, user verification required)--> 32 bytes
+  --HKDF-SHA256(empty salt, info = "ostrilo/biometric-kek-wrap/v1" || 0x00 || credentialId)--> wrapping key
+  wrapping key --AES-GCM(iv, aad = ostrilo/vault-bio-wrap)--> vaultBiometric.wrapped   (the KEK)
+```
+
+The wrapping key is derived straight into a non-extractable `CryptoKey`; it
+never exists as a buffer in script. Whatever the wrapping yields is then proven
+against the envelope `verifier`, exactly as a password-derived KEK is, before a
+single record is opened. So the device path cannot admit a key the password
+path would reject.
+
+### `vaultBiometric`
+
+At most one.
+
+```jsonc
+{
+  "v": 1,                       // wrapper version
+  "hkdfInfoVersion": 1,
+  "credentialId": [/* 1-1023 bytes */],
+  "prfSalt": [/* 32 bytes */],
+  "backupEligible": true,       // whether the passkey may sync; reported by the enrolling page
+  "wrapped": { "ct": [/* 48 bytes */], "iv": [/* 12 bytes */] },
+  "transports": ["internal", "hybrid"],
+  "createdAt": 1795000000000,
+  "lastUnlockAt": 1795000000000,
+  "lastPasswordUnlockAt": 1795000000000
+}
+```
+
+`transports` and the three timestamps are outside the AAD, so updating them
+re-encrypts nothing.
+
+**No envelope version bump.** The envelope and the records are untouched: a
+build that predates this record reads the vault exactly as before and ignores
+the extra key. Removing the record removes the feature and nothing else.
+
+**What it is worth to an attacker.** The PRF salt is fixed, so the authenticator
+returns the same 32 bytes at every unlock, and every other input to the wrapping
+is in `storage.local` in plaintext. A PRF output together with a copy of
+extension storage therefore yields the KEK, offline. This is not defended
+against, because everyone able to capture the output can also read the storage.
+The output is still less exposed than the password: it is never typed or
+displayed, and it exists in a document for the length of one request. It is
+revoked by turning device unlock off or by changing the password.
+
+Rules:
+
+- **Every envelope write deletes the record first.** `saveEnvelope` does it, so
+  vault creation, a password change and both branches of rotation recovery all
+  do. The wrapping is bound to the envelope's salt and could not open under a
+  new one anyway; deleting it means a stale record is never offered.
+- **The password is never removed.** Device unlock is refused, before the
+  output is evaluated, while a `vaultRotation` journal or a legacy record is
+  present, on the first unlock after a browser restart or extension update, and
+  once 30 days have passed without a password unlock. The last two are not
+  cryptographic controls: they keep the password remembered.
+- **The extension identifier is part of the secret's scope.** The passkey
+  belongs to `chrome-extension://<id>`. If the identifier ever changes, no
+  enrolled passkey can be reached and the password is the only way in. The
+  identifier is pinned by the manifest `key`; see `pin-extension-id`.
+- **Deleting the passkey loses only the shortcut.** The record then fails to
+  unlock and the user is offered to turn device unlock off.
 
 ## Rules for changing this
 

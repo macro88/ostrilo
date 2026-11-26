@@ -10,7 +10,8 @@ import {
 } from "@/ui/components/ui/dialog";
 import { PasswordInput } from "@/ui/components/ui/password-input";
 import { SealMark } from "@/components/common/SealMark";
-import { changePassword } from "@/infrastructure/messaging/client";
+import { IS_CHROMIUM_BUILD } from "@/domain/platform/build-target";
+import { biometricStatus, changePassword } from "@/infrastructure/messaging/client";
 import { RPC_ERROR_CODES } from "@/infrastructure/messaging/error-codes";
 import { countdownDetail } from "@/ui/lib/password-failure";
 import { userFacingError } from "@/ui/lib/user-facing-error";
@@ -60,6 +61,16 @@ function describeChangeFailure(error: unknown): Refusal {
   };
 }
 
+/** False on a build without the feature, or when the background cannot say. */
+async function deviceUnlockEnrolled(): Promise<boolean> {
+  if (!IS_CHROMIUM_BUILD) return false;
+  try {
+    return (await biometricStatus()).enrolled;
+  } catch {
+    return false;
+  }
+}
+
 export interface ChangePasswordDialogProps {
   open: boolean;
   onClose: () => void;
@@ -77,6 +88,7 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Refusal | undefined>();
   const [done, setDone] = useState(false);
+  const [deviceUnlockRemoved, setDeviceUnlockRemoved] = useState(false);
 
   const clearFields = () => {
     setCurrent("");
@@ -88,6 +100,7 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
     clearFields();
     setError(undefined);
     setDone(false);
+    setDeviceUnlockRemoved(false);
     onClose();
   };
 
@@ -100,7 +113,11 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
     setBusy(true);
     setError(undefined);
     try {
+      // A password change deletes the biometric wrapping, so whether one
+      // existed has to be read before the change, not after.
+      const hadDeviceUnlock = await deviceUnlockEnrolled();
       await changePassword(current, next);
+      setDeviceUnlockRemoved(hadDeviceUnlock);
       setDone(true);
     } catch (err) {
       setError(describeChangeFailure(err));
@@ -136,6 +153,15 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
               Encrypted backup files keep the passphrase they were made with.
               The new password does not change them.
             </p>
+            {deviceUnlockRemoved && (
+              <p
+                className="text-[13px] text-muted-foreground"
+                data-testid="device-unlock-removed"
+              >
+                Device unlock was turned off, because it was tied to the old
+                password. Turn it on again under Security.
+              </p>
+            )}
             <Button type="button" className="w-full" onClick={close}>
               Done
             </Button>
