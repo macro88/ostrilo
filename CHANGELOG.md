@@ -21,6 +21,12 @@
   and the extension's network policy still named nostr.build from when that host
   was built in. The policy now names exactly the three hosts above, and nothing
   else over `https://`.
+- **Every Chrome build now has the published extension ID.** A build loaded
+  unpacked used to get an ID derived from its folder, different from the one
+  the Chrome Web Store gives the published extension. Both are now
+  `nhodljdjlljpapclgcjmhajpgodanchk`. Nothing changes for an install from the
+  store. An existing unpacked install is treated by Chrome as a different
+  extension, so export its keys before loading a new build.
 
 ### Security
 

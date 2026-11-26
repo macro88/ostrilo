@@ -127,6 +127,19 @@ const SOURCES_ALLOWLIST = [
   "public/**",
 ];
 
+/**
+ * The public key the Chrome Web Store assigned to Ostrilo, read off the
+ * listing's Package tab. Chrome derives the extension identifier from it, so
+ * declaring it gives an unpacked or development build the same identifier, and
+ * therefore the same `chrome-extension://` origin, as the published one.
+ *
+ * It is public, and it is not a signing key: the store holds the private half.
+ * Changing it changes the origin, which orphans everything stored against the
+ * old one.
+ */
+const CHROME_EXTENSION_KEY =
+  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApYS+VMX++oeLHVjqE4SdJtPpphjxGO4/9nYll+1sPtou5u+AaOcMoIEwfLfG4/hxEwTHWpSgFgTgXWxu1e3XOqaRqDH5XCy9FIVnSyGuA71dk7ob17ihSVAywY5YS+tQ2Uf2TAd4z0uNqpGCwart1SbtTf2zMjgR9ZFITW3arctXS+y5/zUUv5hdqS8duBGW/FBSjjg5SUpCidlLOqX+hL74Qs4XRos2UQQqsOrH8D0SqPfa4sz67yuKFZ/IcxOMxRTkW+bxvzdL5q3yRllpVR/8BI2awa/Jz1jx/HQvYzAMPg2gMzWhUoypT2SBYUOzfMN4wX7feYxJ+1XgdkCZrwIDAQAB";
+
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: ["@wxt-dev/module-react", "@wxt-dev/auto-icons"],
@@ -137,6 +150,9 @@ export default defineConfig({
   // background suspension a platform guarantee on both targets.
   manifestVersion: 3,
   manifest: (env) => ({
+    // Chrome-only. Firefox takes its identifier from
+    // `browser_specific_settings` and treats `key` as an unknown manifest key.
+    ...(env.browser === "firefox" ? {} : { key: CHROME_EXTENSION_KEY }),
     // Reviewed permission set. `storage` holds the encrypted vault, `windows`
     // drives the approval window. `sidePanel` is deliberately absent: WXT adds
     // it automatically for MV3 sidepanel entrypoints on Chromium, and it is
