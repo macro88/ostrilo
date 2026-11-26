@@ -42,7 +42,7 @@ The background listener SHALL verify the message sender before dispatching a UI-
 
 ### Requirement: Private Key Parsing Returns A Validation Result Only
 
-`crypto.parsePrivateKey` SHALL return only a validation verdict for the supplied input. It SHALL NOT return secret-key bytes, hex, or bech32 encodings of the parsed key. It SHALL reject public-key input because it parses private keys. Key material SHALL travel only toward the background: a document SHALL send a pseudo-random-function output and an assertion and SHALL receive a verdict, and the vault key-encryption key and the wrapped key blob SHALL NOT be returned to a document in any encoding.
+`crypto.parsePrivateKey` SHALL return only a validation verdict for the supplied input. It SHALL NOT return secret-key bytes, hex, or bech32 encodings of the parsed key. It SHALL reject public-key input because it parses private keys. Key material SHALL travel only toward the background: a document SHALL send a pseudo-random-function output and SHALL receive a verdict, and the vault key-encryption key and the wrapped key blob SHALL NOT be returned to a document in any encoding.
 
 #### Scenario: Valid private key returns a verdict without material
 
@@ -72,8 +72,8 @@ The background listener SHALL verify the message sender before dispatching a UI-
 
 #### Scenario: A biometric unlock returns a verdict, not key material
 
-- **GIVEN** the ceremony document holds a pseudo-random-function output and a signed assertion
-- **WHEN** it sends both to the background to complete a biometric unlock
+- **GIVEN** the ceremony document holds a pseudo-random-function output
+- **WHEN** it sends it to the background to request a biometric unlock
 - **THEN** the response reports only whether the vault is now unlocked
 - **AND** the response contains no key-encryption key, no wrapped key blob, and no data-encryption key in any encoding
 
@@ -87,14 +87,14 @@ The background listener SHALL verify the message sender before dispatching a UI-
 
 ### Requirement: Biometric Methods Are Not Page-Reachable
 
-Every biometric remote-procedure method SHALL be registered only in a UI-only namespace, and none SHALL be added to the page-reachable set. A web page or content script attempting a biometric method SHALL receive exactly the response an unregistered namespace produces, so the refusal discloses neither that the method exists nor whether a factor is enrolled.
+Every biometric remote-procedure method SHALL be registered only in a UI-only namespace, and none SHALL be added to the page-reachable set. A web page or content script attempting a biometric method SHALL receive exactly the response an unregistered namespace produces, so the refusal discloses to a page neither that the method exists nor whether a factor is enrolled.
 
 #### Scenario: A page request for a biometric method is refused
 
-- **GIVEN** the content script is extended to forward `vault.biometricCompleteUnlock`
+- **GIVEN** the content script is extended to forward `vault.biometricUnlock`
 - **WHEN** the request arrives at the background from a page sender
 - **THEN** the response is an error with machine code `unknown_namespace`
-- **AND** no challenge is minted or consumed
+- **AND** no failure is recorded against the unlock throttle
 - **AND** the stored biometric factor record is not read
 
 #### Scenario: The refusal is not an oracle
@@ -102,4 +102,4 @@ Every biometric remote-procedure method SHALL be registered only in a UI-only na
 - **GIVEN** a page that requests a biometric method and a page that requests a namespace which was never registered
 - **WHEN** both responses are compared
 - **THEN** they carry the same machine code and the same detail
-- **AND** neither reveals whether a biometric factor is enrolled
+- **AND** neither reveals to the page whether a biometric factor is enrolled

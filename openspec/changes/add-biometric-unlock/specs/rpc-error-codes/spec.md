@@ -32,7 +32,7 @@ The RPC system SHALL map canonical machine error codes to numeric error codes. E
 - **THEN** the error response SHALL use machine code `"biometric_unavailable"`
 - **AND** the numeric `error.code` SHALL be `-32007`
 - **AND** the message SHALL be "Biometric unlock is unavailable" or a documented equivalent
-- **AND** this code SHALL NOT be returned by an unlock or enrolment attempt, because whether a factor is enrolled is not a fact a refusal may disclose
+- **AND** this code SHALL NOT be returned by an unlock or enrolment attempt, which always use the refusal code
 
 #### Scenario: Biometric refusal code
 - **GIVEN** a biometric unlock or enrolment request reaches the background
@@ -51,7 +51,7 @@ The RPC system SHALL map canonical machine error codes to numeric error codes. E
 
 ### Requirement: Security Considerations
 
-The RPC error code system SHALL maintain security boundaries and prevent information leakage. An error response SHALL NOT act as an oracle for the existence, identity, or state of stored credentials or enrolled authentication factors, nor for which step of a multi-step verification failed.
+The RPC error code system SHALL maintain security boundaries and prevent information leakage. An error response SHALL NOT act as an oracle for the identity or state of stored credentials or enrolled authentication factors, nor for which step of a multi-step verification failed. Whether a biometric factor is enrolled is disclosed deliberately, by the status method and only to an extension page, so that a factor enrolled without the user's knowledge is visible; an error response SHALL NOT be a second channel for it.
 
 #### Scenario: No sensitive data in error codes
 - **GIVEN** any error response
@@ -73,16 +73,16 @@ The RPC error code system SHALL maintain security boundaries and prevent informa
 
 #### Scenario: Every biometric refusal collapses to one code and one detail
 - **GIVEN** a biometric unlock or enrolment request that the background refuses
-- **WHEN** the failure originates in the ceremony, the challenge, the assertion signature, an authenticator-data flag, a credential-identifier mismatch, the key unwrap, or the envelope verifier
+- **WHEN** the failure originates in a missing factor record, a credential-identifier mismatch, the key unwrap, the envelope verifier, or a rule that requires the password this time
 - **THEN** the error response SHALL use machine code `"biometric_rejected"` in every case
 - **AND** `error.data.details` SHALL be the same fixed caller-safe string in every case
 - **AND** the response SHALL NOT name the step that failed, the credential, or the factor
 
-#### Scenario: A refusal does not disclose enrolment state
+#### Scenario: A refusal carries nothing the status method does not
 - **GIVEN** two vaults, one with a biometric factor enrolled and one without
 - **WHEN** a biometric unlock is attempted against each with material that does not verify
-- **THEN** the two responses SHALL be indistinguishable in code, message, and details
-- **AND** the caller SHALL NOT learn whether a factor is enrolled
+- **THEN** the two responses SHALL be identical in code, message, and details
+- **AND** the only source of enrolment state SHALL be the status method
 
 #### Scenario: Unavailability is reported without describing the device
 - **GIVEN** a biometric method refused as unavailable

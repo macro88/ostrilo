@@ -2,7 +2,7 @@
 
 ### Requirement: Manifests Request Only Permissions The Extension Uses
 
-Every generated manifest SHALL request only permissions the extension calls at runtime, and SHALL NOT request a permission that is invalid for the target browser. The reviewed permission set SHALL remain exactly `storage`, `windows` and `alarms`, plus `sidePanel`, which the build tool adds on Chromium for the side panel entrypoint. No generated manifest SHALL declare a host permission, including a host permission claiming a WebAuthn relying-party identifier. Adding a capability SHALL NOT widen this set.
+Every generated manifest SHALL request only permissions the extension calls at runtime, and SHALL NOT request a permission that is invalid for the target browser. The reviewed permission set SHALL remain exactly `storage`, `windows`, `alarms` and `idle`, plus `sidePanel`, which the build tool adds on Chromium for the side panel entrypoint. No generated manifest SHALL declare a host permission, including a host permission claiming a WebAuthn relying-party identifier. Adding a capability SHALL NOT widen this set.
 
 #### Scenario: Storage permission is present
 
@@ -31,11 +31,11 @@ Every generated manifest SHALL request only permissions the extension calls at r
 - **THEN** every entry in `permissions` appears in the reviewed permission allowlist recorded by the manifest assertion test
 - **AND** the manifest declares no `host_permissions` entry that is not required by a declared content script
 
-#### Scenario: The reviewed allowlist admits exactly four names
+#### Scenario: The reviewed allowlist admits exactly five names
 
 - **WHEN** the reviewed permission allowlist recorded by the manifest assertion test is read
-- **THEN** it contains exactly `storage`, `windows`, `alarms` and `sidePanel`
-- **AND** the declared permission set the build configuration writes is exactly `storage`, `windows` and `alarms`
+- **THEN** it contains exactly `storage`, `windows`, `alarms`, `idle` and `sidePanel`
+- **AND** the declared permission set the build configuration writes is exactly `storage`, `windows`, `alarms` and `idle`
 
 #### Scenario: Biometric unlock adds no permission
 

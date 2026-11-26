@@ -2,7 +2,7 @@
 
 ### Requirement: Cryptographic Libraries Confined To The Adapter Layer
 
-Modules under `src/infrastructure/` SHALL be the only modules permitted to import `@noble/*` or `@scure/*`. Domain, application, extension entry-point and UI modules SHALL obtain cryptographic operations through the ports declared in `src/application/ports/crypto.ts`. HKDF-SHA256 and ECDSA P-256 signature verification SHALL each be reached through a port declared in that file, and each SHALL have exactly one adapter, located under `src/infrastructure/crypto/`. The HKDF port SHALL return a non-extractable key object and SHALL NOT expose derived key bytes to any caller. The ECDSA P-256 port SHALL be verify-only: it SHALL expose no signing operation and no key generation operation. No cryptographic package SHALL be added to the project's dependencies to satisfy these ports.
+Modules under `src/infrastructure/` SHALL be the only modules permitted to import `@noble/*` or `@scure/*`. Domain, application, extension entry-point and UI modules SHALL obtain cryptographic operations through the ports declared in `src/application/ports/crypto.ts`. HKDF-SHA256 SHALL be reached through a port declared in that file, and SHALL have exactly one adapter, located under `src/infrastructure/crypto/`. The HKDF port SHALL return a non-extractable key object and SHALL NOT expose derived key bytes to any caller. No cryptographic package SHALL be added to the project's dependencies to satisfy this port, and no asymmetric signature verification other than the existing Schnorr adapter SHALL be introduced by it.
 
 #### Scenario: Domain layer cannot import a crypto library
 
@@ -48,35 +48,18 @@ Modules under `src/infrastructure/` SHALL be the only modules permitted to impor
 - **AND** it SHALL declare no return type and no parameter that carries derived key bytes
 - **AND** no caller SHALL be able to read the derived key as a byte buffer
 
-#### Scenario: ECDSA P-256 is reached through a port with one adapter
-
-- **GIVEN** a caller that must verify an ECDSA P-256 signature
-- **WHEN** it performs the verification
-- **THEN** it SHALL reach the operation through a port declared in `src/application/ports/crypto.ts`
-- **AND** exactly one ECDSA P-256 implementation SHALL exist in `src/`
-- **AND** that implementation SHALL live under `src/infrastructure/crypto/`
-
-#### Scenario: The ECDSA P-256 port offers no signing or key generation
-
-- **GIVEN** the declared ECDSA P-256 port and its adapter
-- **WHEN** they are inspected
-- **THEN** they SHALL expose a verification operation only
-- **AND** they SHALL expose no signing operation
-- **AND** they SHALL expose no key-generation operation
-
 #### Scenario: No cryptographic package is added
 
 - **GIVEN** the project dependency manifest before and after this change
 - **WHEN** they are compared
 - **THEN** no cryptographic package SHALL have been added
-- **AND** the ECDSA P-256 adapter SHALL use the already-declared `@noble/curves` dependency
 - **AND** the HKDF adapter SHALL use the platform `crypto.subtle` implementation
 
 ## ADDED Requirements
 
 ### Requirement: Credential-Management Access Is A Separate Platform Port
 
-Access to the browser credential-management API SHALL be reached only through a port dedicated to it, declared separately from the cryptographic ports, with exactly one adapter that runs in a document context. The credential-management API is platform input and output, not a cryptographic primitive. The background worker SHALL NOT import that port's adapter, and the background bundle SHALL contain no reference to the credential-management API.
+Access to the browser credential-management API SHALL be reached only through a port dedicated to it, declared separately from the cryptographic ports, with exactly one adapter module that runs in a document context. That module MAY be loaded by more than one extension document — the ceremony document for unlock and the options page for enrolment — and by no other. The credential-management API is platform input and output, not a cryptographic primitive. The background worker SHALL NOT import that port's adapter, and the background bundle SHALL contain no reference to the credential-management API.
 
 #### Scenario: Ceremony access is declared outside the crypto ports
 
@@ -92,6 +75,7 @@ Access to the browser credential-management API SHALL be reached only through a 
 - **THEN** it SHALL report exactly one module
 - **AND** that module SHALL implement the credential-management port
 - **AND** that module SHALL run only in a document context
+- **AND** it SHALL be imported only by the ceremony document and the options page
 
 #### Scenario: The background bundle contains no credential-management reference
 

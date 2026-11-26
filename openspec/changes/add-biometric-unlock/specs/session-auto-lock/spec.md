@@ -2,7 +2,7 @@
 
 ### Requirement: Privileged RPC Methods Require An Unlocked Vault
 
-The extension SHALL refuse privileged RPC methods with the `locked` error code while the vault is locked, and SHALL enforce this in the background handlers rather than relying on UI gating. Privileged methods SHALL include `settings.update`, `policy.setOrigin`, `policy.setKindRule`, `policy.setSession`, `policy.clearSession`, `policy.removeOrigin`, `policy.evaluate`, `vault.select`, `vault.renameKey`, `vault.deleteKey`, `vault.sign`, `vault.biometricBeginEnroll`, `vault.biometricEnroll`, `nostr.getPublicKey`, `nostr.signEvent`, `approval.resolve`, all `activity.*` methods, and all `profile.*` methods. Methods that SHALL remain reachable while locked are `vault.unlock`, `vault.lock`, `vault.biometricStatus`, `vault.biometricBeginUnlock`, `vault.biometricCompleteUnlock`, `vault.biometricForget`, `state.getLock`, `state.touch`, `keys.list`, `crypto.evaluatePassword`, `crypto.parsePrivateKey`, `vault.generate`, `vault.import`, `vault.reveal`, and `settings.get`. `vault.generate` and `vault.import` are reachable because creating or importing the first key happens before there is a vault to unlock and both verify the password themselves; `vault.reveal` is reachable because it re-verifies the password itself, which is a stronger check than the lock gate. While the vault is locked, `keys.list` SHALL return only the identifiers needed to determine that keys exist, `settings.get` SHALL return only the fields needed to render the lock screen and first-run flow, and `vault.biometricStatus` SHALL return only whether a usable factor exists and why it is unusable, and SHALL NOT return a credential identifier, a credential label, or any stored wrapping material.
+The extension SHALL refuse privileged RPC methods with the `locked` error code while the vault is locked, and SHALL enforce this in the background handlers rather than relying on UI gating. Privileged methods SHALL include `settings.update`, `policy.setOrigin`, `policy.setKindRule`, `policy.setSession`, `policy.clearSession`, `policy.removeOrigin`, `policy.evaluate`, `vault.select`, `vault.renameKey`, `vault.deleteKey`, `vault.sign`, `vault.biometricEnroll`, `nostr.getPublicKey`, `nostr.signEvent`, `approval.resolve`, all `activity.*` methods, and all `profile.*` methods. Methods that SHALL remain reachable while locked are `vault.unlock`, `vault.lock`, `vault.biometricStatus`, `vault.biometricUnlockRequest`, `vault.biometricUnlock`, `vault.biometricForget`, `state.getLock`, `state.touch`, `keys.list`, `crypto.evaluatePassword`, `crypto.parsePrivateKey`, `vault.generate`, `vault.import`, `vault.reveal`, and `settings.get`. `vault.generate` and `vault.import` are reachable because creating or importing the first key happens before there is a vault to unlock and both verify the password themselves; `vault.reveal` is reachable because it re-verifies the password itself, which is a stronger check than the lock gate. While the vault is locked, `keys.list` SHALL return only the identifiers needed to determine that keys exist, `settings.get` SHALL return only the fields needed to render the lock screen and first-run flow, `state.getLock` SHALL return only the locked state itself, without the inactivity deadline, plus the non-secret lock reason and, for an inactivity lock, the whole minutes of the timeout that elapsed, when the background recorded them, and `vault.biometricStatus` SHALL return only whether a usable factor exists, the date it was enrolled and why it is unusable, and SHALL NOT return a credential identifier, a credential label, or any stored wrapping material. `vault.biometricUnlockRequest` SHALL return only what an authenticator needs to be asked — the credential identifier, the pseudo-random-function salt and the transports — and SHALL NOT return the wrapping.
 
 #### Scenario: Settings mutation is refused while locked
 
@@ -37,14 +37,14 @@ The extension SHALL refuse privileged RPC methods with the `locked` error code w
 
 - **GIVEN** the vault is locked
 - **AND** a biometric factor is enrolled
-- **WHEN** `vault.biometricStatus`, `vault.biometricBeginUnlock`, `vault.biometricCompleteUnlock`, and `vault.biometricForget` are called
+- **WHEN** `vault.biometricStatus`, `vault.biometricUnlockRequest`, `vault.biometricUnlock`, and `vault.biometricForget` are called
 - **THEN** each call is served rather than refused with the `locked` error code
 - **AND** the user can complete a biometric unlock or forget the factor without first entering the password
 
 #### Scenario: Biometric enrolment is refused while locked
 
 - **GIVEN** the vault is locked
-- **WHEN** `vault.biometricBeginEnroll` or `vault.biometricEnroll` is called
+- **WHEN** `vault.biometricEnroll` is called
 - **THEN** the call fails with the `locked` error code
 - **AND** no factor record is written
 
@@ -53,8 +53,8 @@ The extension SHALL refuse privileged RPC methods with the `locked` error code w
 - **GIVEN** the vault is locked
 - **AND** a biometric factor is enrolled with a credential identifier and a label
 - **WHEN** `vault.biometricStatus` is called
-- **THEN** the response reports only whether an unlock can be attempted and why it cannot
-- **AND** no credential identifier, credential label, public key, or wrapping material is returned
+- **THEN** the response reports only whether an unlock can be attempted, the date the factor was enrolled, and why an unlock cannot be attempted
+- **AND** no credential identifier, credential label, or wrapping material is returned
 
 #### Scenario: Locked reads are reduced to what the lock screen needs
 
@@ -63,6 +63,21 @@ The extension SHALL refuse privileged RPC methods with the `locked` error code w
 - **WHEN** `settings.get` and `keys.list` are called
 - **THEN** no origin policy, relay list entry, key label, or public key is returned
 - **AND** the response still allows the UI to distinguish a first run from a locked vault with existing keys
+
+#### Scenario: Locked lock state carries no deadline
+
+- **GIVEN** the vault is locked
+- **AND** a last-activity timestamp is present in stored session state
+- **WHEN** `state.getLock` is called
+- **THEN** no inactivity deadline is returned
+- **AND** the response does not disclose when the previous session would have ended
+
+#### Scenario: Locked lock state carries the lock reason and nothing else
+
+- **GIVEN** the vault is locked with a recorded lock reason and a recorded last-activity timestamp
+- **WHEN** `state.getLock` is called
+- **THEN** the response contains the locked flag, the selected key identifier, the lock reason and, for an inactivity lock, the elapsed minutes
+- **AND** it contains no other field
 
 #### Scenario: A newly added privileged method is classified
 
@@ -109,10 +124,8 @@ Stored session lock state SHALL record whether the session was opened by the pas
 #### Scenario: Auto-lock fires while a ceremony window is open
 
 - **GIVEN** the vault is unlocked
-- **AND** a biometric ceremony window is open with a minted single-use challenge
+- **AND** a biometric ceremony window is open
 - **WHEN** the inactivity deadline passes and the vault locks
 - **THEN** all decrypted key material held in the background is zeroized
-- **AND** the ceremony's completion call consumes the challenge on read before any verification
-- **AND** the completion is refused
-- **AND** the same challenge cannot be presented again because it is single-use and already consumed
-- **AND** the vault stays locked until a new unlock is performed
+- **AND** a later unlock request from that window is evaluated as an ordinary unlock of a locked vault, under the same throttle, rehearsal and first-unlock rules
+- **AND** the open window confers no authority the lock screen would not
