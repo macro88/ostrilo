@@ -4,7 +4,7 @@ import { createServer, type Server } from "node:https";
 import type { AddressInfo } from "node:net";
 import type { Duplex } from "node:stream";
 
-import { ensureDevCertificate } from "./make-dev-cert";
+import { ensureDevCertificate } from "./make-dev-cert.ts";
 
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 export const REJECT_REASON = "blocked: fixture relay refused this event";
@@ -91,7 +91,7 @@ function sendText(socket: Duplex, text: string): void {
  *
  * It exists so a publish can be asserted end to end without a live relay. It
  * speaks only what the extension speaks - EVENT/OK, REQ/EVENT/EOSE - and it
- * stores the last kind:0 per author so a forced refetch gets back exactly what
+ * stores the last event per author and kind so a forced refetch gets back exactly what
  * was published. `accepts: false` answers `OK false`, which is a relay refusing
  * an event rather than a network that is down.
  *
@@ -209,7 +209,7 @@ export class FixtureRelay {
     if (message[0] === "EVENT") {
       const event = message[1] as SignedEvent;
       this.received.push(event);
-      if (this.accepts) this.stored.set(event.pubkey, event);
+      if (this.accepts) this.stored.set(`${event.pubkey}:${event.kind}`, event);
 
       sendText(
         socket,
@@ -229,9 +229,9 @@ export class FixtureRelay {
       this.requested.push(filter);
 
       for (const author of filter.authors ?? []) {
-        const event = this.stored.get(author);
-        if (event && (filter.kinds ?? [event.kind]).includes(event.kind)) {
-          sendText(socket, JSON.stringify(["EVENT", subId, event]));
+        for (const kind of filter.kinds ?? [0, 10002]) {
+          const event = this.stored.get(`${author}:${kind}`);
+          if (event) sendText(socket, JSON.stringify(["EVENT", subId, event]));
         }
       }
 

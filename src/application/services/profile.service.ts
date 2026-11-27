@@ -1,6 +1,7 @@
 import { StorageSuite } from "@/application/ports/storage";
 import {
   INostrRelay,
+  IRelayRouter,
   NostrEvent,
   NostrEventCallback,
   NostrEOSECallback,
@@ -26,20 +27,7 @@ const PARTITION_SALT_STORAGE = "relayPartitionSalt";
 const DEFAULT_TTL_SECONDS = 3600; // 1 hour
 const PROFILE_EVENT_KIND = 0;
 
-/**
- * A relay implementation that can answer on one named relay instead of fanning
- * a query out to every configured relay. `RelayManager` provides this; a bare
- * single-relay adapter does not, and does not need to.
- */
-interface PartitionableRelay {
-  getRelayUrls(): string[];
-  subscribeOn(
-    relayUrl: string,
-    filter: NostrFilter,
-    onEvent: NostrEventCallback,
-    onEOSE?: NostrEOSECallback
-  ): Promise<string>;
-}
+import type { RelayListService } from "./relay-list.service";
 
 /**
  * ProfileService - Application layer service for Nostr profile metadata management.
@@ -73,8 +61,9 @@ export class ProfileService {
 
   constructor(
     private storage: StorageSuite,
-    private relay: INostrRelay,
-    private keyVault: KeyVaultService
+    private relay: INostrRelay & Partial<IRelayRouter>,
+    private keyVault: KeyVaultService,
+    private relayList?: RelayListService
   ) {}
 
   /**
@@ -102,7 +91,7 @@ export class ProfileService {
       // at, so it may ask every configured relay. Routine hydration must not:
       // that is what would hand each relay the user's whole identity set.
       const profile = forceFetch
-        ? await this.fetchProfileFromRelay(pubkey)
+        ? await this.refreshProfile(pubkey)
         : await this.fetchPartitionedProfile(pubkey);
 
       // Cache the result (even if null to avoid repeated failures)
@@ -118,6 +107,12 @@ export class ProfileService {
       const cached = await this.getCachedProfile(pubkey);
       return cached?.metadata ?? null;
     }
+  }
+
+  private async refreshProfile(pubkey: string) {
+    if (!this.relayList) return this.fetchProfileFromRelay(pubkey);
+    const urls = await this.relayList.lookupUrls(pubkey);
+    return this.fetchProfileFromRelay(pubkey, undefined, urls);
   }
 
   /**
@@ -195,11 +190,18 @@ export class ProfileService {
 
     // Publish to relay and update cache optimistically
     await Promise.all([
-      this.relay.publish(signedEvent).catch((error: unknown) => {
+      this.publishProfile(signedEvent).catch((error: unknown) => {
         throw new ProfilePublishError(error);
       }),
       this.cacheProfile(selectedKey.pubkey, validated, signedEvent.id),
     ]);
+  }
+
+  private async publishProfile(event: NostrEvent) {
+    if (!this.relayList || !this.relay.publishTo) return this.relay.publish(event);
+    const urls = await this.relayList.profileTargets(event.pubkey);
+    const results = await this.relay.publishTo(urls, event);
+    if (!results.some(result => result.accepted)) throw new Error("No relay accepted the profile");
   }
 
   /**
@@ -217,18 +219,6 @@ export class ProfileService {
     }
 
     await this.purgeLegacyLocalCache();
-  }
-
-  /**
-   * Narrow the relay port to one that can query a single named relay, when the
-   * composed implementation supports it.
-   */
-  private asPartitionable(): PartitionableRelay | null {
-    const candidate = this.relay as Partial<PartitionableRelay>;
-    return typeof candidate.getRelayUrls === "function" &&
-      typeof candidate.subscribeOn === "function"
-      ? (candidate as PartitionableRelay)
-      : null;
   }
 
   /**
@@ -271,10 +261,9 @@ export class ProfileService {
   private async fetchPartitionedProfile(
     pubkey: string
   ): Promise<ProfileMetadata | null> {
-    const partitionable = this.asPartitionable();
-    const relayUrls = partitionable?.getRelayUrls() ?? [];
+    const relayUrls = this.relay.getRelayUrls?.() ?? [];
 
-    if (!partitionable || relayUrls.length <= 1) {
+    if (!this.relay.subscribeOn || relayUrls.length <= 1) {
       return this.fetchProfileFromRelay(pubkey);
     }
 
@@ -309,10 +298,12 @@ export class ProfileService {
    */
   private fetchProfileFromRelay(
     pubkey: string,
-    relayUrl?: string
+    relayUrl?: string,
+    urls?: string[]
   ): Promise<ProfileMetadata | null> {
     return new Promise((resolve) => {
       const events: NostrEvent[] = [];
+      let closeExtra: (() => void) | undefined;
       let settled = false;
       let subId: string | null = null;
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -328,6 +319,7 @@ export class ProfileService {
           return;
         }
         settled = true;
+        closeExtra?.();
 
         if (timeoutId !== undefined) {
           clearTimeout(timeoutId);
@@ -395,9 +387,22 @@ export class ProfileService {
         limit: 1,
       };
 
-      const partitionable = relayUrl ? this.asPartitionable() : null;
-      const subscription = partitionable
-        ? partitionable.subscribeOn(relayUrl!, filter, onEvent, onEOSE)
+      if (urls && this.relay.subscribeOn) {
+        let pending = urls.length;
+        const ids: string[] = [];
+        closeExtra = () => ids.forEach(closeSubscription);
+        const completed = () => { if (--pending === 0) settle(); };
+        for (const url of urls) {
+          this.relay.subscribeOn(url, filter, onEvent, completed).then(id => {
+            if (settled) closeSubscription(id);
+            else ids.push(id);
+          }, completed);
+        }
+        if (!pending) settle();
+        return;
+      }
+      const subscription = relayUrl && this.relay.subscribeOn
+        ? this.relay.subscribeOn(relayUrl, filter, onEvent, onEOSE)
         : this.relay.subscribe(filter, onEvent, onEOSE);
 
       Promise.resolve(subscription)

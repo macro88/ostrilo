@@ -109,6 +109,18 @@ describe("Quick start flow", () => {
     expect(markOnboardingComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("starts with relay publication enabled and sends the explicit opt-out", async () => {
+    const { container } = mount();
+    await openQuickStart(container);
+    const choice = input(container, "input[type=checkbox]");
+    expect(choice.checked).toBe(true);
+    act(() => choice.click());
+    await fillPasswords(container);
+    await click(button(container, "Create identity"));
+    await settle(() => background.sent("vault.generate").length > 0);
+    expect(background.sent("vault.generate")[0]).toMatchObject({ publishStarter: false });
+  });
+
   it("leaves no password in the document once the key exists", async () => {
     const { container } = mount();
     await openQuickStart(container);

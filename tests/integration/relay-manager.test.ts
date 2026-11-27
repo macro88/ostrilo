@@ -198,19 +198,9 @@ describe("RelayManager", () => {
       expect(relays[1].close).toHaveBeenCalledWith("sub-wss://relay-b.example");
     });
 
-    it("signals EOSE when the named relay is not configured", async () => {
-      const { manager, relays } = managerWithRelays(["wss://relay-a.example"]);
-      const onEOSE = vi.fn();
-
-      await manager.subscribeOn(
-        "wss://relay-unknown.example",
-        { kinds: [0] },
-        vi.fn(),
-        onEOSE
-      );
-
-      expect(relays[0].subscribe).not.toHaveBeenCalled();
-      expect(onEOSE).toHaveBeenCalledTimes(1);
+    it("refuses a private destination outside discovery", async () => {
+      const { manager } = managerWithRelays(["wss://relay-a.example"]);
+      await expect(manager.subscribeOn("wss://localhost", { kinds: [0] }, vi.fn())).rejects.toThrow("unavailable");
     });
 
     it("signals EOSE when the named relay fails to subscribe", async () => {

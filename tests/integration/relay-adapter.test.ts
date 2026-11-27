@@ -35,7 +35,7 @@ describe("NostrRelayAdapter Structure Tests", () => {
     it("subscribe method exists and has correct signature", () => {
       // Just verify the method exists - don't call it (requires WebSocket)
       expect(typeof adapter.subscribe).toBe("function");
-      expect(adapter.subscribe.length).toBe(3); // Takes 3 arguments
+      expect(adapter.subscribe.length).toBe(4); // filter, event, EOSE and discard callbacks
     });
 
     it("publish method exists and has correct signature", () => {

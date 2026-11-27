@@ -34,6 +34,7 @@ export type RpcRequest =
       label?: string;
       /** Create the key only if the vault holds none; else `key_already_exists`. */
       onlyIfEmpty?: boolean;
+      publishStarter?: boolean;
     }
   | { type: "vault.import"; keyInput: string; password: string; label?: string }
   | { type: "vault.select"; id: string }
@@ -139,6 +140,8 @@ export type RpcRequest =
   // The background builds the event; the page supplies only these three fields.
   | { type: "blossom.authorizeUpload"; pubkey: string; sha256: string; serverId: string }
   // Profile operations
+  | { type: "relayList.get" | "relayList.publishStarter"; params: { keyId: string } }
+  | { type: "relayList.publish"; params: { keyId: string; baseEventId: string | null; entries: import("@/domain/relay").RelayPermissions[] } }
   | { type: "profile.get"; params: { pubkey: string; forceFetch?: boolean } }
   | { type: "profile.getAll" }
   | { type: "profile.update"; params: { metadata: unknown } }

@@ -252,6 +252,8 @@ export interface AppSettingsV1 {
   onboardingCompletedAt?: number; // epoch seconds when onboarding was completed
   /** Consent-migration version already applied; absent means none has run. */
   __consentMigrations?: number;
+  /** Preserve explicitly chosen discovery relays, even when they match old defaults. */
+  __customDiscoveryRelays?: boolean;
 }
 
 /**
@@ -333,7 +335,7 @@ export function parseInactivityMinutes(value: unknown): number | undefined {
     : undefined;
 }
 
-export const DEFAULT_RELAY_URLS = ["wss://relay.primal.net"] as const;
+export const DEFAULT_RELAY_URLS = ["wss://relay.primal.net", "wss://relay.damus.io", "wss://nos.lol"] as const;
 
 // Default settings shipped with the extension
 export const DEFAULT_SETTINGS_V1: AppSettingsV1 = {

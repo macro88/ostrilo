@@ -332,7 +332,7 @@ async function seedVault(popup: Page): Promise<void> {
       },
     },
   }).catch((error: Error) => {
-    if (!/Publish failed on all relays/.test(error.message)) throw error;
+    if (!/profile.update failed: network_error/.test(error.message)) throw error;
   });
   const picture = twoToneImage(48, 48, [93, 63, 211], [244, 240, 255]);
   await sendExtensionRpc(popup, {

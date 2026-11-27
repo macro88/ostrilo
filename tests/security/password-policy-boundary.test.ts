@@ -79,6 +79,7 @@ describe("password policy at the RPC boundary", () => {
     handler = new VaultRpcHandler();
     context = {
       vault,
+      settings: { get: async () => ({ relays: [] }) },
       unlockThrottle: new UnlockThrottleService(storage.local),
     } as unknown as ServiceContext;
   });

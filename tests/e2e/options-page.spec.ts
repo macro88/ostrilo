@@ -142,7 +142,7 @@ test.describe("Options page", () => {
       "data-state",
       "active"
     );
-    await expect(options.getByRole("heading", { name: "Relays" })).toBeVisible();
+    await expect(options.getByRole("heading", { name: "Relays", exact: true })).toBeVisible();
   });
 
   test("syncs local settings updates between options and popup contexts", async ({

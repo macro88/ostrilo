@@ -90,7 +90,7 @@ export async function seedUnlockedVault(
   const password = opts.password ?? TEST_PASSWORD;
   const label = opts.label ?? "Agent Loop Key";
 
-  await sendExtensionRpc(page, { type: "vault.generate", password, label });
+  await sendExtensionRpc(page, { type: "vault.generate", password, label, publishStarter: false });
   await sendExtensionRpc(page, { type: "vault.unlock", password });
 
   // Without this grant getPublicKey() does not fail. It queues an approval and

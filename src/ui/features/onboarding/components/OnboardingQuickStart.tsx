@@ -1,3 +1,4 @@
+import { useStarterRelayChoice } from "@/ui/components/StarterRelayChoice";
 import { useRef, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ export function OnboardingQuickStart({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const { publishStarter, choice } = useStarterRelayChoice(isLoading || isCreating);
   const inFlight = useRef(false);
 
   const handleCreate = async () => {
@@ -61,7 +63,7 @@ export function OnboardingQuickStart({
         return;
       }
       try {
-        await generateKey(password, QUICK_START_KEY_NAME, { onlyIfEmpty: true });
+        await generateKey(password, QUICK_START_KEY_NAME, { onlyIfEmpty: true, publishStarter });
       } catch (refusal) {
         const alreadyThere =
           refusal instanceof RpcClientError &&
@@ -122,6 +124,7 @@ export function OnboardingQuickStart({
               />
             </div>
 
+            {choice}
             <div className="mt-auto flex gap-3 pt-6">
               <Button
                 variant="outline"

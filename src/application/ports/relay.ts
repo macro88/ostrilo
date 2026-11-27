@@ -46,7 +46,7 @@ export interface UnsignedNostrEvent {
  * Relay subscription callback types.
  */
 export type NostrEventCallback = (event: NostrEvent) => void;
-export type NostrEOSECallback = () => void;
+export type NostrEOSECallback = (summary?: { discarded: number; complete: boolean }) => void;
 
 /**
  * INostrRelay port interface for relay communication.
@@ -91,7 +91,8 @@ export interface INostrRelay {
   subscribe(
     filter: NostrFilter,
     onEvent: NostrEventCallback,
-    onEOSE?: NostrEOSECallback
+    onEOSE?: NostrEOSECallback,
+    onDiscard?: () => void
   ): Promise<string>;
 
   /**
@@ -115,3 +116,14 @@ export interface INostrRelay {
   disconnect(): Promise<void>;
 }
 
+
+export interface RelayPublishResult {
+  url: string;
+  accepted: boolean;
+}
+
+export interface IRelayRouter extends INostrRelay {
+  getRelayUrls(): string[];
+  subscribeOn(url: string, filter: NostrFilter, onEvent: NostrEventCallback, onEOSE?: NostrEOSECallback, onDiscard?: () => void): Promise<string>;
+  publishTo(urls: string[], event: NostrEvent): Promise<RelayPublishResult[]>;
+}

@@ -102,7 +102,7 @@ Before publishing, the editor enforces at least one write relay and at most `MAX
 
 ### Decision 7: A starter list is published automatically only for keys Ostrilo generated
 
-After `vault.generate` succeeds, the handler calls `RelayListService.publishStarter(keyId)` and does not await it. The RPC response, and so onboarding, never waits on a relay. The starter list is the discovery relays at that moment, each as an `r` tag with no marker (read and write). On a fresh install those are the three defaults.
+Key generation saves the record and erases its fresh secret before the UI unlocks the vault. For an enabled starter, the vault signs the fixed discovery-list event after saving the record and before erasure. Only the signed event passes to the relay service for asynchronous publication. This keeps the normal unlock gate on all general-purpose signing and leaves the vault lock state alone. The RPC response, and so onboarding, never waits on a relay. The starter list is the discovery relays at that moment, each as an `r` tag with no marker (read and write). On a fresh install those are the three defaults.
 
 - It runs once. Failure is logged without the payload and not retried. A retry minutes or days later could land after the user has opened another client that published its own list, and it would overwrite that list. If the key cannot sign (the vault locked first), it is skipped.
 - It skips the overwrite lookup, because a key generated microseconds ago has no list anywhere. That is also why this is the only automatic publish.
@@ -188,6 +188,6 @@ Judged against a populated vault in both themes, per `AGENTS.md`. The screenshot
 
 ## Open Questions
 
-1. **Should onboarding offer an opt-out for the starter publish?** This design ships without one. It is disclosed, and the list can be replaced later, but it cannot be unpublished. A privacy-focused user could reasonably want to skip it. This is a product call for the owner before implementation starts.
+1. **Should onboarding offer an opt-out for the starter publish?** Resolved by Matt on 27 November 2026. Full onboarding, Quick start and Add Key show a checked-by-default publication control. Clearing it skips signing and publishing for this creation.
 2. **Should a starter list or relay-list publish also go to an indexer relay** (for example `purplepag.es`) to improve discoverability? Deferred. It would be a fourth operator receiving every publish.
 3. **Should the popup get a read-only view of the relay list,** or does it stay options-page only? This design assumes options-page only.

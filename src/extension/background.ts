@@ -24,6 +24,8 @@ import { UnlockThrottleService } from "@/application/services/unlock-throttle.se
 import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
 import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.service";
 import { UserPresenceService } from "@/application/services/user-presence.service";
+import { RelayListService } from "@/application/services/relay-list.service";
+import { RelayListRpcHandler } from "@/infrastructure/messaging/handlers/relay-list-rpc";
 import { ProfileService } from "@/application/services/profile.service";
 import { RelayManager } from "@/infrastructure/relay";
 import { SessionKeepAlive } from "@/infrastructure/lifecycle/session-keepalive";
@@ -291,7 +293,8 @@ export default defineBackground(() => {
     .catch((err) => console.warn("Failed to load relay settings", err));
 
   // Initialize profile service
-  const profile = new ProfileService(storage, relayManager, vault);
+  const relayList = new RelayListService(relayManager, storage.session, vault, activityLog);
+  const profile = new ProfileService(storage, relayManager, vault, relayList);
 
   // Create service context
   // Persisted in storage.local, not a timer: setTimeout does not survive MV3
@@ -322,6 +325,7 @@ export default defineBackground(() => {
     settings,
     activityLog,
     profile,
+    relayList,
     unlockThrottle,
     disclosureRateLimit,
     autoSignBudget,
@@ -411,6 +415,7 @@ export default defineBackground(() => {
     })
   ); // Approval queue operations
   router.registerModule("activity", new ActivityRpcHandler()); // Activity log operations
+  router.registerModule("relayList", new RelayListRpcHandler());
   router.registerModule("profile", new ProfileRpcHandler()); // Profile metadata operations
   router.registerModule("backup", new BackupRpcHandler()); // Per-key backup status
   router.registerModule("avatar", new AvatarRpcHandler()); // Local copy of a key's profile picture

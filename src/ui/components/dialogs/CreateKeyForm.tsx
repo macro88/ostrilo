@@ -1,3 +1,4 @@
+import { useStarterRelayChoice } from "@/ui/components/StarterRelayChoice";
 import { useLayoutEffect, useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,7 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
   const passwordRef = useRef<HTMLInputElement>(null);
   const [keyName, setKeyName] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const { publishStarter, choice } = useStarterRelayChoice(isGenerating);
   const [error, setError] = useState("");
 
   // A layout effect: React detaches the ref before passive cleanups run.
@@ -49,7 +51,7 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
     setError("");
 
     try {
-      await generateKey(password, keyName.trim());
+      await generateKey(password, keyName.trim(), publishStarter);
       // Clear password from input
       if (passwordRef.current) {
         passwordRef.current.value = "";
@@ -113,6 +115,7 @@ export function CreateKeyForm({ onBack, onSuccess }: CreateKeyFormProps) {
         </div>
       )}
 
+      {choice}
       <KeyFormActions
         onBack={onBack}
         pending={isGenerating}

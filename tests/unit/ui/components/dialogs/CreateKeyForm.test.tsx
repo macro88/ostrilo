@@ -89,6 +89,17 @@ describe("create key form", () => {
     expect(alertText(container)).toBe("");
   });
 
+  it("skips the starter list when the checked publication choice is cleared", async () => {
+    const { container } = mount();
+    const choice = input(container, "input[type=checkbox]");
+    expect(choice.checked).toBe(true);
+    await click(choice);
+    setValue(input(container, "#password"), PASSWORD);
+    setValue(input(container, "#keyName"), "Work");
+    await submitAndSettle(container);
+    expect(background.sent("vault.generate")[0]).toMatchObject({ publishStarter: false });
+  });
+
   it("shows the vault's refusal and does not report success", async () => {
     background.fail("vault.generate", RPC_ERROR_CODES.INVALID_PASSWORD);
     const { container, onSuccess } = mount();
@@ -137,6 +148,7 @@ describe("create key form", () => {
     expect(button(container, "Back").disabled).toBe(true);
     expect(input(container, "#password").disabled).toBe(true);
     expect(input(container, "#keyName").disabled).toBe(true);
+    expect(input(container, "input[type=checkbox]").disabled).toBe(true);
 
     release();
     await settle(() => !container.textContent?.includes("Creating..."));

@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/password-input";
 
 interface OnboardingCreateKeyInputStepProps {
+  starterChoice: React.ReactNode;
   keyName: string;
   password: string;
   confirmPassword: string;
@@ -25,6 +26,7 @@ interface OnboardingCreateKeyInputStepProps {
  * the popup already is, and it cost 34px of width at 400px.
  */
 export function OnboardingCreateKeyInputStep({
+  starterChoice,
   keyName,
   password,
   confirmPassword,
@@ -76,6 +78,7 @@ export function OnboardingCreateKeyInputStep({
         />
       </div>
 
+      {starterChoice}
       {/* Pinned to the bottom: ghost 1fr, notched primary 2fr (DESIGN_RULES §7). */}
       <div className="mt-auto flex gap-3 pt-6">
         <Button variant="outline" onClick={onBack} className="h-12 flex-1">

@@ -640,6 +640,8 @@ export class NostrRpcHandler implements RpcModule {
         sig: signResult.sigHex,
       };
 
+      if (event.kind === 10002) await context.relayList.invalidate(pubkey);
+
       // Record successful signing in activity log
       await context.activityLog.addEntry({
         origin: message.origin,

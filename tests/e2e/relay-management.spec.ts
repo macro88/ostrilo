@@ -22,7 +22,7 @@ const RELAY_B = "wss://relay.two.example";
 
 async function openRelaysTab(page: Page) {
   await page.getByRole("tab", { name: "Relays" }).click();
-  await expect(page.getByRole("heading", { name: "Relays" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Relays", exact: true })).toBeVisible();
 }
 
 async function configuredRelays(page: Page) {
@@ -119,7 +119,7 @@ test.describe("relay configuration", () => {
       await addButton.click();
 
       await expect(
-        options.getByRole("alert"),
+        options.locator("#relay-url-help"),
         `"${rejected}" was accepted by the UI`
       ).toBeVisible();
       await expect(options.getByText(rejected, { exact: true })).toHaveCount(0);

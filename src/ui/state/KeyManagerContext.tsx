@@ -108,7 +108,7 @@ interface KeyManagerContextType {
   // Actions (all via RPC)
   lock: () => Promise<void>;
   unlock: (password: string) => Promise<UnlockResult>;
-  generateKey: (password: string, label?: string) => Promise<string>;
+  generateKey: (password: string, label?: string, publishStarter?: boolean) => Promise<string>;
   importKey: (
     keyInput: string,
     password: string,
@@ -217,10 +217,10 @@ export function KeyManagerProvider({ children }: KeyManagerProviderProps) {
   }, [hydrate]);
 
   const generateKey = useCallback(
-    async (password: string, label?: string): Promise<string> => {
+    async (password: string, label?: string, publishStarter = true): Promise<string> => {
       try {
         setIsLoading(true);
-        const keyRecord = await rpcGenerateKey(password, label);
+        const keyRecord = await rpcGenerateKey(password, label, { publishStarter });
         await refreshKeys(); // Refresh to get the new key
         return keyRecord.id; // Return just the ID
       } catch (error) {

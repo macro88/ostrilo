@@ -1,3 +1,4 @@
+import { useStarterRelayChoice } from "@/ui/components/StarterRelayChoice";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useKeyManager } from "../../authentication/hooks/useKeyManager";
 import {
@@ -144,6 +145,7 @@ export function OnboardingCreateKey({
 }: OnboardingCreateKeyProps) {
   const { isLoading } = useKeyManager();
   const [state, dispatch] = useReducer(createKeyReducer, initialCreateKeyState);
+  const { publishStarter, choice } = useStarterRelayChoice(isLoading || state.isGenerating);
   const clipboard = useExpiringClipboard();
 
   // Use refs for ephemeral sensitive data (not useState)
@@ -199,12 +201,11 @@ export function OnboardingCreateKey({
   };
 
   const handleGenerateKey = async () => {
-    if (!(await validatePassword())) return;
-
     dispatch({ type: "setGenerating", value: true });
     try {
+      if (!(await validatePassword())) return;
       // Generate key in background and set as selected if first
-      const created = await rpcGenerateKey(state.password, state.keyName.trim());
+      const created = await rpcGenerateKey(state.password, state.keyName.trim(), { publishStarter });
       createdKeyIdRef.current = created.id;
       // Immediately unlock session so user can proceed
       await unlockVault(state.password);
@@ -301,6 +302,7 @@ export function OnboardingCreateKey({
 
         {state.step === "input" && (
           <OnboardingCreateKeyInputStep
+            starterChoice={choice}
             keyName={state.keyName}
             password={state.password}
             confirmPassword={state.confirmPassword}

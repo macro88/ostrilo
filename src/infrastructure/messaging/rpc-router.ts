@@ -21,6 +21,7 @@ export interface ServiceContext {
   settings: SettingsService;
   activityLog: ActivityLogService;
   profile: ProfileService;
+  relayList: import("@/application/services/relay-list.service").RelayListService;
   unlockThrottle: UnlockThrottleService;
   disclosureRateLimit: DisclosureRateLimitService;
   /**

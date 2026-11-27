@@ -352,11 +352,12 @@ interface ProfileMetadata {
 
 ProfileService uses a multi-relay strategy for reliability:
 
-- **Default Relays:** `wss://relay.primal.net`
-- **Query Strategy:** Parallel queries to all configured relays
+- **Discovery relays:** `wss://relay.primal.net`, `wss://relay.damus.io` and `wss://nos.lol`
+- **Query strategy:** Routine profile reads use one assigned discovery relay per key, with one alternate on failure. An explicit refresh can also query cached write relays for that key.
 - **Deduplication:** Events deduplicated by ID across relays
 - **Event Selection:** Highest `created_at` timestamp wins
-- **Publish Strategy:** Publishes to all relays (succeeds if ≥1 accepts)
+- **Publishing:** Profile edits go to the discovery relays and the selected key’s known public write relays. One relay acknowledgement counts as success.
+- **NIP-65 relay lists:** Settings → Relays reads and edits the selected key’s kind 10002 event. New keys publish the discovery relays as their starter list unless the user clears the checkbox. Existing and imported keys can publish from Settings.
 
 ### Caching Strategy
 

@@ -49,6 +49,15 @@ export const RELAY_BOUNDS = {
   /** Relay URLs the extension will connect to at once. */
   MAX_CONFIGURED_RELAYS: 10,
 
+  /** Maximum distinct entries that can be edited without truncation. */
+  MAX_RELAY_LIST_ENTRIES: 20,
+  /** Destinations for one signed event. */
+  MAX_PUBLISH_RELAYS: 16,
+  /** Concurrent connections outside the discovery set. */
+  MAX_TRANSIENT_RELAYS: 16,
+  /** Maximum age of cached relay-list metadata. */
+  RELAY_LIST_CACHE_TTL_SECONDS: 3600,
+
   /** Deadline for a single profile fetch, in milliseconds. */
   FETCH_DEADLINE_MS: 5000,
 

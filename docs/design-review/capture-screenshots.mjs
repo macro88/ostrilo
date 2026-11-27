@@ -54,7 +54,8 @@ async function launchContext(profileDir = userDataDir) {
       // The populated phase seeds activity and policies from origins that
       // read like real sites. Both names resolve to the fixture server; the
       // certificate mismatch is covered by the flag above.
-      "--host-resolver-rules=MAP nostrich.org 127.0.0.1, MAP snort.social 127.0.0.1",
+      "--no-proxy-server",
+      `--host-resolver-rules=MAP nostrich.org 127.0.0.1, MAP snort.social 127.0.0.1, ${LOCAL_NETWORK_RULES}`,
     ],
   };
 
@@ -95,6 +96,7 @@ function startServer() {
 async function waitForExtensionId(context) {
   let worker = context.serviceWorkers()[0];
   if (!worker) worker = await context.waitForEvent("serviceworker");
+  await isolateDiscoveryRelays(worker, reviewRelay.url);
   const match = worker.url().match(/^chrome-extension:\/\/([a-p]{32})\//);
   if (!match) throw new Error(`Could not parse extension id from ${worker.url()}`);
   return match[1];
@@ -296,6 +298,10 @@ async function waitForPendingCount(page, deadline) {
   return waitForPendingCount(page, deadline);
 }
 
+const { isolateDiscoveryRelays, LOCAL_NETWORK_RULES } = await import("../../tests/e2e/fixtures/isolate-relays.ts");
+const { FixtureRelay } = await import("../../tests/e2e/fixtures/fixture-relay.ts");
+const reviewRelay = new FixtureRelay({ accepts: true });
+await reviewRelay.start();
 const context = await launchContext();
 const serverInfo = await startServer();
 
@@ -540,8 +546,14 @@ try {
     // `keys.list` returns a bare array; `list.keys` would be Array.prototype.keys.
     const keys = Array.isArray(list) ? list : list?.keys ?? [];
     const first = keys.find((k) => k.label === "Design Review Key") ?? keys[0];
+    const base = await rpc(popup, { type: "relayList.get", params: { keyId: first.id } });
+    if (base.status !== "found") throw new Error("Starter list missing from fixture relay");
+    await rpc(popup, { type: "relayList.publish", params: {
+      keyId: first.id, baseEventId: base.list.eventId,
+      entries: [{ url: reviewRelay.url, read: true, write: true }, { url: "wss://192.168.1.1", read: true, write: false }],
+    } });
     await rpc(popup, { type: "vault.renameKey", id: first.id, label: KEY_NAME });
-    await rpc(popup, { type: "vault.generate", password: PASSWORD, label: "Work" });
+    await rpc(popup, { type: "vault.generate", password: PASSWORD, label: "Work", publishStarter: false });
     await rpc(popup, { type: "vault.select", id: first.id });
   });
 
@@ -567,7 +579,7 @@ try {
     await rpc(popup, {
       type: "settings.update",
       patch: {
-        relays: ["wss://relay.primal.net", "wss://relay.damus.io", "wss://nos.lol"],
+        relays: [reviewRelay.url, reviewRelay.url + "/discovery-b", reviewRelay.url + "/discovery-c"],
       },
     });
   });
@@ -871,9 +883,27 @@ try {
     await captureTabs(options, [
       ["29-options-keys-populated", "Keys & Identities"],
       ["30-options-permissions-populated", "Permissions"],
-      ["31-options-relays-populated", "Relays"],
+
     ]);
 
+    const keys = await rpc(options, { type: "keys.list" });
+    const active = keys.find(key => key.label === KEY_NAME);
+    const work = keys.find(key => key.label === "Work");
+    await rpc(options, { type: "vault.select", id: active.id });
+    await options.reload();
+    await safeClick(options.getByRole("tab", { name: "Relays" }));
+    await options.getByText("Not used by Ostrilo").waitFor({ timeout: 10000 }).catch(async error => {
+      const current = await rpc(options, { type: "relayList.get", params: { keyId: active.id } });
+      throw new Error(`${error.message}; lookup ${current.status}; tab ${await options.getByRole("tabpanel").innerText()}`);
+    });
+    await screenshot(options, "31-options-relays-populated");
+    await rpc(options, { type: "vault.select", id: work.id });
+    await options.reload();
+    await safeClick(options.getByRole("tab", { name: "Relays" }));
+    await options.getByRole("button", { name: "Publish starter list" }).waitFor();
+    await screenshot(options, "31b-options-relays-unpublished");
+    await rpc(options, { type: "vault.select", id: active.id });
+    await options.reload();
     // A site's controls (trust level, public-key grant, session grant, rules
     // by kind, remove) open under its row. Photograph one open, or the only
     // capture of those controls would be the collapsed list.
@@ -1380,4 +1410,5 @@ try {
 } finally {
   serverInfo.server.close();
   await context.close();
+  await reviewRelay.stop();
 }

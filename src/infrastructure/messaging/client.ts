@@ -240,12 +240,13 @@ export async function listKeys() {
 export async function generateKey(
   password: string,
   label?: string,
-  options: { onlyIfEmpty?: boolean } = {}
+  options: { onlyIfEmpty?: boolean; publishStarter?: boolean } = {}
 ) {
   return rpc<import("@/domain/types").KeyRecord>({
     type: "vault.generate",
     password,
     label,
+    ...(options.publishStarter === false ? { publishStarter: false } : {}),
     ...(options.onlyIfEmpty ? { onlyIfEmpty: true } : {}),
   });
 }
@@ -650,4 +651,14 @@ export async function activityGetOrigins(): Promise<string[]> {
 
 export async function activityClear() {
   return rpc<null>({ type: "activity.clear" });
+}
+
+export function getRelayList(keyId: string) {
+  return rpc<import("@/application/services/relay-list-lookup").RelayLookup>({ type: "relayList.get", params: { keyId } });
+}
+export function publishRelayList(keyId: string, entries: import("@/domain/relay").RelayPermissions[], baseEventId: string | null) {
+  return rpc<import("@/application/services/relay-list.service").RelayPublish>({ type: "relayList.publish", params: { keyId, entries, baseEventId } });
+}
+export function publishStarterList(keyId: string) {
+  return rpc<import("@/application/services/relay-list.service").RelayPublish>({ type: "relayList.publishStarter", params: { keyId } });
 }

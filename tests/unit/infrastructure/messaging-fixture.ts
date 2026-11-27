@@ -10,6 +10,7 @@ import { AutoSignBudgetService } from "@/application/services/auto-sign-budget.s
 import { ActivityLogService } from "@/application/services/activity-log.service";
 import { DisclosureRateLimitService } from "@/application/services/disclosure-rate-limit.service";
 import { PolicyService } from "@/application/services/policy.service";
+import { RelayListService } from "@/application/services/relay-list.service";
 import { ProfileService } from "@/application/services/profile.service";
 import { SettingsService } from "@/application/services/settings.service";
 import { UnlockThrottleService } from "@/application/services/unlock-throttle.service";
@@ -54,6 +55,13 @@ export class MemoryRelay implements INostrRelay {
     this.published.push(event);
   }
 
+  getRelayUrls() { return ["wss://relay.example"]; }
+  subscribeOn(_url: string, ...args: Parameters<MemoryRelay["subscribe"]>) { return this.subscribe(...args); }
+  async publishTo(urls: string[], event: NostrEvent) {
+    if (urls.length && !this.failPublish) await this.publish(event);
+    return urls.map(url => ({ url, accepted: !this.failPublish }));
+  }
+
   async close(): Promise<void> {}
 
   async disconnect(): Promise<void> {}
@@ -81,6 +89,7 @@ export function realContext(
     settings,
     activityLog,
     profile,
+    relayList: new RelayListService(relay, storage.session, vault, activityLog),
     unlockThrottle,
     disclosureRateLimit,
     autoSignBudget,

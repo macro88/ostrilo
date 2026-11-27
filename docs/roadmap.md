@@ -20,10 +20,10 @@ Priority is MoSCoW: **M**ust, **S**hould, **C**ould, **W**on't.
 | Priority | Total | ✅ | 🔄 | ⬜ | ❌ |
 |----------|-------|----|----|----|----|
 | Must     | 29 | 19 | 7 | 3 | 0 |
-| Should   | 59 | 6 | 10 | 39 | 4 |
+| Should   | 59 | 7 | 11 | 37 | 4 |
 | Could    | 31 | 0 | 0 | 29 | 2 |
 | Won't    | 1 | 0 | 0 | 0 | 1 |
-| **Total**| **120** | **25** | **17** | **71** | **7** |
+| **Total**| **120** | **26** | **18** | **69** | **7** |
 
 ## What ships today
 
@@ -106,7 +106,7 @@ Defects in shipped code. Each belongs to the row named.
 | PROTO-006 | NIP-51 lists | S | ⬜ | |
 | PROTO-007 | NIP-57 zaps | S | ⬜ | Kind 9734 always prompts, but nothing validates amounts or recipients. |
 | PROTO-008 | NIP-42 relay auth | S | ⬜ | The relay adapter drops `AUTH` challenges. |
-| PROTO-009 | NIP-65 relay lists | S | ⬜ | Relays are a flat list with no read/write markers. |
+| PROTO-009 | NIP-65 relay lists | S | ✅ | Per-key public relay lists and discovery relays implemented for the next release. Approval-screen diffs remain under SEC-008. |
 | PROTO-010 | NIP-98 HTTP auth | C | ⬜ | Kind 27235 always prompts, nothing more. |
 | PROTO-011 | NIP-05 verification | S | ⬜ | Needs a reviewed widening of the CSP `connect-src`. |
 | PROTO-012 | NIP-13 proof of work | C | ⬜ | |

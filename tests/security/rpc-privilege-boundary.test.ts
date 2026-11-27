@@ -65,6 +65,7 @@ describe("page-reachable namespaces", () => {
       "approval",
       "activity",
       "profile",
+      "relayList",
       "blossom",
       "state",
     ]) {
@@ -424,6 +425,9 @@ describe("lock gate on the RPC surface", () => {
       "activity.getRecent",
       "activity.origins",
       "profile.get",
+      "relayList.get",
+      "relayList.publish",
+      "relayList.publishStarter",
       "approval.resolve",
       "vault.deleteKey",
       "vault.select",

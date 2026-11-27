@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { BLOSSOM_SERVER_IDS } from "@/domain/blossom/servers";
-import { RelayUrlListSchema } from "@/domain/relay/url";
+import { RELAY_BOUNDS } from "@/domain/relay/constants";
+import { RelayUrlSchema, RelayUrlListSchema } from "@/domain/relay/url";
 import { isAvatarDataUrl } from "@/domain/profile/avatar";
 import { isAllowedRemoteUrl } from "@/domain/profile/types";
 import {
@@ -446,4 +447,15 @@ export const BiometricFactorSchema = z.strictObject({
   prfSalt: PrfBytesSchema,
   transports: z.array(z.string().min(1).max(32)).max(8),
   backupEligible: z.boolean(),
+});
+
+export const RelayListKeyParams = z.object({ keyId: KeyIdSchema });
+export const RelayListPublishParams = RelayListKeyParams.extend({
+  baseEventId: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+  entries: z.array(z.object({
+    url: RelayUrlSchema,
+    read: z.boolean(),
+    write: z.boolean(),
+  }).refine(entry => entry.read || entry.write)).min(1).max(RELAY_BOUNDS.MAX_RELAY_LIST_ENTRIES)
+    .refine(entries => entries.some(entry => entry.write), "Choose at least one write relay"),
 });
