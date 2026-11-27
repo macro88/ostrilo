@@ -6,6 +6,7 @@ import {
   expect as baseExpect,
 } from "@playwright/test";
 import type { BrowserContext, Page } from "@playwright/test";
+import { isolateDiscoveryRelays, LOCAL_NETWORK_RULES } from "./isolate-relays";
 import { attachDiagnostics } from "./diagnostics";
 
 type ExtensionFixtures = {
@@ -90,9 +91,13 @@ export const test = base.extend<ExtensionFixtures>({
         `--disable-extensions-except=${extensionPath}`,
         `--load-extension=${extensionPath}`,
         "--ignore-certificate-errors",
+        "--no-proxy-server",
+        `--host-resolver-rules=${LOCAL_NETWORK_RULES}`,
       ],
     });
 
+    const worker = context.serviceWorkers()[0] ?? await context.waitForEvent("serviceworker");
+    await isolateDiscoveryRelays(worker, "wss://localhost:1");
     const flush = attachDiagnostics(context, testInfo, {
       extensionPath,
       mode: buildMode,

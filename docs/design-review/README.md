@@ -650,3 +650,12 @@ A headless browser has no authenticator, so each state is produced with a virtua
 - Light capture and dark capture: both complete, 77 screenshots each, no skipped step. Rerun on 2026-11-26 after rebasing onto the Blossom upload change: 83 each, no skipped step.
 - The two tracked captures (`23-popup-home-populated.png`, light and dark) were restored to their committed versions.
 - `tests/e2e/biometric-unlock.spec.ts` and `tests/e2e/accessibility.spec.ts`: passed.
+
+# Public relay lists
+
+Reviewed the production extension on 27 November 2026 in the light and Deep Ink themes. The populated vault held two keys and three local discovery relays.
+
+- In captures `31` and `31b`, switching keys changed the public list while the same three discovery relays stayed visible below it. The read/write controls aligned with their URLs. The private address kept its “Not used by Ostrilo” label in both themes.
+- The key without a published list showed the replacement warning directly above **Publish starter list**. The saved list showed a disabled **Publish relay list** until an edit. **Refresh** and **Add Relay** stayed secondary.
+- Full onboarding (`03`) and Quick start (`40`) both showed the checked publication choice above the create button. At 400 px its label wrapped to two lines without hiding either the checkbox or the action.
+- The screenshot runner waits for both lookup outcomes and captures them under browser network isolation. The production browser test also changes a read/write marker using the keyboard and verifies receipt at the local fixture relay.

@@ -13,7 +13,7 @@ where it sends it.
 - Your private keys are encrypted with your master password and stay on your
   device. Websites receive your public key and signed events, never a private key.
 - The extension makes network connections to Nostr relays, which you choose. The
-  default is `wss://relay.primal.net`.
+  defaults are `wss://relay.primal.net`, `wss://relay.damus.io` and `wss://nos.lol`.
 - It contacts an image host only when you upload a picture or banner, and only
   after you choose the host and confirm. The hosts are named under "Images and
   uploads" below.
@@ -23,14 +23,14 @@ where it sends it.
 
 ## What stays on your device
 
-These are kept in the browser's local extension storage, which is not synced:
+Ostrilo keeps these records in browser extension storage on this device. The session caches expire when the browser closes.
 
 | Data | What it is |
 |---|---|
 | Encrypted vault | Your private keys, each encrypted with a key derived from your master password (Argon2id, AES-256-GCM). Without the password, the vault cannot be read. |
 | Public keys and key labels | Stored beside the encrypted keys so the vault can list them while locked. |
 | Activity log | For each request a site made: the time, the site's origin, the event kind, whether it was allowed or denied and, for a denial, why (you denied it, a saved rule, no answer in time, too many requests, a locked vault or an unreadable key), the key used, and the first 100 characters of the event's content. It keeps 50 entries by default, and at most 500. |
-| Profile cache | Public Nostr profiles (kind 0 metadata) fetched from relays for your keys. |
+| Session caches | The browser session holds public profiles and per-key relay lists, including read/write markers and event IDs. Each cache holds up to 50 keys and 256 KiB. Relay lists expire after an hour. |
 | Backup status | For each key you made in Ostrilo, whether you have backed it up: the key's internal ID, `pending` or `verified`, and the time. It holds no key material and no backup file, and it is stored apart from the vault. |
 | Profile picture copy | A 96 by 96 pixel copy of your own profile picture, at most 64 KB, kept for each key you made one for, with the address it came from and the time. The header shows it. See [Images and uploads](#images-and-uploads). |
 | Relay partition salt | A random value that decides which relay is asked about which of your keys. See [Relays](#what-is-sent-to-nostr-relays). |
@@ -53,7 +53,7 @@ that single on/off value to your browser account and your other signed-in
 devices. The sync service is run by the browser vendor, not by Ostrilo, and is
 subject to its privacy policy.
 
-Everything else stays on the device, including your site permissions and relays.
+The browser keeps your other settings on this device, including site permissions and discovery relay preferences.
 They used to be synced too; they are not, because a permission you grant with
 this vault's password should not take effect on another browser without it. The
 copy an earlier version kept in browser sync is deleted when you update. If you
@@ -65,7 +65,7 @@ been put in sync storage.
 ## What is sent to Nostr relays
 
 Relays are servers on the public Nostr network, run by third parties. Ostrilo
-connects to them over secure WebSockets (`wss://` only) for two things:
+connects to them over secure WebSockets (`wss://` only) for the following operations:
 
 - **Looking up your profile.** To show your name and bio, Ostrilo asks relays
   for the public profile of each key in your vault. The request contains that
@@ -73,9 +73,13 @@ connects to them over secure WebSockets (`wss://` only) for two things:
   split across them so that no single relay is asked about every key you hold;
   with one relay configured, that relay sees them all.
 - **Publishing your profile.** When you edit and save your profile, Ostrilo
-  signs a kind 0 event and publishes it to your relays. That event is public and
+  looks up the selected key’s public relay list and sends a signed kind 0 event to its write relays and the discovery relays. That event is public and
   permanent by the design of Nostr, and contains only the profile fields you
   filled in.
+
+- **Looking up your relay list.** Opening or refreshing the Relays tab and publishing for a key can ask discovery relays and cached write relays about that single public key. Routine profile lookups use discovery relays only.
+- **Publishing your relay list.** New keys publish a starter list to your discovery relays by default. Clear the checkbox before creating the key to skip this. Imports never trigger publication. Settings lets you publish a public list of read and write relay URLs. Updates go to discovery relays and old and new write relays. Relays can keep copies indefinitely.
+- **Local networks.** Ostrilo filters private IP literals and local hostnames from public lists before connecting, except addresses you explicitly configured for discovery. Public DNS names can still resolve to private addresses.
 
 Like any server, a relay can see your IP address when you connect. What a relay
 does with what it receives is governed by that relay's operator. Ostrilo does

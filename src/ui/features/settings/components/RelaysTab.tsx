@@ -1,3 +1,5 @@
+import { useKeyManager } from "@/ui/features/authentication/hooks/useKeyManager";
+import { PublicRelayEditor } from "./PublicRelayEditor";
 import { RelayList } from "@/ui/features/settings/components/shared";
 import {
   SettingsLoading,
@@ -9,6 +11,7 @@ import { useAppSettings } from "@/hooks/useAppSettings";
 export function RelaysTab() {
   const { settings, isLoading, addRelay, removeRelay } = useAppSettings();
 
+  const { selectedUnlockedKey } = useKeyManager();
   if (isLoading) {
     return <SettingsLoading />;
   }
@@ -17,10 +20,27 @@ export function RelaysTab() {
     <div>
       <SettingsTabHeader
         title="Relays"
-        lede="Used to read profile names for your keys and to publish edits to your own profile. Nothing else goes through them."
+        lede="Choose where other apps find this key and where Ostrilo looks up profiles."
       />
 
-      <SettingsSection label="Relay list">
+      <SettingsSection
+        label={
+          selectedUnlockedKey
+            ? `Relay list · ${selectedUnlockedKey.label}`
+            : "Relay list"
+        }
+      >
+        {selectedUnlockedKey ? (
+          <PublicRelayEditor
+            key={selectedUnlockedKey.id}
+            keyId={selectedUnlockedKey.id}
+            discovery={settings.relays}
+          />
+        ) : (
+          <p>Select a key to view its public relay list.</p>
+        )}
+      </SettingsSection>
+      <SettingsSection label="Discovery relays">
         <RelayList
           relays={settings.relays}
           onAdd={addRelay}

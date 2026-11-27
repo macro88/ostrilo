@@ -133,6 +133,38 @@ describe("RelayManager over real relay adapters", () => {
     });
   });
 
+  it("verifies transient reads and releases the socket at EOSE", async () => {
+    const manager = new RelayManager([RELAY_A]);
+    const accept = vi.fn();
+    const ended = vi.fn();
+    const pending = manager.subscribeOn(RELAY_B, FILTER, accept, ended);
+    openAll();
+    const id = await pending;
+    const socket = socketFor(RELAY_B);
+    socket.deliverMessage(["EVENT", reqId(RELAY_B), { ...signedNote("remote"), sig: "0".repeat(128) }]);
+    socket.deliverMessage(["EOSE", reqId(RELAY_B)]);
+    expect(accept).not.toHaveBeenCalled();
+    expect(ended).toHaveBeenCalledWith({ discarded: 1, complete: true });
+    expect(socket.closeCalls).toBe(1);
+    await manager.close(id);
+    expect(socket.closeCalls).toBe(1);
+  });
+
+  it("bounds transient publishes and reuses configured connections", async () => {
+    const manager = new RelayManager([RELAY_A]);
+    const note = signedNote("routing");
+    const urls = Array.from({ length: 20 }, (_, index) => `wss://r${index}.example`);
+    const send = manager.publishTo([RELAY_A, ...urls], note);
+    expect(FakeWebSocket.instances.length).toBe(17);
+    openAll();
+    await vi.waitFor(() => expect(socketFor(RELAY_A).framesOfType("EVENT")).toHaveLength(1));
+    for (const socket of FakeWebSocket.instances) socket.deliverMessage(["OK", note.id, true, ""]);
+    const results = await send;
+    expect(results.filter(r => r.accepted)).toHaveLength(17);
+    expect(socketFor(RELAY_A).closeCalls).toBe(0);
+    expect(FakeWebSocket.instances.filter(s => s.closeCalls === 1)).toHaveLength(16);
+  });
+
   describe("subscribeOn", () => {
     it("reports an unknown failure and still signals EOSE when the relay throws a non-Error", async () => {
       FakeWebSocket.constructError = 42;

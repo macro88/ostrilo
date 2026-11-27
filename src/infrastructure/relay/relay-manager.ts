@@ -1,12 +1,13 @@
 import {
-  INostrRelay,
+  IRelayRouter,
+  RelayPublishResult,
   NostrFilter,
   NostrEvent,
   NostrEventCallback,
   NostrEOSECallback,
 } from "@/application/ports/relay";
 import { NostrRelayAdapter } from "./nostr-relay.adapter";
-import { RELAY_BOUNDS, sanitizeRelayUrls } from "@/domain/relay";
+import { RELAY_BOUNDS, sanitizeRelayUrls, normalizedRelayUrl, isRoutableRelayHost, RelayUrlSchema } from "@/domain/relay";
 
 /**
  * Relay Manager implementing INostrRelay port with multi-relay support.
@@ -26,9 +27,29 @@ import { RELAY_BOUNDS, sanitizeRelayUrls } from "@/domain/relay";
  * boundary, so a stored cleartext or over-long relay list cannot open a
  * connection even if it reaches this far.
  */
-export class RelayManager implements INostrRelay {
+export class RelayManager implements IRelayRouter {
   private relays: NostrRelayAdapter[] = [];
   private relayUrls: string[] = [];
+
+  private transient = new Set<NostrRelayAdapter>();
+  private transientSubscriptions = new Map<string, NostrRelayAdapter>();
+
+  private openTransient(url: string) {
+    if (
+      !RelayUrlSchema.safeParse(url).success ||
+      !isRoutableRelayHost(url) ||
+      this.transient.size >= RELAY_BOUNDS.MAX_TRANSIENT_RELAYS
+    ) {
+      throw new Error("Relay destination is unavailable");
+    }
+    const relay = new NostrRelayAdapter(url);
+    this.transient.add(relay);
+    return relay;
+  }
+
+  private async release(relay: NostrRelayAdapter) {
+    if (this.transient.delete(relay)) await relay.disconnect();
+  }
 
   constructor(relayUrls: string[]) {
     this.setRelayAdapters(relayUrls);
@@ -149,29 +170,22 @@ export class RelayManager implements INostrRelay {
   }
 
   /**
-   * Subscribe on exactly one configured relay.
-   *
-   * Background profile hydration uses this to keep a relay from learning the
-   * user's whole identity set: each managed pubkey is asked about on its one
-   * assigned relay rather than broadcast to every configured relay.
-   *
-   * The returned subscription ID keeps the composite comma-separated shape, with
-   * an empty slot for every relay that was not asked, so `close` still lines the
-   * IDs up with the relays positionally.
+   * A discovery relay uses its existing connection and positional subscription ID.
+   * A public write relay uses a temporary connection closed by EOSE or the caller.
    */
   async subscribeOn(
     relayUrl: string,
     filter: NostrFilter,
     onEvent: NostrEventCallback,
-    onEOSE?: NostrEOSECallback
+    onEOSE?: NostrEOSECallback,
+    onDiscard?: () => void
   ): Promise<string> {
     const index = this.relays.findIndex(
-      (relay) => relay.getRelayUrl() === relayUrl
+      (relay) => normalizedRelayUrl(relay.getRelayUrl()) === normalizedRelayUrl(relayUrl)
     );
 
     if (index === -1) {
-      onEOSE?.();
-      return this.relays.map(() => "").join(",");
+      return this.subscribeTransient(relayUrl, filter, onEvent, onEOSE, onDiscard);
     }
 
     const subIds = this.relays.map(() => "");
@@ -180,7 +194,8 @@ export class RelayManager implements INostrRelay {
       subIds[index] = await this.relays[index].subscribe(
         filter,
         onEvent,
-        onEOSE
+        onEOSE,
+        onDiscard
       );
     } catch (error) {
       console.warn(
@@ -188,10 +203,52 @@ export class RelayManager implements INostrRelay {
           error instanceof Error ? error.message : "unknown error"
         }`
       );
-      onEOSE?.();
+      onEOSE?.({ complete: false, discarded: 0 });
     }
 
     return subIds.join(",");
+  }
+
+  private async subscribeTransient(
+    url: string,
+    filter: NostrFilter,
+    onEvent: NostrEventCallback,
+    onEOSE?: NostrEOSECallback,
+    onDiscard?: () => void
+  ) {
+    const adapter = this.openTransient(url);
+    const token = "transient-" + crypto.randomUUID();
+    this.transientSubscriptions.set(token, adapter);
+    const release = () => {
+      this.transientSubscriptions.delete(token);
+      return this.release(adapter);
+    };
+    try {
+      await adapter.subscribe(filter, onEvent, summary => {
+        void release();
+        onEOSE?.(summary);
+      }, onDiscard);
+      return token;
+    } catch (error) {
+      await release();
+      throw error;
+    }
+  }
+
+  async publishTo(urls: string[], event: NostrEvent): Promise<RelayPublishResult[]> {
+    return Promise.all([...new Set(urls)].map(async url => {
+      const existing = this.relays.find(relay => normalizedRelayUrl(relay.getRelayUrl()) === normalizedRelayUrl(url));
+      let temporary: NostrRelayAdapter | undefined;
+      try {
+        const adapter = existing ?? (temporary = this.openTransient(url));
+        await adapter.publish(event);
+        return { url, accepted: true };
+      } catch {
+        return { url, accepted: false };
+      } finally {
+        if (temporary) await this.release(temporary);
+      }
+    }));
   }
 
   /**
@@ -234,6 +291,12 @@ export class RelayManager implements INostrRelay {
    * The subId is expected to be a comma-separated list of relay subIds.
    */
   async close(subId: string): Promise<void> {
+    if (subId.startsWith("transient-")) {
+      const adapter = this.transientSubscriptions.get(subId);
+      this.transientSubscriptions.delete(subId);
+      if (adapter) await this.release(adapter);
+      return;
+    }
     const subIds = subId.split(",");
 
     if (subIds.length !== this.relays.length) {
@@ -254,6 +317,8 @@ export class RelayManager implements INostrRelay {
    * Disconnect from all relays.
    */
   async disconnect(): Promise<void> {
+    this.transientSubscriptions.clear();
+    await Promise.all([...this.transient].map(relay => this.release(relay)));
     await Promise.all(this.relays.map((relay) => relay.disconnect()));
   }
 

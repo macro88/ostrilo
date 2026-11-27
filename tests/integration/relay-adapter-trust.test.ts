@@ -141,6 +141,19 @@ describe("NostrRelayAdapter trust boundary", () => {
     delete (globalThis as any).WebSocket;
   });
 
+  it("reports rejected list frames at the subscription boundary", async () => {
+    const adapter = new NostrRelayAdapter(RELAY_URL);
+    const ended = vi.fn();
+    const sub = adapter.subscribe({ kinds: [10002], authors: [TEST_PUBKEY] }, vi.fn(), ended);
+    const socket = MockWebSocket.latest();
+    socket.open();
+    const id = await sub;
+    socket.deliverMessage(["EVENT", id, { ...genuineProfileEvent, kind: 10002, tags: Array(51).fill(["r"]) }]);
+    socket.deliverMessage(["EVENT", id]);
+    socket.deliverMessage(["EOSE", id]);
+    expect(ended).toHaveBeenCalledWith({ discarded: 2, complete: true });
+  });
+
   describe("transport", () => {
     it("refuses to open a WebSocket for a non-wss relay URL", async () => {
       const adapter = new NostrRelayAdapter("ws://relay.example.com");

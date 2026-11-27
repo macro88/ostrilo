@@ -19,6 +19,8 @@ interface RelaySubscription {
   onEvent: NostrEventCallback;
   onEOSE?: NostrEOSECallback;
   acceptedEvents: number;
+  discarded: number;
+  onDiscard?: () => void;
 }
 
 /**
@@ -189,6 +191,10 @@ export class NostrRelayAdapter implements INostrRelay {
 
       const envelope = RelayMessageSchema.safeParse(parsed);
       if (!envelope.success) {
+        if (Array.isArray(parsed) && parsed[0] === "EVENT") {
+          const subscription = this.subscriptions.get(parsed[1]);
+          if (subscription) this.reportDiscard(subscription);
+        }
         console.warn(
           `Discarded malformed relay message from ${this.relayUrl}: ${envelope.error.issues[0]?.code ?? "invalid"}`
         );
@@ -212,7 +218,7 @@ export class NostrRelayAdapter implements INostrRelay {
           console.warn(
             `Relay closed subscription: ${boundNoticeText(message[2])}`
           );
-          this.handleEose(message[1]);
+          this.handleEose(message[1], false);
           break;
         }
 
@@ -253,6 +259,11 @@ export class NostrRelayAdapter implements INostrRelay {
     }
   }
 
+  private reportDiscard(sub: RelaySubscription) {
+    sub.discarded++;
+    sub.onDiscard?.();
+  }
+
   /**
    * Verify one relay event and hand it to its subscription, or discard it.
    */
@@ -272,6 +283,7 @@ export class NostrRelayAdapter implements INostrRelay {
       sub.filter
     );
     if (!verification.ok) {
+      this.reportDiscard(sub);
       console.warn(
         `Discarded relay event from ${this.relayUrl}: ${verification.reason}`
       );
@@ -302,7 +314,7 @@ export class NostrRelayAdapter implements INostrRelay {
    * and drop the handler so the registry drains and reconnection has no work
    * left to justify it.
    */
-  private handleEose(subId: string): void {
+  private handleEose(subId: string, complete = true): void {
     const sub = this.subscriptions.get(subId);
     if (!sub) {
       return;
@@ -312,7 +324,7 @@ export class NostrRelayAdapter implements INostrRelay {
     this.sendClose(subId);
 
     try {
-      sub.onEOSE?.();
+      sub.onEOSE?.({ discarded: sub.discarded, complete });
     } catch (error) {
       console.error(
         "Subscription EOSE handler failed:",
@@ -401,7 +413,7 @@ export class NostrRelayAdapter implements INostrRelay {
 
     for (const sub of orphaned) {
       try {
-        sub.onEOSE?.();
+        sub.onEOSE?.({ discarded: sub.discarded, complete: false });
       } catch (error) {
         console.error(
           "Subscription EOSE handler failed:",
@@ -434,7 +446,8 @@ export class NostrRelayAdapter implements INostrRelay {
   async subscribe(
     filter: NostrFilter,
     onEvent: NostrEventCallback,
-    onEOSE?: NostrEOSECallback
+    onEOSE?: NostrEOSECallback,
+    onDiscard?: () => void
   ): Promise<string> {
     // Ensure connection
     await this.connect();
@@ -443,7 +456,7 @@ export class NostrRelayAdapter implements INostrRelay {
     const subId = crypto.randomUUID();
 
     // Store subscription
-    this.subscriptions.set(subId, { filter, onEvent, onEOSE, acceptedEvents: 0 });
+    this.subscriptions.set(subId, { filter, onEvent, onEOSE, onDiscard, acceptedEvents: 0, discarded: 0 });
 
     // Send REQ message
     try {

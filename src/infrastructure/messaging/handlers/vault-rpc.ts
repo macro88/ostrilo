@@ -225,6 +225,9 @@ export class VaultRpcHandler implements RpcModule {
       });
     }
 
+    if (message.publishStarter !== undefined && typeof message.publishStarter !== "boolean") {
+      return createRpcErrorResponse(RPC_ERROR_CODES.INVALID_PARAMS, { method: message.type });
+    }
     const policyError = await this.enforceNewPasswordPolicy(
       message.password,
       message.type,
@@ -234,9 +237,20 @@ export class VaultRpcHandler implements RpcModule {
     if (policyError) return policyError;
 
     try {
+      const urls = message.publishStarter === false
+        ? []
+        : (await context.settings.get())?.relays ?? [];
       return await this.writeUnderThrottle(context, message.type, () =>
         context.vault.generateKey(message.password, message.label, {
           onlyIfEmpty: message.onlyIfEmpty,
+          starter: urls.length
+            ? {
+                urls,
+                signed: (id, event) => {
+                  void context.relayList.publishGenerated(id, event);
+                },
+              }
+            : undefined,
         })
       );
     } catch (error) {

@@ -30,6 +30,24 @@ describe("SettingsService relay and legacy-record migration", () => {
     service = new SettingsService(storage);
   });
 
+  it("migrates the Primal default and preserves a customized list", async () => {
+    const defaults = ["wss://relay.primal.net", "wss://relay.damus.io", "wss://nos.lol"];
+    await storage.local.set("appSettings", v1(defaults.slice(0, 1)));
+    expect((await service.get())?.relays).toEqual(defaults);
+    expect((await stored())?.relays).toEqual(defaults);
+    await storage.local.set("appSettings", { relays: [defaults[0]] });
+    expect((await service.get())?.relays).toEqual(defaults);
+    const custom = [defaults[0], "wss://relay.example.com"];
+    await storage.local.set("appSettings", v1(custom));
+    expect((await service.get())?.relays).toEqual(custom);
+  });
+
+  it("preserves a Primal-only list explicitly saved after the upgrade", async () => {
+    await service.get();
+    await service.update({ relays: ["wss://relay.primal.net"] });
+    expect((await new SettingsService(storage).get())?.relays).toEqual(["wss://relay.primal.net"]);
+  });
+
   it("drops cleartext relays from a stored list and persists the cleaned list", async () => {
     await storage.local.set("appSettings", v1(["ws://plain.example", "wss://good.example"]));
 

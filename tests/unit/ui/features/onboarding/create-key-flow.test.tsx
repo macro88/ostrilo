@@ -119,6 +119,17 @@ afterEach(() => {
 });
 
 describe("create-key flow drops key material on every exit", () => {
+  it("can generate a key with its starter relay list turned off", async () => {
+    const { container } = render(
+      <OnboardingCreateKey onBack={() => {}} onComplete={() => {}} />
+    );
+    const choice = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+    expect(choice.checked).toBe(true);
+    await click(choice);
+    await reachRevealedBackupStep(container);
+    expect(generateKey).toHaveBeenCalledWith(PASSWORD, "Everyday", { publishStarter: false });
+  });
+
   it("reveals through the password-verified RPC, never a session-only path", async () => {
     const { container } = render(
       <OnboardingCreateKey onBack={() => {}} onComplete={() => {}} />

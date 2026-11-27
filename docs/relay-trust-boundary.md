@@ -185,6 +185,12 @@ configuration. Partitioning also costs coverage: a profile that exists only on a
 unassigned relay will not be found during background hydration, and that identity
 shows the fallback avatar and label until the user refreshes it explicitly.
 
+## Public relay lists
+
+User-initiated NIP-65 lookups return the newest verified list, explicit absence after every relay answers, unreadable data after a discarded event, or unreachable relays. Publishing checks the base event again and refuses stale edits and uncertain reads. Up to 20 entries survive parsing, and 16 destinations can receive one event. Short-lived adapters use the same validation as discovery adapters. Private, loopback and link-local literals and local hostname suffixes stay in the list but cannot direct a connection unless explicitly configured for discovery. DNS resolution remains outside the hostname check.
+
+The creation handler uses the fresh key to sign only a kind 10002 with empty content and the configured discovery relays. It can do this once, after the key has been saved and before the vault erases the fresh secret. Only the signed event leaves the vault. Disabling starter publication skips this step. Network replies never delay key creation.
+
 ## Where to look
 
 | Concern | File |

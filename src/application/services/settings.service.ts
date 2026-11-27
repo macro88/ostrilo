@@ -24,6 +24,7 @@ import { SettingsStore } from "./settings-store";
 export const SETTINGS_CHANGED_EVENT = BROADCAST_EVENTS.SETTINGS_CHANGED;
 
 const LEGACY_DEFAULT_RELAY_SETS = [
+  ["wss://relay.primal.net"],
   ["wss://relay.damus.io", "wss://relay.nostr.band", "wss://nos.lol"],
   ["wss://relay.damus.io", "wss://relay.primal.net"],
   ["wss://relay.damus.io", "wss://nostr.wine"],
@@ -78,7 +79,7 @@ export class SettingsService {
         changed = true;
       }
 
-      if (isLegacyDefaultRelaySet(current.relays)) {
+      if (!current.__customDiscoveryRelays && isLegacyDefaultRelaySet(current.relays)) {
         next.relays = [...DEFAULT_RELAY_URLS];
         changed = true;
       }
@@ -140,6 +141,7 @@ export class SettingsService {
       sidePanel: existing?.sidePanel ?? d.sidePanel,
       autoLockMinutes: normalizeAutoLockMinutes(existing?.autoLockMinutes),
       relays: (() => {
+        if (isLegacyDefaultRelaySet(existing?.relays)) return d.relays;
         const sanitized = sanitizeRelayUrls(existing?.relays);
         return sanitized.length > 0 ? sanitized : d.relays;
       })(),
@@ -164,6 +166,7 @@ export class SettingsService {
   async update(patch: Partial<AppSettingsV1>): Promise<AppSettingsV1> {
     const current = (await this.get()) ?? freshInstallSettings();
     const safePatch = { ...patch };
+    if (Array.isArray(patch.relays)) safePatch.__customDiscoveryRelays = true;
     if (Array.isArray(patch.mediumAllowKinds)) {
       safePatch.mediumAllowKinds = getEffectiveMediumAllowKinds(
         patch.mediumAllowKinds

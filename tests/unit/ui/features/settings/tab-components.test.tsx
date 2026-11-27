@@ -91,6 +91,7 @@ vi.mock("@/ui/hooks/useProfileMetadata", () => ({
 }));
 
 vi.mock("@/infrastructure/messaging/client", () => ({
+  getRelayList: vi.fn().mockResolvedValue({ status: "none" }),
   renameKey: vi.fn(),
   deleteKey: vi.fn(),
   activityGetRecent: vi.fn().mockResolvedValue({ entries: [], total: 0 }),

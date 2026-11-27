@@ -80,6 +80,7 @@ describe("consent policy integration", () => {
         sign,
       },
       policy,
+      relayList: { invalidate: vi.fn().mockResolvedValue(undefined) },
       activityLog: { addEntry: vi.fn().mockResolvedValue(undefined) },
       autoSignBudget: new AutoSignBudgetService(),
       settings: { get: vi.fn(), update: vi.fn() },
@@ -200,12 +201,14 @@ describe("consent policy integration", () => {
     );
     const firstResult = await pending;
     expect(firstResult.ok).toBe(true);
+    expect(context.relayList.invalidate).toHaveBeenCalledTimes(1);
 
     const second = await signEvent(
       "https://a.example",
       unsignedEvent({ kind: 10002, content: "relay list again" })
     );
     expect(second.ok).toBe(true);
+    expect(context.relayList.invalidate).toHaveBeenCalledTimes(2);
     expect(queue.count()).toBe(0);
 
     // The remembered decision stays scoped to kind 10002.

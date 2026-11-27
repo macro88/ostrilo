@@ -643,7 +643,7 @@ describe("KeyManagerProvider", () => {
         id = await latest().generateKey("pw", "Fresh");
       });
 
-      expect(rpc.generateKey).toHaveBeenCalledWith("pw", "Fresh");
+      expect(rpc.generateKey).toHaveBeenCalledWith("pw", "Fresh", { publishStarter: true });
       expect(id).toBe("new");
       expect(latest().keys.map((k) => k.id)).toEqual(["new"]);
       expect(latest().isLoading).toBe(false);

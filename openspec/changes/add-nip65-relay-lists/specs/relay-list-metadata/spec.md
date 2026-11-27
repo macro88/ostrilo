@@ -199,7 +199,13 @@ The extension SHALL publish a relay list only after a fresh lookup for that iden
 
 ### Requirement: Generated Keys Receive A Starter Relay List
 
-When `vault.generate` succeeds, the extension SHALL sign and publish, with the new key, a kind `10002` event that lists each current discovery relay as an `r` tag with no marker, and SHALL send it to those discovery relays. The `vault.generate` response SHALL NOT wait for this publish. The extension SHALL attempt it once, SHALL NOT retry it later, and SHALL skip it if the key cannot sign. The extension SHALL NOT publish a relay list automatically for an imported key. The create-key step, Quick start, and Add Key's generate path SHALL each tell the user that a starter relay list will be published for the new key.
+When starter publication is enabled (the default) and `vault.generate` succeeds, the extension SHALL sign and publish, with the new key, a kind `10002` event that lists each current discovery relay as an `r` tag with no marker, and SHALL send it to those discovery relays. The `vault.generate` response SHALL NOT wait for this publish. The extension SHALL attempt it once, SHALL NOT retry it later, and SHALL skip it if the key cannot sign. The extension SHALL NOT publish a relay list automatically for an imported key. The create-key step, Quick start, and Add Key's generate path SHALL each tell the user that a starter relay list will be published for the new key.
+
+#### Scenario: User turns off starter publication
+
+- **GIVEN** Full onboarding, Quick start and Add Key each show a checked publication control
+- **WHEN** the user clears it and creates a key
+- **THEN** the key MUST be created without signing, publishing or scheduling a starter list
 
 #### Scenario: New key gets a starter list
 

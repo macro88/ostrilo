@@ -4,6 +4,8 @@
 
 ### Added
 
+- Manage each identity’s public read/write relay list in Settings → Relays. New keys publish a starter list unless you clear the checkbox before creation. Profile edits also reach your write relays. Discovery defaults to Primal, Damus and nos.lol. Rolling back leaves published lists on the network.
+
 - **Upload a profile picture or banner from Edit Profile.** Choose a file, pick
   one of three hosts (Primal, nostr.build or nostrcheck.me) and confirm. Nothing
   is sent until you do, there is no default host, and the window asks every

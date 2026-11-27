@@ -79,7 +79,6 @@ export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
         </div>
       )}
 
-      {/* Add new relay: the screen's one primary action. */}
       <div className="flex gap-2">
         <Input
           placeholder="wss://relay.example.com"
@@ -97,7 +96,7 @@ export function RelayList({ relays, onAdd, onRemove }: RelayListProps) {
           aria-label="Relay URL"
           aria-describedby="relay-url-help"
         />
-        <Button onClick={handleAdd} aria-label="Add relay" className="px-5">
+        <Button variant="ghost" onClick={handleAdd} aria-label="Add relay" className="px-5">
           Add Relay
         </Button>
       </div>

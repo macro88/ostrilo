@@ -1,3 +1,5 @@
+import type { NostrEvent } from "@/application/ports/relay";
+import { RELAY_LIST_KIND, sanitizeRelayUrls } from "@/domain/relay";
 import type { StorageSuite } from "@/application/ports/storage";
 import type {
   Bech32Codec,
@@ -57,6 +59,11 @@ import { ProfileAvatarService } from "./profile-avatar.service";
 const ENCRYPTED_KEYS_STORAGE = "encryptedKeys";
 const VAULT_ENVELOPE_STORAGE = "vaultEnvelope";
 const LOCK_STATE_STORAGE = "lockState";
+
+interface StarterPublication {
+  urls: string[];
+  signed: (keyId: string, event: NostrEvent) => void;
+}
 
 /**
  * Known plaintext sealed under the vault KEK. Decrypting it proves the password
@@ -499,17 +506,18 @@ export class KeyVaultService {
   async generateKey(
     password: string,
     label?: string,
-    options: { onlyIfEmpty?: boolean } = {}
+    options: { onlyIfEmpty?: boolean; starter?: StarterPublication } = {}
   ): Promise<KeyRecord> {
     return this.writeLock.run(() =>
-      this.generateKeyNow(password, label, options.onlyIfEmpty === true)
+      this.generateKeyNow(password, label, options.onlyIfEmpty === true, options.starter)
     );
   }
 
   private async generateKeyNow(
     password: string,
     label: string | undefined,
-    onlyIfEmpty: boolean
+    onlyIfEmpty: boolean,
+    starter?: StarterPublication
   ): Promise<KeyRecord> {
     if (!password) {
       throw new Error("password_required");
@@ -558,6 +566,28 @@ export class KeyVaultService {
       }
       const next = [...records, record];
       await this.saveKeys(next);
+      if (starter) {
+        try {
+          const tags = sanitizeRelayUrls(starter.urls).map(url => ["r", url]);
+          if (tags.length) {
+            const event = {
+              kind: RELAY_LIST_KIND,
+              content: "",
+              pubkey,
+              tags,
+              created_at: Math.floor(Date.now() / 1000),
+            };
+            const eventId = computeEventId(this.hash, event);
+            const sig = await this.signDigest(hexToBytes(eventId), sk);
+            starter.signed(id, { ...event, id: eventId, sig });
+          }
+        } catch (error) {
+          console.warn(
+            "Could not prepare the new key’s starter relay list",
+            error instanceof Error ? error.name : "unknown error"
+          );
+        }
+      }
       return record;
     } finally {
       // zeroize private key material
@@ -1470,7 +1500,7 @@ export class KeyVaultService {
   }
 
   /**
-   * The single Schnorr call site in this class.
+   * Sign a digest with an unlocked vault key.
    *
    * `hashHex` is validated as 64 characters of hex BEFORE it is decoded. The
    * previous decode was `hashHex.match(/.{1,2}/g).map(b => parseInt(b, 16))`,
@@ -1486,8 +1516,11 @@ export class KeyVaultService {
     if (!isValidHex(hashHex, 32)) throw new Error("hash_must_be_32_bytes");
     const bytes = hexToBytes(hashHex);
     const { keyId: id, sk } = this.ensureUnlockedKey(await this.resolveKeyId(keyId));
-    const sig = await this.schnorr.sign(bytes, sk);
-    return { sigHex: bytesToHex(sig), keyId: id };
+    return { sigHex: await this.signDigest(bytes, sk), keyId: id };
+  }
+
+  private async signDigest(bytes: Uint8Array, sk: Uint8Array) {
+    return bytesToHex(await this.schnorr.sign(bytes, sk));
   }
 
   /**
